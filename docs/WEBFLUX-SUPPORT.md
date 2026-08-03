@@ -17,7 +17,7 @@ Loggers (set level), HTTP Probe, Cache (clear), Flyway (migrate/clean), Liquibas
 advisor scans (Architecture, Spring, Hibernate, Pentesting, REST API, Memory, Vulnerabilities/OSV), and Exceptions
 triage.
 
-Only **HTTP Sessions**, the **Security advisor**, the raw **Spring Security** panel, and the standalone
+Only **HTTP Sessions**, the raw **Spring Security** panel, and the standalone
 **REST Client** panel stay unavailable, each with a panel-specific reason surfaced through the
 `/bootui/api/panels` manifest (and, in turn, the sidebar tooltip and the panel's own alert banner — see §5).
 `docs/FEATURES.md` and the per-panel `unavailableReason` strings in `PanelsController` are the authoritative, current
@@ -206,12 +206,17 @@ OpenTelemetry SDK is present — see §7 for how this was found.
 - The servlet adapter's thread-based correlation (`LiveActivityCorrelator`) is not ported — it has no reactive
   equivalent.
 
-### 6.5 Not yet ported (3 panels)
+### 6.5 Not yet ported (2 panels)
+
+> **Note (ported since initial writing):** The **Security advisor** (`security`, panel id distinct from the raw
+> `spring-security` panel) was originally listed here. It has been ported as `ReactiveSecurityScanner` /
+> `ReactiveSecurityController` with a dedicated 25-rule WebFlux ruleset (rule IDs `SEC-RXF-*`), available whenever a
+> `WebFilterChainProxy` bean is present. The panel now reports `available: true` on any WebFlux app that has Spring
+> Security configured. See `docs/SECURITY-CHECKS.md` for the reactive rule catalogue.
 
 | Panel          | Reason                                                                                                                                                                                        |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Spring Security (raw panel, `spring-security`) | *"Not yet ported for Spring WebFlux: this advisor analyzes the servlet SecurityFilterChain/HttpSecurity configuration model, which has no reactive equivalent wired here yet (a ServerHttpSecurity/SecurityWebFilterChain ruleset is planned)."* `springSecurityAvailable()` now requires `!isReactive()` in addition to the pre-existing classpath/bean checks. |
-| Security advisor (`security`, grouped under Advisors — distinct from the raw Spring Security panel above, grouped under Security) | Also stays unavailable on WebFlux, but needed no dedicated reactive-aware string: `securityAvailable()` checks for a `FilterChainProxy` bean (the servlet security filter, `extends GenericFilterBean`), while a reactive Spring Security setup only ever registers a `WebFilterChainProxy` bean (`implements WebFilter`, package `org.springframework.security.web.server`) — two unrelated types in the same `spring-security-web` jar. The existing check already resolves `false` on WebFlux by construction, so the panel falls through to its pre-existing generic reasons ("Spring Security not on the classpath" / "No Spring Security filter chains are available") rather than a WebFlux-specific one. A reactive ruleset for this advisor is a genuinely new advisor (comparable in scope to the from-scratch Quarkus Security ruleset), deliberately deferred to a follow-up. |
 | REST Client       | *"REST Client is only available on the Spring MVC (servlet) adapter."* — the panel's availability check in `PanelsController` requires `!isReactive()`, so the dedicated full-detail panel (with its own filtering/paging over every captured call) is not wired into `BootUiReactiveAutoConfiguration` regardless of client instrumentation. On the servlet adapter, availability additionally requires `RestClientTraceRecorder#hasInstrumentedClient()` (see `docs/FEATURES.md`), so an MVC app that never builds a `RestClient`/`RestTemplate`/`WebClient` also reports unavailable rather than an empty buffer — the pre-existing bean-presence check alone wasn't a useful signal, since the recorder bean is registered unconditionally on both adapters. **Capture itself is not stack-gated**, though: `BootUiEngineConfiguration`'s `WebClientCustomizer` attaches `RestClientTraceExchangeFilter` to every auto-configured `WebClient.Builder` regardless of web application type, so REST/WebClient calls are still captured into the shared `RestClientTraceRecorder` and still appear as `REST_CLIENT` entries in the Live Activity merge (§6.4) on WebFlux — only the standalone panel is unavailable. |
 
 ### 6.6 Not applicable (1 panel)
@@ -274,9 +279,8 @@ directly rather than through a real multi-scheduler Reactor pipeline.
   second, separate Playwright config and test directory (not a new npm project) so the default `npm test` run against
   the servlet sample app is untouched; the WebFlux suite checks the platform manifest, navbar branding, a
   representative sample of ported panels rendering cleanly (now including Live Activity and the MCP Server panel), and
-  that `http-sessions` and `spring-security` each show their WebFlux-specific reason in both the sidebar and the panel
-  alert (the `security` advisor's equivalent reason is covered at the unit level by `PanelsControllerTests`, not
-  re-asserted in e2e).
+  that `http-sessions` shows its WebFlux-specific reason in both the sidebar and the panel alert, and that the
+  Security advisor (`security`) is available and can be scanned (the reactive ruleset is now live — see §6.5 note).
 - Run it: see the "WebFlux (reactive) smoke suite" section of `bootui-spring-sample-app/e2e/README.md`.
 - **`Dockerfile-webflux`** (repository root) is the reactive analogue of the plain servlet `Dockerfile`: the same
   exploded-jar-layers + jlink + distroless-glibc recipe, pointed at `bootui-spring-webflux-sample-app` instead of
@@ -298,8 +302,6 @@ sample app — but is easy to trip over when smoke-testing a freshly built react
 
 ## 10. Future work
 
-- A reactive Security advisor ruleset (`ServerHttpSecurity`/`SecurityWebFilterChain`), closing the
-  `security`/`spring-security` gap in §6.5.
 - Deeper Live Activity correlation for requests with no active tracing span at all (today: trace-id-primary only,
   now matching the Quarkus adapter exactly since `Span.current()` is stamped unconditionally at every capture
   point — see §6.4).

@@ -12,8 +12,8 @@ import org.springframework.boot.test.web.server.LocalServerPort;
  *
  * <p>Proves the reactive adapter serves the exact same {@code /bootui/api/**} contract the servlet
  * adapter does (same panel ids/titles/order, same JSON shapes), just with
- * {@code platform: "spring-boot-reactive"} and the two panels with no reactive equivalent
- * (http-sessions, spring-security) reporting {@code available: false}.
+ * {@code platform: "spring-boot-reactive"} and the panel with no reactive equivalent
+ * http-sessions reporting {@code available: false} (no reactive equivalent for servlet HTTP Sessions).
  *
  * <p>Panel-access conformance properties: {@code bootui.panels.copilot.enabled=false} enables
  * {@link AbstractBootUiApiConformanceTest#panelDisabledRequestIsRejectedWithCanonicalBody}; {@code

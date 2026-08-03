@@ -13,11 +13,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * Pools, Flyway, Liquibase, and Email panels alongside the panels that need no application-specific data
  * at all.
  *
- * <p>Deliberately does NOT add Spring Security: BootUI's Spring Security advisor and its own
- * permit-all {@code SecurityWebFilterChain} binding are not yet ported to WebFlux (see
- * {@code BootUiSpringSecurityAutoConfiguration}, servlet-only today), so adding
- * {@code spring-boot-starter-security} here without that binding would make Spring Security's default
- * reactive login wall block every request, including {@code /bootui/**} itself.
+ * <p>Spring Security is wired here via a minimal {@link SecurityConfiguration} so that the BootUI
+ * WebFlux Security advisor is exercised. {@code BootUiReactiveSpringSecurityAutoConfiguration}
+ * inserts a highest-priority permit-all {@code SecurityWebFilterChain} for the {@code /bootui}
+ * surface so the console remains fully accessible without authentication.</p>
  */
 @SpringBootApplication
 @EnableCaching

@@ -35,6 +35,7 @@ import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveLocalhostOnlyFilt
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveLogTailController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveOtelTraceIdProvider;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactivePanelAccessFilter;
+import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveSecurityController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveSecurityEventTraceRegistry;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveSecurityHeadersFilter;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveSecurityLogsController;
@@ -224,6 +225,7 @@ import tools.jackson.databind.ObjectMapper;
     ReactiveSqlTraceController.class,
     ReactiveSecurityLogsController.class,
     ReactiveLiveActivityController.class,
+    ReactiveSecurityController.class,
     EmailController.class,
     KafkaController.class,
     ReactiveLogTailController.class,
@@ -281,6 +283,7 @@ public class BootUiReactiveAutoConfiguration {
             ReactiveSqlTraceController.class.getName(),
             ReactiveSecurityLogsController.class.getName(),
             ReactiveLiveActivityController.class.getName(),
+            ReactiveSecurityController.class.getName(),
             ReactiveBootUiMcpController.class.getName(),
             ReactiveBootUiMcpServerController.class.getName(),
             EmailController.class.getName(),
