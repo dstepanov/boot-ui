@@ -139,6 +139,7 @@ Small interfaces the shared engine calls; each framework implements them. Names 
 | `AuditEventProvider`           | Security audit events (Security Logs)                                | Actuator `AuditEventRepository`                             | CDI security events                          |
 | `SqlTraceSource`               | Captured SQL statements                                              | datasource-proxy                                            | Agroal / JDBC interceptor                    |
 | `KafkaActivityRecorder`        | Kafka messaging capture (Live Activity + the Kafka panel)           | `KafkaTemplate` / `@KafkaListener` `BeanPostProcessor` wrap | SmallRye `Outgoing`/`IncomingInterceptor`    |
+| `RabbitActivityRecorder`       | RabbitMQ messaging capture (Live Activity + the RabbitMQ panel)     | `RabbitTemplate` / `AbstractRabbitListenerContainerFactory` wrap | SmallRye `Outgoing`/`IncomingInterceptor` |
 | `LogCaptureSource`             | Tailed log lines (Log Tail)                                          | logback appender                                            | JBoss LogManager handler                     |
 | `LocalhostGuardBinding`        | Feeds request metadata to the shared guard                           | servlet `Filter`                                            | Vert.x handler                               |
 

@@ -214,7 +214,7 @@ Scope — new event types, roughly in priority order:
   resolved cache to an internal, non-public `AbstractCache` type, so a Spring-style decorator implementing only the
   public `Cache` interface would fail with a `ClassCastException`; there is no comparable runtime interception seam, so
   the Quarkus adapter continues to report `cacheHitRatioPercent: null` (see `docs/QUARKUS-SUPPORT.md`).
-- **Messaging (Kafka/RabbitMQ/JMS) publish and consume — Kafka shipped (both adapters).** The highest-value new-instrumentation
+- **Messaging (Kafka/RabbitMQ) publish and consume — Kafka and RabbitMQ shipped (both adapters).** The highest-value new-instrumentation
   candidate after mail and
   REST calls: async messaging is exactly where a Telescope/Aspire-style console helps most, since message flow is
   otherwise invisible outside the debugger. As scoped below, this landed **Kafka-first**: a `KafkaActivityRecorder`
@@ -225,18 +225,28 @@ Scope — new event types, roughly in priority order:
   like Cache/Mail/REST Client, a `MESSAGING` entry into the merged Live Activity feed (topic, partition, offset, a hash
   of the key, direction, success/failure, consumer group id, listener id, duration).
   Message values/payloads are never captured (out of scope by design, sidestepping the payload-masking problem
-  entirely). Controlled by `bootui.kafka.*` (see `docs/PROPERTIES.md`). RabbitMQ/JMS remain later, separately-scoped
-  follow-ups. The **Quarkus port (SmallRye Reactive Messaging) has now shipped**, reusing the same
+  entirely). Controlled by `bootui.kafka.*` (see `docs/PROPERTIES.md`). **RabbitMQ has now shipped on both
+  adapters** via a parallel `RabbitActivityRecorder` (`bootui-engine`) fed on Spring by
+  `RabbitProducerCaptureBeanPostProcessor` (`addBeforePublishPostProcessors` on every `RabbitTemplate` bean,
+  composing with any existing post-processors) and `RabbitConsumerCaptureBeanPostProcessor` (prepends a
+  `MethodInterceptor` to every `AbstractRabbitListenerContainerFactory`'s advice chain, composing with existing
+  advice, timing the `onMessage(Message)` invocation); on Quarkus it uses the same SmallRye
+  `OutgoingInterceptor`/`IncomingInterceptor` SPI as the Kafka capture
+  (`QuarkusRabbitProducerCapture`/`QuarkusRabbitConsumerCapture`), capability-gated on `IncomingRabbitMQMetadata`
+  class presence via a `registerRabbitCapture` deployment build-step (production-dark, R2), exactly like
+  Hibernate/Cache/Flyway. Both adapters capture direction, exchange, routing key, queue, success/failure, timing,
+  and (opt-in via `bootui.rabbitmq.capture-correlation-id=true`, default `false`) a hashed correlation ID —
+  never the message body or arbitrary headers. The **Quarkus port (SmallRye Reactive Messaging) has shipped**, reusing the same
   `KafkaActivityRecorder` and the same `bootui.kafka.*` keys/defaults: because Quarkus applications use SmallRye's
   `@Incoming`/`@Outgoing` channel model rather than `spring-kafka`'s imperative templates, the capture point is
   SmallRye's `OutgoingInterceptor`/`IncomingInterceptor` SPI, implemented by two `@ApplicationScoped` interceptors
   (`QuarkusKafkaProducerCapture`/`QuarkusKafkaConsumerCapture`, `bootui-quarkus`) that read Kafka record metadata into
   the shared recorder. They are the sole importers of the SmallRye messaging types, capability-gated on `Capability.KAFKA`
   via an `ExcludedTypeBuildItem` exactly like Hibernate/Cache/Flyway/Liquibase (production-dark), a no-op for non-Kafka
-  (in-memory/RabbitMQ/JMS) channels, pass-through/fail-open, and set the lowest interceptor precedence so an
+  (in-memory/JMS) channels, pass-through/fail-open, and set the lowest interceptor precedence so an
   application's own channel interceptor always wins. `LiveActivityResource` merges the captured `MESSAGING` entries into
   the feed adapter-side (top-level, no request correlation) via the shared `KafkaActivityEntries` mapping, so both
-  adapters render byte-identical entries. Unlike the other items above,
+  adapters render byte-identical entries. JMS remains a separately-scoped follow-up. Unlike the other items above,
   this was a materially bigger investment: Kafka,
   RabbitMQ, and JMS are three unrelated client APIs (no single "messaging" abstraction to intercept once), so scope this
   as **Kafka-first**, with RabbitMQ/JMS as later, separately-scoped follow-ups rather than one bundled feature. Each

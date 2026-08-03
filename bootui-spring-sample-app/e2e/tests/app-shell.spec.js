@@ -43,6 +43,7 @@ const allPanelLinks = [
   {id: 'http-probe', title: 'HTTP Probe', heading: /HTTP Probe/},
   {id: 'email', title: 'Email', heading: /^Email/},
   {id: 'kafka', title: 'Kafka', heading: /^Kafka/},
+  {id: 'rabbitmq', title: 'RabbitMQ', heading: /^RabbitMQ/},
   {id: 'rest-client-trace', title: 'REST Client', heading: /^REST Client$/},
   {id: 'architecture', title: 'Architecture', heading: /^Architecture/},
   {id: 'rest-api', title: 'REST API', heading: /^REST API/},
