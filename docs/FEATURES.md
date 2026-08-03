@@ -263,9 +263,10 @@ has one, and honestly reports itself unavailable rather than fabricating a parti
 detection, its row badge, and call-site capture are computed by the same shared engine code as every other adapter,
 so a WebFlux request that resolves a trace-id correlation gets byte-identical flagging to Spring MVC and Quarkus. The
 optional durable persistence backend and the "Use the existing datasource" hot-switch described above work
-identically on WebFlux too, over the same shared engine machinery. The dedicated REST Client panel itself is
-still not available on WebFlux — only its capture and Live Activity merge are. See
-[docs/WEBFLUX-SUPPORT.md](WEBFLUX-SUPPORT.md) for the full detail.
+identically on WebFlux too, over the same shared engine machinery. The dedicated REST Client panel is also available
+on WebFlux (see [docs/WEBFLUX-SUPPORT.md](WEBFLUX-SUPPORT.md) for the full detail), delivering the same
+pause/resume controls, retained-call table, and "Most frequent calls" grouping over `WebClient` calls captured via
+the reactive adapter.
 
 ![BootUI Live Activity panel](./images/bootui-activity.webp)
 
@@ -1170,13 +1171,12 @@ serving-thread-second correlation SQL statements use, and carry a deep link back
 above is not (yet) surfaced as a row-level badge in the merged stream the way SQL's N+1 suspicion is — it is visible only
 in this panel's own "Most frequent calls" table.
 
-**REST Client's dedicated panel is currently available on the Spring MVC (servlet) adapter only.** Its own
-push-updating `/stream` endpoint is built on the servlet-specific `SseEmitter`, so BootUI does not yet expose that full
-panel (with its pause/resume controls, retained-call table, and "Most frequent calls" grouping) on Spring WebFlux or
-Quarkus. However, the underlying outbound-call capture is now shared by both Spring adapters: a WebFlux application's
-own `WebClient` calls are captured and merged into **Live Activity** with the same trace-id-only correlation model that
-WebFlux already uses there for SQL/exceptions/security. Quarkus still has no outbound REST client capture pipeline of
-any kind yet, so both the dedicated panel and Live Activity REST entries remain unavailable on that adapter for now.
+The REST Client panel is available on both the **Spring MVC (servlet)** and **Spring WebFlux (reactive)** adapters.
+On WebFlux, only `WebClient` calls are captured (the `RestClient`/`RestTemplate` interceptors require
+`spring-boot-restclient`, which is a servlet-side module not present on a WebFlux-only classpath); the panel becomes
+available once an instrumented `WebClient` has been built from Spring Boot's auto-configured `WebClient.Builder`.
+Quarkus has no outbound REST client capture pipeline yet, so both the dedicated panel and Live Activity REST entries
+remain unavailable on that adapter for now.
 
 ![BootUI REST Client panel](./images/bootui-rest-client-trace.webp)
 

@@ -331,13 +331,10 @@ public class PanelsController {
     // Kafka/Email/Cache panels gate on their own beans.
     private boolean restClientTraceAvailable() {
         RestClientTraceRecorder recorder = restClientTraceRecorder();
-        return !isReactive() && recorder != null && recorder.hasInstrumentedClient();
+        return recorder != null && recorder.hasInstrumentedClient();
     }
 
     private String restClientTraceUnavailableReason() {
-        if (isReactive()) {
-            return "REST Client is only available on the Spring MVC (servlet) adapter";
-        }
         RestClientTraceRecorder recorder = restClientTraceRecorder();
         if (recorder == null) {
             return "REST client tracing is not configured";

@@ -10,16 +10,16 @@ reactive analog genuinely exists, and an honest "not yet ported" / "not applicab
 ## 2. Current status
 
 The WebFlux adapter serves the large majority of the panel surface — the same 50-panel manifest the servlet adapter
-reports, minus the four panels that stay unavailable for stack reasons described below. **Every action-capable panel
+reports, minus the three panels that stay unavailable for stack reasons described below. **Every action-capable panel
 that is available behaves identically to the servlet adapter**, behind the same shared `LocalhostGuard` write floor:
 Loggers (set level), HTTP Probe, Cache (clear), Flyway (migrate/clean), Liquibase (update), Heap Dump
-(capture/analyze/delete/download), Threads (download), Traces (clear), SQL Trace (toggle recording/clear), the
-advisor scans (Architecture, Spring, Hibernate, Pentesting, REST API, Memory, Vulnerabilities/OSV), and Exceptions
-triage.
+(capture/analyze/delete/download), Threads (download), Traces (clear), SQL Trace (toggle recording/clear),
+REST Client (clear/toggle recording), the advisor scans (Architecture, Spring, Hibernate, Pentesting, REST API,
+Memory, Vulnerabilities/OSV), and Exceptions triage.
 
-Only **HTTP Sessions**, the **Security advisor**, the raw **Spring Security** panel, and the standalone
-**REST Client** panel stay unavailable, each with a panel-specific reason surfaced through the
-`/bootui/api/panels` manifest (and, in turn, the sidebar tooltip and the panel's own alert banner — see §5).
+Only **HTTP Sessions**, the **Security advisor**, and the raw **Spring Security** panel stay unavailable, each with a
+panel-specific reason surfaced through the `/bootui/api/panels` manifest (and, in turn, the sidebar tooltip and the
+panel's own alert banner — see §5).
 `docs/FEATURES.md` and the per-panel `unavailableReason` strings in `PanelsController` are the authoritative, current
 detail.
 
@@ -114,10 +114,10 @@ work identically to the servlet adapter with zero adapter changes, the same as E
 | -------------- | ---------------------------------------------------------------------------------------------------------- |
 | HTTP Exchanges | `ReactiveHttpExchangeRepositoryConfiguration` supplies Actuator's reactive `HttpExchangeRepository` bean instead of the servlet one — same DTO, same UI, same capture semantics |
 
-### 6.3 Rebuilt with a new reactive capture layer (6 panels)
+### 6.3 Rebuilt with a new reactive capture layer (7 panels)
 
 The DTO and UI are reused unchanged; only the capture/streaming source was rewritten because the servlet original
-depended on `SseEmitter` (SQL Trace, Log Tail, Security Logs, Exceptions) or `HandlerExceptionResolver` (Exceptions):
+depended on `SseEmitter` (SQL Trace, Log Tail, Security Logs, Exceptions, REST Client) or `HandlerExceptionResolver` (Exceptions):
 
 | Panel         | Reactive source                                                                                                                                                                        |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -127,6 +127,7 @@ depended on `SseEmitter` (SQL Trace, Log Tail, Security Logs, Exceptions) or `Ha
 | Exceptions    | `ReactiveExceptionsController` + new `ReactiveBootUiExceptionHandler` (a `WebExceptionHandler` at `HIGHEST_PRECEDENCE`, replacing the servlet `HandlerExceptionResolver`); see the fidelity note below |
 | Copilot       | `ReactiveCopilotController` over the same `AgentSessionStore`, SSE via `ReactiveBootUiChangeStream`                     |
 | Claude Code   | `ReactiveClaudeCodeController` over the same `AgentSessionStore`, SSE via `ReactiveBootUiChangeStream`                  |
+| REST Client   | `ReactiveRestClientTraceController` — same `RestClientTraceRecorder` engine, SSE via `ReactiveBootUiChangeStream`. Availability is gated on `RestClientTraceRecorder#hasInstrumentedClient()` (a `WebClient.Builder` auto-configured with the BootUI customizer must have been built); the `RestClient`/`RestTemplate` interceptors are not linked on a WebFlux-only classpath (their `@ConditionalOnClass` gate requires `spring-boot-restclient`), so the recorder only sees `WebClient` customization on this stack, which is the correct signal. |
 
 **`ReactiveBootUiChangeStream`** is a small shared `Sinks.Many`-backed SSE broadcaster (`open()` /
 `signal()` / `close()`) used by every "push an update when something changes" panel above, instead of each controller
@@ -152,8 +153,8 @@ capture wiring (`BootUiEngineConfiguration`) is gated purely on classpath/bean p
 `EmailCaptureService`/`EmailController` the §6.1 Email panel exposes; Kafka messaging is read from
 `KafkaActivityRecorder` (fed by the same `KafkaTemplate`/`@KafkaListener` `BeanPostProcessor` wrapping used on the
 servlet adapter, which has no servlet-specific dependency); and REST/WebClient calls are read from the same
-`RestClientTraceRecorder` fed by `BootUiEngineConfiguration`'s `WebClientCustomizer` (see §6.5 — capture is active
-here even though the *standalone* REST Client panel is not). The servlet adapter's `LiveActivityController`
+`RestClientTraceRecorder` fed by `BootUiEngineConfiguration`'s `WebClientCustomizer` (capture is active on both
+stacks — the standalone panel is now also wired reactively, see §6.3). The servlet adapter's `LiveActivityController`
 additionally depends on two things with no reactive equivalent: a `ServletRequestHandledEvent` listener, which exists
 purely as an SSE-refresh trigger (not a data source), and a thread-based `LiveActivityCorrelator` that stitches a
 request to its downstream activity via serving-thread identity — meaningless on Reactor Netty, where a request is
@@ -206,13 +207,12 @@ OpenTelemetry SDK is present — see §7 for how this was found.
 - The servlet adapter's thread-based correlation (`LiveActivityCorrelator`) is not ported — it has no reactive
   equivalent.
 
-### 6.5 Not yet ported (3 panels)
+### 6.5 Not yet ported (2 panels)
 
 | Panel          | Reason                                                                                                                                                                                        |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Spring Security (raw panel, `spring-security`) | *"Not yet ported for Spring WebFlux: this advisor analyzes the servlet SecurityFilterChain/HttpSecurity configuration model, which has no reactive equivalent wired here yet (a ServerHttpSecurity/SecurityWebFilterChain ruleset is planned)."* `springSecurityAvailable()` now requires `!isReactive()` in addition to the pre-existing classpath/bean checks. |
 | Security advisor (`security`, grouped under Advisors — distinct from the raw Spring Security panel above, grouped under Security) | Also stays unavailable on WebFlux, but needed no dedicated reactive-aware string: `securityAvailable()` checks for a `FilterChainProxy` bean (the servlet security filter, `extends GenericFilterBean`), while a reactive Spring Security setup only ever registers a `WebFilterChainProxy` bean (`implements WebFilter`, package `org.springframework.security.web.server`) — two unrelated types in the same `spring-security-web` jar. The existing check already resolves `false` on WebFlux by construction, so the panel falls through to its pre-existing generic reasons ("Spring Security not on the classpath" / "No Spring Security filter chains are available") rather than a WebFlux-specific one. A reactive ruleset for this advisor is a genuinely new advisor (comparable in scope to the from-scratch Quarkus Security ruleset), deliberately deferred to a follow-up. |
-| REST Client       | *"REST Client is only available on the Spring MVC (servlet) adapter."* — the panel's availability check in `PanelsController` requires `!isReactive()`, so the dedicated full-detail panel (with its own filtering/paging over every captured call) is not wired into `BootUiReactiveAutoConfiguration` regardless of client instrumentation. On the servlet adapter, availability additionally requires `RestClientTraceRecorder#hasInstrumentedClient()` (see `docs/FEATURES.md`), so an MVC app that never builds a `RestClient`/`RestTemplate`/`WebClient` also reports unavailable rather than an empty buffer — the pre-existing bean-presence check alone wasn't a useful signal, since the recorder bean is registered unconditionally on both adapters. **Capture itself is not stack-gated**, though: `BootUiEngineConfiguration`'s `WebClientCustomizer` attaches `RestClientTraceExchangeFilter` to every auto-configured `WebClient.Builder` regardless of web application type, so REST/WebClient calls are still captured into the shared `RestClientTraceRecorder` and still appear as `REST_CLIENT` entries in the Live Activity merge (§6.4) on WebFlux — only the standalone panel is unavailable. |
 
 ### 6.6 Not applicable (1 panel)
 
