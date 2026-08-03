@@ -61,7 +61,7 @@ public class BootUiIndexController {
         this.indexResource = indexResource;
     }
 
-    @GetMapping({"/bootui", "/bootui/"})
+    @GetMapping({"${bootui.path}", "${bootui.path}/"})
     public void spaIndex(HttpServletRequest request, HttpServletResponse response) throws IOException {
         // Include the servlet context path so the SPA's relative assets/API resolve when the host app
         // sets server.servlet.context-path (e.g. /api/bootui/ instead of /bootui/). See #332.

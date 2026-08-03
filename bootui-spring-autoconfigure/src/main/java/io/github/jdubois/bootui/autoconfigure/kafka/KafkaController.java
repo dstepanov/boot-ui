@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @ConditionalOnClass(name = "org.springframework.kafka.core.KafkaTemplate")
-@RequestMapping("/bootui/api/kafka")
+@RequestMapping("${bootui.path}/api/kafka")
 public class KafkaController {
 
     private final ObjectProvider<KafkaActivityRecorder> recorderProvider;

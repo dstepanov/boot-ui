@@ -60,7 +60,7 @@ public class BootUiTelemetryProducer {
                 .orElse(Boolean.TRUE);
         String path = config.getOptionalValue("bootui.path", String.class).orElse("/bootui");
         String apiPath =
-                config.getOptionalValue("bootui.api-path", String.class).orElse("/bootui/api");
+                config.getOptionalValue("bootui.api-path", String.class).orElse(path + "/api");
         return new SelfTelemetryClassifier(excludeSelf, path, apiPath);
     }
 

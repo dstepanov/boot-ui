@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
  * result.</p>
  */
 @RestController
-@RequestMapping("/bootui/api/rest-api")
+@RequestMapping("${bootui.path}/api/rest-api")
 public class RestApiController {
 
     private final RestApiScanner scanner;

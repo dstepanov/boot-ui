@@ -40,6 +40,10 @@ public class QuarkusIndexResource {
 
     static final String ROOT_PATH_KEY = "quarkus.http.root-path";
 
+    static final String BASE_PATH_KEY = "bootui.path";
+
+    static final String DEFAULT_BASE_PATH = "/bootui";
+
     private static final Pattern HEAD_OPEN = Pattern.compile("(?i)<head[^>]*>");
 
     private static final Pattern EXISTING_BASE = Pattern.compile("(?i)<base\\b");
@@ -55,7 +59,8 @@ public class QuarkusIndexResource {
 
     @GET
     public Response index() {
-        String baseHref = normalizeRootPath(rootPath()) + "/bootui/";
+        String bootUiPath = config.getOptionalValue(BASE_PATH_KEY, String.class).orElse(DEFAULT_BASE_PATH);
+        String baseHref = normalizeRootPath(rootPath()) + bootUiPath + "/";
         String html = injectBaseHref(template(), baseHref);
         return Response.ok(html, MediaType.TEXT_HTML_TYPE).build();
     }

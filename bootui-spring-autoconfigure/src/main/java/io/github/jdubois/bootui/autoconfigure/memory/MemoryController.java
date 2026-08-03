@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
  * read, exactly as on the Architecture advisor.</p>
  */
 @RestController
-@RequestMapping("/bootui/api/memory")
+@RequestMapping("${bootui.path}/api/memory")
 public class MemoryController {
 
     private final MemoryScanner scanner;

@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
  * {@code get_beans} tool invokes it directly.</p>
  */
 @RestController
-@RequestMapping("/bootui/api/beans")
+@RequestMapping("${bootui.path}/api/beans")
 public class BeansController {
 
     private final BeansService beansService;

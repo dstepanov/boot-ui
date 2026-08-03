@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @ConditionalOnClass(RepositoryFactoryInformation.class)
-@RequestMapping("/bootui/api/data")
+@RequestMapping("${bootui.path}/api/data")
 public class DataController {
 
     private final ObjectProvider<ListableBeanFactory> beanFactoryProvider;

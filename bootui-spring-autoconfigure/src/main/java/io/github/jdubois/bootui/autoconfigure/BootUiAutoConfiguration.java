@@ -513,8 +513,9 @@ public class BootUiAutoConfiguration {
     }
 
     @Bean
-    public BootUiStaticResourceConfigurer bootUiStaticResourceConfigurer(Environment environment) {
-        return new BootUiStaticResourceConfigurer(environment);
+    public BootUiStaticResourceConfigurer bootUiStaticResourceConfigurer(
+            Environment environment, BootUiProperties properties) {
+        return new BootUiStaticResourceConfigurer(environment, properties);
     }
 
     @Bean

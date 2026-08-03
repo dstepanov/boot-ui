@@ -45,17 +45,12 @@ import org.eclipse.microprofile.config.Config;
 @ApplicationScoped
 public class BootUiProdShellGuardFilter {
 
-    private static final String BASE_PATH = "/bootui";
+    /** Internal classpath path — always {@code /bootui}; the compiled SPA assets live here. */
+    static final String INTERNAL_PATH = "/bootui";
 
-    private static final String API_PATH = BASE_PATH + "/api";
+    /** Config key for the user-facing base path. */
+    static final String BASE_PATH_KEY = "bootui.path";
 
-    /**
-     * Run early, before route dispatch (including the static-resource route), matching
-     * {@link BootUiQuarkusSafetyFilter}'s priority. The exact value relative to the other BootUI filters
-     * does not matter: this filter only ever does meaningful work in {@link LaunchMode#NORMAL}, where
-     * {@link BootUiQuarkusSafetyFilter} and {@link QuarkusPanelAccessFilter} are never wired at all, and in
-     * every other launch mode this filter is an immediate pass-through.
-     */
     private static final int PRIORITY = 1000;
 
     private final Config config;
@@ -79,23 +74,29 @@ public class BootUiProdShellGuardFilter {
         }
 
         String path = rc.normalizedPath();
-        // Cheap pre-check: unlike BootUiQuarkusSafetyFilter (which is prod-dark), this filter is active
-        // for every request in production, so avoid the root-path-aware Config lookup below for the vast
-        // majority of unrelated requests. A path that cannot possibly contain the console under any
-        // root-path prefix is let through immediately; a false positive here just falls through to the
-        // precise check, which is always correct.
-        if (path == null || !path.contains(BASE_PATH)) {
+        // Cheap pre-check: read the configured base path to narrow the check. Any path that cannot
+        // possibly match either the configured path or the internal classpath path (/bootui) is
+        // let through immediately without the more-expensive root-path-aware Config lookup.
+        String configuredPath = bootUiPath();
+        if (path == null || (!path.contains(configuredPath) && !path.contains(INTERNAL_PATH))) {
             rc.next();
             return;
         }
 
         String relativePath = QuarkusRootPath.stripPrefix(path, QuarkusRootPath.normalize(rootPath()));
-        if (isBootUiPath(relativePath)) {
+        String internalApiPath = INTERNAL_PATH + "/api";
+        String configuredApiPath = configuredPath + "/api";
+        if (isBootUiPath(relativePath, configuredPath)) {
+            // Determine the API path for cache-control header differentiation: use the configuredApiPath
+            // for requests at the configured path, internalApiPath for direct internal-path access.
+            String apiPath = relativePath.equals(configuredPath) || relativePath.startsWith(configuredPath + "/")
+                    ? configuredApiPath
+                    : internalApiPath;
             rc.response().setStatusCode(404);
-            if (BootUiSecurityHeaders.removesPragma(relativePath, API_PATH, 404)) {
+            if (BootUiSecurityHeaders.removesPragma(relativePath, apiPath, 404)) {
                 rc.response().headers().remove(BootUiSecurityHeaders.PRAGMA);
             }
-            BootUiSecurityHeaders.headersFor(relativePath, API_PATH, 404).forEach((name, value) -> {
+            BootUiSecurityHeaders.headersFor(relativePath, apiPath, 404).forEach((name, value) -> {
                 if (BootUiSecurityHeaders.overridesExisting(name)
                         || !rc.response().headers().contains(name)) {
                     rc.response().putHeader(name, value);
@@ -108,16 +109,20 @@ public class BootUiProdShellGuardFilter {
     }
 
     /**
-     * Returns {@code true} for the whole BootUI surface — the static shell and {@code /bootui/api/**}
-     * alike — using the same strict boundary check as {@link BootUiQuarkusSafetyFilter#isBootUiRequest}
-     * (an exact match or a {@code /}-delimited sub-path), so a lookalike path such as {@code /bootui-other}
-     * is left alone.
+     * Returns {@code true} for the whole BootUI surface under both the configured base path and
+     * the internal classpath path ({@code /bootui}), so the static Vue assets at their classpath
+     * location are suppressed even when a custom {@code bootui.path} is configured.
      */
-    static boolean isBootUiPath(String path) {
+    static boolean isBootUiPath(String path, String configuredPath) {
         if (path == null) {
             return false;
         }
-        return path.equals(BASE_PATH) || path.startsWith(BASE_PATH + "/");
+        return path.equals(configuredPath) || path.startsWith(configuredPath + "/")
+                || path.equals(INTERNAL_PATH) || path.startsWith(INTERNAL_PATH + "/");
+    }
+
+    private String bootUiPath() {
+        return config.getOptionalValue(BASE_PATH_KEY, String.class).orElse(INTERNAL_PATH);
     }
 
     private String rootPath() {

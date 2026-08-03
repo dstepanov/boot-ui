@@ -24,7 +24,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /** Reactive WebFlux transport for the BootUI MCP server. */
 @RestController
-@RequestMapping("/bootui/api/mcp")
+@RequestMapping("${bootui.path}/api/mcp")
 public class ReactiveBootUiMcpController {
 
     private static final String PAYLOAD_LIMIT_MESSAGE = "Request payload exceeds limit";

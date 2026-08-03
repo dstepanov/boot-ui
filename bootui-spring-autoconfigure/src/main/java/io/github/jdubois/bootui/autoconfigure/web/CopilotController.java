@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>All endpoint behavior lives in {@link AgentSessionController}.
  */
 @RestController
-@RequestMapping("/bootui/api/copilot")
+@RequestMapping("${bootui.path}/api/copilot")
 public class CopilotController extends AgentSessionController {
 
     @Autowired

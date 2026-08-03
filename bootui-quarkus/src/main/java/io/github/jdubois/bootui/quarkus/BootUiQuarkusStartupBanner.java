@@ -31,7 +31,8 @@ public class BootUiQuarkusStartupBanner {
 
     static final String SHOW_BANNER_KEY = "bootui.show-banner";
     static final String ROOT_PATH_KEY = "quarkus.http.root-path";
-    static final String BASE_PATH = "/bootui";
+    static final String BASE_PATH_KEY = "bootui.path";
+    static final String DEFAULT_BASE_PATH = "/bootui";
 
     private static final Logger LOG = Logger.getLogger(BootUiQuarkusStartupBanner.class);
 
@@ -49,7 +50,7 @@ public class BootUiQuarkusStartupBanner {
 
     void onStart(@Observes StartupEvent event) {
         if (showBanner(config)) {
-            LOG.infof("BootUI is available at %s", buildStartupUrl(portSupplier.localServerPort(), rootPath()));
+            LOG.infof("BootUI is available at %s", buildStartupUrl(portSupplier.localServerPort(), rootPath(), bootUiPath()));
         }
         if (authenticator.generated() && remoteAccessConfigured()) {
             LOG.infof("BootUI bearer token for non-local API access: %s", authenticator.token());
@@ -72,6 +73,10 @@ public class BootUiQuarkusStartupBanner {
         return config.getOptionalValue(ROOT_PATH_KEY, String.class).orElse("/");
     }
 
+    private String bootUiPath() {
+        return config.getOptionalValue(BASE_PATH_KEY, String.class).orElse(DEFAULT_BASE_PATH);
+    }
+
     /**
      * Reads {@code bootui.show-banner}, defaulting to {@code true} (Spring parity). SmallRye's boolean converter
      * never throws on an unrecognized value (anything outside the truthy set is {@code false}), so a malformed value
@@ -82,13 +87,13 @@ public class BootUiQuarkusStartupBanner {
     }
 
     /**
-     * Builds {@code http://localhost:<port><normalized-root>/bootui}. The root path is normalized so a default
+     * Builds {@code http://localhost:<port><normalized-root><bootui-path>}. The root path is normalized so a default
      * {@code "/"} (or blank) contributes nothing and any custom root is rendered without a trailing slash — e.g.
      * {@code "/"} → {@code http://localhost:8080/bootui}, {@code "/app"} or {@code "/app/"} →
      * {@code http://localhost:8080/app/bootui}.
      */
-    static String buildStartupUrl(int port, String rootPath) {
-        return "http://localhost:" + port + normalizeRootPath(rootPath) + BASE_PATH;
+    static String buildStartupUrl(int port, String rootPath, String bootUiPath) {
+        return "http://localhost:" + port + normalizeRootPath(rootPath) + bootUiPath;
     }
 
     private static String normalizeRootPath(String rootPath) {

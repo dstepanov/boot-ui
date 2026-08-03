@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
  * keeps {@link #health()} as the call site the MCP {@code get_health} tool invokes.</p>
  */
 @RestController
-@RequestMapping("/bootui/api/health")
+@RequestMapping("${bootui.path}/api/health")
 public class HealthController {
 
     private final HealthService service;

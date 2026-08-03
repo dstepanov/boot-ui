@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.autoconfigure.web;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import io.github.jdubois.bootui.autoconfigure.BootUiProperties;
 import org.springframework.core.env.Environment;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -26,31 +27,30 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  */
 public class BootUiStaticResourceConfigurer implements WebMvcConfigurer {
 
-    // Public: shared verbatim with the reactive (WebFlux) sibling
-    // ReactiveBootUiStaticResourceConfigurer in the ...autoconfigure.reactive package, so both adapters
-    // serve the exact same asset path/location.
-    public static final String ASSET_PATH_PATTERN = "/bootui/**";
-
     public static final String ASSET_LOCATION = "classpath:/META-INF/resources/bootui/";
 
     private static final Logger log = LoggerFactory.getLogger(BootUiStaticResourceConfigurer.class);
 
     private final Environment environment;
 
-    public BootUiStaticResourceConfigurer(Environment environment) {
+    private final BootUiProperties properties;
+
+    public BootUiStaticResourceConfigurer(Environment environment, BootUiProperties properties) {
         this.environment = environment;
+        this.properties = properties;
     }
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler(ASSET_PATH_PATTERN).addResourceLocations(ASSET_LOCATION);
+        String assetPathPattern = properties.getPath() + "/**";
+        registry.addResourceHandler(assetPathPattern).addResourceLocations(ASSET_LOCATION);
 
         if (!environment.getProperty("spring.web.resources.add-mappings", Boolean.class, true)) {
             log.warn(
                     "spring.web.resources.add-mappings is false, which disables Spring Boot's default static "
                             + "resource handling. BootUI registered its own handler for '{}' (serving {}) so the "
                             + "dashboard UI still loads.",
-                    ASSET_PATH_PATTERN,
+                    assetPathPattern,
                     ASSET_LOCATION);
         }
     }

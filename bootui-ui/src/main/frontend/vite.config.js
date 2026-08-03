@@ -35,11 +35,16 @@ function bootstrapIconsSubsetPlugin() {
 // /api/bootui/assets/...). An absolute '/bootui/' base would ignore the context
 // path and 404. The dev server keeps the '/bootui/' base so its /bootui/api
 // proxy below continues to match the SPA's relative API calls.
+//
+// Override the dev-server base and proxy path with BOOTUI_DEV_PATH (e.g.
+// BOOTUI_DEV_PATH=/my-console) when developing against an app that uses a
+// non-default bootui.path. The path must start with '/' and must not be '/'.
+const devBasePath = process.env.BOOTUI_DEV_PATH || '/bootui'
 export default defineConfig(({command}) => ({
-  base: command === 'build' ? './' : '/bootui/',
+  base: command === 'build' ? './' : devBasePath + '/',
   server: {
     proxy: {
-      '/bootui/api': {
+      [devBasePath + '/api']: {
         // Defaults to :8080; override with BOOTUI_API_PROXY_TARGET so the dev
         // server can point at a sample app bound to a dynamic port.
         target: process.env.BOOTUI_API_PROXY_TARGET || 'http://localhost:8080',

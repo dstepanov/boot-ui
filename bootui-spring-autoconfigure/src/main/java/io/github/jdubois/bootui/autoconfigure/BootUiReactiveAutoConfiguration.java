@@ -488,8 +488,9 @@ public class BootUiReactiveAutoConfiguration {
     }
 
     @Bean
-    public ReactiveBootUiStaticResourceConfigurer bootUiReactiveStaticResourceConfigurer(Environment environment) {
-        return new ReactiveBootUiStaticResourceConfigurer(environment);
+    public ReactiveBootUiStaticResourceConfigurer bootUiReactiveStaticResourceConfigurer(
+            Environment environment, BootUiProperties properties) {
+        return new ReactiveBootUiStaticResourceConfigurer(environment, properties);
     }
 
     /**

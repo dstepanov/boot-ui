@@ -41,6 +41,8 @@ public class McpServerResource {
     private final QuarkusPanelAccessConfig accessConfig;
     private final int maxResults;
 
+    private final String mcpEndpoint;
+
     @Inject
     public McpServerResource(McpServerState state, McpDispatcher dispatcher, Config config) {
         this.state = state;
@@ -49,6 +51,8 @@ public class McpServerResource {
         this.maxResults = Math.max(
                 1,
                 config.getOptionalValue("bootui.mcp.max-results", Integer.class).orElse(200));
+        String bootUiPath = config.getOptionalValue("bootui.path", String.class).orElse("/bootui");
+        this.mcpEndpoint = bootUiPath + "/api/mcp";
     }
 
     @GET
@@ -77,7 +81,7 @@ public class McpServerResource {
                 McpProtocol.SERVER_NAME,
                 serverVersion(),
                 "http",
-                "/bootui/api/mcp",
+                mcpEndpoint,
                 McpProtocol.DEFAULT_PROTOCOL_VERSION,
                 maxResults,
                 toolInfos.size(),

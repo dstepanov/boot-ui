@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>All endpoint behavior lives in {@link AgentSessionController}.
  */
 @RestController
-@RequestMapping("/bootui/api/claude-code")
+@RequestMapping("${bootui.path}/api/claude-code")
 public class ClaudeCodeController extends AgentSessionController {
 
     @Autowired

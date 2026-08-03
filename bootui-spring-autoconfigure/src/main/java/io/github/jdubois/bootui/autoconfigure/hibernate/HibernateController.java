@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @ConditionalOnClass(name = {"jakarta.persistence.EntityManagerFactory", "org.hibernate.SessionFactory"})
-@RequestMapping("/bootui/api/hibernate")
+@RequestMapping("${bootui.path}/api/hibernate")
 public class HibernateController {
 
     private final HibernateScanner scanner;

@@ -47,7 +47,7 @@ public class ReactiveBootUiIndexController {
         this.indexResource = indexResource;
     }
 
-    @GetMapping({"/bootui", "/bootui/"})
+    @GetMapping({"${bootui.path}", "${bootui.path}/"})
     public Mono<Void> spaIndex(ServerWebExchange exchange) {
         String baseHref = properties.getPath() + "/";
         String html = BootUiIndexController.injectBaseHref(template(), baseHref);

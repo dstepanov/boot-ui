@@ -9,7 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/bootui/api/devtools")
+@RequestMapping("${bootui.path}/api/devtools")
 public class DevToolsController {
 
     private final DevToolsBridge devTools;

@@ -26,7 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
  * additional configuration is required.</p>
  */
 @RestController
-@RequestMapping("/bootui/api/ai")
+@RequestMapping("${bootui.path}/api/ai")
 public class AiController {
 
     private final AiUsageService service;
