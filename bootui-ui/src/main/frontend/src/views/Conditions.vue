@@ -13,7 +13,8 @@ const loading = ref(false)
 const loadingMore = ref(false)
 const error = ref(null)
 
-let requestId = 0
+let baseAc = null
+let appendAc = null
 let timer = null
 
 const entriesKey = computed(() => (tab.value === 'positive' ? 'positiveMatches' : 'negativeMatches'))
@@ -37,34 +38,77 @@ function buildUrl(offset) {
   return `api/conditions?${params.toString()}`
 }
 
-async function load(options = {}) {
-  const append = options.append === true
-  const id = options.requestId || ++requestId
-  const targetLoading = append ? loadingMore : loading
-  targetLoading.value = true
-  error.value = null
-  try {
-    const next = await getJson(buildUrl(append ? entries.value.length : 0))
-    if (id !== requestId) return
-    data.value =
-      append && data.value
+function cancelAppend() {
+  if (appendAc) {
+    appendAc.abort()
+    appendAc = null
+    loadingMore.value = false
+  }
+}
+
+async function load(loadOpts = {}) {
+  const append = loadOpts.append === true
+
+  if (append) {
+    cancelAppend()
+    const ac = new AbortController()
+    appendAc = ac
+
+    const currentEntries = entries.value
+    loadingMore.value = true
+    try {
+      const next = await getJson(buildUrl(currentEntries.length), {signal: ac.signal})
+      if (appendAc !== ac) return
+      data.value = data.value
         ? {
             ...next,
-            [entriesKey.value]: [...entries.value, ...(next[entriesKey.value] || [])]
+            [entriesKey.value]: [...currentEntries, ...(next[entriesKey.value] || [])]
           }
         : next
-  } catch (e) {
-    if (id === requestId) error.value = describeLoadError(e, 'Unable to load conditions')
-  } finally {
-    if (id === requestId) targetLoading.value = false
+    } catch (e) {
+      if (e.name === 'AbortError') return
+      if (appendAc === ac) error.value = describeLoadError(e, 'Unable to load conditions')
+    } finally {
+      if (appendAc === ac) {
+        appendAc = null
+        loadingMore.value = false
+      }
+    }
+  } else {
+    if (baseAc) {
+      baseAc.abort()
+      baseAc = null
+    }
+    cancelAppend()
+    const ac = new AbortController()
+    baseAc = ac
+
+    loading.value = true
+    error.value = null
+    try {
+      const next = await getJson(buildUrl(0), {signal: ac.signal})
+      if (baseAc !== ac) return
+      data.value = next
+    } catch (e) {
+      if (e.name === 'AbortError') return
+      if (baseAc === ac) error.value = describeLoadError(e, 'Unable to load conditions')
+    } finally {
+      if (baseAc === ac) {
+        baseAc = null
+        loading.value = false
+      }
+    }
   }
 }
 
 function scheduleReload() {
-  requestId += 1
-  const id = requestId
+  if (baseAc) {
+    baseAc.abort()
+    baseAc = null
+  }
+  cancelAppend()
   if (timer) clearTimeout(timer)
-  timer = setTimeout(() => load({requestId: id}), 250)
+  timer = setTimeout(load, 250)
 }
 
 function loadMore() {
@@ -78,7 +122,14 @@ onMounted(load)
 watch([tab, filter], scheduleReload)
 onBeforeUnmount(() => {
   if (timer) clearTimeout(timer)
-  requestId += 1
+  if (baseAc) {
+    baseAc.abort()
+    baseAc = null
+  }
+  if (appendAc) {
+    appendAc.abort()
+    appendAc = null
+  }
 })
 </script>
 

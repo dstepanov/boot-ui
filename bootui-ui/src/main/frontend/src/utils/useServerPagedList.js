@@ -7,12 +7,14 @@ export const SERVER_PAGE_SIZE = 200
 export function useServerPagedList(endpoint, itemsKey, queryParams, options = {}) {
   const pageSize = options.pageSize || SERVER_PAGE_SIZE
   const debounceMs = options.debounceMs || 250
+  const errorContext = options.errorContext || 'Unable to load data'
   const data = ref(null)
   const loading = ref(false)
   const loadingMore = ref(false)
   const error = ref(null)
 
-  let requestId = 0
+  let baseAc = null
+  let appendAc = null
   let timer = null
 
   const items = computed(() => data.value?.[itemsKey] || [])
@@ -35,37 +37,81 @@ export function useServerPagedList(endpoint, itemsKey, queryParams, options = {}
     return `${endpoint}?${params.toString()}`
   }
 
-  async function load(options = {}) {
-    const append = options.append === true
-    const id = options.requestId || ++requestId
-    const targetLoading = append ? loadingMore : loading
-    const currentItems = append ? items.value : []
-    targetLoading.value = true
-    error.value = null
-    try {
-      const res = await apiFetch(buildUrl(currentItems.length))
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const next = await res.json()
-      if (id !== requestId) return
-      data.value =
-        append && data.value
+  function cancelAppend() {
+    if (appendAc) {
+      appendAc.abort()
+      appendAc = null
+      loadingMore.value = false
+    }
+  }
+
+  async function load(loadOpts = {}) {
+    const append = loadOpts.append === true
+
+    if (append) {
+      cancelAppend()
+      const ac = new AbortController()
+      appendAc = ac
+
+      const currentItems = items.value
+      loadingMore.value = true
+      try {
+        const res = await apiFetch(buildUrl(currentItems.length), {signal: ac.signal})
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const next = await res.json()
+        if (appendAc !== ac) return
+        data.value = data.value
           ? {
               ...next,
               [itemsKey]: [...currentItems, ...(next[itemsKey] || [])]
             }
           : next
-    } catch (e) {
-      if (id === requestId) error.value = describeLoadError(e, options.errorContext || 'Unable to load data')
-    } finally {
-      if (id === requestId) targetLoading.value = false
+      } catch (e) {
+        if (e.name === 'AbortError') return
+        if (appendAc === ac) error.value = describeLoadError(e, errorContext)
+      } finally {
+        if (appendAc === ac) {
+          appendAc = null
+          loadingMore.value = false
+        }
+      }
+    } else {
+      if (baseAc) {
+        baseAc.abort()
+        baseAc = null
+      }
+      cancelAppend()
+      const ac = new AbortController()
+      baseAc = ac
+
+      loading.value = true
+      error.value = null
+      try {
+        const res = await apiFetch(buildUrl(0), {signal: ac.signal})
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const next = await res.json()
+        if (baseAc !== ac) return
+        data.value = next
+      } catch (e) {
+        if (e.name === 'AbortError') return
+        if (baseAc === ac) error.value = describeLoadError(e, errorContext)
+      } finally {
+        if (baseAc === ac) {
+          baseAc = null
+          loading.value = false
+        }
+      }
     }
   }
 
   function scheduleReload() {
-    requestId += 1
-    const id = requestId
+    if (baseAc) {
+      baseAc.abort()
+      baseAc = null
+    }
+    cancelAppend()
     if (timer) clearTimeout(timer)
-    timer = setTimeout(() => load({requestId: id}), debounceMs)
+    timer = setTimeout(load, debounceMs)
   }
 
   function loadMore() {
@@ -77,7 +123,14 @@ export function useServerPagedList(endpoint, itemsKey, queryParams, options = {}
 
   onBeforeUnmount(() => {
     if (timer) clearTimeout(timer)
-    requestId += 1
+    if (baseAc) {
+      baseAc.abort()
+      baseAc = null
+    }
+    if (appendAc) {
+      appendAc.abort()
+      appendAc = null
+    }
   })
 
   return {
