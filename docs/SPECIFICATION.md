@@ -285,11 +285,11 @@ Acceptance criteria:
 
 ### 5.2 Beans Explorer
 
-Purpose: answer "Which beans exist, and where did they come from?"
+Purpose: answer "Which beans exist, and where did they come from?" and "How is a given bean wired into the application?"
 
 Data sources:
 
-- Actuator `beans` endpoint.
+- Actuator `beans` endpoint (Spring Boot); Arc/CDI `BeanManager` (Quarkus).
 - Spring application context.
 - Optional internal BootUI metadata for auto-configured vs user-defined beans.
 
@@ -305,12 +305,34 @@ Features:
   - Java/Jakarta platform beans.
   - other beans.
 - Show bean name, type, scope, resource/declaring class when available, dependencies, aliases, and classification.
+- **Dependency graph mode** (toggle in the panel header):
+  - Loads all beans once (up to 2 000; bounded) into a client-side index.
+  - A search field selects the focus bean.
+  - Renders a concentric-ring SVG neighbourhood centred on the focus bean: direct
+    dependencies (focus → node), direct dependents (node → focus), mutual/cycle nodes, and
+    deeper-hop nodes up to depth 3 and 60 nodes total.
+  - Nodes are colour-coded by role (focus, dependency, dependent, mutual, deep) in both
+    light and dark themes at WCAG 2.1 AA contrast.
+  - Clicking any node navigates the graph to that bean's neighbourhood.
+  - When the 60-node or depth-3 limit is reached, a notice explains the truncation.
+  - Cycle-safe: a visited-set prevents infinite BFS traversal on any dependency cycle.
+  - Lazy-loaded: the graph visualization bundle is split from the list view so switching
+    to list mode carries no graph overhead.
+  - Keyboard-navigable: Tab/Enter/Space on each SVG node, visible focus rings, `aria-label` with full bean name.
+  - Reduced-motion: no transition or animation when `prefers-reduced-motion` is active.
+  - **Reduced fidelity on Quarkus:** Arc does not expose inter-bean `dependencies` at
+    runtime; the graph renders a clear "no recorded dependencies or dependents" notice
+    for each focused bean rather than an empty or misleading graph.
 
 Acceptance criteria:
 
 - A developer can find a bean by name or type.
 - A developer can inspect why a bean matters by seeing dependencies.
 - Large applications remain usable through search and lazy loading.
+- A developer can focus any bean and explore its dependency neighbourhood by clicking through nodes.
+- Cycles, isolated beans, depth limits, node limits, and missing dependency data each produce
+  a deterministic, explained result rather than an error or blank state.
+- The existing list/filter/paging behaviour is unchanged when graph mode is not activated.
 
 ### 5.3 Conditions Explorer
 
