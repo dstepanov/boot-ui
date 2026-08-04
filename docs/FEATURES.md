@@ -894,21 +894,24 @@ own beans are hidden by default; when self-data filtering is disabled they are c
 Large bean lists load in bounded pages so the initial payload stays small while filters still apply to the full bean set.
 
 **Dependency graph mode.** A toggle in the panel header switches between the list view (default) and a dependency
-neighbourhood graph. In graph mode all beans are fetched once (up to 2 000, bounded) and indexed client-side; a search
-field lets you type or select a bean name to focus on. The graph renders a concentric-ring SVG showing the focused bean
-at the centre, its direct dependencies (beans it depends on, coloured blue), its direct dependents (beans that depend on
-it, coloured green), mutual / cycle nodes (coloured amber), and deeper-hop nodes (grey) up to three hops away and sixty
-nodes in total. Clicking any node re-focuses the graph on that bean so you can navigate the neighbourhood iteratively.
-When the sixty-node or three-hop limit is hit a notice explains the truncation and invites you to re-focus. The
-visualization is lazy-loaded so switching to the list view incurs no cost from the graph code. Keyboard navigation is
-supported (Tab to move between nodes, Enter or Space to re-focus) and all nodes carry visible focus rings and `aria-label`
-attributes with the full bean name. Reduced-motion preference is respected. The graph respects the light/dark theme.
+neighbourhood graph. Graph mode lazily fetches beans in bounded 1 000-row pages, up to a 2 000-bean client-side inventory;
+if the inventory is larger, the panel reports both the loaded and total counts. A search field accepts a bean name, alias,
+or unique type match. The graph renders a concentric-ring SVG showing the focused bean at the centre, its direct
+dependencies (beans it depends on, coloured blue), its direct dependents (beans that depend on it, coloured green),
+mutual / cycle nodes (coloured amber), and deeper-hop nodes (grey) up to three hops away and sixty nodes in total.
+Clicking any node re-focuses the graph on that bean so you can navigate the neighbourhood iteratively. When the
+sixty-node or three-hop limit is hit, a notice identifies the bound and invites you to re-focus. Duplicate bean names are
+combined deterministically and explained instead of silently dropping one definition. The visualization bundle is
+lazy-loaded, so list mode incurs no graph rendering cost. Keyboard navigation uses one graph tab stop, arrow/Home/End
+movement between nodes, and Enter or Space to re-focus; all nodes carry visible focus rings and `aria-label` attributes
+with the full bean name. The static layout introduces no motion, and its role colours meet contrast requirements in both
+light and dark themes.
 
 **Reduced fidelity on Quarkus.** The Quarkus Arc/CDI adapter does not expose inter-bean `dependencies` at runtime (Arc
 resolves injection points at build time and does not make the wiring graph available programmatically), so the
-`dependencies` array in each `BeanSummary` is empty. The graph mode renders honestly in this case: when a focused bean
-has no dependency data the panel shows a clear "no recorded dependencies or dependents" notice rather than an empty
-graph. Users on Quarkus can still browse the full bean inventory in list mode.
+`dependencies` array in each `BeanSummary` is empty. Graph mode renders a Quarkus-specific reduced-fidelity explanation
+before selection; when a bean is focused, the panel shows a clear "no recorded dependencies or dependents" notice rather
+than an empty graph. Users on Quarkus can still browse the full bean inventory in list mode.
 
 On Quarkus the panel is identical from the UI's point of view, running over the same framework-neutral engine
 `BeansService` and the same `/bootui/api/beans` contract. The Quarkus adapter enumerates beans from the live Arc/CDI

@@ -1,17 +1,20 @@
 <script setup>
-import {computed} from 'vue'
-import {MAX_GRAPH_NODES} from '../utils/useBeanGraph.js'
+import {computed, nextTick, ref} from 'vue'
+import {MAX_GRAPH_DEPTH, MAX_GRAPH_NODES} from '../utils/useBeanGraph.js'
 
 const props = defineProps({
   /** The neighbourhood returned by {@link traverseNeighborhood}. */
   graph: {type: Object, required: true},
   /** Map<name, BeanSummary> used to look up types for tooltip titles. */
   byName: {type: Object, required: true},
+  /** Map<name, BeanSummary[]> retaining duplicate definitions merged into a graph node. */
+  definitionsByName: {type: Object, required: true},
   /** Name of the currently focused bean. */
   focusName: {type: String, required: true}
 })
 
 const emit = defineEmits(['focus'])
+const graphElement = ref(null)
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 const NODE_W = 148
@@ -19,7 +22,8 @@ const NODE_H = 36
 const NODE_RX = 4
 const FONT_SIZE = 11
 /** Minimum arc spacing (px) between adjacent nodes in the same ring. */
-const MIN_ARC_SPACING = 52
+const MIN_ARC_SPACING = NODE_W + 24
+const MIN_RING_GAP = NODE_W + 32
 
 /**
  * Compute the ring radius so adjacent nodes in a ring are at least
@@ -48,7 +52,7 @@ const layout = computed(() => {
   let prevR = 0
   for (const d of depths) {
     const count = byDepth.get(d).length
-    const minR = prevR + Math.max(NODE_W * 1.1, 140)
+    const minR = prevR + MIN_RING_GAP
     const r = ringRadius(count, minR)
     radii.set(d, r)
     prevR = r
@@ -65,7 +69,7 @@ const layout = computed(() => {
   for (const [depth, ring] of byDepth) {
     const r = radii.get(depth) ?? depth * 160
     // Sort for deterministic placement: focus first, then by name
-    const sorted = [...ring].sort((a, b) => a.name.localeCompare(b.name))
+    const sorted = [...ring].sort((a, b) => (a.name === b.name ? 0 : a.name < b.name ? -1 : 1))
     sorted.forEach((node, i) => {
       if (r === 0) {
         pos.set(node.name, {x: cx, y: cy})
@@ -89,9 +93,11 @@ const layout = computed(() => {
       if (dist < 1) return null
       const ux = dx / dist
       const uy = dy / dist
-      // Offset from source border and leave gap for arrowhead at target
-      const srcOffset = Math.max(NODE_W / 2, Math.abs(ux) * (NODE_W / 2)) + 4
-      const dstOffset = Math.max(NODE_H / 2, Math.abs(uy) * (NODE_H / 2)) + 12
+      const horizontalIntersection = Math.abs(ux) > 0.0001 ? NODE_W / 2 / Math.abs(ux) : Number.POSITIVE_INFINITY
+      const verticalIntersection = Math.abs(uy) > 0.0001 ? NODE_H / 2 / Math.abs(uy) : Number.POSITIVE_INFINITY
+      const boundaryOffset = Math.min(horizontalIntersection, verticalIntersection)
+      const srcOffset = boundaryOffset + 4
+      const dstOffset = boundaryOffset + 12
       return {
         key: `${e.from}=>${e.to}`,
         x1: x1 + ux * srcOffset,
@@ -112,24 +118,56 @@ function shortName(name) {
   if (!name) return ''
   const base = name.split('#')[0]
   const parts = base.split('.')
-  return parts[parts.length - 1] || name
+  const value = parts[parts.length - 1] || name
+  const characters = Array.from(value)
+  return characters.length > 18 ? `${characters.slice(0, 17).join('')}…` : value
 }
 
 /** Full type from the index if available, otherwise the name itself. */
 function nodeTitle(name) {
-  const bean = props.byName.get(name)
-  return bean ? `${name}\n${bean.type || ''}` : name
+  const definitions = props.definitionsByName.get(name) || []
+  if (!definitions.length) return `${name}\nReferenced dependency is not present in the loaded bean inventory.`
+  return [name, ...definitions.map((bean) => bean.type).filter(Boolean)].join('\n')
+}
+
+function roleDescription(node) {
+  if (!props.byName.has(node.name)) return 'Referenced dependency is not present in the loaded bean inventory'
+  return {
+    focus: 'Focused bean',
+    dep: 'Direct dependency of the focused bean',
+    rdep: 'Direct dependent of the focused bean',
+    both: 'Mutual dependency with the focused bean',
+    deep: `Bean at depth ${node.depth}`
+  }[node.role]
 }
 
 // ── Event handlers ────────────────────────────────────────────────────────────
-function refocus(name) {
-  if (name !== props.focusName) emit('focus', name)
+async function refocus(name) {
+  if (name === props.focusName || !props.byName.has(name)) return
+  emit('focus', name)
+  await nextTick()
+  graphElement.value?.querySelector('[aria-pressed="true"]')?.focus()
 }
 
 function onKeydown(event, name) {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()
     refocus(name)
+    return
+  }
+  const nodes = [...event.currentTarget.ownerSVGElement.querySelectorAll('.bg-node[role="button"]')]
+  const current = nodes.indexOf(event.currentTarget)
+  const targetIndex = {
+    ArrowRight: (current + 1) % nodes.length,
+    ArrowDown: (current + 1) % nodes.length,
+    ArrowLeft: (current - 1 + nodes.length) % nodes.length,
+    ArrowUp: (current - 1 + nodes.length) % nodes.length,
+    Home: 0,
+    End: nodes.length - 1
+  }[event.key]
+  if (targetIndex !== undefined) {
+    event.preventDefault()
+    nodes[targetIndex]?.focus()
   }
 }
 </script>
@@ -139,7 +177,18 @@ function onKeydown(event, name) {
     <!-- Truncation notice -->
     <div v-if="graph.truncated" class="alert alert-info py-2 small mb-2" role="status">
       <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
-      Graph truncated to {{ MAX_GRAPH_NODES }} nodes. Click any node to re-focus and explore its neighbourhood.
+      <template v-if="graph.nodeLimited && graph.depthLimited">
+        Graph limited to {{ MAX_GRAPH_NODES }} nodes and {{ MAX_GRAPH_DEPTH }} hops.
+      </template>
+      <template v-else-if="graph.nodeLimited"> Graph limited to {{ MAX_GRAPH_NODES }} nodes. </template>
+      <template v-else> Graph limited to {{ MAX_GRAPH_DEPTH }} hops. </template>
+      Focus any node to explore its neighbourhood.
+    </div>
+
+    <div v-if="definitionsByName.get(focusName)?.length > 1" class="alert alert-info py-2 small mb-2" role="status">
+      <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+      {{ definitionsByName.get(focusName).length }} bean definitions share the name <code>{{ focusName }}</code
+      >. Their recorded dependencies are combined in this graph.
     </div>
 
     <!-- No neighbours notice for isolated beans -->
@@ -151,18 +200,21 @@ function onKeydown(event, name) {
     >
       <i class="bi bi-diagram-2 me-1" aria-hidden="true"></i>
       <strong>{{ focusName }}</strong> has no recorded dependencies or dependents.
-      <span v-if="!byName.get(focusName)?.dependencies?.length">
-        Dependency data may not be available on this platform.</span
-      >
     </div>
 
-    <div class="bean-graph-scroll" role="region" aria-label="Bean dependency neighbourhood graph">
+    <div
+      v-if="graph.nodes.length > 1"
+      class="bean-graph-scroll"
+      role="region"
+      aria-label="Bean dependency neighbourhood graph"
+    >
       <svg
+        ref="graphElement"
         :width="layout.svgW"
         :height="layout.svgH"
         :viewBox="`0 0 ${layout.svgW} ${layout.svgH}`"
         class="bean-graph-svg"
-        role="img"
+        role="group"
         :aria-label="`Dependency neighbourhood for ${focusName}: ${graph.nodes.length} nodes, ${graph.edges.length} edges`"
       >
         <!-- Arrowhead marker (dependency direction) -->
@@ -200,15 +252,19 @@ function onKeydown(event, name) {
           :key="node.name"
           :transform="`translate(${(layout.pos.get(node.name)?.x ?? 0) - NODE_W / 2},${(layout.pos.get(node.name)?.y ?? 0) - NODE_H / 2})`"
           :class="['bg-node', `bg-node--${node.role}`]"
-          tabindex="0"
-          role="button"
-          :aria-label="`${node.name}${node.role === 'focus' ? ' (focused)' : ''} — press Enter to focus`"
+          :tabindex="byName.has(node.name) && node.role === 'focus' ? 0 : -1"
+          :role="byName.has(node.name) ? 'button' : 'img'"
+          :aria-label="`${node.name}. ${roleDescription(node)}.${
+            byName.has(node.name) ? ' Use arrow keys to move between nodes; press Enter to focus.' : ''
+          }`"
           :aria-pressed="node.role === 'focus'"
           @click="refocus(node.name)"
           @keydown="onKeydown($event, node.name)"
         >
           <title>{{ nodeTitle(node.name) }}</title>
-          <rect :width="NODE_W" :height="NODE_H" :rx="NODE_RX" />
+          <rect class="bg-focus-ring bg-focus-ring--outer" x="-5" y="-5" :width="NODE_W + 10" :height="NODE_H + 10" />
+          <rect class="bg-focus-ring bg-focus-ring--inner" x="-2" y="-2" :width="NODE_W + 4" :height="NODE_H + 4" />
+          <rect class="bg-node-shape" :width="NODE_W" :height="NODE_H" :rx="NODE_RX" />
           <text :x="NODE_W / 2" :y="NODE_H / 2" text-anchor="middle" dominant-baseline="central" :font-size="FONT_SIZE">
             {{ shortName(node.name) }}
           </text>
@@ -216,8 +272,15 @@ function onKeydown(event, name) {
       </svg>
     </div>
 
+    <ul v-if="graph.nodes.length > 1" class="visually-hidden" aria-label="Bean dependency relationships">
+      <li v-for="node in graph.nodes" :key="`node-${node.name}`">{{ node.name }}: {{ roleDescription(node) }}.</li>
+      <li v-for="edge in graph.edges" :key="`edge-${edge.from}-${edge.to}`">
+        {{ edge.from }} depends on {{ edge.to }}.
+      </li>
+    </ul>
+
     <!-- Legend -->
-    <div class="bg-legend" aria-label="Graph legend">
+    <div v-if="graph.nodes.length > 1" class="bg-legend" aria-label="Graph legend">
       <span class="bg-legend-item">
         <span class="bg-legend-swatch bg-legend-swatch--focus" aria-hidden="true"></span>
         <span>Focus</span>
@@ -246,6 +309,8 @@ function onKeydown(event, name) {
 <style scoped>
 /* ── Container ─────────────────────────────────────────────────────────────── */
 .bean-graph-wrap {
+  --bean-graph-edge: #64748b;
+  --bean-graph-focus: #146c43;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -266,12 +331,12 @@ function onKeydown(event, name) {
 
 /* ── Arrowhead ──────────────────────────────────────────────────────────────── */
 .bg-arrow-poly {
-  fill: var(--bootui-border-alt);
+  fill: var(--bean-graph-edge);
 }
 
 /* ── Edges ──────────────────────────────────────────────────────────────────── */
 .bg-edge {
-  stroke: var(--bootui-border-alt);
+  stroke: var(--bean-graph-edge);
   stroke-width: 1.5;
   fill: none;
 }
@@ -282,16 +347,25 @@ function onKeydown(event, name) {
   outline: none;
 }
 
-/* Keyboard focus ring */
-.bg-node:focus-visible rect {
-  outline: 2px solid var(--bootui-blue);
-  outline-offset: 3px;
+.bg-focus-ring {
+  fill: none;
+  opacity: 0;
+  pointer-events: none;
+  rx: calc(var(--bootui-radius-xs) + 2px);
 }
 
-/* Since SVG doesn't support CSS outline on rects directly, use a box-shadow-equivalent */
-.bg-node:focus-visible rect {
-  stroke: var(--bootui-blue);
-  stroke-width: 2.5;
+.bg-focus-ring--outer {
+  stroke: #fff;
+  stroke-width: 6;
+}
+
+.bg-focus-ring--inner {
+  stroke: #000;
+  stroke-width: 3;
+}
+
+.bg-node:focus-visible .bg-focus-ring {
+  opacity: 1;
 }
 
 .bg-node text {
@@ -302,9 +376,9 @@ function onKeydown(event, name) {
 
 /* ── Node role colours ──────────────────────────────────────────────────────── */
 /* Focus */
-.bg-node--focus rect {
-  fill: var(--bootui-green);
-  stroke: var(--bootui-green-dark);
+.bg-node--focus .bg-node-shape {
+  fill: var(--bean-graph-focus);
+  stroke: var(--bean-graph-focus);
   stroke-width: 1.5;
 }
 .bg-node--focus text {
@@ -313,75 +387,75 @@ function onKeydown(event, name) {
 }
 
 /* Direct dependency (focus → node) */
-.bg-node--dep rect {
-  fill: #dbeafe;
-  stroke: #3b82f6;
+.bg-node--dep .bg-node-shape {
+  fill: color-mix(in srgb, var(--bootui-blue) 14%, transparent);
+  stroke: var(--bootui-blue);
   stroke-width: 1.5;
 }
 .bg-node--dep text {
-  fill: #1e3a5f;
+  fill: var(--bootui-text);
 }
 
 /* Direct dependent (node → focus) */
-.bg-node--rdep rect {
-  fill: #dcfce7;
+.bg-node--rdep .bg-node-shape {
+  fill: color-mix(in srgb, var(--bootui-green) 14%, transparent);
   stroke: var(--bootui-green);
   stroke-width: 1.5;
 }
 .bg-node--rdep text {
-  fill: #14532d;
+  fill: var(--bootui-green-dark);
 }
 
 /* Mutual (dep AND rdep at depth 1) */
-.bg-node--both rect {
-  fill: #fef9c3;
-  stroke: #ca8a04;
+.bg-node--both .bg-node-shape {
+  fill: color-mix(in srgb, var(--bootui-warning) 20%, transparent);
+  stroke: var(--bootui-warning-text-strong);
   stroke-width: 1.5;
 }
 .bg-node--both text {
-  fill: #713f12;
+  fill: var(--bootui-warning-text-strong);
 }
 
 /* Deeper hop */
-.bg-node--deep rect {
+.bg-node--deep .bg-node-shape {
   fill: var(--bootui-surface);
-  stroke: var(--bootui-border-alt);
-  stroke-width: 1;
+  stroke: var(--bean-graph-edge);
+  stroke-width: 1.5;
 }
 .bg-node--deep text {
   fill: var(--bootui-text-muted);
 }
 
 /* ── Dark-mode overrides ─────────────────────────────────────────────────────── */
-:root[data-bootui-theme='dark'] .bg-node--dep rect {
-  fill: #1e3a5f;
-  stroke: #60a5fa;
+:global(:root[data-bootui-theme='dark']) .bg-node--dep .bg-node-shape {
+  fill: color-mix(in srgb, var(--bootui-blue) 16%, transparent);
+  stroke: var(--bootui-blue);
 }
-:root[data-bootui-theme='dark'] .bg-node--dep text {
-  fill: #bfdbfe;
+:global(:root[data-bootui-theme='dark']) .bg-node--dep text {
+  fill: var(--bootui-text);
 }
 
-:root[data-bootui-theme='dark'] .bg-node--rdep rect {
-  fill: #14532d;
+:global(:root[data-bootui-theme='dark']) .bg-node--rdep .bg-node-shape {
+  fill: color-mix(in srgb, var(--bootui-green) 16%, transparent);
   stroke: var(--bootui-green);
 }
-:root[data-bootui-theme='dark'] .bg-node--rdep text {
-  fill: #bbf7d0;
+:global(:root[data-bootui-theme='dark']) .bg-node--rdep text {
+  fill: var(--bootui-text);
 }
 
-:root[data-bootui-theme='dark'] .bg-node--both rect {
-  fill: #422006;
-  stroke: #d97706;
+:global(:root[data-bootui-theme='dark']) .bg-node--both .bg-node-shape {
+  fill: color-mix(in srgb, var(--bootui-warning-text-strong) 16%, transparent);
+  stroke: var(--bootui-warning-text-strong);
 }
-:root[data-bootui-theme='dark'] .bg-node--both text {
-  fill: #fde68a;
+:global(:root[data-bootui-theme='dark']) .bg-node--both text {
+  fill: var(--bootui-text);
 }
 
-:root[data-bootui-theme='dark'] .bg-node--deep rect {
+:global(:root[data-bootui-theme='dark']) .bg-node--deep .bg-node-shape {
   fill: var(--bootui-surface-alt);
-  stroke: var(--bootui-border-alt);
+  stroke: #94a3b8;
 }
-:root[data-bootui-theme='dark'] .bg-node--deep text {
+:global(:root[data-bootui-theme='dark']) .bg-node--deep text {
   fill: var(--bootui-text-muted);
 }
 
@@ -391,7 +465,7 @@ function onKeydown(event, name) {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   color: var(--bootui-text-muted);
 }
 
@@ -405,55 +479,57 @@ function onKeydown(event, name) {
   display: inline-block;
   width: 14px;
   height: 14px;
-  border-radius: 3px;
+  border-radius: var(--bootui-radius-xs);
   border: 1.5px solid transparent;
 }
 
 .bg-legend-swatch--focus {
-  background: var(--bootui-green);
-  border-color: var(--bootui-green-dark);
+  background: var(--bean-graph-focus);
+  border-color: var(--bean-graph-focus);
 }
 .bg-legend-swatch--dep {
-  background: #dbeafe;
-  border-color: #3b82f6;
+  background: color-mix(in srgb, var(--bootui-blue) 14%, transparent);
+  border-color: var(--bootui-blue);
 }
 .bg-legend-swatch--rdep {
-  background: #dcfce7;
+  background: color-mix(in srgb, var(--bootui-green) 14%, transparent);
   border-color: var(--bootui-green);
 }
 .bg-legend-swatch--both {
-  background: #fef9c3;
-  border-color: #ca8a04;
+  background: color-mix(in srgb, var(--bootui-warning) 20%, transparent);
+  border-color: var(--bootui-warning-text-strong);
 }
 .bg-legend-swatch--deep {
   background: var(--bootui-surface);
-  border-color: var(--bootui-border-alt);
+  border-color: var(--bean-graph-edge);
 }
 
-:root[data-bootui-theme='dark'] .bg-legend-swatch--dep {
-  background: #1e3a5f;
-  border-color: #60a5fa;
+:global(:root[data-bootui-theme='dark']) .bg-legend-swatch--dep {
+  background: color-mix(in srgb, var(--bootui-blue) 16%, transparent);
+  border-color: var(--bootui-blue);
 }
-:root[data-bootui-theme='dark'] .bg-legend-swatch--rdep {
-  background: #14532d;
+:global(:root[data-bootui-theme='dark']) .bg-legend-swatch--rdep {
+  background: color-mix(in srgb, var(--bootui-green) 16%, transparent);
   border-color: var(--bootui-green);
 }
-:root[data-bootui-theme='dark'] .bg-legend-swatch--both {
-  background: #422006;
-  border-color: #d97706;
+:global(:root[data-bootui-theme='dark']) .bg-legend-swatch--both {
+  background: color-mix(in srgb, var(--bootui-warning-text-strong) 16%, transparent);
+  border-color: var(--bootui-warning-text-strong);
+}
+
+:global(:root[data-bootui-theme='dark']) .bean-graph-wrap {
+  --bean-graph-edge: #94a3b8;
+}
+
+@media (forced-colors: active) {
+  .bg-focus-ring--outer,
+  .bg-focus-ring--inner {
+    stroke: Highlight;
+  }
 }
 
 .bg-legend-arrow-note {
   margin-left: auto;
-  font-size: 0.75rem;
-  opacity: 0.65;
-}
-
-/* ── Reduced motion ──────────────────────────────────────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  .bg-node,
-  .bg-edge {
-    transition: none;
-  }
+  font-size: 0.85rem;
 }
 </style>

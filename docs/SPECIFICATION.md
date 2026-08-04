@@ -306,23 +306,27 @@ Features:
   - other beans.
 - Show bean name, type, scope, resource/declaring class when available, dependencies, aliases, and classification.
 - **Dependency graph mode** (toggle in the panel header):
-  - Loads all beans once (up to 2 000; bounded) into a client-side index.
-  - A search field selects the focus bean.
+  - Loads beans in bounded 1 000-row pages once graph mode is activated, up to a 2 000-bean client-side inventory. When
+    more beans exist, the UI reports the loaded and total counts instead of implying that the graph is complete.
+  - A search field selects the focus bean by name, alias, or a unique type match.
   - Renders a concentric-ring SVG neighbourhood centred on the focus bean: direct
     dependencies (focus → node), direct dependents (node → focus), mutual/cycle nodes, and
     deeper-hop nodes up to depth 3 and 60 nodes total.
   - Nodes are colour-coded by role (focus, dependency, dependent, mutual, deep) in both
     light and dark themes at WCAG 2.1 AA contrast.
   - Clicking any node navigates the graph to that bean's neighbourhood.
-  - When the 60-node or depth-3 limit is reached, a notice explains the truncation.
+  - When the 60-node or depth-3 limit is reached, a notice identifies which bound was reached.
   - Cycle-safe: a visited-set prevents infinite BFS traversal on any dependency cycle.
+  - Duplicate bean names are represented by one deterministic node with the definitions' dependencies merged; focusing
+    that node explains the ambiguity rather than silently discarding a definition.
   - Lazy-loaded: the graph visualization bundle is split from the list view so switching
     to list mode carries no graph overhead.
-  - Keyboard-navigable: Tab/Enter/Space on each SVG node, visible focus rings, `aria-label` with full bean name.
-  - Reduced-motion: no transition or animation when `prefers-reduced-motion` is active.
+  - Keyboard-navigable: one graph tab stop, arrow/Home/End movement between SVG nodes, Enter/Space to focus, visible
+    focus rings, and an `aria-label` with the full bean name.
+  - Reduced-motion safe: the graph uses a deterministic static layout with no motion or transition.
   - **Reduced fidelity on Quarkus:** Arc does not expose inter-bean `dependencies` at
-    runtime; the graph renders a clear "no recorded dependencies or dependents" notice
-    for each focused bean rather than an empty or misleading graph.
+    runtime; graph mode renders a platform-specific explanation before selection and a clear "no recorded dependencies
+    or dependents" notice for each focused bean rather than an empty or misleading graph.
 
 Acceptance criteria:
 

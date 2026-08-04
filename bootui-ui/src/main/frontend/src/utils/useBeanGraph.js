@@ -4,31 +4,55 @@ import {describeLoadError} from './loadError.js'
 
 /** Maximum beans to fetch when building the graph index. */
 export const MAX_GRAPH_LOAD = 2000
+/** The shared backend paging helper caps every response at 1 000 rows. */
+export const GRAPH_LOAD_PAGE_SIZE = 1000
 /** Maximum nodes to include in a single neighbourhood render. */
 export const MAX_GRAPH_NODES = 60
 /** Maximum BFS hop depth from the focused node in either direction. */
 export const MAX_GRAPH_DEPTH = 3
+
+function compareCodeUnits(a, b) {
+  if (a === b) return 0
+  return a < b ? -1 : 1
+}
 
 /**
  * Builds a forward dependency index (name → BeanSummary) and a reverse index
  * (name → Set of dependent names) from a flat bean list.
  *
  * @param {Array} beans  Array of BeanSummary objects.
- * @returns {{ byName: Map<string,object>, reverseIndex: Map<string,Set<string>> }}
+ * Duplicate names can occur across Spring application contexts or for synthetic CDI names. Their
+ * dependency lists are merged under one stable graph node, while definitionsByName keeps the
+ * original summaries so the UI can explain the ambiguity.
+ *
+ * @returns {{
+ *   byName: Map<string,object>,
+ *   definitionsByName: Map<string,Array<object>>,
+ *   reverseIndex: Map<string,Set<string>>
+ * }}
  */
 export function buildGraphIndex(beans) {
-  const byName = new Map()
+  const definitionsByName = new Map()
   for (const bean of beans) {
-    byName.set(bean.name, bean)
+    if (!bean?.name) continue
+    if (!definitionsByName.has(bean.name)) definitionsByName.set(bean.name, [])
+    definitionsByName.get(bean.name).push(bean)
   }
+
+  const byName = new Map()
+  for (const [name, definitions] of [...definitionsByName].sort(([a], [b]) => compareCodeUnits(a, b))) {
+    const dependencies = [...new Set(definitions.flatMap((bean) => bean.dependencies || []))].sort(compareCodeUnits)
+    byName.set(name, {...definitions[0], dependencies})
+  }
+
   const reverseIndex = new Map()
-  for (const bean of beans) {
+  for (const bean of byName.values()) {
     for (const dep of bean.dependencies || []) {
       if (!reverseIndex.has(dep)) reverseIndex.set(dep, new Set())
       reverseIndex.get(dep).add(bean.name)
     }
   }
-  return {byName, reverseIndex}
+  return {byName, definitionsByName, reverseIndex}
 }
 
 /**
@@ -47,7 +71,13 @@ export function buildGraphIndex(beans) {
  * @param {Map<string,Set>}     reverseIndex  Reverse dependency index.
  * @param {number}              maxNodes      Node limit (default {@link MAX_GRAPH_NODES}).
  * @param {number}              maxDepth      Hop depth limit (default {@link MAX_GRAPH_DEPTH}).
- * @returns {{ nodes: Array, edges: Array, truncated: boolean }}
+ * @returns {{
+ *   nodes: Array,
+ *   edges: Array,
+ *   truncated: boolean,
+ *   depthLimited: boolean,
+ *   nodeLimited: boolean
+ * }}
  */
 export function traverseNeighborhood(
   focusName,
@@ -57,83 +87,62 @@ export function traverseNeighborhood(
   maxDepth = MAX_GRAPH_DEPTH
 ) {
   if (!byName.has(focusName)) {
-    return {nodes: [], edges: [], truncated: false}
+    return {nodes: [], edges: [], truncated: false, depthLimited: false, nodeLimited: false}
   }
 
-  const visited = new Set()
-  const nodeDetails = new Map() // name → {name, depth, role}
-  const edgeSet = new Set()
+  const safeMaxNodes = Math.max(1, maxNodes)
+  const safeMaxDepth = Math.max(0, maxDepth)
+  const nodeDetails = new Map([[focusName, {name: focusName, depth: 0, role: 'focus'}]])
+  const queue = [{name: focusName, depth: 0}]
+  let nodeLimited = false
+  let depthLimited = false
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const {name, depth} = queue[index]
+    const dependencies = [...new Set(byName.get(name)?.dependencies || [])].sort(compareCodeUnits)
+    const dependents = [...(reverseIndex.get(name) || [])].sort(compareCodeUnits)
+    const neighbours = [...new Set([...dependencies, ...dependents])].sort(compareCodeUnits)
+
+    if (depth >= safeMaxDepth) {
+      if (neighbours.some((neighbour) => !nodeDetails.has(neighbour))) depthLimited = true
+      continue
+    }
+
+    for (const neighbour of neighbours) {
+      if (nodeDetails.has(neighbour)) continue
+      if (nodeDetails.size >= safeMaxNodes) {
+        nodeLimited = true
+        continue
+      }
+
+      const nextDepth = depth + 1
+      let role = 'deep'
+      if (nextDepth === 1) {
+        const dependency = dependencies.includes(neighbour)
+        const dependent = dependents.includes(neighbour)
+        role = dependency && dependent ? 'both' : dependency ? 'dep' : 'rdep'
+      }
+      nodeDetails.set(neighbour, {name: neighbour, depth: nextDepth, role})
+      queue.push({name: neighbour, depth: nextDepth})
+    }
+  }
+
+  const included = new Set(nodeDetails.keys())
   const edges = []
-  let truncated = false
-
-  function tryAdd(name, depth, role) {
-    if (visited.has(name)) return false
-    if (nodeDetails.size >= maxNodes) {
-      truncated = true
-      return false
-    }
-    visited.add(name)
-    nodeDetails.set(name, {name, depth, role})
-    return true
-  }
-
-  function addEdge(from, to) {
-    const key = `${from}=>${to}`
-    if (!edgeSet.has(key)) {
-      edgeSet.add(key)
-      edges.push({from, to})
+  for (const from of [...included].sort(compareCodeUnits)) {
+    const dependencies = [...new Set(byName.get(from)?.dependencies || [])].sort(compareCodeUnits)
+    for (const to of dependencies) {
+      if (included.has(to)) edges.push({from, to})
     }
   }
 
-  // Focus node
-  tryAdd(focusName, 0, 'focus')
-  const focusBean = byName.get(focusName)
-
-  // --- Depth-1: direct dependencies (focus → dep) ---
-  for (const dep of focusBean?.dependencies || []) {
-    tryAdd(dep, 1, 'dep')
-    addEdge(focusName, dep)
+  return {
+    nodes: Array.from(nodeDetails.values()),
+    edges,
+    truncated: nodeLimited || depthLimited,
+    depthLimited,
+    nodeLimited
   }
-
-  // --- Depth-1: direct dependents (rdep → focus) ---
-  for (const rdep of reverseIndex.get(focusName) || new Set()) {
-    if (!visited.has(rdep)) {
-      tryAdd(rdep, 1, 'rdep')
-    } else {
-      // Already added as a direct dep → mutual / cycle at depth 1
-      const nd = nodeDetails.get(rdep)
-      if (nd && nd.depth === 1 && nd.role === 'dep') nd.role = 'both'
-    }
-    addEdge(rdep, focusName)
-  }
-
-  // --- BFS for depth 2+ ---
-  if (maxDepth > 1) {
-    const queue = []
-    for (const [name, info] of nodeDetails) {
-      if (info.depth === 1) queue.push({name, depth: 1})
-    }
-    let qi = 0
-    while (qi < queue.length) {
-      const {name, depth} = queue[qi++]
-      if (depth >= maxDepth) continue
-      const bean = byName.get(name)
-      if (!bean) continue
-
-      for (const dep of bean.dependencies || []) {
-        const added = tryAdd(dep, depth + 1, 'deep')
-        addEdge(name, dep)
-        if (added) queue.push({name: dep, depth: depth + 1})
-      }
-      for (const rdep of reverseIndex.get(name) || new Set()) {
-        const added = tryAdd(rdep, depth + 1, 'deep')
-        addEdge(rdep, name)
-        if (added) queue.push({name: rdep, depth: depth + 1})
-      }
-    }
-  }
-
-  return {nodes: Array.from(nodeDetails.values()), edges, truncated}
 }
 
 /**
@@ -147,9 +156,12 @@ export function traverseNeighborhood(
  *   allBeans: import('vue').Ref<Array>,
  *   beanNames: import('vue').ComputedRef<string[]>,
  *   byName: import('vue').ComputedRef<Map>,
+ *   definitionsByName: import('vue').ComputedRef<Map>,
  *   error: import('vue').Ref,
  *   focusName: import('vue').Ref<string|null>,
  *   graph: import('vue').ComputedRef,
+ *   inventoryTotal: import('vue').Ref<number>,
+ *   inventoryTruncated: import('vue').Ref<boolean>,
  *   loaded: import('vue').Ref<boolean>,
  *   loading: import('vue').Ref<boolean>,
  *   loadAll: function,
@@ -162,26 +174,16 @@ export function useBeanGraph() {
   const error = ref(null)
   const focusName = ref(null)
   const loaded = ref(false)
+  const inventoryTotal = ref(0)
+  const inventoryTruncated = ref(false)
 
-  const byName = computed(() => {
-    const m = new Map()
-    for (const b of allBeans.value) m.set(b.name, b)
-    return m
-  })
-
-  const reverseIndex = computed(() => {
-    const m = new Map()
-    for (const b of allBeans.value) {
-      for (const dep of b.dependencies || []) {
-        if (!m.has(dep)) m.set(dep, new Set())
-        m.get(dep).add(b.name)
-      }
-    }
-    return m
-  })
+  const index = computed(() => buildGraphIndex(allBeans.value))
+  const byName = computed(() => index.value.byName)
+  const definitionsByName = computed(() => index.value.definitionsByName)
+  const reverseIndex = computed(() => index.value.reverseIndex)
 
   /** Sorted list of all bean names; used to populate the focus-search datalist. */
-  const beanNames = computed(() => allBeans.value.map((b) => b.name).sort((a, b) => a.localeCompare(b)))
+  const beanNames = computed(() => [...byName.value.keys()])
 
   /** Neighbourhood graph for the currently focused bean, or {@code null}. */
   const graph = computed(() => {
@@ -191,15 +193,30 @@ export function useBeanGraph() {
 
   /** Load all beans (up to {@link MAX_GRAPH_LOAD}) once. Subsequent calls are no-ops. */
   async function loadAll() {
-    if (loaded.value) return
+    if (loaded.value || loading.value) return
     loading.value = true
     error.value = null
     try {
-      const params = new URLSearchParams({offset: '0', limit: String(MAX_GRAPH_LOAD)})
-      const res = await apiFetch(`api/beans?${params}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      allBeans.value = data.beans || []
+      const beans = []
+      let hasMore = true
+      let total = 0
+      while (hasMore && beans.length < MAX_GRAPH_LOAD) {
+        const params = new URLSearchParams({
+          offset: String(beans.length),
+          limit: String(Math.min(GRAPH_LOAD_PAGE_SIZE, MAX_GRAPH_LOAD - beans.length))
+        })
+        const res = await apiFetch(`api/beans?${params}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        const pageBeans = data.beans || []
+        beans.push(...pageBeans)
+        total = data.page?.matched ?? data.total ?? beans.length
+        hasMore = data.page?.hasMore === true
+        if (pageBeans.length === 0) break
+      }
+      allBeans.value = beans
+      inventoryTotal.value = total
+      inventoryTruncated.value = hasMore || total > beans.length
       loaded.value = true
     } catch (e) {
       error.value = describeLoadError(e, 'Could not load beans for graph')
@@ -213,5 +230,19 @@ export function useBeanGraph() {
     focusName.value = name || null
   }
 
-  return {allBeans, beanNames, byName, error, focusName, graph, loaded, loading, loadAll, setFocus}
+  return {
+    allBeans,
+    beanNames,
+    byName,
+    definitionsByName,
+    error,
+    focusName,
+    graph,
+    inventoryTotal,
+    inventoryTruncated,
+    loaded,
+    loading,
+    loadAll,
+    setFocus
+  }
 }

@@ -1,5 +1,12 @@
-import {describe, expect, it} from 'vitest'
-import {buildGraphIndex, MAX_GRAPH_DEPTH, MAX_GRAPH_NODES, traverseNeighborhood} from '../utils/useBeanGraph.js'
+import {describe, expect, it, vi} from 'vitest'
+import {
+  buildGraphIndex,
+  GRAPH_LOAD_PAGE_SIZE,
+  MAX_GRAPH_DEPTH,
+  MAX_GRAPH_NODES,
+  traverseNeighborhood,
+  useBeanGraph
+} from '../utils/useBeanGraph.js'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -62,6 +69,19 @@ describe('buildGraphIndex', () => {
     const {byName, reverseIndex} = graphIndex([])
     expect(byName.size).toBe(0)
     expect(reverseIndex.size).toBe(0)
+  })
+
+  it('merges duplicate bean names deterministically without losing dependencies', () => {
+    const {byName, definitionsByName, reverseIndex} = graphIndex([
+      bean('shared', ['z']),
+      bean('shared', ['a'], 'com.example.SecondShared'),
+      bean('a'),
+      bean('z')
+    ])
+
+    expect(byName.get('shared').dependencies).toEqual(['a', 'z'])
+    expect(definitionsByName.get('shared')).toHaveLength(2)
+    expect(reverseIndex.get('a')).toEqual(new Set(['shared']))
   })
 })
 
@@ -209,6 +229,15 @@ describe('traverseNeighborhood — node limit', () => {
     expect(truncated).toBe(true)
   })
 
+  it('reports node and depth bounds separately', () => {
+    const beans = [bean('a', ['b', 'c']), bean('b', ['d']), bean('c'), bean('d')]
+    const nodeLimited = traverse('a', beans, {maxNodes: 2, maxDepth: 3})
+    const depthLimited = traverse('a', beans, {maxNodes: 20, maxDepth: 1})
+
+    expect(nodeLimited).toMatchObject({truncated: true, nodeLimited: true})
+    expect(depthLimited).toMatchObject({truncated: true, depthLimited: true, nodeLimited: false})
+  })
+
   it('never exceeds maxNodes in the returned list', () => {
     const beans = [
       bean(
@@ -219,6 +248,13 @@ describe('traverseNeighborhood — node limit', () => {
     ]
     const {nodes} = traverse('a', beans, {maxNodes: 8})
     expect(nodes.length).toBeLessThanOrEqual(8)
+  })
+
+  it('uses locale-independent ordering when the node bound is reached', () => {
+    const beans = [bean('focus', ['äBean', 'zBean']), bean('äBean'), bean('zBean')]
+    const {nodes} = traverse('focus', beans, {maxNodes: 2})
+
+    expect(nodeNames(nodes)).toEqual(['focus', 'zBean'])
   })
 
   it('sets truncated=false when well below the limit', () => {
@@ -249,6 +285,11 @@ describe('traverseNeighborhood — multi-hop', () => {
     const {nodes} = traverse('a', beans, {maxDepth: 2})
     const cNode = nodes.find((n) => n.name === 'c')
     expect(cNode.role).toBe('deep')
+  })
+
+  it('keeps cycle edges between already included nodes', () => {
+    const {edges} = traverse('a', [bean('a', ['b']), bean('b', ['c']), bean('c', ['a'])], {maxDepth: 2})
+    expect(edgePairs(edges)).toEqual(['a=>b', 'b=>c', 'c=>a'])
   })
 })
 
@@ -284,5 +325,64 @@ describe('traverseNeighborhood — reduced fidelity', () => {
     expect(nodeNames(nodes)).toContain('a')
     expect(edgePairs(edges)).toContain('a=>ghostBean')
     expect(truncated).toBe(false)
+  })
+})
+
+describe('useBeanGraph loading', () => {
+  it('paginates through the backend 1 000-row cap up to the graph inventory bound', async () => {
+    const first = Array.from({length: GRAPH_LOAD_PAGE_SIZE}, (_, index) => bean(`bean${index}`))
+    const second = [bean('bean1000')]
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          total: 1001,
+          beans: first,
+          page: {matched: 1001, returned: 1000, hasMore: true}
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          total: 1001,
+          beans: second,
+          page: {matched: 1001, returned: 1, hasMore: false}
+        })
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const graph = useBeanGraph()
+    await graph.loadAll()
+
+    expect(graph.allBeans.value).toHaveLength(1001)
+    expect(graph.inventoryTruncated.value).toBe(false)
+    expect(fetchMock).toHaveBeenNthCalledWith(2, expect.stringContaining('offset=1000'), expect.anything())
+    vi.unstubAllGlobals()
+  })
+
+  it('marks the inventory truncated when more than 2 000 beans exist', async () => {
+    const page = Array.from({length: GRAPH_LOAD_PAGE_SIZE}, (_, index) => bean(`bean${index}`))
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({total: 2500, beans: page, page: {matched: 2500, hasMore: true}})
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({total: 2500, beans: page, page: {matched: 2500, hasMore: true}})
+        })
+    )
+
+    const graph = useBeanGraph()
+    await graph.loadAll()
+
+    expect(graph.allBeans.value).toHaveLength(2000)
+    expect(graph.inventoryTotal.value).toBe(2500)
+    expect(graph.inventoryTruncated.value).toBe(true)
+    vi.unstubAllGlobals()
   })
 })

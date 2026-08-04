@@ -125,18 +125,21 @@ test.describe('Beans view', () => {
     ]
 
     test('shows the graph mode toggle and switches to graph view', async ({openView, page}) => {
-      await page.route('**/bootui/api/beans?*', (route) =>
-        route.fulfill({
+      const requestedLimits = []
+      await page.route('**/bootui/api/beans?*', (route) => {
+        requestedLimits.push(new URL(route.request().url()).searchParams.get('limit'))
+        return route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify(beanListResponse(graphBeans))
         })
-      )
+      })
       await openView('beans', 'Beans')
 
       // The graph toggle button should be present
       const graphBtn = page.getByRole('button', {name: 'Dependency graph'})
       await expect(graphBtn).toBeVisible()
+      expect(requestedLimits).not.toContain('1000')
 
       // Activate graph mode
       await graphBtn.click()
@@ -144,6 +147,7 @@ test.describe('Beans view', () => {
       // The list table should be gone; the focus search should appear
       await expect(page.locator('table')).not.toBeVisible()
       await expect(page.getByPlaceholder(/Search for a bean/)).toBeVisible()
+      await expect.poll(() => requestedLimits).toContain('1000')
     })
 
     test('renders the neighbourhood graph after focusing a bean', async ({openView, page}) => {
@@ -199,6 +203,51 @@ test.describe('Beans view', () => {
 
       // orderRepository should now be the focus node (aria-pressed="true")
       await expect(page.locator('[aria-label*="orderRepository"][aria-pressed="true"]')).toBeVisible()
+    })
+
+    test('supports roving keyboard navigation and focus selection', async ({openView, page}) => {
+      await page.route('**/bootui/api/beans?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(beanListResponse(graphBeans))
+        })
+      )
+      await openView('beans', 'Beans')
+      await page.getByRole('button', {name: 'Dependency graph'}).click()
+      const focusInput = page.getByPlaceholder(/Search for a bean/)
+      await focusInput.fill('orderService')
+      await focusInput.press('Enter')
+
+      const focusNode = page.locator('.bg-node[aria-pressed="true"]')
+      await focusNode.focus()
+      await focusNode.press('ArrowRight')
+      const movedNode = page.locator('.bg-node:focus')
+      await expect(movedNode).not.toHaveAttribute('aria-pressed', 'true')
+      const movedName = (await movedNode.getAttribute('aria-label')).split('.')[0]
+      await movedNode.press('Enter')
+      await expect(page.locator(`[aria-label^="${movedName}"][aria-pressed="true"]`)).toBeFocused()
+    })
+
+    test('uses a motion-free graph when reduced motion is requested', async ({openView, page}) => {
+      await page.emulateMedia({reducedMotion: 'reduce'})
+      await page.route('**/bootui/api/beans?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(beanListResponse(graphBeans))
+        })
+      )
+      await openView('beans', 'Beans')
+      await page.getByRole('button', {name: 'Dependency graph'}).click()
+      const focusInput = page.getByPlaceholder(/Search for a bean/)
+      await focusInput.fill('orderService')
+      await focusInput.press('Enter')
+
+      const node = page.locator('.bg-node').first()
+      await expect(node).toBeVisible()
+      expect(await node.evaluate((element) => getComputedStyle(element).animationName)).toBe('none')
+      expect(await node.evaluate((element) => getComputedStyle(element).transitionDuration)).toBe('0s')
     })
 
     test('returns to list view when the list toggle is clicked', async ({openView, page}) => {
