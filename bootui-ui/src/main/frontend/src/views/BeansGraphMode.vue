@@ -37,7 +37,7 @@ const {
   loadAll,
   reverseIndex,
   setFocus
-} = useBeanGraph()
+} = useBeanGraph(graphClassification)
 
 const conditionEntries = ref([])
 const conditionError = ref(null)
@@ -48,15 +48,16 @@ let conditionRequestId = 0
 
 const focusedDefinitions = computed(() => definitionsByName.value.get(focusName.value) || [])
 const focusedBean = computed(() => byName.value.get(focusName.value) || null)
-const directDependents = computed(() => reverseIndex.value.get(focusName.value)?.size || 0)
-const focusBeanNames = computed(() =>
-  beanNames.value.filter(
-    (name) =>
-      !graphClassification.value ||
-      (definitionsByName.value.get(name) || []).some((bean) => bean.classification === graphClassification.value)
-  )
-)
+const focusBeanNames = computed(() => beanNames.value)
 const focusBeanNameSet = computed(() => new Set(focusBeanNames.value))
+const directDependencies = computed(
+  () =>
+    focusedBean.value?.dependencies?.filter((name) => !byName.value.has(name) || focusBeanNameSet.value.has(name))
+      .length || 0
+)
+const directDependents = computed(
+  () => [...(reverseIndex.value.get(focusName.value) || [])].filter((name) => focusBeanNameSet.value.has(name)).length
+)
 const focusClassificationLabel = computed(() =>
   graphClassification.value ? graphClassification.value.toLowerCase() : 'loaded'
 )
@@ -322,7 +323,7 @@ async function loadConditionEvidence() {
             </div>
             <div>
               <dt>Dependencies</dt>
-              <dd>{{ focusedBean?.dependencies?.length || 0 }}</dd>
+              <dd>{{ directDependencies }}</dd>
             </div>
             <div>
               <dt>Dependents</dt>

@@ -896,9 +896,10 @@ Large bean lists load in bounded pages so the initial payload stays small while 
 **Dependency graph mode.** The panel opens on the dependency neighbourhood graph; a header toggle switches to the
 server-paged list when needed. Graph mode fetches beans in bounded 1 000-row pages, up to a 2 000-bean client-side
 inventory; if the inventory is larger, the panel reports both the loaded and total counts. Focus search starts with
-Application beans selected while a classification control can broaden the available starting points. The full inventory
-remains indexed so framework dependencies of an application bean are still represented. A search field accepts a bean
-name, alias, or unique type match. The graph renders a concentric-ring SVG showing the focused bean at the centre, its direct
+Application beans selected while a classification control can switch the graph to Framework, BootUI, Platform, Other, or
+all beans. The selected classification applies to both focus choices and rendered neighbours, so the Application graph
+contains only host-application beans. A search field accepts a bean name, alias, or unique type match. The graph renders a
+concentric-ring SVG showing the focused bean at the centre, its direct
 dependencies (beans it depends on, coloured blue), its direct dependents (beans that depend on it, coloured green),
 mutual / cycle nodes (coloured amber), and deeper-hop nodes (grey) up to three hops away and sixty nodes in total.
 Clicking any node re-focuses the graph on that bean so you can navigate the neighbourhood iteratively. When the

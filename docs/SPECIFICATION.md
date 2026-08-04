@@ -312,8 +312,8 @@ Features:
   - Loads beans in bounded 1 000-row pages, up to a 2 000-bean client-side inventory. When
     more beans exist, the UI reports the loaded and total counts instead of implying that the graph is complete.
   - A search field selects the focus bean by name, alias, or a unique type match. Application beans are the default
-    classification for focus choices; the operator can select another classification or all beans. Relationship traversal
-    still uses the complete loaded inventory so non-application dependencies remain visible.
+    classification; the operator can select another classification or all beans. The classification applies to focus
+    choices and rendered neighbours, so the Application graph contains only host-application beans.
   - Renders a concentric-ring SVG neighbourhood centred on the focus bean: direct
     dependencies (focus → node), direct dependents (node → focus), mutual/cycle nodes, and
     deeper-hop nodes up to depth 3 and 60 nodes total.

@@ -150,7 +150,7 @@ describe('Beans — graph mode toggle', () => {
   })
 
   it('filters graph starting points to application beans by default', async () => {
-    stubFetch(beanList([bean('applicationBean'), bean('frameworkBean', [], 'FRAMEWORK')]))
+    stubFetch(beanList([bean('applicationBean', ['bootUiBean']), bean('bootUiBean', [], 'BOOTUI')]))
     const wrapper = mountBeans()
     await vi.dynamicImportSettled()
     await flushPromises()
@@ -159,11 +159,22 @@ describe('Beans — graph mode toggle', () => {
     expect(wrapper.findAll('datalist option').map((option) => option.element.value)).toEqual(['applicationBean'])
     expect(wrapper.text()).toContain('1 application')
 
+    const input = wrapper.find('input[placeholder*="Search for a bean"]')
+    await input.setValue('applicationBean')
+    await input.trigger('change')
+    expect(wrapper.find('[aria-label*="bootUiBean"]').exists()).toBe(false)
+    const dependencyFact = wrapper
+      .findAll('.bean-details__facts > div')
+      .find((fact) => fact.find('dt').text() === 'Dependencies')
+    expect(dependencyFact.find('dd').text()).toBe('0')
+
     await wrapper.find('#beans-graph-classification').setValue('')
     expect(wrapper.findAll('datalist option').map((option) => option.element.value)).toEqual([
       'applicationBean',
-      'frameworkBean'
+      'bootUiBean'
     ])
+    expect(wrapper.find('[aria-label*="bootUiBean"]').exists()).toBe(true)
+    expect(dependencyFact.find('dd').text()).toBe('1')
   })
 
   it('loads the unfiltered list only after list mode is selected', async () => {

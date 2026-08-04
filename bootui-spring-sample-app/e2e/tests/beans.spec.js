@@ -177,6 +177,10 @@ test.describe('Beans view', () => {
 
       // The dependency node should also be visible
       await expect(page.locator('[aria-label*="orderRepository"]')).toBeVisible()
+      await expect(page.locator('[aria-label*="dataSource"]')).not.toBeVisible()
+
+      await page.locator('#beans-graph-classification').selectOption('')
+      await expect(page.locator('[aria-label*="dataSource"]')).toBeVisible()
     })
 
     test('shows exact positive condition evidence for a focused bean', async ({openView, page}) => {

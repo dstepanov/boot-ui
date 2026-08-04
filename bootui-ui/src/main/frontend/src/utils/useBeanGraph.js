@@ -115,6 +115,7 @@ export function buildGraphIndex(beans) {
  * @param {Map<string,Set>}     reverseIndex  Reverse dependency index.
  * @param {number}              maxNodes      Node limit (default {@link MAX_GRAPH_NODES}).
  * @param {number}              maxDepth      Hop depth limit (default {@link MAX_GRAPH_DEPTH}).
+ * @param {function(string): boolean} includeName Whether a bean may appear in the graph.
  * @returns {{
  *   nodes: Array,
  *   edges: Array,
@@ -128,7 +129,8 @@ export function traverseNeighborhood(
   byName,
   reverseIndex,
   maxNodes = MAX_GRAPH_NODES,
-  maxDepth = MAX_GRAPH_DEPTH
+  maxDepth = MAX_GRAPH_DEPTH,
+  includeName = () => true
 ) {
   if (!byName.has(focusName)) {
     return {nodes: [], edges: [], truncated: false, depthLimited: false, nodeLimited: false}
@@ -143,8 +145,8 @@ export function traverseNeighborhood(
 
   for (let index = 0; index < queue.length; index += 1) {
     const {name, depth} = queue[index]
-    const dependencies = [...new Set(byName.get(name)?.dependencies || [])].sort(compareCodeUnits)
-    const dependents = [...(reverseIndex.get(name) || [])].sort(compareCodeUnits)
+    const dependencies = [...new Set(byName.get(name)?.dependencies || [])].filter(includeName).sort(compareCodeUnits)
+    const dependents = [...(reverseIndex.get(name) || [])].filter(includeName).sort(compareCodeUnits)
     const neighbours = [...new Set([...dependencies, ...dependents])].sort(compareCodeUnits)
 
     if (depth >= safeMaxDepth) {
@@ -174,7 +176,7 @@ export function traverseNeighborhood(
   const included = new Set(nodeDetails.keys())
   const edges = []
   for (const from of [...included].sort(compareCodeUnits)) {
-    const dependencies = [...new Set(byName.get(from)?.dependencies || [])].sort(compareCodeUnits)
+    const dependencies = [...new Set(byName.get(from)?.dependencies || [])].filter(includeName).sort(compareCodeUnits)
     for (const to of dependencies) {
       if (included.has(to)) edges.push({from, to})
     }
@@ -213,7 +215,7 @@ export function traverseNeighborhood(
  *   setFocus: function
  * }}
  */
-export function useBeanGraph() {
+export function useBeanGraph(classification = null) {
   const allBeans = ref([])
   const loading = ref(false)
   const error = ref(null)
@@ -227,13 +229,25 @@ export function useBeanGraph() {
   const definitionsByName = computed(() => index.value.definitionsByName)
   const reverseIndex = computed(() => index.value.reverseIndex)
 
-  /** Sorted list of all bean names; used to populate the focus-search datalist. */
-  const beanNames = computed(() => [...byName.value.keys()])
+  function matchesClassification(name) {
+    if (!classification?.value || !byName.value.has(name)) return true
+    return (definitionsByName.value.get(name) || []).some((bean) => bean.classification === classification.value)
+  }
+
+  /** Sorted list of selectable bean names for the active classification. */
+  const beanNames = computed(() => [...byName.value.keys()].filter(matchesClassification))
 
   /** Neighbourhood graph for the currently focused bean, or {@code null}. */
   const graph = computed(() => {
     if (!focusName.value || !byName.value.has(focusName.value)) return null
-    return traverseNeighborhood(focusName.value, byName.value, reverseIndex.value)
+    return traverseNeighborhood(
+      focusName.value,
+      byName.value,
+      reverseIndex.value,
+      MAX_GRAPH_NODES,
+      MAX_GRAPH_DEPTH,
+      matchesClassification
+    )
   })
 
   /** Load all beans (up to {@link MAX_GRAPH_LOAD}) once. Subsequent calls are no-ops. */

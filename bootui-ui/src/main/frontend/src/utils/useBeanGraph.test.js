@@ -27,7 +27,8 @@ function traverse(focusName, beans, overrides = {}) {
     byName,
     reverseIndex,
     overrides.maxNodes ?? MAX_GRAPH_NODES,
-    overrides.maxDepth ?? MAX_GRAPH_DEPTH
+    overrides.maxDepth ?? MAX_GRAPH_DEPTH,
+    overrides.includeName
   )
 }
 
@@ -210,6 +211,15 @@ describe('traverseNeighborhood — direct neighbours', () => {
     // 'unknown' is declared as a dependency but not in the bean list (reduced fidelity)
     const {edges} = traverse('a', [bean('a', ['unknown'])])
     expect(edgePairs(edges)).toContain('a=>unknown')
+  })
+
+  it('excludes dependencies rejected by the active graph filter', () => {
+    const graph = traverse('applicationBean', [bean('applicationBean', ['bootUiBean']), bean('bootUiBean')], {
+      includeName: (name) => name !== 'bootUiBean'
+    })
+
+    expect(nodeNames(graph.nodes)).toEqual(['applicationBean'])
+    expect(graph.edges).toEqual([])
   })
 })
 
