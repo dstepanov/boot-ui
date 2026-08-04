@@ -152,7 +152,9 @@ test.describe('BootUI on Spring WebFlux', () => {
 
     const outbound = await request.get('/api/sample/rest-client?name=WebFluxRestClient')
     expect(outbound.ok()).toBeTruthy()
-    await expect(page.getByText('/api/greetings/WebFluxRestClient', {exact: true})).toBeVisible({timeout: 15_000})
+    await expect(page.getByText('127.0.0.1/api/greetings/WebFluxRestClient', {exact: true}).first()).toBeVisible({
+      timeout: 15_000
+    })
 
     const report = await request.get('/bootui/api/rest-client-trace')
     const body = await report.json()
