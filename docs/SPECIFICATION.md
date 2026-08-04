@@ -1102,6 +1102,24 @@ Acceptance criteria:
   `MESSAGING` entries, not just the dedicated view.
 - Ships on both Spring (servlet and WebFlux — the controller has no reactive-specific code) and Quarkus.
 
+### 5.14.7 RabbitMQ Panel
+
+Purpose: show payload-free RabbitMQ publish/consume activity over Spring AMQP or SmallRye Reactive Messaging, using the
+same bounded capture that feeds Live Activity's `MESSAGING` entries.
+
+Acceptance criteria:
+
+- Spring capture composes with existing `RabbitTemplate` before-publish processors and listener-factory advice; Quarkus
+  capture is registered only when `quarkus-messaging-rabbitmq` is present and excluded otherwise.
+- The message body and arbitrary headers are never captured. Exchange, routing key, and queue metadata are length-bounded;
+  raw exception messages are not retained.
+- Correlation IDs are omitted by default. With `bootui.rabbitmq.capture-correlation-id=true`, only a truncated SHA-256
+  hash is stored.
+- The in-memory buffer is capped by `bootui.rabbitmq.max-entries`, oldest-first eviction, and clear is gated by
+  `bootui.panels.rabbitmq.read-only`.
+- Spring panel availability requires a `RabbitTemplate` bean. Quarkus availability requires the RabbitMQ messaging
+  extension in a non-production launch. Dependency absence must not link optional RabbitMQ classes or advertise capture.
+
 ### 5.15 Profile Diff Panel
 
 Purpose: show which properties are contributed by active profile-specific property sources.

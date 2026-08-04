@@ -18,6 +18,7 @@ import io.github.jdubois.bootui.autoconfigure.monitoring.BootUiSelfDataFilter;
 import io.github.jdubois.bootui.autoconfigure.otlp.OtlpSpanDecoder;
 import io.github.jdubois.bootui.autoconfigure.otlp.SpringTelemetrySettings;
 import io.github.jdubois.bootui.autoconfigure.pentesting.PentestingController;
+import io.github.jdubois.bootui.autoconfigure.rabbit.RabbitController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveActivitySignalFilter;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveAgentSessionController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveApiAuthenticationFilter;
@@ -246,6 +247,7 @@ import tools.jackson.databind.ObjectMapper;
     ReactiveLiveActivityController.class,
     EmailController.class,
     KafkaController.class,
+    RabbitController.class,
     ReactiveLogTailController.class,
     ReactiveCopilotController.class,
     ReactiveClaudeCodeController.class,
@@ -306,6 +308,7 @@ public class BootUiReactiveAutoConfiguration {
             ReactiveBootUiMcpServerController.class.getName(),
             EmailController.class.getName(),
             KafkaController.class.getName(),
+            RabbitController.class.getName(),
             ReactiveCopilotController.class.getName(),
             ReactiveClaudeCodeController.class.getName());
 
