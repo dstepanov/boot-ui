@@ -1299,6 +1299,8 @@ On Quarkus the panel is identical, running over the same shared engine `RabbitAc
 classpath (and dark in production); otherwise it reports a
 clear unavailable reason.
 
+![BootUI RabbitMQ panel](./images/bootui-rabbitmq.webp)
+
 ### AI Usage
 
 The AI Usage panel summarizes Spring AI and LangChain4j activity collected from OpenTelemetry spans emitted by their
