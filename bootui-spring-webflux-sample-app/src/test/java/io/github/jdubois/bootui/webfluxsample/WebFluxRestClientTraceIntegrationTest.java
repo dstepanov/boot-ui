@@ -38,6 +38,7 @@ class WebFluxRestClientTraceIntegrationTest {
         assertThat(report.statusCode()).isEqualTo(200);
         assertThat(report.body())
                 .contains("\"available\":true")
+                .contains("\"host\":\"127.0.0.1\"")
                 .contains("\"path\":\"/api/greetings/Integration\"")
                 .contains("\"clientType\":\"WebClient\"");
     }

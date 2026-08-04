@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -70,17 +69,14 @@ public class SampleActionsController {
     /** Makes a real instrumented outbound WebClient call back into the sample application. */
     @GetMapping("/rest-client")
     public Mono<Map<String, String>> restClient(@RequestParam(defaultValue = "WebFlux") String name) {
-        var target = UriComponentsBuilder.newInstance()
-                .scheme("http")
-                .host("127.0.0.1")
-                .port(webServerApplicationContext.getWebServer().getPort())
-                .pathSegment("api", "greetings", name)
-                .build()
-                .encode()
-                .toUri();
-        return webClient
+        var loopbackClient = webClient
+                .mutate()
+                .baseUrl("http://127.0.0.1:"
+                        + webServerApplicationContext.getWebServer().getPort())
+                .build();
+        return loopbackClient
                 .get()
-                .uri(target)
+                .uri("/api/greetings/{name}", name)
                 .retrieve()
                 .bodyToMono(String.class)
                 .map(greeting -> Map.of("greeting", greeting));
