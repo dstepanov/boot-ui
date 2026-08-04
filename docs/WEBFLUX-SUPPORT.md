@@ -4,7 +4,7 @@
 
 Support Spring WebFlux (reactive, Netty/`DispatcherHandler`) Spring Boot 4 applications as a first-class BootUI
 target alongside the existing Spring MVC (servlet) adapter and the Quarkus adapter: the same shared engine
-(`bootui-engine`/`bootui-core`), the same Vue UI, the same `/bootui/api/**` contract, panel parity wherever a
+(`bootui-engine`/`bootui-core`), the same Vue UI, the same JSON contract (`/bootui/api/**` by default), panel parity wherever a
 reactive analog genuinely exists, and an honest "not yet ported" / "not applicable" status where it doesn't.
 
 ## 2. Current status
@@ -73,6 +73,12 @@ both, so exactly one of the two autoconfigurations activates.
   `HttpServletRequest`/`HttpServletResponse`) differs.
 - **Same per-panel gating.** `ReactivePanelAccessFilter` enforces `bootui.panels.*` (enable/read-only) via the same
   `BootUiPanels` registry the servlet `PanelAccessFilter` uses — same config keys, same canonical JSON 403 body.
+- **Same configurable path contract.** `bootui.path` moves the shell, assets, APIs, streams, downloads, and action
+  endpoints together; `bootui.api-path` can override the derived `<bootui.path>/api` mount independently. Both compose
+  with `spring.webflux.base-path` exactly once. A dedicated WebFlux static-resource handler serves the configured mount,
+  while an earlier blocker prevents the packaged `/bootui/**` resources from leaking as a legacy alias. The generated
+  shell injects the browser-visible UI/API paths for the shared SPA, and the authentication cookie is scoped to the
+  composed API path.
 - **Same platform-aware manifest mechanism the Quarkus adapter established.** `PanelsController` — a single shared
   bean bulk-imported unmodified by both autoconfigurations — detects the running context type
   (`applicationContext instanceof ReactiveWebApplicationContext`) and reports `platform:
@@ -315,6 +321,10 @@ directly rather than through a real multi-scheduler Reactor pipeline.
   that `http-sessions` shows its WebFlux-specific reason in both the sidebar and the panel alert (the `security`
   advisor's equivalent reason is covered at the unit level by `PanelsControllerTests`, not re-asserted in e2e).
 - Run it: see the "WebFlux (reactive) smoke suite" section of `bootui-spring-sample-app/e2e/README.md`.
+- **`playwright.custom-path.config.js`** runs one shared browser contract against both MVC and WebFlux with a non-default
+  application root, UI path, and independently configured API path. It proves the shell metadata, assets, manifest,
+  API fetches, SSE, CSRF enforcement, MCP controls, servlet OTLP receiver, and 404 behavior of the old `/bootui` mount
+  in a real browser.
 - **`Dockerfile-webflux`** (repository root) is the reactive analogue of the plain servlet `Dockerfile`: the same
   exploded-jar-layers + jlink + distroless-glibc recipe, pointed at `bootui-spring-webflux-sample-app` instead of
   `bootui-spring-sample-app`, keeping the sample app's own `server.port=8081` default in the container too — the same

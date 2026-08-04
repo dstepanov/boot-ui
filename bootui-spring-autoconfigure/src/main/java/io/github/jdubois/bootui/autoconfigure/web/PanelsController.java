@@ -36,7 +36,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/bootui/api/panels")
+@RequestMapping("${bootui.api-path:${bootui.path:/bootui}/api}/panels")
 public class PanelsController {
 
     // Matches the application-<profile>.{properties,yml,yaml} token in both plain source names and

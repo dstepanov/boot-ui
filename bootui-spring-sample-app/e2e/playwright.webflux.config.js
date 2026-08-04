@@ -19,6 +19,8 @@ import {defineConfig, devices} from '@playwright/test'
  */
 const PORT = Number(process.env.BOOTUI_WEBFLUX_PORT || 8081)
 const BASE_URL = process.env.BOOTUI_WEBFLUX_BASE_URL || `http://localhost:${PORT}`
+const MAVEN_REPO = process.env.BOOTUI_MAVEN_REPO_LOCAL
+const REPO_ARG = MAVEN_REPO ? ` -Dmaven.repo.local=${MAVEN_REPO}` : ''
 
 export default defineConfig({
   testDir: './tests-webflux',
@@ -62,7 +64,7 @@ export default defineConfig({
     : {
         // Run from the e2e module through the root Maven Wrapper, against the reactive sample app.
         command:
-          '../../mvnw -f ../../bootui-spring-webflux-sample-app/pom.xml -q spring-boot:run ' +
+          `../../mvnw${REPO_ARG} -f ../../bootui-spring-webflux-sample-app/pom.xml -q spring-boot:run ` +
           '-Dspring-boot.run.jvmArguments=-Dspring.devtools.restart.enabled=false',
         url: `${BASE_URL}/bootui/api/overview`,
         reuseExistingServer: !process.env.CI,
