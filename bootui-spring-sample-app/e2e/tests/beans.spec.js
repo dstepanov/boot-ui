@@ -21,6 +21,7 @@ function beanListResponse(beans, extra = {}) {
 test.describe('Beans view', () => {
   test('lists beans and supports filtering by name and classification', async ({openView}) => {
     const page = await openView('beans', 'Beans')
+    await page.getByRole('button', {name: 'List view'}).click()
 
     const rows = page.locator('table tbody tr')
     await expect.poll(async () => rows.count()).toBeGreaterThan(5)
@@ -80,6 +81,7 @@ test.describe('Beans view', () => {
     })
 
     await openView('beans', 'Beans')
+    await page.getByRole('button', {name: 'List view'}).click()
 
     const rows = page.locator('table tbody tr')
     await expect(rows).toHaveCount(200)
@@ -124,7 +126,7 @@ test.describe('Beans view', () => {
       }
     ]
 
-    test('shows the graph mode toggle and switches to graph view', async ({openView, page}) => {
+    test('opens in graph mode with application beans selected', async ({openView, page}) => {
       const requestedLimits = []
       await page.route('**/bootui/api/beans?*', (route) => {
         requestedLimits.push(new URL(route.request().url()).searchParams.get('limit'))
@@ -136,18 +138,14 @@ test.describe('Beans view', () => {
       })
       await openView('beans', 'Beans')
 
-      // The graph toggle button should be present
       const graphBtn = page.getByRole('button', {name: 'Dependency graph'})
       await expect(graphBtn).toBeVisible()
-      expect(requestedLimits).not.toContain('1000')
-
-      // Activate graph mode
-      await graphBtn.click()
-
-      // The list table should be gone; the focus search should appear
+      await expect(graphBtn).toHaveAttribute('aria-pressed', 'true')
       await expect(page.locator('table')).not.toBeVisible()
       await expect(page.getByPlaceholder(/Search for a bean/)).toBeVisible()
       await expect.poll(() => requestedLimits).toContain('1000')
+      await expect(page.locator('#beans-graph-classification')).toHaveValue('APPLICATION')
+      await expect(page.locator('#beans-graph-datalist option')).toHaveCount(3)
     })
 
     test('renders the neighbourhood graph after focusing a bean', async ({openView, page}) => {

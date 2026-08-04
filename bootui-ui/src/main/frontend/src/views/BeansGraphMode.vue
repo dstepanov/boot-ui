@@ -16,6 +16,7 @@ const CONDITION_LOOKUP_LIMIT = 1000
 const graphFocusInput = ref('')
 const graphSearchMessage = ref('')
 const graphDatalistId = 'beans-graph-datalist'
+const graphClassification = ref('APPLICATION')
 const panels = inject('panels', ref(null))
 const platform = computed(() => panels.value?.platform || 'spring-boot')
 const isQuarkus = computed(() => platform.value === 'quarkus')
@@ -48,22 +49,41 @@ let conditionRequestId = 0
 const focusedDefinitions = computed(() => definitionsByName.value.get(focusName.value) || [])
 const focusedBean = computed(() => byName.value.get(focusName.value) || null)
 const directDependents = computed(() => reverseIndex.value.get(focusName.value)?.size || 0)
+const focusBeanNames = computed(() =>
+  beanNames.value.filter(
+    (name) =>
+      !graphClassification.value ||
+      (definitionsByName.value.get(name) || []).some((bean) => bean.classification === graphClassification.value)
+  )
+)
+const focusBeanNameSet = computed(() => new Set(focusBeanNames.value))
+const focusClassificationLabel = computed(() =>
+  graphClassification.value ? graphClassification.value.toLowerCase() : 'loaded'
+)
 const inventoryLabel = computed(() => {
   if (!loaded.value) return null
-  return inventoryTruncated.value
-    ? `${allBeans.value.length} of ${inventoryTotal.value} beans loaded`
-    : `${allBeans.value.length} beans loaded`
+  const loadedLabel = inventoryTruncated.value
+    ? `${allBeans.value.length} of ${inventoryTotal.value} loaded`
+    : `${allBeans.value.length} loaded`
+  return `${focusBeanNames.value.length} ${focusClassificationLabel.value} · ${loadedLabel}`
 })
 
 onMounted(loadAll)
 watch(focusName, loadConditionEvidence)
+watch(graphClassification, () => {
+  graphSearchMessage.value = ''
+  if (focusName.value && !focusBeanNameSet.value.has(focusName.value)) {
+    graphFocusInput.value = ''
+    setFocus(null)
+  }
+})
 onBeforeUnmount(() => {
   conditionRequestId += 1
 })
 
 function onFocusInputChange() {
   const trimmed = graphFocusInput.value.trim()
-  if (byName.value.has(trimmed)) {
+  if (focusBeanNameSet.value.has(trimmed)) {
     setFocus(trimmed)
     graphSearchMessage.value = ''
   } else if (!trimmed) {
@@ -79,7 +99,7 @@ function submitGraphSearch() {
     graphSearchMessage.value = ''
     return
   }
-  if (byName.value.has(graphFocusInput.value.trim())) {
+  if (focusBeanNameSet.value.has(graphFocusInput.value.trim())) {
     setFocus(graphFocusInput.value.trim())
     graphSearchMessage.value = ''
     return
@@ -87,12 +107,13 @@ function submitGraphSearch() {
   const matches = [...definitionsByName.value]
     .filter(
       ([name, definitions]) =>
-        name.toLowerCase().includes(query) ||
-        definitions.some(
-          (bean) =>
-            (bean.type || '').toLowerCase().includes(query) ||
-            (bean.aliases || []).some((alias) => alias.toLowerCase().includes(query))
-        )
+        focusBeanNameSet.value.has(name) &&
+        (name.toLowerCase().includes(query) ||
+          definitions.some(
+            (bean) =>
+              (bean.type || '').toLowerCase().includes(query) ||
+              (bean.aliases || []).some((alias) => alias.toLowerCase().includes(query))
+          ))
     )
     .map(([name]) => byName.value.get(name))
   if (matches.length === 1) {
@@ -237,7 +258,7 @@ async function loadConditionEvidence() {
           />
           <datalist :id="graphDatalistId">
             <option
-              v-for="name in beanNames"
+              v-for="name in focusBeanNames"
               :key="name"
               :value="name"
               :label="byName.get(name)?.type || `${definitionsByName.get(name)?.length || 1} definitions`"
@@ -247,13 +268,31 @@ async function loadConditionEvidence() {
             {{ graphSearchMessage }}
           </div>
         </div>
+        <div>
+          <label for="beans-graph-classification" class="form-label">Bean classification</label>
+          <select id="beans-graph-classification" v-model="graphClassification" class="form-select">
+            <option value="">All classifications</option>
+            <option value="APPLICATION">Application</option>
+            <option value="FRAMEWORK">Framework</option>
+            <option value="BOOTUI">BootUI</option>
+            <option value="PLATFORM">Platform</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
         <span class="graph-inventory-count">{{ inventoryLabel }}</span>
       </div>
 
-      <div v-if="!focusName" class="graph-empty-state" role="status" aria-live="polite">
+      <div v-if="!focusName && focusBeanNames.length === 0" class="graph-empty-state" role="status" aria-live="polite">
+        <i class="bi bi-funnel graph-empty-state__icon" aria-hidden="true"></i>
+        <h3>No {{ focusClassificationLabel }} beans available</h3>
+        <p>Choose another bean classification to explore the loaded inventory.</p>
+      </div>
+      <div v-else-if="!focusName" class="graph-empty-state" role="status" aria-live="polite">
         <i class="bi bi-search graph-empty-state__icon" aria-hidden="true"></i>
         <h3>Choose a bean to inspect</h3>
-        <p>Search by bean name, alias, or type to explore its dependency neighbourhood.</p>
+        <p>
+          Search by bean name, alias, or type, or change the classification to broaden the available starting points.
+        </p>
       </div>
 
       <div v-else-if="graph" class="graph-workspace">
@@ -358,7 +397,7 @@ async function loadConditionEvidence() {
   align-items: end;
   display: grid;
   gap: 1rem;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(11rem, 14rem) auto;
 }
 
 .graph-inventory-count {
@@ -504,7 +543,7 @@ async function loadConditionEvidence() {
   }
 }
 
-@media (max-width: 575.98px) {
+@media (max-width: 767.98px) {
   .graph-search-row {
     align-items: stretch;
     grid-template-columns: 1fr;

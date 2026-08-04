@@ -308,9 +308,12 @@ Features:
   - other beans.
 - Show bean name, type, scope, resource/declaring class when available, dependencies, aliases, and classification.
 - **Dependency graph mode** (toggle in the panel header):
-  - Loads beans in bounded 1 000-row pages once graph mode is activated, up to a 2 000-bean client-side inventory. When
+  - Is the panel's default view; the server-paged list remains available from the header toggle and loads only when selected.
+  - Loads beans in bounded 1 000-row pages, up to a 2 000-bean client-side inventory. When
     more beans exist, the UI reports the loaded and total counts instead of implying that the graph is complete.
-  - A search field selects the focus bean by name, alias, or a unique type match.
+  - A search field selects the focus bean by name, alias, or a unique type match. Application beans are the default
+    classification for focus choices; the operator can select another classification or all beans. Relationship traversal
+    still uses the complete loaded inventory so non-application dependencies remain visible.
   - Renders a concentric-ring SVG neighbourhood centred on the focus bean: direct
     dependencies (focus → node), direct dependents (node → focus), mutual/cycle nodes, and
     deeper-hop nodes up to depth 3 and 60 nodes total.
@@ -325,8 +328,8 @@ Features:
     For an exact classpath-resource match, it queries the existing bounded positive Conditions endpoint and shows only
     evidence whose source is that configuration class or one of its methods. Missing resources, no exact match, disabled
     Conditions, and request failures remain explicit non-evidence states; provenance is never inferred.
-  - Lazy-loaded: graph state, indexing, inventory fetching, condition evidence, and visualization are split from the list
-    view so list mode carries no graph overhead.
+  - Graph and list data paths remain independent: the default graph does not fetch the server-paged list, and the list
+    loads only when selected.
   - Keyboard-navigable: one graph tab stop, arrow/Home/End movement between SVG nodes, Enter/Space to focus, visible
     focus rings, and an `aria-label` with the full bean name.
   - Reduced-motion safe: the graph uses a deterministic static layout with no motion or transition.
@@ -343,7 +346,7 @@ Acceptance criteria:
 - A developer can focus any bean and explore its dependency neighbourhood by clicking through nodes.
 - Cycles, isolated beans, depth limits, node limits, and missing dependency data each produce
   a deterministic, explained result rather than an error or blank state.
-- The existing list/filter/paging behaviour is unchanged when graph mode is not activated.
+- The existing list/filter/paging behaviour remains available after switching from the default graph view.
 
 ### 5.3 Conditions Explorer
 

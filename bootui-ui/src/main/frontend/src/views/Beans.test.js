@@ -6,12 +6,12 @@ import Beans from './Beans.vue'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function bean(name, deps = []) {
+function bean(name, deps = [], classification = 'APPLICATION') {
   return {
     name,
     type: `com.example.${name}`,
     scope: 'singleton',
-    classification: 'APPLICATION',
+    classification,
     dependencies: deps
   }
 }
@@ -84,6 +84,11 @@ async function openGraph(wrapper) {
   await flushPromises()
 }
 
+async function openList(wrapper) {
+  await wrapper.find('[aria-label="List view"]').trigger('click')
+  await flushPromises()
+}
+
 // ── List mode (existing behaviour preserved) ──────────────────────────────────
 
 describe('Beans — list mode', () => {
@@ -94,7 +99,7 @@ describe('Beans — list mode', () => {
   it('renders a table with beans from the API', async () => {
     stubFetch(beanList([bean('orderService', ['orderRepository']), bean('orderRepository')]))
     const wrapper = mountBeans()
-    await flushPromises()
+    await openList(wrapper)
 
     expect(wrapper.text()).toContain('orderService')
     expect(wrapper.text()).toContain('orderRepository')
@@ -103,7 +108,7 @@ describe('Beans — list mode', () => {
   it('shows "No beans match" when the filtered list is empty', async () => {
     stubFetch({total: 5, beans: [], page: {total: 5, matched: 0, offset: 0, limit: 200, returned: 0, hasMore: false}})
     const wrapper = mountBeans()
-    await flushPromises()
+    await openList(wrapper)
 
     expect(wrapper.text()).toContain('No beans match your filters')
   })
@@ -111,7 +116,7 @@ describe('Beans — list mode', () => {
   it('shows total and matched counts in the subtitle', async () => {
     stubFetch({total: 42, beans: [], page: {total: 42, matched: 3, offset: 0, limit: 200, returned: 0, hasMore: false}})
     const wrapper = mountBeans()
-    await flushPromises()
+    await openList(wrapper)
 
     expect(wrapper.text()).toContain('42 beans')
     expect(wrapper.text()).toContain('3 matched')
@@ -125,35 +130,53 @@ describe('Beans — graph mode toggle', () => {
     vi.unstubAllGlobals()
   })
 
-  it('has a graph-mode toggle button', async () => {
+  it('uses graph mode by default', async () => {
     stubFetch(beanList([bean('a')]))
     const wrapper = mountBeans()
     await flushPromises()
 
-    // The graph button icon should be present
-    expect(wrapper.find('[aria-label="Dependency graph"]').attributes('aria-pressed')).toBe('false')
-  })
-
-  it('has a list-mode toggle button', async () => {
-    stubFetch(beanList([bean('a')]))
-    const wrapper = mountBeans()
-    await flushPromises()
-
-    expect(wrapper.find('[aria-label="List view"]').attributes('aria-pressed')).toBe('true')
-  })
-
-  it('switches to graph mode on graph-button click and shows the focus search', async () => {
-    stubFetch(beanList([bean('a', ['b']), bean('b')]))
-    const wrapper = mountBeans()
-    await flushPromises()
-
-    await openGraph(wrapper)
-
-    // The focus search input should appear
-    expect(wrapper.find('input[placeholder*="Search for a bean"]').exists()).toBe(true)
     expect(wrapper.find('[aria-label="Dependency graph"]').attributes('aria-pressed')).toBe('true')
-    // The bean table should be gone
-    expect(wrapper.find('table').exists()).toBe(false)
+    await vi.dynamicImportSettled()
+    await flushPromises()
+    expect(wrapper.find('input[placeholder*="Search for a bean"]').exists()).toBe(true)
+  })
+
+  it('keeps list mode available without selecting it by default', async () => {
+    stubFetch(beanList([bean('a')]))
+    const wrapper = mountBeans()
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="List view"]').attributes('aria-pressed')).toBe('false')
+  })
+
+  it('filters graph starting points to application beans by default', async () => {
+    stubFetch(beanList([bean('applicationBean'), bean('frameworkBean', [], 'FRAMEWORK')]))
+    const wrapper = mountBeans()
+    await vi.dynamicImportSettled()
+    await flushPromises()
+
+    expect(wrapper.find('#beans-graph-classification').element.value).toBe('APPLICATION')
+    expect(wrapper.findAll('datalist option').map((option) => option.element.value)).toEqual(['applicationBean'])
+    expect(wrapper.text()).toContain('1 application')
+
+    await wrapper.find('#beans-graph-classification').setValue('')
+    expect(wrapper.findAll('datalist option').map((option) => option.element.value)).toEqual([
+      'applicationBean',
+      'frameworkBean'
+    ])
+  })
+
+  it('loads the unfiltered list only after list mode is selected', async () => {
+    stubFetch(beanList([bean('applicationBean')]))
+    const wrapper = mountBeans()
+    await vi.dynamicImportSettled()
+    await flushPromises()
+
+    expect(fetch.mock.calls.map(([input]) => String(input))).toEqual([expect.stringContaining('offset=0&limit=1000')])
+
+    await openList(wrapper)
+    const listRequest = fetch.mock.calls.map(([input]) => String(input)).find((url) => !url.includes('limit=1000'))
+    expect(new URL(listRequest, 'http://localhost').searchParams.has('classification')).toBe(false)
   })
 
   it('returns to list mode without reloading the cached graph inventory', async () => {

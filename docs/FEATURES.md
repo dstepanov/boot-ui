@@ -893,10 +893,12 @@ bean names and types, plus classifications such as application, Spring framework
 own beans are hidden by default; when self-data filtering is disabled they are classified separately as BootUI beans.
 Large bean lists load in bounded pages so the initial payload stays small while filters still apply to the full bean set.
 
-**Dependency graph mode.** A toggle in the panel header switches between the list view (default) and a dependency
-neighbourhood graph. Graph mode lazily fetches beans in bounded 1 000-row pages, up to a 2 000-bean client-side inventory;
-if the inventory is larger, the panel reports both the loaded and total counts. A search field accepts a bean name, alias,
-or unique type match. The graph renders a concentric-ring SVG showing the focused bean at the centre, its direct
+**Dependency graph mode.** The panel opens on the dependency neighbourhood graph; a header toggle switches to the
+server-paged list when needed. Graph mode fetches beans in bounded 1 000-row pages, up to a 2 000-bean client-side
+inventory; if the inventory is larger, the panel reports both the loaded and total counts. Focus search starts with
+Application beans selected while a classification control can broaden the available starting points. The full inventory
+remains indexed so framework dependencies of an application bean are still represented. A search field accepts a bean
+name, alias, or unique type match. The graph renders a concentric-ring SVG showing the focused bean at the centre, its direct
 dependencies (beans it depends on, coloured blue), its direct dependents (beans that depend on it, coloured green),
 mutual / cycle nodes (coloured amber), and deeper-hop nodes (grey) up to three hops away and sixty nodes in total.
 Clicking any node re-focuses the graph on that bean so you can navigate the neighbourhood iteratively. When the
@@ -905,11 +907,11 @@ combined deterministically and explained instead of silently dropping one defini
 type, scope, resource, aliases, definition count, and direct relationship counts. When a Spring bean's recorded classpath
 resource establishes an exact configuration class, the panel queries the existing positive Conditions endpoint and shows
 only matching class or method-level evidence under "Why this bean exists"; missing, disabled, failed, or unmatched
-Conditions data is reported honestly instead of inferred. The complete graph workspace is lazy-loaded, so list mode
-incurs no graph indexing, inventory-fetching, or rendering cost. Keyboard navigation uses one graph tab stop, arrow/Home/End
-movement between nodes, and Enter or Space to re-focus; all nodes carry visible focus rings and `aria-label` attributes
-with the full bean name. The static layout introduces no motion, and its role colours meet contrast requirements in both
-light and dark themes.
+Conditions data is reported honestly instead of inferred. Graph and list implementations are split into separate loading
+paths: opening the default graph does not fetch the server-paged list, and switching to the list loads it only once.
+Keyboard navigation uses one graph tab stop, arrow/Home/End movement between nodes, and Enter or Space to re-focus; all
+nodes carry visible focus rings and `aria-label` attributes with the full bean name. The static layout introduces no
+motion, and its role colours meet contrast requirements in both light and dark themes.
 
 **Reduced fidelity on Quarkus.** The Quarkus Arc/CDI adapter does not expose inter-bean `dependencies` at runtime (Arc
 resolves injection points at build time and does not make the wiring graph available programmatically), so the

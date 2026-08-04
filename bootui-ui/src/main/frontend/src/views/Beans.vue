@@ -1,10 +1,10 @@
 <script setup>
-import {defineAsyncComponent, onMounted, ref, watch} from 'vue'
+import {defineAsyncComponent, ref, watch} from 'vue'
 import PanelHeader from './components/PanelHeader.vue'
 import {useServerPagedList} from '../utils/useServerPagedList.js'
 import ServerListFooter from './components/ServerListFooter.vue'
 
-// Keep the complete graph workspace out of the default list-view chunk.
+// Keep the complete graph workspace in its own route-level async chunk.
 const BeansGraphMode = defineAsyncComponent(() => import('./BeansGraphMode.vue'))
 
 // ── List mode ──────────────────────────────────────────────────────────────────
@@ -35,10 +35,10 @@ const {
   {errorContext: 'Could not load beans'}
 )
 
-onMounted(load)
 watch([filter, classification], scheduleReload)
 
-const graphMode = ref(false)
+const graphMode = ref(true)
+const listActivated = ref(false)
 
 function activateGraphMode() {
   graphMode.value = true
@@ -46,6 +46,10 @@ function activateGraphMode() {
 
 function deactivateGraphMode() {
   graphMode.value = false
+  if (!listActivated.value) {
+    listActivated.value = true
+    load()
+  }
 }
 </script>
 
