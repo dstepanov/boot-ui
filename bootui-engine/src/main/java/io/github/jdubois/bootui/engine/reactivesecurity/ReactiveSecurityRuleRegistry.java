@@ -1,4 +1,4 @@
-package io.github.jdubois.bootui.autoconfigure.security;
+package io.github.jdubois.bootui.engine.reactivesecurity;
 
 import java.util.List;
 

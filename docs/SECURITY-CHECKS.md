@@ -16,7 +16,8 @@ or health detail properties, the checks continue to evaluate those values.
 
 ## Availability and bounds
 
-The panel is available only when Spring Security is on the classpath and at least one `SecurityFilterChain` bean exists.
+The panel is available only when Spring Security is on the classpath and at least one application
+`SecurityFilterChain` (servlet) or `SecurityWebFilterChain` (WebFlux) bean exists.
 If Spring Security is absent or no filter chains are registered, BootUI returns a stable empty report with an explanatory
 status. Configuration that cannot be read (for example via reflection) is skipped gracefully and reported as a partial scan
 rather than failing the panel.
@@ -45,7 +46,7 @@ includes up to a handful of sample details plus a remediation link.
 
 ### SEC-AUTH-002 - Password encoder should not use a weak or legacy algorithm
 
-- **Severity**: HIGH
+- **Severity**: MEDIUM
 - **Detects**: Detects deprecated encoders based on MD5/SHA or the legacy StandardPasswordEncoder.
 - **Recommendation**: Migrate to bcrypt, Argon2, or PBKDF2 via a DelegatingPasswordEncoder so hashes upgrade over time.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/features/authentication/password-storage.html>
@@ -490,10 +491,12 @@ custom source is never misreported as verified-safe.
 
 ## WebFlux (reactive) rules
 
-The Security advisor also supports Spring WebFlux (reactive) applications. On the reactive stack it
-reads `SecurityWebFilterChain` beans via the `WebFilterChainProxy` and inspects security-relevant
+The Security advisor also supports Spring WebFlux (reactive) applications. On the reactive stack the Spring adapter
+reads the application's `SecurityWebFilterChain` beans directly, excluding BootUI's own permit-all chain, and inspects
+security-relevant
 reactive beans (`ReactiveJwtDecoder`, `ReactiveOpaqueTokenIntrospector`, `CorsConfigurationSource`)
-and `Environment` properties. Availability is gated on the presence of a `WebFilterChainProxy` bean.
+and `Environment` properties. It maps those observations into framework-neutral records before the shared engine
+evaluates the rules. Availability is gated on at least one application `SecurityWebFilterChain` bean.
 
 The reactive checks share the same severity scale as the servlet checks. Rule IDs start with
 `SEC-RXF-` to distinguish them from the servlet rules.
@@ -507,7 +510,7 @@ The reactive checks share the same severity scale as the servlet checks. Rule ID
 
 ### SEC-RXF-AUTHZ-002 - Reactive permitAll catch-all while authentication is active
 
-- **Severity**: MEDIUM
+- **Severity**: HIGH
 - **Detects**: A reactive chain grants all requests to anonymous callers (permitAll catch-all) while also configuring authentication filters.
 - **Recommendation**: Restrict sensitive paths and finish with `anyExchange().authenticated()`.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/authorization/authorize-http-requests.html>
@@ -556,7 +559,7 @@ The reactive checks share the same severity scale as the servlet checks. Rule ID
 
 ### SEC-RXF-HEAD-002 - Reactive chain missing X-Frame-Options header writer
 
-- **Severity**: LOW
+- **Severity**: MEDIUM
 - **Detects**: No frame-options writer is installed, leaving clickjacking protection absent.
 - **Recommendation**: Add a `XFrameOptionsServerHttpHeadersWriter`.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/exploits/headers.html>
@@ -570,7 +573,7 @@ The reactive checks share the same severity scale as the servlet checks. Rule ID
 
 ### SEC-RXF-HEAD-004 - Reactive chain has no Content-Security-Policy header writer
 
-- **Severity**: INFO
+- **Severity**: MEDIUM
 - **Detects**: No CSP writer is installed on any chain.
 - **Recommendation**: Add a `ContentSecurityPolicyServerHttpHeadersWriter` appropriate to your app.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/exploits/headers.html>
@@ -591,7 +594,7 @@ The reactive checks share the same severity scale as the servlet checks. Rule ID
 
 ### SEC-RXF-ACT-001 - Actuator exposes all endpoints with wildcard include
 
-- **Severity**: MEDIUM
+- **Severity**: HIGH
 - **Detects**: `management.endpoints.web.exposure.include=*` without any exclude, exposing all Actuator endpoints.
 - **Recommendation**: List only needed endpoints or add excludes.
 - **Learn more**: <https://docs.spring.io/spring-boot/reference/actuator/endpoints.html>
@@ -612,7 +615,7 @@ The reactive checks share the same severity scale as the servlet checks. Rule ID
 
 ### SEC-RXF-ACT-004 - Sensitive Actuator endpoints on main server port
 
-- **Severity**: LOW
+- **Severity**: INFO
 - **Detects**: Sensitive Actuator endpoints are on the application's main port without a separate management port.
 - **Recommendation**: Set `management.server.port` to isolate management traffic.
 - **Learn more**: <https://docs.spring.io/spring-boot/reference/actuator/monitoring.html>
@@ -626,7 +629,7 @@ The reactive checks share the same severity scale as the servlet checks. Rule ID
 
 ### SEC-RXF-OAUTH2-002 - Reactive JWT decoder uses a static symmetric key
 
-- **Severity**: MEDIUM
+- **Severity**: HIGH
 - **Detects**: A `NimbusReactiveJwtDecoder` (or similar) is backed by a fixed symmetric key via property, not a JWKS URI or X.509 certificate.
 - **Recommendation**: Use a JWKS URI (`spring.security.oauth2.resourceserver.jwt.jwk-set-uri`) for production deployments.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html>
@@ -640,14 +643,14 @@ The reactive checks share the same severity scale as the servlet checks. Rule ID
 
 ### SEC-RXF-CONFIG-001 - spring.security.debug is enabled
 
-- **Severity**: MEDIUM
+- **Severity**: HIGH
 - **Detects**: `spring.security.debug=true` is set, printing Spring Security decisions to stdout.
 - **Recommendation**: Disable `spring.security.debug` in production.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/index.html>
 
 ### SEC-RXF-CONFIG-002 - HTTPS not enforced in production
 
-- **Severity**: MEDIUM
+- **Severity**: HIGH
 - **Detects**: A production profile is active but no TLS configuration or `HttpsRedirectWebFilter` was found.
 - **Recommendation**: Configure TLS (`server.ssl.*`) or `HttpsRedirectWebFilter` for production traffic.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/exploits/https.html>

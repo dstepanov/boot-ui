@@ -10,16 +10,16 @@ reactive analog genuinely exists, and an honest "not yet ported" / "not applicab
 ## 2. Current status
 
 The WebFlux adapter serves the large majority of the panel surface — the same 50-panel manifest the servlet adapter
-reports, minus the four panels that stay unavailable for stack reasons described below. **Every action-capable panel
+reports, minus the two panels that stay unavailable for stack reasons described below. **Every action-capable panel
 that is available behaves identically to the servlet adapter**, behind the same shared `LocalhostGuard` write floor:
 Loggers (set level), HTTP Probe, Cache (clear), Flyway (migrate/clean), Liquibase (update), Heap Dump
 (capture/analyze/delete/download), Threads (download), Traces (clear), SQL Trace (toggle recording/clear), the
 advisor scans (Architecture, Spring, Hibernate, Pentesting, REST API, Memory, Vulnerabilities/OSV), and Exceptions
 triage.
 
-Only **HTTP Sessions**, the raw **Spring Security** panel, and the standalone
-**REST Client** panel stay unavailable, each with a panel-specific reason surfaced through the
-`/bootui/api/panels` manifest (and, in turn, the sidebar tooltip and the panel's own alert banner — see §5).
+Only **HTTP Sessions** and the standalone **REST Client** panel stay
+unavailable, each with a panel-specific reason surfaced through the `/bootui/api/panels` manifest
+(and, in turn, the sidebar tooltip and the panel's own alert banner — see §5).
 `docs/FEATURES.md` and the per-panel `unavailableReason` strings in `PanelsController` are the authoritative, current
 detail.
 
@@ -206,20 +206,61 @@ OpenTelemetry SDK is present — see §7 for how this was found.
 - The servlet adapter's thread-based correlation (`LiveActivityCorrelator`) is not ported — it has no reactive
   equivalent.
 
-### 6.5 Not yet ported (2 panels)
+### 6.5 Raw Spring Security panel (`spring-security`) — live on WebFlux
 
-> **Note (ported since initial writing):** The **Security advisor** (`security`, panel id distinct from the raw
-> `spring-security` panel) was originally listed here. It has been ported as `ReactiveSecurityScanner` /
-> `ReactiveSecurityController` with a dedicated 25-rule WebFlux ruleset (rule IDs `SEC-RXF-*`), available whenever a
-> `WebFilterChainProxy` bean is present. The panel now reports `available: true` on any WebFlux app that has Spring
-> Security configured. See `docs/SECURITY-CHECKS.md` for the reactive rule catalogue.
+The raw Spring Security panel is ported to WebFlux via `ReactiveSpringSecurityController` and
+`ReactiveSpringSecurityService`. It is available whenever the application contributes at least one
+`SecurityWebFilterChain`; BootUI's own permit-all chain is explicitly excluded from that decision and from the report.
+The extractor reads the ordered chain beans directly rather than reflecting into `WebFilterChainProxy`, and every filter
+collection, chain match, and authorization simulation remains a Reactor `Mono`/`Flux` pipeline — no request path calls
+`block()` or performs other event-loop-blocking waits. Key platform-aware fidelity notes:
+
+- **Filters are `WebFilter` beans**, not `jakarta.servlet.Filter`; they are named faithfully in the filter list.
+- **Matchers are `ServerWebExchangeMatcher`** (`PathPatternParserServerWebExchangeMatcher`, etc.). Actual matching calls
+  each chain's public reactive `matches(...)` API, including custom chain implementations. Spring Security does not expose
+  the standard chain's matcher metadata, so BootUI uses bounded, read-only reflection for that description only. Known
+  Spring matchers are rendered from an allow-list; a custom matcher's arbitrary `toString()` is never exposed because it
+  could contain a configured header or token.
+- **Explain is deliberately reduced-fidelity.** `/explain` builds a sanitized path-and-method-only exchange and never
+  reuses the BootUI request's headers, cookies, principal, session, body, addresses, or TLS state. Reactive explain results
+  therefore carry `bestEffort:true`; a context-dependent matcher can report no match rather than receiving live secrets.
+- **`sessionManagementPresent` is a compatibility field, not proof of a `WebSession` policy.** On WebFlux it is set when
+  the chain contains Spring Security's context integration filter
+  (`SecurityContextServerWebExchangeWebFilter`/`ReactorContextWebFilter`). The UI labels this signal **Security context**;
+  it does not claim that server-side session persistence is enabled or disabled.
+- **Endpoint authorization** (`/endpoints`) uses the reactive `RequestMappingHandlerMapping` where available.
+  Annotation mappings are evaluated with the same sanitized exchange and synthetic anonymous/authenticated principals.
+  Context-dependent or custom authorization managers are reported as `custom`/`unknown`, never guessed as `denyAll`.
+  Functional-style `RouterFunction` routes are not included because they emit no annotation mapping metadata.
+- **The BootUI permit-all chain** (`bootUiReactiveSecurityWebFilterChain` from
+  `BootUiReactiveSpringSecurityAutoConfiguration`) is always filtered out by `BootUiSelfDataFilter`, so the panel never
+  shows BootUI's own internal chain in the chain list.
+- **`BootUiReactiveSpringSecurityAutoConfiguration`** is auto-configured (alongside the servlet
+  `BootUiSpringSecurityAutoConfiguration`) and permits BootUI routes at highest precedence when reactive Spring
+  Security is configured, preventing the application's login wall from blocking the exact `/bootui` root and its
+  descendants. It keeps the MCP bridge, OTLP ingestion, and API-unlock session endpoints outside browser CSRF while
+  requiring a cookie/header token pair for other state-changing BootUI requests. The configuration is isolated behind
+  string-based class and bean conditions, so a WebFlux application without Spring Security starts without linking any
+  reactive security type.
+- The WebFlux sample app (`bootui-spring-webflux-sample-app`) includes `spring-boot-starter-security` to demonstrate the
+  integration end to end.
+
+### 6.6 Security advisor (`security`) — live on WebFlux
+
+The advisor uses a dedicated 25-rule reactive catalogue (`SEC-RXF-*`) over a neutral observation model collected from
+the application's `SecurityWebFilterChain` configuration. It stays distinct from the raw `spring-security` panel:
+the raw panel explains the configured chains and mappings, while the advisor turns the observed posture into bounded,
+deterministic findings across authorization, CSRF, CORS, headers, Actuator exposure, OAuth2/JWT, configuration, and
+reactive session policy. BootUI's own permit-all chain is excluded from availability and analysis. See
+`docs/SECURITY-CHECKS.md` for the complete reactive catalogue.
+
+### 6.7 Not yet ported (1 panel)
 
 | Panel          | Reason                                                                                                                                                                                        |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Spring Security (raw panel, `spring-security`) | *"Not yet ported for Spring WebFlux: this advisor analyzes the servlet SecurityFilterChain/HttpSecurity configuration model, which has no reactive equivalent wired here yet (a ServerHttpSecurity/SecurityWebFilterChain ruleset is planned)."* `springSecurityAvailable()` now requires `!isReactive()` in addition to the pre-existing classpath/bean checks. |
 | REST Client       | *"REST Client is only available on the Spring MVC (servlet) adapter."* — the panel's availability check in `PanelsController` requires `!isReactive()`, so the dedicated full-detail panel (with its own filtering/paging over every captured call) is not wired into `BootUiReactiveAutoConfiguration` regardless of client instrumentation. On the servlet adapter, availability additionally requires `RestClientTraceRecorder#hasInstrumentedClient()` (see `docs/FEATURES.md`), so an MVC app that never builds a `RestClient`/`RestTemplate`/`WebClient` also reports unavailable rather than an empty buffer — the pre-existing bean-presence check alone wasn't a useful signal, since the recorder bean is registered unconditionally on both adapters. **Capture itself is not stack-gated**, though: `BootUiEngineConfiguration`'s `WebClientCustomizer` attaches `RestClientTraceExchangeFilter` to every auto-configured `WebClient.Builder` regardless of web application type, so REST/WebClient calls are still captured into the shared `RestClientTraceRecorder` and still appear as `REST_CLIENT` entries in the Live Activity merge (§6.4) on WebFlux — only the standalone panel is unavailable. |
 
-### 6.6 Not applicable (1 panel)
+### 6.8 Not applicable (1 panel)
 
 | Panel        | Reason                                                                                                                                                                                                     |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

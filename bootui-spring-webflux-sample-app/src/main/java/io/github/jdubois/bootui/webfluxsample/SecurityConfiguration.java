@@ -2,49 +2,37 @@ package io.github.jdubois.bootui.webfluxsample;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
-import org.springframework.security.core.userdetails.MapReactiveUserDetailsService;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 
 /**
- * Minimal reactive Spring Security configuration for the WebFlux sample app.
+ * Minimal reactive Spring Security configuration for the WebFlux sample application.
  *
- * <p>Configures a simple, one-user in-memory authentication store and requires authentication on
- * all application routes. BootUI's own {@code BootUiReactiveSpringSecurityAutoConfiguration} inserts
- * a higher-priority permit-all filter chain for the {@code /bootui/**} surface, so the console
- * is fully accessible without logging in.</p>
+ * <p>The BootUI permit-all chain ({@code BootUiReactiveSpringSecurityAutoConfiguration}) has
+ * highest precedence and handles the exact {@code /bootui} root plus all descendants. This
+ * configuration defines the application's own catch-all chain: it permits the demo API and requires
+ * authentication for everything else — just enough to demonstrate a non-trivial reactive security
+ * setup that BootUI can inspect via the Spring Security panel.</p>
  */
 @Configuration
+@EnableWebFluxSecurity
 public class SecurityConfiguration {
 
     /**
-     * Application security chain: requires authentication for all non-BootUI routes.
-     *
-     * <p>BootUI's own higher-priority chain ({@code bootUiReactiveSecurityWebFilterChain}) matches
-     * first on {@code /bootui/**} and permits all access there; this chain covers the rest of the
-     * application.</p>
+     * Public access for the demo REST API paths and static resources; everything else (including
+     * the root) requires authentication. This is intentionally kept simple so CI can run without a
+     * login step.
      */
     @Bean
     public SecurityWebFilterChain applicationSecurityWebFilterChain(ServerHttpSecurity http) {
-        return http.authorizeExchange(authorize -> authorize
-                        .pathMatchers("/api/**", "/greeting/**").authenticated()
-                        .anyExchange().permitAll())
+        return http.authorizeExchange(exchanges -> exchanges
+                        .pathMatchers("/greeting/**", "/api/**", "/actuator/**")
+                        .permitAll()
+                        .anyExchange()
+                        .authenticated())
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
-                .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .build();
-    }
-
-    /**
-     * Provides a demo user so the application can demonstrate authenticated endpoints.
-     * The password is never exposed by BootUI — only the property key is flagged if it
-     * appears in application properties as a plain-text literal.
-     */
-    @Bean
-    @SuppressWarnings("deprecation")
-    public MapReactiveUserDetailsService userDetailsService() {
-        return new MapReactiveUserDetailsService(
-                User.withDefaultPasswordEncoder().username("demo").password("demo").roles("USER").build());
     }
 }

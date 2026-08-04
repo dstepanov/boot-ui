@@ -298,8 +298,12 @@ public class PanelsController {
 
     private boolean springSecurityAvailable() {
         if (isReactive()) {
-            return classPresent("org.springframework.security.web.server.WebFilterChainProxy")
-                    && beanPresent("org.springframework.security.web.server.WebFilterChainProxy");
+            // Inspect actual application SecurityWebFilterChain beans rather than WebFilterChainProxy's
+            // private list. Exclude BootUI's own permit-all chain so the panel cannot make itself available.
+            return classPresent("org.springframework.security.web.server.SecurityWebFilterChain")
+                    && beanPresentExcluding(
+                            "org.springframework.security.web.server.SecurityWebFilterChain",
+                            "bootUiReactiveSecurityWebFilterChain");
         }
         return classPresent("org.springframework.security.web.SecurityFilterChain")
                 && beanPresent("org.springframework.security.web.SecurityFilterChain");
@@ -307,11 +311,11 @@ public class PanelsController {
 
     private String springSecurityUnavailableReason() {
         if (isReactive()) {
-            if (!classPresent("org.springframework.security.web.server.WebFilterChainProxy")) {
-                return "Spring Security is not on the classpath";
+            if (!classPresent("org.springframework.security.web.server.SecurityWebFilterChain")) {
+                return "Spring Security not on the classpath";
             }
-            return "No Spring Security WebFilterChainProxy found — add spring-security-config and "
-                    + "configure at least one SecurityWebFilterChain";
+            return "No reactive Spring Security filter chains are available"
+                    + " (no SecurityWebFilterChain bean found)";
         }
         if (!classPresent("org.springframework.security.web.SecurityFilterChain")) {
             return "Spring Security not on the classpath";
@@ -412,6 +416,16 @@ public class PanelsController {
         }
     }
 
+    private boolean beanPresentExcluding(String className, String excludedBeanName) {
+        try {
+            Class<?> type = ClassUtils.forName(className, getClass().getClassLoader());
+            return Arrays.stream(applicationContext.getBeanNamesForType(type, true, false))
+                    .anyMatch(beanName -> !excludedBeanName.equals(beanName));
+        } catch (ClassNotFoundException ex) {
+            return false;
+        }
+    }
+
     private boolean hibernateAvailable() {
         return classPresent("org.hibernate.SessionFactory")
                 && classPresent("jakarta.persistence.EntityManagerFactory")
@@ -430,8 +444,10 @@ public class PanelsController {
 
     private boolean securityAvailable() {
         if (isReactive()) {
-            return classPresent("org.springframework.security.web.server.WebFilterChainProxy")
-                    && beanPresent("org.springframework.security.web.server.WebFilterChainProxy");
+            return classPresent("org.springframework.security.web.server.SecurityWebFilterChain")
+                    && beanPresentExcluding(
+                            "org.springframework.security.web.server.SecurityWebFilterChain",
+                            "bootUiReactiveSecurityWebFilterChain");
         }
         return classPresent("org.springframework.security.web.FilterChainProxy")
                 && beanPresent("org.springframework.security.web.FilterChainProxy");
@@ -439,11 +455,10 @@ public class PanelsController {
 
     private String securityUnavailableReason() {
         if (isReactive()) {
-            if (!classPresent("org.springframework.security.web.server.WebFilterChainProxy")) {
+            if (!classPresent("org.springframework.security.web.server.SecurityWebFilterChain")) {
                 return "Spring Security is not on the classpath";
             }
-            return "No Spring Security WebFilterChainProxy found — add spring-security-config and "
-                    + "configure at least one SecurityWebFilterChain";
+            return "No application SecurityWebFilterChain beans are available";
         }
         if (!classPresent("org.springframework.security.web.FilterChainProxy")) {
             return "Spring Security not on the classpath";

@@ -10,13 +10,15 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * adapter. Deliberately minimal: a couple of {@code Mono}/{@code Flux} REST endpoints backed by blocking
  * JDBC (off the event loop), a {@code @Scheduled} task, a {@code @Cacheable} service, and a couple of
  * dev-trapped sample emails - just enough to light up the Scheduled Tasks, Cache, Database Connection
- * Pools, Flyway, Liquibase, and Email panels alongside the panels that need no application-specific data
- * at all.
+ * Pools, Flyway, Liquibase, Email, and Spring Security panels alongside the panels that need no
+ * application-specific data at all.
  *
- * <p>Spring Security is wired here via a minimal {@link SecurityConfiguration} so that the BootUI
- * WebFlux Security advisor is exercised. {@code BootUiReactiveSpringSecurityAutoConfiguration}
- * inserts a highest-priority permit-all {@code SecurityWebFilterChain} for the {@code /bootui}
- * surface so the console remains fully accessible without authentication.</p>
+ * <p>Spring Security is included so that both the raw Spring Security panel and the Security advisor
+ * are available on WebFlux.
+ * {@code BootUiReactiveSpringSecurityAutoConfiguration} registers a high-precedence permit-all
+ * {@code SecurityWebFilterChain} for the exact {@code /bootui} root and its descendants so BootUI
+ * itself is never blocked. The application's own {@code SecurityConfiguration} defines the
+ * remaining chain.</p>
  */
 @SpringBootApplication
 @EnableCaching
