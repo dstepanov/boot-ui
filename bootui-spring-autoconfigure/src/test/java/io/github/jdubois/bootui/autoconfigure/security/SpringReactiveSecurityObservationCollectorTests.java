@@ -1,23 +1,37 @@
 package io.github.jdubois.bootui.autoconfigure.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.github.jdubois.bootui.engine.reactivesecurity.ReactiveSecurityObservation;
 import io.github.jdubois.bootui.engine.reactivesecurity.WebFilterChainObservation;
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.security.authentication.ReactiveAuthenticationManager;
 import org.springframework.security.web.server.MatcherSecurityWebFilterChain;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.security.web.server.authentication.AuthenticationWebFilter;
+import org.springframework.security.web.server.authentication.ServerAuthenticationConverter;
 import org.springframework.security.web.server.csrf.CsrfWebFilter;
+import org.springframework.security.web.server.header.CompositeServerHttpHeadersWriter;
+import org.springframework.security.web.server.header.ContentSecurityPolicyServerHttpHeadersWriter;
+import org.springframework.security.web.server.header.HttpHeaderWriterWebFilter;
+import org.springframework.security.web.server.header.StrictTransportSecurityServerHttpHeadersWriter;
 import org.springframework.security.web.server.util.matcher.PathPatternParserServerWebExchangeMatcher;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -31,6 +45,14 @@ import reactor.core.publisher.Mono;
 class SpringReactiveSecurityObservationCollectorTests {
 
     private static final WebFilter PASSTHROUGH = (exchange, chain) -> chain.filter(exchange);
+
+    private static final class ServerBearerTokenAuthenticationConverter implements ServerAuthenticationConverter {
+
+        @Override
+        public Mono<org.springframework.security.core.Authentication> convert(ServerWebExchange exchange) {
+            return Mono.empty();
+        }
+    }
 
     @SuppressWarnings("unchecked")
     private static ObjectProvider<SecurityWebFilterChain> chainProvider(List<SecurityWebFilterChain> chains) {
@@ -157,6 +179,34 @@ class SpringReactiveSecurityObservationCollectorTests {
     }
 
     @Test
+    void extractsRealReactiveHeaderWritersAndHstsConfiguration() {
+        StrictTransportSecurityServerHttpHeadersWriter hsts = new StrictTransportSecurityServerHttpHeadersWriter();
+        hsts.setMaxAge(Duration.ofSeconds(60));
+        hsts.setIncludeSubDomains(true);
+        ContentSecurityPolicyServerHttpHeadersWriter csp = new ContentSecurityPolicyServerHttpHeadersWriter();
+        csp.setPolicyDirectives("default-src 'self'");
+        csp.setReportOnly(true);
+        HttpHeaderWriterWebFilter headers =
+                new HttpHeaderWriterWebFilter(new CompositeServerHttpHeadersWriter(List.of(hsts, csp)));
+        SecurityWebFilterChain chain =
+                new MatcherSecurityWebFilterChain(ServerWebExchangeMatchers.anyExchange(), List.of(headers));
+
+        SpringReactiveSecurityObservationCollector collector = new SpringReactiveSecurityObservationCollector(
+                chainProvider(List.of(chain)), beanFactoryProvider(null), new MockEnvironment());
+
+        WebFilterChainObservation observed = collector.collect().chains().get(0);
+
+        assertThat(observed.headerWriterNames())
+                .containsExactly(
+                        "StrictTransportSecurityServerHttpHeadersWriter",
+                        "ContentSecurityPolicyServerHttpHeadersWriter");
+        assertThat(observed.hstsMaxAgeSeconds()).isEqualTo(60);
+        assertThat(observed.hstsIncludeSubdomains()).isTrue();
+        assertThat(observed.cspPolicyDirectives()).isEqualTo("default-src 'self'");
+        assertThat(observed.cspReportOnly()).isTrue();
+    }
+
+    @Test
     void collectionDoesNotBlockOnAnAsynchronousChain() {
         SecurityWebFilterChain asynchronousChain = new SecurityWebFilterChain() {
             @Override
@@ -177,6 +227,65 @@ class SpringReactiveSecurityObservationCollectorTests {
 
         assertThat(observation.chains()).hasSize(1);
         assertThat(observation.chains().get(0).webFilterNames()).hasSize(1);
+    }
+
+    @Test
+    void unreadableFiltersProduceAnUnknownAuthorizationDecisionAndPartialObservation() {
+        SecurityWebFilterChain unreadableChain = new SecurityWebFilterChain() {
+            @Override
+            public Mono<Boolean> matches(ServerWebExchange exchange) {
+                return Mono.just(true);
+            }
+
+            @Override
+            public Flux<WebFilter> getWebFilters() {
+                return Flux.error(new IllegalStateException("unavailable"));
+            }
+        };
+
+        SpringReactiveSecurityObservationCollector collector = new SpringReactiveSecurityObservationCollector(
+                chainProvider(List.of(unreadableChain)), beanFactoryProvider(null), new MockEnvironment());
+
+        ReactiveSecurityObservation observation = collector.collect();
+
+        assertThat(observation.chains().get(0).permitsAllAnonymous()).isNull();
+        assertThat(observation.errors()).containsExactly("Chain 0: web filters could not be collected");
+    }
+
+    @Test
+    void recognizesBearerTokenAuthenticationConverterWithoutReadingCredentials() {
+        ReactiveAuthenticationManager authenticationManager = authentication -> Mono.empty();
+        AuthenticationWebFilter bearerFilter = new AuthenticationWebFilter(authenticationManager);
+        bearerFilter.setServerAuthenticationConverter(new ServerBearerTokenAuthenticationConverter());
+        SecurityWebFilterChain chain =
+                new MatcherSecurityWebFilterChain(ServerWebExchangeMatchers.anyExchange(), List.of(bearerFilter));
+
+        SpringReactiveSecurityObservationCollector collector = new SpringReactiveSecurityObservationCollector(
+                chainProvider(List.of(chain)), beanFactoryProvider(null), new MockEnvironment());
+
+        assertThat(collector.collect().chains().get(0).bearerTokenAuthentication())
+                .isTrue();
+    }
+
+    @Test
+    void convertsRealCorsOriginPatternsToNeutralStrings() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOriginPatterns(List.of("*"));
+        configuration.setAllowCredentials(true);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        ListableBeanFactory beanFactory = mock(ListableBeanFactory.class);
+        doReturn(Map.of("corsConfigurationSource", source)).when(beanFactory).getBeansOfType(any());
+
+        SpringReactiveSecurityObservationCollector collector = new SpringReactiveSecurityObservationCollector(
+                chainProvider(List.of()), beanFactoryProvider(beanFactory), new MockEnvironment());
+
+        ReactiveSecurityObservation observation = collector.collect();
+
+        assertThat(observation.corsConfigs()).singleElement().satisfies(cors -> {
+            assertThat(cors.allowedOriginPatterns()).containsExactly("*");
+            assertThat(cors.allowCredentials()).isTrue();
+        });
     }
 
     @Test
@@ -219,5 +328,30 @@ class SpringReactiveSecurityObservationCollectorTests {
         ReactiveSecurityObservation observation = collector.collect();
 
         assertThat(observation.environment().suspectedHardcodedSecretKeys()).isEmpty();
+    }
+
+    @Test
+    void issuerOrJwkConfigurationOverridesStaticPublicKeyLocation() {
+        MockEnvironment staticKeyOnly = new MockEnvironment()
+                .withProperty(
+                        "spring.security.oauth2.resourceserver.jwt.public-key-location",
+                        "classpath:verification-key.pub");
+        MockEnvironment issuerConfigured = new MockEnvironment()
+                .withProperty(
+                        "spring.security.oauth2.resourceserver.jwt.public-key-location",
+                        "classpath:verification-key.pub")
+                .withProperty("spring.security.oauth2.resourceserver.jwt.issuer-uri", "https://issuer.example");
+
+        ReactiveSecurityObservation staticObservation = new SpringReactiveSecurityObservationCollector(
+                        chainProvider(List.of()), beanFactoryProvider(null), staticKeyOnly)
+                .collect();
+        ReactiveSecurityObservation issuerObservation = new SpringReactiveSecurityObservationCollector(
+                        chainProvider(List.of()), beanFactoryProvider(null), issuerConfigured)
+                .collect();
+
+        assertThat(staticObservation.environment().oauth2JwtStaticPublicKeyConfigured())
+                .isTrue();
+        assertThat(issuerObservation.environment().oauth2JwtStaticPublicKeyConfigured())
+                .isFalse();
     }
 }

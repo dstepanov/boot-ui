@@ -627,11 +627,11 @@ The reactive checks share the same severity scale as the servlet checks. Rule ID
 - **Recommendation**: Configure a `JwtClaimValidator<List<String>>("aud", ...)` or `spring.security.oauth2.resourceserver.jwt.audiences`.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html>
 
-### SEC-RXF-OAUTH2-002 - Reactive JWT decoder uses a static symmetric key
+### SEC-RXF-OAUTH2-002 - Reactive JWT decoder uses a static public key
 
-- **Severity**: HIGH
-- **Detects**: A `NimbusReactiveJwtDecoder` (or similar) is backed by a fixed symmetric key via property, not a JWKS URI or X.509 certificate.
-- **Recommendation**: Use a JWKS URI (`spring.security.oauth2.resourceserver.jwt.jwk-set-uri`) for production deployments.
+- **Severity**: MEDIUM
+- **Detects**: `spring.security.oauth2.resourceserver.jwt.public-key-location` pins JWT verification to a static public key, making signing-key rotation operationally fragile.
+- **Recommendation**: Prefer `issuer-uri` or `jwk-set-uri` so signing-key rotation is handled through the authorization server's JWKS endpoint.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html>
 
 ### SEC-RXF-OAUTH2-003 - Reactive JWT metadata URL is plain HTTP
@@ -672,6 +672,6 @@ The reactive checks share the same severity scale as the servlet checks. Rule ID
 ### SEC-RXF-SESSION-001 - Bearer-token resource server using stateful sessions
 
 - **Severity**: LOW
-- **Detects**: A chain with `BearerTokenAuthenticationWebFilter` also configures OAuth2 login or session-based authentication (stateful), which is redundant for pure resource servers.
+- **Detects**: A chain whose `AuthenticationWebFilter` uses Spring Security's reactive bearer-token converter also configures OAuth2 login or session-based authentication (stateful), which is redundant for pure resource servers.
 - **Recommendation**: Configure `.sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))` for pure bearer-token resource server chains.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html>

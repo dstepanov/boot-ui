@@ -284,6 +284,24 @@ class ReactiveSecurityScannerTests {
     }
 
     @Test
+    void scanDetectsUnconfiguredCspWriter() {
+        WebFilterChainObservation chain = new WebFilterChainObservation(
+                0,
+                "any request",
+                List.of("AuthorizationWebFilter", "HttpHeaderWriterWebFilter"),
+                Boolean.FALSE,
+                List.of("ContentSecurityPolicyServerHttpHeadersWriter"),
+                null,
+                null,
+                null,
+                Boolean.FALSE);
+
+        SecurityReport report = scan(chain, List.of(), false);
+
+        assertThat(report.results()).extracting(SecurityRuleResultDto::id).contains("SEC-RXF-HEAD-004");
+    }
+
+    @Test
     void scanDetectsActuatorWildcardExposure() {
         WebFilterChainObservation chain = new WebFilterChainObservation(
                 0,
@@ -332,7 +350,7 @@ class ReactiveSecurityScannerTests {
     }
 
     @Test
-    void jwtStaticKeyRuleNeverEchoesTheSecretValueItself() {
+    void jwtStaticPublicKeyRuleReportsOnlyThePropertyName() {
         WebFilterChainObservation chain = new WebFilterChainObservation(
                 0, "any request", List.of("AuthorizationWebFilter"), Boolean.FALSE, List.of(), null, null, null, null);
         ReactiveSecurityEnvironmentSnapshot environment = new ReactiveSecurityEnvironmentSnapshot(
@@ -350,7 +368,26 @@ class ReactiveSecurityScannerTests {
         assertThat(result.status()).isEqualTo(ReactiveSecuritySupport.VIOLATION);
         assertThat(result.sampleViolations())
                 .containsExactly(
-                        "spring.security.oauth2.resourceserver.jwt.secret-value is set as a literal; use a JWKS endpoint or an external secrets manager instead.");
+                        "spring.security.oauth2.resourceserver.jwt.public-key-location configures a static verification key; prefer issuer-uri or jwk-set-uri for key rotation.");
+    }
+
+    @Test
+    void scanDetectsStatefulBearerTokenAuthentication() {
+        WebFilterChainObservation chain = new WebFilterChainObservation(
+                0,
+                "any request",
+                List.of("AuthorizationWebFilter", "AuthenticationWebFilter", "OAuth2LoginAuthenticationWebFilter"),
+                Boolean.FALSE,
+                true,
+                List.of(),
+                null,
+                null,
+                null,
+                null);
+
+        SecurityReport report = scan(chain, List.of(), false);
+
+        assertThat(report.results()).extracting(SecurityRuleResultDto::id).contains("SEC-RXF-SESSION-001");
     }
 
     @Test

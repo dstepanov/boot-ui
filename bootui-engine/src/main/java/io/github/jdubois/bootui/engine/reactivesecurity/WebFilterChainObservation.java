@@ -16,6 +16,8 @@ import java.util.Locale;
  * @param permitsAllAnonymous best-effort result of whether the chain permits all requests without
  *     authorization ({@code TRUE} when no {@code AuthorizationWebFilter} is found, {@code null} when
  *     it could not be determined)
+ * @param bearerTokenAuthentication whether the chain contains an {@code AuthenticationWebFilter}
+ *     backed by Spring Security's reactive bearer-token converter
  * @param headerWriterNames simple class names of the {@code ServerHttpHeadersWriter}s installed by the
  *     chain's {@code HttpHeaderWriterWebFilter}, when one is present
  * @param hstsMaxAgeSeconds the HSTS writer's configured {@code maxAgeInSeconds}, when an HSTS writer
@@ -29,6 +31,7 @@ public record WebFilterChainObservation(
         String matcher,
         List<String> webFilterNames,
         Boolean permitsAllAnonymous,
+        boolean bearerTokenAuthentication,
         List<String> headerWriterNames,
         Long hstsMaxAgeSeconds,
         Boolean hstsIncludeSubdomains,
@@ -40,6 +43,29 @@ public record WebFilterChainObservation(
     public WebFilterChainObservation {
         webFilterNames = List.copyOf(webFilterNames);
         headerWriterNames = headerWriterNames == null ? List.of() : List.copyOf(headerWriterNames);
+    }
+
+    public WebFilterChainObservation(
+            int index,
+            String matcher,
+            List<String> webFilterNames,
+            Boolean permitsAllAnonymous,
+            List<String> headerWriterNames,
+            Long hstsMaxAgeSeconds,
+            Boolean hstsIncludeSubdomains,
+            String cspPolicyDirectives,
+            Boolean cspReportOnly) {
+        this(
+                index,
+                matcher,
+                webFilterNames,
+                permitsAllAnonymous,
+                false,
+                headerWriterNames,
+                hstsMaxAgeSeconds,
+                hstsIncludeSubdomains,
+                cspPolicyDirectives,
+                cspReportOnly);
     }
 
     boolean hasWebFilter(String simpleName) {
@@ -63,7 +89,8 @@ public record WebFilterChainObservation(
     }
 
     boolean hasHstsWriter() {
-        return headerWriterNames.stream().anyMatch(name -> name.contains("Hsts"));
+        return headerWriterNames.stream()
+                .anyMatch(name -> name.contains("Hsts") || name.contains("StrictTransportSecurity"));
     }
 
     boolean hasFrameOptionsWriter() {
@@ -71,7 +98,7 @@ public record WebFilterChainObservation(
     }
 
     boolean hasCspWriter() {
-        return headerWriterNames.stream().anyMatch(name -> name.contains("ContentSecurityPolicy"));
+        return cspPolicyDirectives != null && !cspPolicyDirectives.isBlank();
     }
 
     boolean hasContentTypeOptionsWriter() {

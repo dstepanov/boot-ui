@@ -536,20 +536,20 @@ final class ReactiveJwtStaticKeyRule extends AbstractReactiveSecurityRule {
     ReactiveJwtStaticKeyRule() {
         super(new ReactiveSecurityRuleDefinition(
                 "SEC-RXF-OAUTH2-002",
-                "Reactive JWT resource server should not use a hardcoded signing secret",
+                "Reactive JWT resource servers should avoid static public keys",
                 ReactiveSecurityCategory.OAUTH2,
-                "HIGH",
-                "Detects spring.security.oauth2.resourceserver.jwt.secret-value (a symmetric HMAC key) configured as a literal string in application properties.",
-                "Use an asymmetric key pair (RSA/EC) with a JWKS endpoint, or store the symmetric key in a secrets manager.",
+                "MEDIUM",
+                "Detects spring.security.oauth2.resourceserver.jwt.public-key-location, which pins JWT verification to a static public key and makes signing-key rotation operationally fragile.",
+                "Prefer issuer-uri or jwk-set-uri so signing-key rotation can be handled through the authorization server's JWKS endpoint.",
                 "https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html"));
     }
 
     @Override
     SecurityRuleResultDto evaluateRule(ReactiveSecurityContext context) {
-        if (context.environment().oauth2JwtLiteralSecretConfigured()) {
+        if (context.environment().oauth2JwtStaticPublicKeyConfigured()) {
             return violation(
                     List.of(
-                            "spring.security.oauth2.resourceserver.jwt.secret-value is set as a literal; use a JWKS endpoint or an external secrets manager instead."));
+                            "spring.security.oauth2.resourceserver.jwt.public-key-location configures a static verification key; prefer issuer-uri or jwk-set-uri for key rotation."));
         }
         return pass();
     }
@@ -706,7 +706,7 @@ final class ReactiveBearerTokenStatefulRule extends AbstractReactiveSecurityRule
                 "Bearer-token resource server should use stateless session management",
                 ReactiveSecurityCategory.SESSION,
                 "LOW",
-                "Detects a reactive chain that appears to handle bearer-token authentication (BearerTokenAuthenticationWebFilter) while also configuring session-based authentication mechanisms. JWTs are self-contained credentials; pairing them with session storage is redundant and increases attack surface.",
+                "Detects a reactive chain that handles bearer-token authentication through AuthenticationWebFilter while also configuring session-based authentication mechanisms. JWTs are self-contained credentials; pairing them with session storage is redundant and increases attack surface.",
                 "For pure bearer-token resource servers, configure .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) to disable server-side sessions.",
                 "https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html"));
     }
@@ -715,7 +715,7 @@ final class ReactiveBearerTokenStatefulRule extends AbstractReactiveSecurityRule
     SecurityRuleResultDto evaluateRule(ReactiveSecurityContext context) {
         List<String> details = new ArrayList<>();
         for (WebFilterChainObservation chain : context.chains()) {
-            if (chain.hasWebFilter("BearerTokenAuthenticationWebFilter") && chain.isStateful()) {
+            if (chain.bearerTokenAuthentication() && chain.isStateful()) {
                 details.add(
                         chain.describe()
                                 + " configures both bearer-token authentication and session-based authentication; consider using stateless sessions for pure resource server chains.");

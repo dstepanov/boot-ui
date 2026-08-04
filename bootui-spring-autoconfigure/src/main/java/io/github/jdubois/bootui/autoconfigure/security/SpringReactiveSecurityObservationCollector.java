@@ -31,6 +31,7 @@ import org.springframework.security.web.server.MatcherSecurityWebFilterChain;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatcher;
 import org.springframework.security.web.server.util.matcher.ServerWebExchangeMatchers;
+import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.server.WebFilter;
 
 /**
@@ -87,7 +88,7 @@ public final class SpringReactiveSecurityObservationCollector {
         List<WebFilterChainObservation> chains = new ArrayList<>();
         for (int i = 0; i < applicationChains.size(); i++) {
             try {
-                chains.add(toChainObservation(i, applicationChains.get(i)));
+                chains.add(toChainObservation(i, applicationChains.get(i), errors));
             } catch (RuntimeException | LinkageError ex) {
                 errors.add("Chain " + i + ": " + safeMessage(ex));
             }
@@ -146,16 +147,28 @@ public final class SpringReactiveSecurityObservationCollector {
         }
     }
 
-    private static WebFilterChainObservation toChainObservation(int index, SecurityWebFilterChain chain) {
+    private static WebFilterChainObservation toChainObservation(
+            int index, SecurityWebFilterChain chain, List<String> errors) {
         String matcher = matcherDescription(chain);
-        List<String> webFilterNames = extractFilterNames(chain);
-        Boolean permitsAllAnonymous = detectPermitsAllAnonymous(webFilterNames);
-        HeaderWriterInfo headerWriters = detectHeaderWriters(webFilterNames, chain);
+        List<WebFilter> webFilters = extractFilters(chain);
+        List<String> webFilterNames = webFilters == null
+                ? List.of()
+                : webFilters.stream()
+                        .map(filter -> filter.getClass().getSimpleName())
+                        .toList();
+        Boolean permitsAllAnonymous = webFilters == null ? null : detectPermitsAllAnonymous(webFilterNames);
+        if (webFilters == null) {
+            errors.add("Chain " + index + ": web filters could not be collected");
+        }
+        boolean bearerTokenAuthentication = webFilters != null
+                && webFilters.stream().anyMatch(SpringReactiveSecurityObservationCollector::isBearerTokenFilter);
+        HeaderWriterInfo headerWriters = detectHeaderWriters(webFilters);
         return new WebFilterChainObservation(
                 index,
                 matcher,
                 webFilterNames,
                 permitsAllAnonymous,
+                bearerTokenAuthentication,
                 headerWriters.names(),
                 headerWriters.hstsMaxAgeSeconds(),
                 headerWriters.hstsIncludeSubdomains(),
@@ -219,31 +232,25 @@ public final class SpringReactiveSecurityObservationCollector {
         return className.startsWith(SPRING_MATCHER_PACKAGE) ? simpleName : "(custom matcher: " + className + ")";
     }
 
-    private static List<String> extractFilterNames(SecurityWebFilterChain chain) {
+    private static List<WebFilter> extractFilters(SecurityWebFilterChain chain) {
         // Fast path: reflect the "filters" List<WebFilter> field directly from the chain.
         Object raw = readField(chain, "filters");
         if (raw instanceof List<?> list) {
-            List<String> names = new ArrayList<>();
+            List<WebFilter> filters = new ArrayList<>();
             for (Object item : list) {
                 if (item instanceof WebFilter webFilter) {
-                    names.add(webFilter.getClass().getSimpleName());
+                    filters.add(webFilter);
                 }
             }
-            if (!names.isEmpty()) {
-                return names;
-            }
+            return filters;
         }
         // Fallback: subscribe with a short, bounded timeout. Never called on the event loop: this
         // collector is invoked only from the controller's boundedElastic-scheduled scan().
         try {
-            List<WebFilter> filters = chain.getWebFilters().collectList().block(FILTER_COLLECT_TIMEOUT);
-            if (filters != null) {
-                return filters.stream().map(f -> f.getClass().getSimpleName()).toList();
-            }
+            return chain.getWebFilters().collectList().block(FILTER_COLLECT_TIMEOUT);
         } catch (RuntimeException | LinkageError ex) {
-            // ignore — return empty list
+            return null;
         }
-        return List.of();
     }
 
     /**
@@ -263,12 +270,16 @@ public final class SpringReactiveSecurityObservationCollector {
             String cspPolicyDirectives,
             Boolean cspReportOnly) {}
 
-    private static HeaderWriterInfo detectHeaderWriters(List<String> filterNames, SecurityWebFilterChain chain) {
-        if (!filterNames.contains("HttpHeaderWriterWebFilter")) {
-            return new HeaderWriterInfo(List.of(), null, null, null, null);
+    private static boolean isBearerTokenFilter(WebFilter filter) {
+        if (!"AuthenticationWebFilter".equals(filter.getClass().getSimpleName())) {
+            return false;
         }
-        Object rawFilters = readField(chain, "filters");
-        if (!(rawFilters instanceof List<?> filters)) {
+        Object converter = readField(filter, "authenticationConverter");
+        return converter != null && converter.getClass().getName().endsWith("ServerBearerTokenAuthenticationConverter");
+    }
+
+    private static HeaderWriterInfo detectHeaderWriters(List<WebFilter> filters) {
+        if (filters == null) {
             return new HeaderWriterInfo(List.of(), null, null, null, null);
         }
         for (Object filter : filters) {
@@ -282,7 +293,7 @@ public final class SpringReactiveSecurityObservationCollector {
     }
 
     private static HeaderWriterInfo readHeaderWriterFilter(Object headerFilter) {
-        Object writerField = readField(headerFilter, "headerWriter");
+        Object writerField = readField(headerFilter, "writer");
         if (writerField == null) {
             return new HeaderWriterInfo(List.of(), null, null, null, null);
         }
@@ -295,15 +306,9 @@ public final class SpringReactiveSecurityObservationCollector {
         Boolean cspReportOnly = null;
         for (Object writer : writers) {
             String simpleName = writer.getClass().getSimpleName();
-            if (simpleName.contains("Hsts")) {
-                Object maxAge = readField(writer, "maxAgeInSeconds");
-                if (maxAge instanceof Number n) {
-                    hstsMaxAge = n.longValue();
-                }
-                Object includeSubs = readField(writer, "includeSubDomains");
-                if (includeSubs instanceof Boolean b) {
-                    hstsIncludeSubdomains = b;
-                }
+            if (simpleName.contains("Hsts") || simpleName.contains("StrictTransportSecurity")) {
+                hstsMaxAge = parseHstsMaxAge(readField(writer, "maxAge"));
+                hstsIncludeSubdomains = parseHstsIncludeSubdomains(readField(writer, "subdomain"));
             } else if (simpleName.contains("ContentSecurityPolicy")) {
                 Object policy = readField(writer, "policyDirectives");
                 cspDirectives = policy == null ? null : String.valueOf(policy);
@@ -317,19 +322,44 @@ public final class SpringReactiveSecurityObservationCollector {
     }
 
     private static List<Object> flattenWriters(Object writerField) {
-        // CompositeServerHttpHeadersWriter or DelegatingServerHttpHeadersWriter wraps a list.
-        Object delegateList = readField(writerField, "headerWriters");
+        Object delegateList = readField(writerField, "writers");
         if (delegateList instanceof List<?> list) {
             List<Object> result = new ArrayList<>();
             for (Object item : list) {
                 if (item != null) {
-                    result.add(item);
+                    result.addAll(flattenWriters(item));
                 }
             }
             return result;
         }
         // Single writer
         return List.of(writerField);
+    }
+
+    private static Long parseHstsMaxAge(Object maxAge) {
+        if (maxAge instanceof Number number) {
+            return number.longValue();
+        }
+        if (maxAge instanceof String value) {
+            int separator = value.indexOf('=');
+            String seconds = separator >= 0 ? value.substring(separator + 1).trim() : value.trim();
+            try {
+                return Long.parseLong(seconds);
+            } catch (NumberFormatException ex) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static Boolean parseHstsIncludeSubdomains(Object subdomain) {
+        if (subdomain instanceof Boolean value) {
+            return value;
+        }
+        if (subdomain instanceof String value) {
+            return value.toLowerCase(Locale.ROOT).contains("includesubdomains");
+        }
+        return null;
     }
 
     // ── CORS discovery ────────────────────────────────────────────────────────────
@@ -369,33 +399,20 @@ public final class SpringReactiveSecurityObservationCollector {
     }
 
     private static CorsConfigObservation toCorsObservation(String pattern, Object config) {
-        if (config == null) {
+        if (!(config instanceof CorsConfiguration cors)) {
             return null;
         }
-        Object allowedOriginsField = readField(config, "allowedOrigins");
-        Object allowedOriginPatternsField = readField(config, "allowedOriginPatterns");
-        Object allowedMethodsField = readField(config, "allowedMethods");
-        Object allowedHeadersField = readField(config, "allowedHeaders");
-        Object allowCredentialsField = readField(config, "allowCredentials");
         return new CorsConfigObservation(
                 pattern,
-                toStringList(allowedOriginsField),
-                toStringList(allowedOriginPatternsField),
-                toStringList(allowedMethodsField),
-                toStringList(allowedHeadersField),
-                allowCredentialsField instanceof Boolean b ? b : null);
+                nullableList(cors.getAllowedOrigins()),
+                nullableList(cors.getAllowedOriginPatterns()),
+                nullableList(cors.getAllowedMethods()),
+                nullableList(cors.getAllowedHeaders()),
+                cors.getAllowCredentials());
     }
 
-    @SuppressWarnings("unchecked")
-    private static List<String> toStringList(Object obj) {
-        if (obj instanceof List<?> list) {
-            try {
-                return (List<String>) list;
-            } catch (ClassCastException ex) {
-                return list.stream().map(String::valueOf).toList();
-            }
-        }
-        return List.of();
+    private static List<String> nullableList(List<String> values) {
+        return values == null ? List.of() : List.copyOf(values);
     }
 
     // ── Reflection helpers ────────────────────────────────────────────────────────
@@ -462,11 +479,10 @@ public final class SpringReactiveSecurityObservationCollector {
         } catch (RuntimeException ex) {
             profiles = List.of();
         }
-        String secretValue = firstProperty(
-                "spring.security.oauth2.resourceserver.jwt.secret-value",
-                "spring.security.oauth2.resourceserver.jwt.secret");
         String issuerUri = firstProperty("spring.security.oauth2.resourceserver.jwt.issuer-uri");
         String jwkSetUri = firstProperty("spring.security.oauth2.resourceserver.jwt.jwk-set-uri");
+        String publicKeyLocation = firstProperty("spring.security.oauth2.resourceserver.jwt.public-key-location");
+        boolean staticPublicKeyConfigured = hasText(publicKeyLocation) && !hasText(issuerUri) && !hasText(jwkSetUri);
         String loggingLevel = firstProperty(
                 "logging.level.org.springframework.security", "logging.level.org.springframework.security.web");
         return new ReactiveSecurityEnvironmentSnapshot(
@@ -476,7 +492,7 @@ public final class SpringReactiveSecurityObservationCollector {
                 firstHostProperty("management.server.port") != null,
                 profiles,
                 isPropertyTrue("spring.security.debug"),
-                secretValue != null && !secretValue.contains("${"),
+                staticPublicKeyConfigured,
                 usesPlainHttp(issuerUri),
                 usesPlainHttp(jwkSetUri),
                 loggingLevel,
@@ -485,6 +501,10 @@ public final class SpringReactiveSecurityObservationCollector {
 
     private static boolean usesPlainHttp(String value) {
         return value != null && value.toLowerCase(Locale.ROOT).startsWith("http://");
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private boolean isGlobalTlsConfigured() {

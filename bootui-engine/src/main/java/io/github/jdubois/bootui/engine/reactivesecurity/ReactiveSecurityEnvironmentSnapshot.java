@@ -23,9 +23,9 @@ import java.util.Set;
  * @param managementServerPortConfigured whether {@code management.server.port} is configured
  * @param activeProfiles the application's active Spring profiles
  * @param securityDebugEnabled whether {@code spring.security.debug=true}
- * @param oauth2JwtLiteralSecretConfigured whether
- *     {@code spring.security.oauth2.resourceserver.jwt.secret-value} (or the deprecated
- *     {@code ...jwt.secret}) is configured as a literal rather than a placeholder
+ * @param oauth2JwtStaticPublicKeyConfigured whether
+ *     {@code spring.security.oauth2.resourceserver.jwt.public-key-location} configures a static public
+ *     key instead of a remotely rotatable JWKS
  * @param oauth2JwtIssuerUsesPlainHttp whether the configured issuer URI uses plain HTTP
  * @param oauth2JwtJwkSetUsesPlainHttp whether the configured JWKS URI uses plain HTTP
  * @param securityLoggingLevel the resolved value of {@code logging.level.org.springframework.security}
@@ -40,7 +40,7 @@ public record ReactiveSecurityEnvironmentSnapshot(
         boolean managementServerPortConfigured,
         List<String> activeProfiles,
         boolean securityDebugEnabled,
-        boolean oauth2JwtLiteralSecretConfigured,
+        boolean oauth2JwtStaticPublicKeyConfigured,
         boolean oauth2JwtIssuerUsesPlainHttp,
         boolean oauth2JwtJwkSetUsesPlainHttp,
         String securityLoggingLevel,
