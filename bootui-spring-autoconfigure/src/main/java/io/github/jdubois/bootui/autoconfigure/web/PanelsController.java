@@ -190,6 +190,7 @@ public class PanelsController {
             case BootUiPanels.LIQUIBASE -> availability(liquibaseAvailable(), liquibaseUnavailableReason());
             case BootUiPanels.EMAIL -> availability(emailAvailable(), "No JavaMailSender bean is available");
             case BootUiPanels.KAFKA -> availability(kafkaAvailable(), "No KafkaTemplate bean is available");
+            case BootUiPanels.RABBITMQ -> availability(rabbitAvailable(), "No RabbitTemplate bean is available");
             case BootUiPanels.SECURITY -> availability(securityAvailable(), securityUnavailableReason());
             case BootUiPanels.AI -> availability(aiAvailable(), aiUnavailableReason());
             case BootUiPanels.COPILOT ->
@@ -297,16 +298,25 @@ public class PanelsController {
     }
 
     private boolean springSecurityAvailable() {
-        return !isReactive()
-                && classPresent("org.springframework.security.web.SecurityFilterChain")
+        if (isReactive()) {
+            // Inspect actual application SecurityWebFilterChain beans rather than WebFilterChainProxy's
+            // private list. Exclude BootUI's own permit-all chain so the panel cannot make itself available.
+            return classPresent("org.springframework.security.web.server.SecurityWebFilterChain")
+                    && beanPresentExcluding(
+                            "org.springframework.security.web.server.SecurityWebFilterChain",
+                            "bootUiReactiveSecurityWebFilterChain");
+        }
+        return classPresent("org.springframework.security.web.SecurityFilterChain")
                 && beanPresent("org.springframework.security.web.SecurityFilterChain");
     }
 
     private String springSecurityUnavailableReason() {
         if (isReactive()) {
-            return "Not yet ported for Spring WebFlux: this advisor analyzes the servlet"
-                    + " SecurityFilterChain/HttpSecurity configuration model, which has no reactive equivalent"
-                    + " wired here yet (a ServerHttpSecurity/SecurityWebFilterChain ruleset is planned).";
+            if (!classPresent("org.springframework.security.web.server.SecurityWebFilterChain")) {
+                return "Spring Security not on the classpath";
+            }
+            return "No reactive Spring Security filter chains are available"
+                    + " (no SecurityWebFilterChain bean found)";
         }
         if (!classPresent("org.springframework.security.web.SecurityFilterChain")) {
             return "Spring Security not on the classpath";
@@ -398,10 +408,25 @@ public class PanelsController {
                 && beanPresent("org.springframework.kafka.core.KafkaTemplate");
     }
 
+    private boolean rabbitAvailable() {
+        return classPresent("org.springframework.amqp.rabbit.core.RabbitTemplate")
+                && beanPresent("org.springframework.amqp.rabbit.core.RabbitTemplate");
+    }
+
     private boolean beanPresent(String className) {
         try {
             Class<?> type = ClassUtils.forName(className, getClass().getClassLoader());
             return beanPresent(type);
+        } catch (ClassNotFoundException ex) {
+            return false;
+        }
+    }
+
+    private boolean beanPresentExcluding(String className, String excludedBeanName) {
+        try {
+            Class<?> type = ClassUtils.forName(className, getClass().getClassLoader());
+            return Arrays.stream(applicationContext.getBeanNamesForType(type, true, false))
+                    .anyMatch(beanName -> !excludedBeanName.equals(beanName));
         } catch (ClassNotFoundException ex) {
             return false;
         }
@@ -424,11 +449,15 @@ public class PanelsController {
     }
 
     private boolean securityAvailable() {
-        return classPresent("org.springframework.security.web.FilterChainProxy")
+        return !isReactive()
+                && classPresent("org.springframework.security.web.FilterChainProxy")
                 && beanPresent("org.springframework.security.web.FilterChainProxy");
     }
 
     private String securityUnavailableReason() {
+        if (isReactive()) {
+            return "Security Advisor is only available on the Spring MVC (servlet) adapter";
+        }
         if (!classPresent("org.springframework.security.web.FilterChainProxy")) {
             return "Spring Security not on the classpath";
         }

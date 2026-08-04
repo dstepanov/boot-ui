@@ -236,24 +236,12 @@ Scope — new event types, roughly in priority order:
   class presence via a `registerRabbitCapture` deployment build-step (production-dark, R2), exactly like
   Hibernate/Cache/Flyway. Both adapters capture direction, exchange, routing key, queue, success/failure, timing,
   and (opt-in via `bootui.rabbitmq.capture-correlation-id=true`, default `false`) a hashed correlation ID —
-  never the message body or arbitrary headers. The **Quarkus port (SmallRye Reactive Messaging) has shipped**, reusing the same
-  `KafkaActivityRecorder` and the same `bootui.kafka.*` keys/defaults: because Quarkus applications use SmallRye's
-  `@Incoming`/`@Outgoing` channel model rather than `spring-kafka`'s imperative templates, the capture point is
-  SmallRye's `OutgoingInterceptor`/`IncomingInterceptor` SPI, implemented by two `@ApplicationScoped` interceptors
-  (`QuarkusKafkaProducerCapture`/`QuarkusKafkaConsumerCapture`, `bootui-quarkus`) that read Kafka record metadata into
-  the shared recorder. They are the sole importers of the SmallRye messaging types, capability-gated on `Capability.KAFKA`
-  via an `ExcludedTypeBuildItem` exactly like Hibernate/Cache/Flyway/Liquibase (production-dark), a no-op for non-Kafka
-  (in-memory/JMS) channels, pass-through/fail-open, and set the lowest interceptor precedence so an
-  application's own channel interceptor always wins. `LiveActivityResource` merges the captured `MESSAGING` entries into
-  the feed adapter-side (top-level, no request correlation) via the shared `KafkaActivityEntries` mapping, so both
-  adapters render byte-identical entries. JMS remains a separately-scoped follow-up. Unlike the other items above,
-  this was a materially bigger investment: Kafka,
-  RabbitMQ, and JMS are three unrelated client APIs (no single "messaging" abstraction to intercept once), so scope this
-  as **Kafka-first**, with RabbitMQ/JMS as later, separately-scoped follow-ups rather than one bundled feature. Each
-  needs its own bounded capture buffer, wired only when the relevant client bean/class (`KafkaTemplate`,
-  `RabbitTemplate`, JMS `ConnectionFactory`) is present, following the same optional-dependency/fail-closed pattern as
-  Hibernate/Cache/Flyway/Liquibase — the interceptor must live in the adapter behind a `@ConditionalOnClass` gate (Spring)
-  or a capability-gated `ExcludedTypeBuildItem` (Quarkus), never statically imported by the framework-neutral engine.
+  never the message body, arbitrary headers, or raw exception messages. Both SmallRye capture pairs are the sole importers
+  of their connector-specific metadata types, are excluded from bean discovery when their extension is absent, are
+  pass-through/fail-open, and use the lowest interceptor precedence so an application's own channel interceptor wins.
+  `LiveActivityResource` merges both recorders' `MESSAGING` entries into the feed adapter-side (top-level, no request
+  correlation), preserving the same wire shape across adapters. JMS remains a separately-scoped follow-up because it is
+  a third unrelated client API and needs its own bounded recorder plus optional-dependency gate.
   Interception itself is more invasive than any existing capture source: it means wrapping the app's own messaging beans
   (a `BeanPostProcessor`, mirroring the existing HTTP Exchanges repository wrapper) or registering interceptor/advice
   hooks, so pass-through-by-default and fail-open wrapping are non-negotiable design constraints, and message bodies
@@ -285,7 +273,7 @@ Scope — new event types, roughly in priority order:
   run does, on both the servlet and WebFlux adapters. On Quarkus, `LiveActivityResource` reads the same
   `EmailCaptureService` directly (not through the Email panel's own resource) and feeds its merged SSE stream
   identically, mirroring the Spring wiring exactly.
-- **Outbound REST call capture — ✅ Shipped (Spring servlet and WebFlux adapters).** Every `RestClient`/`RestTemplate`/
+- **Outbound REST call capture — ✅ Shipped (Spring servlet, Spring WebFlux, and Quarkus adapters).** Every `RestClient`/`RestTemplate`/
   `WebClient` built through Spring Boot's auto-configured builders is instrumented via Spring Boot's own
   `RestClientCustomizer`/`RestTemplateCustomizer`/`WebClientCustomizer` hooks, attaching a `RestClientTraceInterceptor`
   (`RestClient`/`RestTemplate`) or `RestClientTraceExchangeFilter` (`WebClient`) from inside the `customize(...)`
@@ -298,9 +286,17 @@ Scope — new event types, roughly in priority order:
   standalone REST Client panel and, like Cache/Mail, a `REST_CLIENT` entry into the merged Live Activity feed —
   nesting as a `REQUEST` child via the same trace-id-then-thread join `SQL`/`CACHE`/`MAIL` use (see the `MAIL` bullet
   above for why `EXCEPTION`/`SECURITY` are not part of that list), and adding
-  `restCallErrorRatePercent`/`restCallP95LatencyMs` KPI tiles deep-linked to `/rest-client-trace`. Quarkus is out of
-  scope for now — like Cache, no comparable runtime interception seam exists yet for the Quarkus-native REST client
-  (see `docs/QUARKUS-SUPPORT.md`), so the Quarkus adapter reports the merged-stream slot unavailable.
+  `restCallErrorRatePercent`/`restCallP95LatencyMs` KPI tiles deep-linked to `/rest-client-trace`. Quarkus uses the
+  supported MicroProfile `RestClientListener` SPI (`QuarkusRestClientTraceListener`, registered through a generated
+  service-provider entry only when `Capability.REST_CLIENT_REACTIVE` is present) to attach a
+  `QuarkusRestClientTraceFilter` at transport-bracketing priority on every client proxy. Capture is metadata-only on
+  Quarkus: no headers or bodies are read, and URI credentials/sensitive query values are sanitized before storage.
+  Quarkus reports pre-response transport failures with status `0`; the filter maps those to failed calls with no HTTP
+  status, while real `4xx`/`5xx` responses remain transport-successful error responses. A capability-absent exclusion
+  keeps the optional listener type unlinked, and the recorder's Quarkus OTel `TraceIdProvider` feeds trace-only Live
+  Activity correlation.
+
+**Done** — Quarkus REST Client capture shipped (issue #653).
 
 Scope — enhancements on top of the shipped event types, generally cheaper than a new source and some of higher value:
 
@@ -355,7 +351,7 @@ For each feature above, the following must move together, consistent with the ex
 | Bean/dependency graph or correlation bloating the bundle          | 3.1, 3.2   | Medium | Bounded rendering, lightweight visualization, and lazy-loaded panels.                                     |
 | Silently swallowing application mail                              | 3.3        | Medium | Pass-through by default; "dev trap" mode strictly opt-in.                                                 |
 | Over-broad or noisy new Live Activity event types (e.g. cache operations) | 3.4 | Medium | Explicit opt-in wiring by bean/class presence, bounded buffers, masked payloads/hashed cache keys. |
-| Messaging capture's added optional-dependency surface (Kafka/RabbitMQ/JMS clients), invasive interception of app-owned messaging beans, and a per-adapter capture design (SmallRye Reactive Messaging on Quarkus vs. imperative templates on Spring) | 3.4 | High | Kafka shipped on **both adapters** with classpath/capability gating identical to Hibernate/Cache/Flyway/Liquibase, pass-through-by-default fail-open wrapping, and no message-value/payload capture at all (metadata-only, sidestepping body masking); Spring wraps `KafkaTemplate`/listener beans while Quarkus uses SmallRye's `OutgoingInterceptor`/`IncomingInterceptor` SPI feeding the same `KafkaActivityRecorder`. Rabbit/JMS remain separate follow-ups. |
+| Messaging capture's added optional-dependency surface (Kafka/RabbitMQ/JMS clients), invasive interception of app-owned messaging beans, and a per-adapter capture design (SmallRye Reactive Messaging on Quarkus vs. imperative templates on Spring) | 3.4 | High | Kafka and RabbitMQ shipped on **both adapters** with classpath/capability gating identical to Hibernate/Cache/Flyway/Liquibase, pass-through/fail-open wrapping, bounded metadata-only buffers, and no message-value/payload capture. JMS remains a separate follow-up. |
 | Scope creep beyond this merged feature set                        | all        | High   | Treat this list as the maximum near-term surface; move further ideas to a later plan.                     |
 
 ## 6. Validation checklist

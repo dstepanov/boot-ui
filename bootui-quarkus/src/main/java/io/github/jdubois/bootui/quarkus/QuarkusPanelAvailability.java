@@ -244,11 +244,25 @@ public class QuarkusPanelAvailability {
     /**
      * Build-time config key written by the {@code registerRabbitCapture} build step to signal that
      * {@code quarkus-messaging-rabbitmq} is present and the capture beans were wired; read back here
-     * (default {@code false}) only when {@code Capability.RABBITMQ} is present at build time and the launch
+     * (default {@code false}) only when SmallRye RabbitMQ metadata is present at build time and the launch
      * mode is non-production; this bean reads it back to decide whether the dedicated RabbitMQ panel is lit
      * up, mirroring {@link #KAFKA_PRESENT_KEY}.
      */
     public static final String RABBIT_PRESENT_KEY = "bootui.internal.rabbit-present";
+
+    /**
+     * Runtime-config key carrying the build-time REST Client Reactive presence decision. The deployment
+     * processor emits it (default {@code false}) only when the REST Client Reactive capability is present
+     * and the launch mode is non-production. The recorder is produced unconditionally; the panel remains
+     * visible when the capability exists so it can explain that no proxy has been initialized yet and then
+     * start streaming as soon as the first call is captured.
+     */
+    public static final String REST_CLIENT_TRACE_PRESENT_KEY = "bootui.internal.rest-client-trace-present";
+
+    public static final String REST_CLIENT_TRACE_DISABLED =
+            "REST Client capture is disabled via bootui.rest-client-trace.enabled=false";
+    public static final String REST_CLIENT_TRACE_NOT_INSTRUMENTED =
+            "No REST Client Reactive proxy has been instrumented yet.";
 
     private static final String NOT_YET_AVAILABLE = "Not yet available on Quarkus.";
 
@@ -291,6 +305,11 @@ public class QuarkusPanelAvailability {
     private static final String RABBIT_ABSENT =
             "Not available: this application does not use RabbitMQ messaging. Add the quarkus-messaging-rabbitmq"
                     + " extension (with an @Incoming/@Outgoing channel) to enable the RabbitMQ panel.";
+
+    private static final String REST_CLIENT_TRACE_ABSENT =
+            "Not available: this application does not use Quarkus REST Client Reactive. Add the"
+                    + " quarkus-rest-client extension (with at least one REST Client"
+                    + " interface) to enable the REST Client panel.";
 
     private static final String SQL_TRACE_ABSENT =
             "Not available: no JDBC datasource is on the classpath. Add a Quarkus JDBC datasource"
@@ -375,6 +394,7 @@ public class QuarkusPanelAvailability {
             Map.entry(BootUiPanels.EMAIL, EMAIL_ABSENT),
             Map.entry(BootUiPanels.KAFKA, KAFKA_ABSENT),
             Map.entry(BootUiPanels.RABBITMQ, RABBIT_ABSENT),
+            Map.entry(BootUiPanels.REST_CLIENT_TRACE, REST_CLIENT_TRACE_ABSENT),
             Map.entry(BootUiPanels.SQL_TRACE, SQL_TRACE_ABSENT),
             Map.entry(BootUiPanels.PROFILE_DIFF, PROFILE_DIFF_ABSENT),
             Map.entry(BootUiPanels.REST_API, REST_API_ABSENT),
@@ -430,6 +450,7 @@ public class QuarkusPanelAvailability {
     private final boolean kafkaPresent;
 
     private final boolean rabbitPresent;
+    private final boolean restClientTracePresent;
 
     private final boolean securityLogsAvailable;
 
@@ -473,6 +494,8 @@ public class QuarkusPanelAvailability {
                 config.getOptionalValue(KAFKA_PRESENT_KEY, Boolean.class).orElse(false);
         this.rabbitPresent =
                 config.getOptionalValue(RABBIT_PRESENT_KEY, Boolean.class).orElse(false);
+        this.restClientTracePresent = config.getOptionalValue(REST_CLIENT_TRACE_PRESENT_KEY, Boolean.class)
+                .orElse(false);
         boolean securityPresent = config.getOptionalValue(SECURITY_LOGS_PRESENT_KEY, Boolean.class)
                 .orElse(false);
         boolean eventsEnabled = config.getOptionalValue("quarkus.security.events.enabled", Boolean.class)
@@ -498,6 +521,7 @@ public class QuarkusPanelAvailability {
                 Map.entry(BootUiPanels.EMAIL, emailPresent),
                 Map.entry(BootUiPanels.KAFKA, kafkaPresent),
                 Map.entry(BootUiPanels.RABBITMQ, rabbitPresent),
+                Map.entry(BootUiPanels.REST_CLIENT_TRACE, restClientTracePresent),
                 Map.entry(BootUiPanels.SECURITY_LOGS, securityLogsAvailable),
                 Map.entry(BootUiPanels.SQL_TRACE, connectionPoolsPresent),
                 Map.entry(BootUiPanels.PROFILE_DIFF, profilesActive),
@@ -564,6 +588,16 @@ public class QuarkusPanelAvailability {
         return AVAILABLE_PANELS.contains(panelId)
                 || dynamicAvailability.getOrDefault(panelId, Boolean.FALSE)
                 || (BootUiPanels.GITHUB.equals(panelId) && githubAvailable());
+    }
+
+    /** Whether the panel is enabled by the live per-panel access policy. */
+    public boolean isPanelEnabled(String panelId) {
+        return accessConfig.isPanelEnabled(panelId);
+    }
+
+    /** Returns the platform-specific reason for an unavailable panel, or {@code null} when available. */
+    public String panelUnavailableReason(String panelId) {
+        return isPanelAvailable(panelId) ? null : unavailableReason(panelId);
     }
 
     /**

@@ -36,6 +36,9 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class RabbitActivityRecorder {
 
+    private static final int MAX_METADATA_LENGTH = 512;
+    private static final String FAILURE_MESSAGE = "Message processing failed";
+
     /** Whether a captured message was published or consumed. */
     public enum Direction {
         PUBLISH,
@@ -132,12 +135,12 @@ public final class RabbitActivityRecorder {
                 sequence.incrementAndGet(),
                 System.currentTimeMillis(),
                 direction,
-                exchange,
-                routingKey,
-                queue,
+                truncate(exchange),
+                truncate(routingKey),
+                truncate(queue),
                 durationMillis == null ? null : Math.max(0, durationMillis),
                 success,
-                errorMessage,
+                success ? null : FAILURE_MESSAGE,
                 captureCorrelationId ? hashCorrelationId(correlationId, maxCorrelationIdLength) : null);
         synchronized (lock) {
             buffer.addLast(entry);
@@ -208,9 +211,16 @@ public final class RabbitActivityRecorder {
                 hex.append(Character.forDigit(b & 0xF, 16));
             }
             int length = Math.max(8, Math.min(hex.length(), maxLength));
-            return hex.substring(0, Math.min(length, 16));
+            return hex.substring(0, length);
         } catch (NoSuchAlgorithmException ex) {
             throw new IllegalStateException("SHA-256 is required but unavailable", ex);
         }
+    }
+
+    private static String truncate(String value) {
+        if (value == null || value.length() <= MAX_METADATA_LENGTH) {
+            return value;
+        }
+        return value.substring(0, MAX_METADATA_LENGTH);
     }
 }

@@ -1,6 +1,8 @@
 package io.github.jdubois.bootui.autoconfigure.rabbit;
 
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
+import java.util.ArrayList;
+import java.util.List;
 import org.aopalliance.aop.Advice;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
@@ -82,7 +84,7 @@ public final class RabbitConsumerCaptureBeanPostProcessor implements BeanPostPro
     /**
      * Times each {@code MessageListener.onMessage(Message)} invocation and records the outcome
      * into the recorder. Metadata is read from the {@link MessageProperties} of the AMQP
-     * {@link Message} passed as the first argument.
+     * {@link Message} passed by the listener container.
      */
     private static final class CapturingConsumerAdvice implements MethodInterceptor {
 
@@ -99,15 +101,23 @@ public final class RabbitConsumerCaptureBeanPostProcessor implements BeanPostPro
         @Override
         public Object invoke(MethodInvocation invocation) throws Throwable {
             long startNanos = System.nanoTime();
-            Message message = extractMessage(invocation);
+            List<Message> messages = extractMessages(invocation);
             try {
                 Object result = invocation.proceed();
-                recordOutcome(message, startNanos, true, null);
+                recordOutcomes(messages, startNanos, true, null);
                 return result;
             } catch (Throwable ex) {
-                recordOutcome(message, startNanos, false, ex.getMessage());
+                recordOutcomes(messages, startNanos, false, ex.getMessage());
                 throw ex;
             }
+        }
+
+        private void recordOutcomes(List<Message> messages, long startNanos, boolean success, String errorMessage) {
+            if (messages.isEmpty()) {
+                recordOutcome(null, startNanos, success, errorMessage);
+                return;
+            }
+            messages.forEach(message -> recordOutcome(message, startNanos, success, errorMessage));
         }
 
         private void recordOutcome(Message message, long startNanos, boolean success, String errorMessage) {
@@ -128,12 +138,24 @@ public final class RabbitConsumerCaptureBeanPostProcessor implements BeanPostPro
             }
         }
 
-        private static Message extractMessage(MethodInvocation invocation) {
+        private static List<Message> extractMessages(MethodInvocation invocation) {
             Object[] args = invocation.getArguments();
-            if (args != null && args.length > 0 && args[0] instanceof Message) {
-                return (Message) args[0];
+            if (args == null) {
+                return List.of();
             }
-            return null;
+            List<Message> messages = new ArrayList<>();
+            for (Object arg : args) {
+                if (arg instanceof Message message) {
+                    messages.add(message);
+                } else if (arg instanceof Iterable<?> iterable) {
+                    for (Object element : iterable) {
+                        if (element instanceof Message message) {
+                            messages.add(message);
+                        }
+                    }
+                }
+            }
+            return messages;
         }
     }
 }

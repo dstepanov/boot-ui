@@ -49,7 +49,11 @@ public class RabbitResource {
     @Produces(MediaType.APPLICATION_JSON)
     public RabbitReport list() {
         if (!rabbitPresent) {
-            return RabbitReport.unavailable("No RabbitMQ messaging channel is present", maxEntries);
+            return RabbitReport.unavailable(
+                    "Not available: this application does not use RabbitMQ messaging. Add the"
+                            + " quarkus-messaging-rabbitmq extension (with an @Incoming/@Outgoing channel) to"
+                            + " enable the RabbitMQ panel.",
+                    maxEntries);
         }
         return RabbitMessageDtos.toReport(recorder);
     }
