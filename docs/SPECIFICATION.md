@@ -27,8 +27,9 @@ BootUI currently targets:
 Maturity is stated honestly: the **Spring Boot servlet adapter is complete** (all panels). The **Spring Boot WebFlux
 adapter** reuses the same engine and serves the large majority of panels unmodified or over a rebuilt reactive capture
 layer, including **Live Activity** (all nine signal types merge identically to the servlet adapter — see
-`docs/WEBFLUX-SUPPORT.md` §6.4), the raw Spring Security panel, and REST Client capture over instrumented
-`WebClient` instances; the Security advisor is not yet ported, and HTTP Sessions is not applicable to a reactive,
+`docs/WEBFLUX-SUPPORT.md` §6.4), plus the raw Spring Security panel and the WebFlux-native 25-rule Security advisor; the
+raw Spring Security panel, the WebFlux-native 25-rule Security advisor, and REST Client capture over instrumented
+`WebClient` instances; HTTP Sessions is not applicable to a reactive,
 container-session-free stack — see `docs/WEBFLUX-SUPPORT.md` for the current per-panel status. The **Quarkus adapter
 is being built out**, with panels lighting up as the shared engine grows; see `docs/QUARKUS-SUPPORT.md` for the
 current per-platform status.
@@ -39,7 +40,6 @@ Out of scope for the current 1.x line:
 - Spring Framework 6 / Boot 3 compatibility shims.
 - A dedicated BootUI Gradle plugin (the Spring starters and Quarkus extension are consumable from Maven or Gradle as
   ordinary dependencies).
-- On Spring Boot WebFlux: a reactive Security advisor ruleset (see `docs/WEBFLUX-SUPPORT.md` for the reason and plan).
 
 ## 2. Product goals
 
@@ -1899,7 +1899,6 @@ Future compatibility:
 
 - Spring Boot 3.5 if demand requires it.
 - Gradle examples.
-- Closing the remaining Spring Boot WebFlux gap: a reactive Security advisor (see `docs/WEBFLUX-SUPPORT.md`).
 
 ## 9. Testing strategy
 

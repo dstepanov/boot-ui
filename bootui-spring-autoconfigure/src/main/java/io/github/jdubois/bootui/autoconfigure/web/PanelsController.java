@@ -440,14 +440,22 @@ public class PanelsController {
     }
 
     private boolean securityAvailable() {
-        return !isReactive()
-                && classPresent("org.springframework.security.web.FilterChainProxy")
+        if (isReactive()) {
+            return classPresent("org.springframework.security.web.server.SecurityWebFilterChain")
+                    && beanPresentExcluding(
+                            "org.springframework.security.web.server.SecurityWebFilterChain",
+                            "bootUiReactiveSecurityWebFilterChain");
+        }
+        return classPresent("org.springframework.security.web.FilterChainProxy")
                 && beanPresent("org.springframework.security.web.FilterChainProxy");
     }
 
     private String securityUnavailableReason() {
         if (isReactive()) {
-            return "Security Advisor is only available on the Spring MVC (servlet) adapter";
+            if (!classPresent("org.springframework.security.web.server.SecurityWebFilterChain")) {
+                return "Spring Security is not on the classpath";
+            }
+            return "No application SecurityWebFilterChain beans are available";
         }
         if (!classPresent("org.springframework.security.web.FilterChainProxy")) {
             return "Spring Security not on the classpath";
