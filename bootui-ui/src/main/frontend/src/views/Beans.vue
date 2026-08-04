@@ -1,12 +1,11 @@
 <script setup>
-import {computed, defineAsyncComponent, inject, onMounted, ref, watch} from 'vue'
+import {defineAsyncComponent, onMounted, ref, watch} from 'vue'
 import PanelHeader from './components/PanelHeader.vue'
 import {useServerPagedList} from '../utils/useServerPagedList.js'
 import ServerListFooter from './components/ServerListFooter.vue'
-import {useBeanGraph} from '../utils/useBeanGraph.js'
 
-// Lazy-load the graph visualization so the list view is unaffected on initial render.
-const BeanGraph = defineAsyncComponent(() => import('./BeanGraph.vue'))
+// Keep the complete graph workspace out of the default list-view chunk.
+const BeansGraphMode = defineAsyncComponent(() => import('./BeansGraphMode.vue'))
 
 // ── List mode ──────────────────────────────────────────────────────────────────
 const filter = ref('')
@@ -39,88 +38,14 @@ const {
 onMounted(load)
 watch([filter, classification], scheduleReload)
 
-// ── Graph mode ─────────────────────────────────────────────────────────────────
 const graphMode = ref(false)
-const graphFocusInput = ref('')
-const graphSearchMessage = ref('')
-const graphDatalistId = 'beans-graph-datalist'
-const panels = inject('panels', ref(null))
-const isQuarkus = computed(() => panels.value?.platform === 'quarkus')
 
-const {
-  allBeans,
-  beanNames,
-  byName,
-  definitionsByName,
-  error: graphError,
-  focusName,
-  graph,
-  inventoryTotal,
-  inventoryTruncated,
-  loading: graphLoading,
-  loadAll,
-  setFocus
-} = useBeanGraph()
-
-async function activateGraphMode() {
+function activateGraphMode() {
   graphMode.value = true
-  await loadAll()
 }
 
 function deactivateGraphMode() {
   graphMode.value = false
-}
-
-function onFocusInputChange() {
-  const trimmed = graphFocusInput.value.trim()
-  if (byName.value.has(trimmed)) {
-    setFocus(trimmed)
-    graphSearchMessage.value = ''
-  } else if (!trimmed) {
-    setFocus(null)
-    graphSearchMessage.value = ''
-  }
-}
-
-function submitGraphSearch() {
-  const query = graphFocusInput.value.trim().toLowerCase()
-  if (!query) {
-    setFocus(null)
-    graphSearchMessage.value = ''
-    return
-  }
-  if (byName.value.has(graphFocusInput.value.trim())) {
-    setFocus(graphFocusInput.value.trim())
-    graphSearchMessage.value = ''
-    return
-  }
-  const matches = [...definitionsByName.value]
-    .filter(
-      ([name, definitions]) =>
-        name.toLowerCase().includes(query) ||
-        definitions.some(
-          (bean) =>
-            (bean.type || '').toLowerCase().includes(query) ||
-            (bean.aliases || []).some((alias) => alias.toLowerCase().includes(query))
-        )
-    )
-    .map(([name]) => byName.value.get(name))
-  if (matches.length === 1) {
-    graphFocusInput.value = matches[0].name
-    setFocus(matches[0].name)
-    graphSearchMessage.value = ''
-  } else {
-    graphSearchMessage.value =
-      matches.length === 0
-        ? 'No loaded bean matches that name or type.'
-        : 'More than one bean matches. Choose a bean name.'
-  }
-}
-
-function onNodeFocus(name) {
-  graphFocusInput.value = name
-  setFocus(name)
-  graphSearchMessage.value = ''
 }
 </script>
 
@@ -129,12 +54,8 @@ function onNodeFocus(name) {
     <PanelHeader
       icon="bi-diagram-3"
       title="Beans"
-      :subtitle="
-        graphMode
-          ? `${allBeans.length}${inventoryTruncated ? ` of ${inventoryTotal}` : ''} beans loaded`
-          : `${totalCount} beans · ${matchedCount} matched`
-      "
-      :error="graphMode ? graphError : error"
+      :subtitle="graphMode ? 'Focused dependency neighbourhood' : `${totalCount} beans · ${matchedCount} matched`"
+      :error="graphMode ? null : error"
     >
       <template #actions>
         <div class="btn-group btn-group-sm" role="group" aria-label="View mode">
@@ -232,74 +153,9 @@ function onNodeFocus(name) {
       />
     </template>
 
-    <!-- ── GRAPH MODE ── -->
-    <template v-else>
-      <div v-if="isQuarkus" class="alert alert-info py-2 small" role="note">
-        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
-        Quarkus Arc does not expose inter-bean dependency relationships at runtime. You can focus a bean, but its wiring
-        graph is unavailable.
-      </div>
-      <div v-if="inventoryTruncated" class="alert alert-info py-2 small" role="status">
-        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
-        Loaded the first {{ allBeans.length }} of {{ inventoryTotal }} beans. Search and graph results are limited to
-        this bounded inventory.
-      </div>
-
-      <!-- Focus-bean search -->
-      <div class="row g-2 mb-3">
-        <div class="col-md-10">
-          <label :for="graphDatalistId + '-input'" class="visually-hidden">Focus bean</label>
-          <input
-            :id="graphDatalistId + '-input'"
-            v-model="graphFocusInput"
-            :list="graphDatalistId"
-            class="form-control"
-            placeholder="Search for a bean to focus…"
-            autocomplete="off"
-            :aria-describedby="graphSearchMessage ? 'beans-graph-search-message' : undefined"
-            @change="onFocusInputChange"
-            @input="onFocusInputChange"
-            @keydown.enter.prevent="submitGraphSearch"
-          />
-          <datalist :id="graphDatalistId">
-            <option
-              v-for="name in beanNames"
-              :key="name"
-              :value="name"
-              :label="byName.get(name)?.type || `${definitionsByName.get(name)?.length || 1} definitions`"
-            />
-          </datalist>
-          <div v-if="graphSearchMessage" id="beans-graph-search-message" class="form-text text-danger" role="status">
-            {{ graphSearchMessage }}
-          </div>
-        </div>
-        <div class="col-md-2 d-flex align-items-center">
-          <span v-if="graphLoading" class="text-muted small">
-            <i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>Loading…
-          </span>
-          <span v-else-if="allBeans.length" class="text-muted small">{{ allBeans.length }} beans</span>
-        </div>
-      </div>
-
-      <!-- Empty / loading state -->
-      <div v-if="graphLoading" class="text-center text-muted py-5" role="status" aria-live="polite">
-        <i class="bi bi-hourglass-split me-2" aria-hidden="true"></i>Loading bean graph…
-      </div>
-      <div v-else-if="!focusName" class="text-center text-muted py-5">
-        <i class="bi bi-search me-2" aria-hidden="true"></i>
-        Search for a bean above to explore its dependency neighbourhood.
-      </div>
-
-      <!-- Graph visualization -->
-      <BeanGraph
-        v-else-if="graph"
-        :graph="graph"
-        :by-name="byName"
-        :definitions-by-name="definitionsByName"
-        :focus-name="focusName"
-        @focus="onNodeFocus"
-      />
-    </template>
+    <KeepAlive>
+      <BeansGraphMode v-if="graphMode" />
+    </KeepAlive>
   </div>
 </template>
 

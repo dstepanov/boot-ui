@@ -63,7 +63,7 @@ Each new panel must:
 
 ## 2. Scope of this workstream
 
-One open feature remains. The §3.1 correlation item has shipped as the **Live Activity** panel; the §3.3 e-mail viewer
+This workstream is complete. The §3.1 correlation item has shipped as the **Live Activity** panel; the §3.3 e-mail viewer
 has shipped too, both as a standalone panel and as a `MAIL` entry type feeding the Live Activity stream; and all five
 §3.4 event-type extensions (Scheduled Task runs, Cache operations, Kafka messaging, Mail, and REST call capture) have
 shipped. The bean/dependency graph visualization (§3.2) has now also shipped as the **graph mode** of the existing Beans

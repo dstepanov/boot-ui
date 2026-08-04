@@ -1,7 +1,9 @@
 import {describe, expect, it, vi} from 'vitest'
 import {
   buildGraphIndex,
+  conditionClassFromResource,
   GRAPH_LOAD_PAGE_SIZE,
+  matchingPositiveConditions,
   MAX_GRAPH_DEPTH,
   MAX_GRAPH_NODES,
   traverseNeighborhood,
@@ -36,6 +38,68 @@ function nodeNames(nodes) {
 function edgePairs(edges) {
   return edges.map((e) => `${e.from}=>${e.to}`).sort()
 }
+
+describe('condition evidence helpers', () => {
+  it('extracts an exact class name from a Spring classpath resource', () => {
+    expect(conditionClassFromResource('class path resource [com/example/orders/OrderAutoConfiguration.class]')).toBe(
+      'com.example.orders.OrderAutoConfiguration'
+    )
+  })
+
+  it('rejects resource formats that cannot establish an exact configuration class', () => {
+    expect(conditionClassFromResource('file [/tmp/classes/com/example/OrderConfiguration.class]')).toBeNull()
+    expect(conditionClassFromResource('OrderConfiguration.class')).toBeNull()
+    expect(conditionClassFromResource(null)).toBeNull()
+  })
+
+  it('keeps exact and method-level positive matches without accepting message-only matches', () => {
+    const report = {
+      positiveMatches: [
+        {
+          autoConfigurationClass: 'com.example.OrderAutoConfiguration',
+          condition: 'ClassCondition',
+          message: 'matched',
+          outcome: 'MATCH'
+        },
+        {
+          autoConfigurationClass: 'com.example.OrderAutoConfiguration#orderService',
+          condition: 'BeanCondition',
+          message: 'matched',
+          outcome: 'MATCH'
+        },
+        {
+          autoConfigurationClass: 'com.example.OtherAutoConfiguration',
+          condition: 'MessageCondition',
+          message: 'mentions com.example.OrderAutoConfiguration',
+          outcome: 'MATCH'
+        }
+      ]
+    }
+
+    expect(matchingPositiveConditions(report, 'com.example.OrderAutoConfiguration')).toHaveLength(2)
+  })
+
+  it('bounds matching condition evidence deterministically', () => {
+    const report = {
+      positiveMatches: [
+        {
+          autoConfigurationClass: 'com.example.OrderAutoConfiguration#z',
+          condition: 'Z',
+          message: 'z',
+          outcome: 'MATCH'
+        },
+        {
+          autoConfigurationClass: 'com.example.OrderAutoConfiguration#a',
+          condition: 'A',
+          message: 'a',
+          outcome: 'MATCH'
+        }
+      ]
+    }
+
+    expect(matchingPositiveConditions(report, 'com.example.OrderAutoConfiguration', 1)[0].condition).toBe('A')
+  })
+})
 
 // ── buildGraphIndex ───────────────────────────────────────────────────────────
 

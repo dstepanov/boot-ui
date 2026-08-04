@@ -37,12 +37,27 @@ function beanList(beans) {
  *  - GET api/beans?offset=0&limit=1000 (graph mode paged load) returns the graphResponse
  *    (defaults to the same response as listResponse if not provided separately)
  */
-function stubFetch(listResponse, graphResponse = null) {
+function stubFetch(listResponse, graphResponse = null, conditionsResponse = null) {
   const graphBody = graphResponse ?? listResponse
   vi.stubGlobal(
     'fetch',
     vi.fn((input) => {
       const url = typeof input === 'string' ? input : String(input)
+      if (url.includes('api/conditions?')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            Promise.resolve(
+              conditionsResponse ?? {
+                positiveMatches: [],
+                negativeMatches: [],
+                unconditionalClasses: [],
+                exclusions: []
+              }
+            )
+        })
+      }
       const body = url.includes('limit=1000') ? graphBody : listResponse
       return Promise.resolve({
         ok: true,
@@ -57,10 +72,16 @@ function mountBeans(platform = 'spring-boot') {
   return mount(Beans, {
     global: {
       provide: {
-        panels: {value: {platform}}
+        panels: {value: {platform, panels: [{id: 'conditions', available: platform !== 'quarkus', enabled: true}]}}
       }
     }
   })
+}
+
+async function openGraph(wrapper) {
+  await wrapper.find('[aria-label="Dependency graph"]').trigger('click')
+  await vi.dynamicImportSettled()
+  await flushPromises()
 }
 
 // ── List mode (existing behaviour preserved) ──────────────────────────────────
@@ -126,8 +147,7 @@ describe('Beans — graph mode toggle', () => {
     const wrapper = mountBeans()
     await flushPromises()
 
-    await wrapper.find('[aria-label="Dependency graph"]').trigger('click')
-    await flushPromises()
+    await openGraph(wrapper)
 
     // The focus search input should appear
     expect(wrapper.find('input[placeholder*="Search for a bean"]').exists()).toBe(true)
@@ -136,20 +156,23 @@ describe('Beans — graph mode toggle', () => {
     expect(wrapper.find('table').exists()).toBe(false)
   })
 
-  it('returns to list mode when list button is clicked', async () => {
+  it('returns to list mode without reloading the cached graph inventory', async () => {
     stubFetch(beanList([bean('a'), bean('b')]))
     const wrapper = mountBeans()
     await flushPromises()
 
     // Switch to graph mode
-    await wrapper.find('[aria-label="Dependency graph"]').trigger('click')
-    await flushPromises()
+    await openGraph(wrapper)
     expect(wrapper.find('table').exists()).toBe(false)
 
     // Switch back to list mode
     await wrapper.find('[aria-label="List view"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('table').exists()).toBe(true)
+
+    await openGraph(wrapper)
+    const graphRequests = fetch.mock.calls.filter(([input]) => String(input).includes('limit=1000'))
+    expect(graphRequests).toHaveLength(1)
   })
 })
 
@@ -164,18 +187,16 @@ describe('Beans — graph mode focus', () => {
     stubFetch(beanList([bean('a')]))
     const wrapper = mountBeans()
     await flushPromises()
-    await wrapper.find('[aria-label="Dependency graph"]').trigger('click')
-    await flushPromises()
+    await openGraph(wrapper)
 
-    expect(wrapper.text()).toContain('Search for a bean above')
+    expect(wrapper.text()).toContain('Choose a bean to inspect')
   })
 
   it('populates the datalist with sorted bean names after graph load', async () => {
     stubFetch(beanList([bean('zebra'), bean('alpha')]))
     const wrapper = mountBeans()
     await flushPromises()
-    await wrapper.find('[aria-label="Dependency graph"]').trigger('click')
-    await flushPromises()
+    await openGraph(wrapper)
 
     const options = wrapper.findAll('datalist option')
     const values = options.map((o) => o.attributes('value'))
@@ -190,8 +211,7 @@ describe('Beans — graph mode focus', () => {
     stubFetch(beanList(beans))
     const wrapper = mountBeans()
     await flushPromises()
-    await wrapper.find('[aria-label="Dependency graph"]').trigger('click')
-    await flushPromises()
+    await openGraph(wrapper)
 
     // Set focus bean via the search input
     const input = wrapper.find('input[placeholder*="Search for a bean"]')
@@ -234,7 +254,7 @@ describe('Beans — graph loading state', () => {
     const wrapper = mountBeans()
     await flushPromises()
     await wrapper.find('[aria-label="Dependency graph"]').trigger('click')
-    // Do NOT flush promises — the graph load is pending
+    await vi.dynamicImportSettled()
 
     expect(wrapper.text()).toContain('Loading bean graph')
 
@@ -247,18 +267,136 @@ describe('Beans — graph loading state', () => {
     stubFetch(beanList([bean('a')]))
     const wrapper = mountBeans('quarkus')
     await flushPromises()
-    await wrapper.find('[aria-label="Dependency graph"]').trigger('click')
-    await flushPromises()
+    await openGraph(wrapper)
 
     expect(wrapper.text()).toContain('Quarkus Arc does not expose inter-bean dependency relationships')
+    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining('api/conditions?'), expect.anything())
+  })
+
+  it('shows a useful empty state when the graph inventory has no beans', async () => {
+    stubFetch(beanList([bean('listBean')]), beanList([]))
+    const wrapper = mountBeans()
+    await flushPromises()
+    await openGraph(wrapper)
+
+    expect(wrapper.text()).toContain('No beans available to graph')
+    expect(wrapper.find('input[placeholder*="Search for a bean"]').exists()).toBe(false)
+  })
+
+  it('retries a failed graph inventory request', async () => {
+    let graphAttempts = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input) => {
+        const url = typeof input === 'string' ? input : String(input)
+        if (url.includes('limit=1000')) {
+          graphAttempts += 1
+          if (graphAttempts === 1) return Promise.resolve({ok: false, status: 500})
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(beanList([bean('recoveredBean')]))
+          })
+        }
+        return Promise.resolve({ok: true, status: 200, json: () => Promise.resolve(beanList([bean('listBean')]))})
+      })
+    )
+    const wrapper = mountBeans()
+    await flushPromises()
+    await openGraph(wrapper)
+
+    expect(wrapper.text()).toContain('Could not load beans for graph')
+    const retry = wrapper.findAll('button').find((button) => button.text().includes('Retry'))
+    await retry.trigger('click')
+    await flushPromises()
+
+    expect(graphAttempts).toBe(2)
+    expect(wrapper.find('input[placeholder*="Search for a bean"]').exists()).toBe(true)
+  })
+
+  it('shows exact positive Conditions evidence for the focused bean resource', async () => {
+    const orderService = {
+      ...bean('orderService', ['orderRepository']),
+      resource: 'class path resource [com/example/OrderAutoConfiguration.class]',
+      aliases: ['orders']
+    }
+    stubFetch(beanList([orderService, bean('orderRepository')]), null, {
+      positiveMatches: [
+        {
+          autoConfigurationClass: 'com.example.OrderAutoConfiguration',
+          condition: 'OnClassCondition',
+          message: 'Required order classes were found.',
+          outcome: 'MATCH'
+        },
+        {
+          autoConfigurationClass: 'com.example.OtherAutoConfiguration',
+          condition: 'OtherCondition',
+          message: 'Mentions com.example.OrderAutoConfiguration only in text.',
+          outcome: 'MATCH'
+        },
+        {
+          autoConfigurationClass: 'com.example.OrderAutoConfiguration#orderService',
+          condition: 'OnBeanCondition',
+          message: 'A supporting bean was found.',
+          outcome: 'PARTIAL'
+        }
+      ]
+    })
+    const wrapper = mountBeans()
+    await flushPromises()
+    await openGraph(wrapper)
+
+    const input = wrapper.find('input[placeholder*="Search for a bean"]')
+    await input.setValue('orderService')
+    await input.trigger('change')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Why this bean exists')
+    expect(wrapper.text()).toContain('OnClassCondition')
+    expect(wrapper.text()).toContain('Required order classes were found.')
+    expect(wrapper.text()).toContain('PARTIAL')
+    expect(wrapper.text()).not.toContain('OtherCondition')
+  })
+
+  it('counts all direct dependents even when the rendered graph reaches its node limit', async () => {
+    const dependents = Array.from({length: 65}, (_, index) => bean(`dependent${index}`, ['focusBean']))
+    stubFetch(beanList([bean('focusBean'), ...dependents]))
+    const wrapper = mountBeans()
+    await flushPromises()
+    await openGraph(wrapper)
+
+    const input = wrapper.find('input[placeholder*="Search for a bean"]')
+    await input.setValue('focusBean')
+    await input.trigger('change')
+    await flushPromises()
+
+    const dependentFact = wrapper
+      .findAll('.bean-details__facts > div')
+      .find((fact) => fact.find('dt').text() === 'Dependents')
+    expect(dependentFact.find('dd').text()).toBe('65')
+    expect(wrapper.text()).toContain('Graph limited to 60 nodes')
+  })
+
+  it('does not invent condition provenance when the bean has no recorded resource', async () => {
+    stubFetch(beanList([bean('orderService')]))
+    const wrapper = mountBeans()
+    await flushPromises()
+    await openGraph(wrapper)
+
+    const input = wrapper.find('input[placeholder*="Search for a bean"]')
+    await input.setValue('orderService')
+    await input.trigger('change')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('No condition source can be established')
+    expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining('api/conditions?'), expect.anything())
   })
 
   it('focuses the only bean matching a type search on Enter', async () => {
     stubFetch(beanList([bean('orderService'), bean('orderRepository')]))
     const wrapper = mountBeans()
     await flushPromises()
-    await wrapper.find('[aria-label="Dependency graph"]').trigger('click')
-    await flushPromises()
+    await openGraph(wrapper)
 
     const input = wrapper.find('input[placeholder*="Search for a bean"]')
     await input.setValue('OrderService')

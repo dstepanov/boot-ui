@@ -10,10 +10,54 @@ export const GRAPH_LOAD_PAGE_SIZE = 1000
 export const MAX_GRAPH_NODES = 60
 /** Maximum BFS hop depth from the focused node in either direction. */
 export const MAX_GRAPH_DEPTH = 3
+/** Maximum matching condition entries shown for one focused bean. */
+export const MAX_BEAN_CONDITIONS = 20
 
 function compareCodeUnits(a, b) {
   if (a === b) return 0
   return a < b ? -1 : 1
+}
+
+/**
+ * Extracts a fully-qualified configuration class from the classpath resource
+ * format exposed by Spring Boot's Beans endpoint.
+ *
+ * Unsupported or ambiguous resource formats deliberately return null: the UI
+ * must not infer bean provenance from a filename alone.
+ */
+export function conditionClassFromResource(resource) {
+  if (typeof resource !== 'string') return null
+  const match = resource.trim().match(/^class path resource \[([A-Za-z0-9_$/.-]+)\.class]$/)
+  if (!match) return null
+
+  const segments = match[1].split('/')
+  if (!segments.length || segments.some((segment) => !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(segment))) {
+    return null
+  }
+  return segments.join('.')
+}
+
+/**
+ * Keeps only positive Conditions entries that belong to the exact
+ * configuration class represented by a bean resource. Method-level condition
+ * sources use the stable "Class#method" prefix and are included.
+ */
+export function matchingPositiveConditions(report, configurationClass, limit = MAX_BEAN_CONDITIONS) {
+  if (!configurationClass || !Array.isArray(report?.positiveMatches)) return []
+  const safeLimit = Math.max(0, limit)
+  return report.positiveMatches
+    .filter((entry) => {
+      const source = entry?.autoConfigurationClass
+      return source === configurationClass || source?.startsWith(`${configurationClass}#`)
+    })
+    .sort((a, b) => {
+      const sourceComparison = compareCodeUnits(a.autoConfigurationClass || '', b.autoConfigurationClass || '')
+      if (sourceComparison !== 0) return sourceComparison
+      const conditionComparison = compareCodeUnits(a.condition || '', b.condition || '')
+      if (conditionComparison !== 0) return conditionComparison
+      return compareCodeUnits(a.message || '', b.message || '')
+    })
+    .slice(0, safeLimit)
 }
 
 /**
@@ -157,6 +201,7 @@ export function traverseNeighborhood(
  *   beanNames: import('vue').ComputedRef<string[]>,
  *   byName: import('vue').ComputedRef<Map>,
  *   definitionsByName: import('vue').ComputedRef<Map>,
+ *   reverseIndex: import('vue').ComputedRef<Map>,
  *   error: import('vue').Ref,
  *   focusName: import('vue').Ref<string|null>,
  *   graph: import('vue').ComputedRef,
@@ -243,6 +288,7 @@ export function useBeanGraph() {
     loaded,
     loading,
     loadAll,
+    reverseIndex,
     setFocus
   }
 }

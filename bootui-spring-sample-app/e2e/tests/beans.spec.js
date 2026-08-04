@@ -181,6 +181,75 @@ test.describe('Beans view', () => {
       await expect(page.locator('[aria-label*="orderRepository"]')).toBeVisible()
     })
 
+    test('shows exact positive condition evidence for a focused bean', async ({openView, page}) => {
+      const beansWithResource = graphBeans.map((bean) =>
+        bean.name === 'orderService'
+          ? {
+              ...bean,
+              resource: 'class path resource [com/example/OrderAutoConfiguration.class]'
+            }
+          : bean
+      )
+      await page.route('**/bootui/api/beans?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(beanListResponse(beansWithResource))
+        })
+      )
+      await page.route('**/bootui/api/conditions?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            positiveMatches: [
+              {
+                autoConfigurationClass: 'com.example.OrderAutoConfiguration',
+                condition: 'OnClassCondition',
+                message: 'Required order classes were found.',
+                outcome: 'MATCH'
+              },
+              {
+                autoConfigurationClass: 'com.example.OtherAutoConfiguration',
+                condition: 'OtherCondition',
+                message: 'Only mentions com.example.OrderAutoConfiguration.',
+                outcome: 'MATCH'
+              }
+            ],
+            negativeMatches: [],
+            unconditionalClasses: [],
+            exclusions: [],
+            page: {total: 2, matched: 2, offset: 0, limit: 1000, returned: 2, hasMore: false}
+          })
+        })
+      )
+      await openView('beans', 'Beans')
+      await page.getByRole('button', {name: 'Dependency graph'}).click()
+
+      const focusInput = page.getByPlaceholder(/Search for a bean/)
+      await focusInput.fill('orderService')
+      await focusInput.press('Enter')
+
+      await expect(page.getByRole('heading', {name: 'Why this bean exists'})).toBeVisible()
+      await expect(page.getByText('Required order classes were found.')).toBeVisible()
+      await expect(page.getByText('OtherCondition')).not.toBeVisible()
+    })
+
+    test('shows an explicit empty state when no beans are available to graph', async ({openView, page}) => {
+      await page.route('**/bootui/api/beans?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(beanListResponse([]))
+        })
+      )
+      await openView('beans', 'Beans')
+      await page.getByRole('button', {name: 'Dependency graph'}).click()
+
+      await expect(page.getByRole('heading', {name: 'No beans available to graph'})).toBeVisible()
+      await expect(page.getByPlaceholder(/Search for a bean/)).not.toBeVisible()
+    })
+
     test('allows navigating to a neighbour by clicking its node', async ({openView, page}) => {
       await page.route('**/bootui/api/beans?*', (route) =>
         route.fulfill({

@@ -290,6 +290,8 @@ Purpose: answer "Which beans exist, and where did they come from?" and "How is a
 Data sources:
 
 - Actuator `beans` endpoint (Spring Boot); Arc/CDI `BeanManager` (Quarkus).
+- Actuator `conditions` endpoint for exact positive auto-configuration evidence when a Spring bean resource identifies
+  its configuration class.
 - Spring application context.
 - Optional internal BootUI metadata for auto-configured vs user-defined beans.
 
@@ -319,14 +321,19 @@ Features:
   - Cycle-safe: a visited-set prevents infinite BFS traversal on any dependency cycle.
   - Duplicate bean names are represented by one deterministic node with the definitions' dependencies merged; focusing
     that node explains the ambiguity rather than silently discarding a definition.
-  - Lazy-loaded: the graph visualization bundle is split from the list view so switching
-    to list mode carries no graph overhead.
+  - The focused-bean details area shows type, scope, resource, aliases, definition count, and direct relationship counts.
+    For an exact classpath-resource match, it queries the existing bounded positive Conditions endpoint and shows only
+    evidence whose source is that configuration class or one of its methods. Missing resources, no exact match, disabled
+    Conditions, and request failures remain explicit non-evidence states; provenance is never inferred.
+  - Lazy-loaded: graph state, indexing, inventory fetching, condition evidence, and visualization are split from the list
+    view so list mode carries no graph overhead.
   - Keyboard-navigable: one graph tab stop, arrow/Home/End movement between SVG nodes, Enter/Space to focus, visible
     focus rings, and an `aria-label` with the full bean name.
   - Reduced-motion safe: the graph uses a deterministic static layout with no motion or transition.
   - **Reduced fidelity on Quarkus:** Arc does not expose inter-bean `dependencies` at
     runtime; graph mode renders a platform-specific explanation before selection and a clear "no recorded dependencies
-    or dependents" notice for each focused bean rather than an empty or misleading graph.
+    or dependents" notice for each focused bean rather than an empty or misleading graph. Spring Boot Conditions
+    evidence is also explicitly unavailable.
 
 Acceptance criteria:
 
