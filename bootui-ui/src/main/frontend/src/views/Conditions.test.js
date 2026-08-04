@@ -116,6 +116,74 @@ describe('Conditions', () => {
     wrapper.unmount()
   })
 
+  it('hides pagination while a debounced replacement is pending', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          conditionsResponse({
+            counts: {positiveMatched: 2, positiveTotal: 2, negativeMatched: 1, negativeTotal: 1}
+          })
+        )
+      )
+    )
+
+    const wrapper = mount(Conditions)
+    await flushPromises()
+    expect(wrapper.findComponent({name: 'ServerListFooter'}).exists()).toBe(true)
+
+    await wrapper.findAll('a.nav-link')[1].trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findComponent({name: 'ServerListFooter'}).exists()).toBe(false)
+    expect(fetch).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+    expect(fetch).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+
+  it('discards a stale response when the fetch mock ignores abort', async () => {
+    let resolveStale
+    const staleFetch = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveStale = resolve
+        })
+    )
+    vi.stubGlobal('fetch', staleFetch)
+    const wrapper = mount(Conditions)
+
+    await wrapper.findAll('a.nav-link')[1].trigger('click')
+    await flushPromises()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          conditionsResponse({
+            negativeMatches: [{autoConfigurationClass: 'LATEST', condition: 'C', message: 'M', outcome: 'NO_MATCH'}]
+          })
+        )
+      )
+    )
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+
+    resolveStale(
+      jsonResponse(
+        conditionsResponse({
+          negativeMatches: [{autoConfigurationClass: 'STALE', condition: 'C', message: 'M', outcome: 'NO_MATCH'}]
+        })
+      )
+    )
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('LATEST')
+    expect(wrapper.text()).not.toContain('STALE')
+    wrapper.unmount()
+  })
+
   it('unmount aborts an in-flight base request', async () => {
     const {fetchMock} = abortablePending()
     vi.stubGlobal('fetch', fetchMock)
@@ -156,6 +224,21 @@ describe('Conditions', () => {
     wrapper.unmount()
   })
 
+  it('surfaces a genuine failure from the replacement after silently aborting the stale request', async () => {
+    const {fetchMock} = abortablePending()
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = mount(Conditions)
+
+    await wrapper.findAll('a.nav-link')[1].trigger('click')
+    await flushPromises()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(null, false, 500)))
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Unable to load conditions: HTTP 500')
+    wrapper.unmount()
+  })
+
   it('append (loadMore) is aborted by a subsequent base reload', async () => {
     const pageOneResponse = conditionsResponse({
       positiveMatches: [{autoConfigurationClass: 'A', condition: 'C', message: 'M', outcome: 'MATCH'}],
@@ -173,11 +256,8 @@ describe('Conditions', () => {
     const {fetchMock: appendFetchMock} = abortablePending()
     vi.stubGlobal('fetch', appendFetchMock)
 
-    // Trigger loadMore by finding and using the internals (simulate)
-    // Since hiddenCount should be 1, loadMore is available.
-    // We need to call it via the component instance; use the ServerListFooter emit.
     const footer = wrapper.findComponent({name: 'ServerListFooter'})
-    await footer.vm.$emit('load-more')
+    await footer.find('button').trigger('click')
 
     const appendSignal = appendFetchMock.mock.calls[0]?.[1]?.signal
     expect(appendSignal).toBeDefined()
@@ -189,5 +269,30 @@ describe('Conditions', () => {
     expect(appendSignal?.aborted).toBe(true)
 
     wrapper.unmount()
+  })
+
+  it('unmount aborts an in-flight append request', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(
+        jsonResponse(
+          conditionsResponse({
+            positiveMatches: [{autoConfigurationClass: 'A', condition: 'C', message: 'M', outcome: 'MATCH'}],
+            counts: {positiveMatched: 2, positiveTotal: 2, negativeMatched: 0, negativeTotal: 0}
+          })
+        )
+      )
+    )
+    const wrapper = mount(Conditions)
+    await flushPromises()
+
+    const {fetchMock} = abortablePending()
+    vi.stubGlobal('fetch', fetchMock)
+    await wrapper.findComponent({name: 'ServerListFooter'}).find('button').trigger('click')
+    const appendSignal = fetchMock.mock.calls[0][1]?.signal
+
+    wrapper.unmount()
+
+    expect(appendSignal?.aborted).toBe(true)
   })
 })

@@ -1,6 +1,6 @@
 import {computed, onBeforeUnmount, ref} from 'vue'
 import {apiFetch} from '../api.js'
-import {describeLoadError} from './loadError.js'
+import {describeLoadError, isAbortError} from './loadError.js'
 
 export const SERVER_PAGE_SIZE = 200
 
@@ -16,6 +16,7 @@ export function useServerPagedList(endpoint, itemsKey, queryParams, options = {}
   let baseAc = null
   let appendAc = null
   let timer = null
+  let disposed = false
 
   const items = computed(() => data.value?.[itemsKey] || [])
   const page = computed(() => data.value?.page || null)
@@ -46,20 +47,24 @@ export function useServerPagedList(endpoint, itemsKey, queryParams, options = {}
   }
 
   async function load(loadOpts = {}) {
+    if (disposed) return
     const append = loadOpts.append === true
 
     if (append) {
+      if (loading.value || baseAc || timer) return
       cancelAppend()
       const ac = new AbortController()
       appendAc = ac
 
-      const currentItems = items.value
+      const currentItems = [...items.value]
+      const requestUrl = buildUrl(currentItems.length)
       loadingMore.value = true
+      error.value = null
       try {
-        const res = await apiFetch(buildUrl(currentItems.length), {signal: ac.signal})
+        const res = await apiFetch(requestUrl, {signal: ac.signal})
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const next = await res.json()
-        if (appendAc !== ac) return
+        if (appendAc !== ac || requestUrl !== buildUrl(currentItems.length)) return
         data.value = data.value
           ? {
               ...next,
@@ -67,7 +72,7 @@ export function useServerPagedList(endpoint, itemsKey, queryParams, options = {}
             }
           : next
       } catch (e) {
-        if (e.name === 'AbortError') return
+        if (isAbortError(e)) return
         if (appendAc === ac) error.value = describeLoadError(e, errorContext)
       } finally {
         if (appendAc === ac) {
@@ -76,6 +81,10 @@ export function useServerPagedList(endpoint, itemsKey, queryParams, options = {}
         }
       }
     } else {
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
       if (baseAc) {
         baseAc.abort()
         baseAc = null
@@ -84,16 +93,17 @@ export function useServerPagedList(endpoint, itemsKey, queryParams, options = {}
       const ac = new AbortController()
       baseAc = ac
 
+      const requestUrl = buildUrl(0)
       loading.value = true
       error.value = null
       try {
-        const res = await apiFetch(buildUrl(0), {signal: ac.signal})
+        const res = await apiFetch(requestUrl, {signal: ac.signal})
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const next = await res.json()
-        if (baseAc !== ac) return
+        if (baseAc !== ac || requestUrl !== buildUrl(0)) return
         data.value = next
       } catch (e) {
-        if (e.name === 'AbortError') return
+        if (isAbortError(e)) return
         if (baseAc === ac) error.value = describeLoadError(e, errorContext)
       } finally {
         if (baseAc === ac) {
@@ -105,24 +115,33 @@ export function useServerPagedList(endpoint, itemsKey, queryParams, options = {}
   }
 
   function scheduleReload() {
+    if (disposed) return
     if (baseAc) {
       baseAc.abort()
       baseAc = null
     }
     cancelAppend()
     if (timer) clearTimeout(timer)
-    timer = setTimeout(load, debounceMs)
+    loading.value = true
+    timer = setTimeout(() => {
+      timer = null
+      void load()
+    }, debounceMs)
   }
 
   function loadMore() {
-    if (hiddenCount.value > 0 && !loadingMore.value) {
+    if (hiddenCount.value > 0 && !loading.value && !loadingMore.value) {
       return load({append: true})
     }
     return Promise.resolve()
   }
 
   onBeforeUnmount(() => {
-    if (timer) clearTimeout(timer)
+    disposed = true
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
     if (baseAc) {
       baseAc.abort()
       baseAc = null
@@ -131,6 +150,8 @@ export function useServerPagedList(endpoint, itemsKey, queryParams, options = {}
       appendAc.abort()
       appendAc = null
     }
+    loading.value = false
+    loadingMore.value = false
   })
 
   return {

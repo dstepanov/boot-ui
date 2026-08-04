@@ -106,6 +106,26 @@ describe('useServerPagedList', () => {
     expect(api.items.value).toEqual([{id: 99}])
   })
 
+  it('discards a response when query values change before the watcher cancels it', async () => {
+    let query = 'old'
+    let resolveRequest
+    global.fetch = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve
+        })
+    )
+    const {api} = harness('api/things', 'things', () => ({q: query}))
+
+    const pendingLoad = api.load()
+    query = 'new'
+    resolveRequest(jsonResponse({things: [{id: 1}], page: {matched: 1, total: 1}}))
+    await pendingLoad
+
+    expect(api.items.value).toEqual([])
+    expect(api.loading.value).toBe(false)
+  })
+
   it('captures an error message on a non-ok response', async () => {
     global.fetch = vi.fn().mockResolvedValue(jsonResponse(null, false, 503))
     const {api} = harness('api/things', 'things', () => ({}))
@@ -173,6 +193,53 @@ describe('useServerPagedList', () => {
     expect(api.loading.value).toBe(false)
   })
 
+  it('marks a scheduled reload as loading and blocks append until the replacement finishes', async () => {
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({things: [{id: 1}], page: {matched: 2, total: 2}}))
+    const {api} = harness('api/things', 'things', () => ({}), {pageSize: 1})
+    await api.load()
+
+    api.scheduleReload()
+    const append = api.loadMore()
+
+    expect(api.loading.value).toBe(true)
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    await append
+
+    await vi.advanceTimersByTimeAsync(250)
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+    expect(api.loading.value).toBe(false)
+  })
+
+  it('an explicit base load replaces and clears a pending debounced reload', async () => {
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({things: [{id: 1}], page: {matched: 1, total: 1}}))
+    const {api} = harness('api/things', 'things', () => ({}))
+    await api.load()
+
+    api.scheduleReload()
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({things: [{id: 2}], page: {matched: 1, total: 1}}))
+    await api.load()
+    await vi.advanceTimersByTimeAsync(250)
+
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+    expect(api.items.value).toEqual([{id: 2}])
+  })
+
+  it('does not start an append while a base request owns the list', async () => {
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({things: [{id: 1}], page: {matched: 2, total: 2}}))
+    const {api} = harness('api/things', 'things', () => ({}), {pageSize: 1})
+    await api.load()
+
+    const {fetchMock} = abortablePending()
+    global.fetch = fetchMock
+    const baseLoad = api.load()
+    await api.load({append: true})
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toContain('offset=0')
+    api.scheduleReload()
+    await baseLoad
+  })
+
   it('unmount aborts an in-flight base request', async () => {
     const {fetchMock} = abortablePending()
     global.fetch = fetchMock
@@ -203,6 +270,7 @@ describe('useServerPagedList', () => {
     wrapper.unmount()
 
     expect(capturedSignal?.aborted).toBe(true)
+    expect(api.loadingMore.value).toBe(false)
   })
 
   it('base reload aborts and discards an in-flight append', async () => {
@@ -223,6 +291,28 @@ describe('useServerPagedList', () => {
     expect(appendSignal?.aborted).toBe(true)
     expect(api.loadingMore.value).toBe(false)
     expect(api.items.value).toEqual([{id: 99}])
+  })
+
+  it('discards an append when its query values become stale before cancellation', async () => {
+    let query = 'old'
+    global.fetch = vi.fn().mockResolvedValue(jsonResponse({things: [{id: 1}], page: {matched: 2, total: 2}}))
+    const {api} = harness('api/things', 'things', () => ({q: query}), {pageSize: 1})
+    await api.load()
+
+    let resolveAppend
+    global.fetch = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveAppend = resolve
+        })
+    )
+    const pendingAppend = api.loadMore()
+    query = 'new'
+    resolveAppend(jsonResponse({things: [{id: 2}], page: {matched: 2, total: 2}}))
+    await pendingAppend
+
+    expect(api.items.value).toEqual([{id: 1}])
+    expect(api.loadingMore.value).toBe(false)
   })
 
   it('scheduleReload aborts and clears an in-flight append', async () => {
