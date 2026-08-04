@@ -10,7 +10,7 @@ import org.eclipse.microprofile.config.Config;
 
 /**
  * Rewrites incoming requests at a non-default {@code bootui.path} to the internal {@code /bootui}
- * mount before route dispatch, so all JAX-RS resources (hardcoded at {@code /bootui/api/**}) and the
+ * mount before route dispatch, so all JAX-RS resources (fixed at {@code /bootui/api/**}) and the
  * built-in static-resource handler (serving {@code META-INF/resources/bootui/} at {@code /bootui/**})
  * continue to work without annotation changes.
  *
@@ -20,14 +20,13 @@ import org.eclipse.microprofile.config.Config;
  *   <li>Blocks direct requests to the internal {@code /bootui/**} path with {@code 404}, preventing
  *       unintended access to the classpath static assets at a path the operator did not configure.</li>
  *   <li>Rewrites requests whose path starts with the configured base path to the internal path via
- *       {@link RoutingContext#reroute(String)}, triggering a new routing cycle. The new cycle's
+ *       {@link RoutingContext#reroute(String)}, restarting route dispatch on the same context. The new cycle's
  *       {@link BootUiQuarkusSafetyFilter} and {@link QuarkusPanelAccessFilter} see the rewritten
  *       {@code /bootui/**} path, which their hardcoded path constants already match.</li>
  * </ol>
  *
- * <p>Infinite-loop safety: {@link RoutingContext#reroute} creates a new {@link RoutingContext} but
- * reuses the same underlying data map, so the {@link #REROUTE_MARKER} key set before calling reroute
- * is visible to this filter in the new routing cycle, which then passes through immediately.</p>
+ * <p>Infinite-loop safety: {@link RoutingContext#reroute} reuses the context and its data map, so the
+ * {@link #REROUTE_MARKER} key set before rerouting is visible in the restarted routing cycle.</p>
  *
  * <p>This filter is registered <strong>only in dev/test</strong> launch modes (it is one of the beans
  * wired by the same {@code registerConsole} build step that gates the rest of the console), so the prod
@@ -41,10 +40,10 @@ import org.eclipse.microprofile.config.Config;
 @ApplicationScoped
 public class BootUiPathRewriteFilter {
 
-    static final String PATH_KEY = "bootui.path";
-
     /** Internal classpath path — the fixed mount for all JAX-RS resources and static assets. */
     static final String INTERNAL_PATH = "/bootui";
+
+    static final String INTERNAL_API_PATH = INTERNAL_PATH + "/api";
 
     /**
      * Data-map key written to the {@link RoutingContext} before calling {@code reroute()}.
@@ -76,13 +75,8 @@ public class BootUiPathRewriteFilter {
             return;
         }
 
-        String configuredPath = bootUiPath();
-
-        // Fast path: default path — no rewrite needed.
-        if (INTERNAL_PATH.equals(configuredPath)) {
-            rc.next();
-            return;
-        }
+        String configuredPath = QuarkusBootUiPaths.uiPath(config);
+        String configuredApiPath = QuarkusBootUiPaths.apiPath(config);
 
         // This routing cycle was started by our own reroute() call — pass through immediately to
         // avoid an infinite loop. The data map persists across reroute() calls.
@@ -99,31 +93,59 @@ public class BootUiPathRewriteFilter {
 
         // Strip the root-path prefix (quarkus.http.root-path) so comparisons are against the
         // application-relative path, exactly as every other BootUI Vert.x filter does.
-        String rootPath = QuarkusRootPath.normalize(
-                config.getOptionalValue(QuarkusRootPath.ROOT_PATH_KEY, String.class).orElse("/"));
+        String rootPath = QuarkusBootUiPaths.rootPrefix(config);
         String relativePath = QuarkusRootPath.stripPrefix(fullPath, rootPath);
 
-        // Block direct access to the internal /bootui path when a custom path is configured, to
-        // avoid exposing the classpath static assets at a path the operator did not intend.
-        if (relativePath.equals(INTERNAL_PATH) || relativePath.startsWith(INTERNAL_PATH + "/")) {
-            rc.response().setStatusCode(404).end();
+        // Always route the shell through QuarkusIndexResource so it can inject the configured UI/API
+        // paths. Otherwise Quarkus' static directory index would serve the unmodified packaged HTML.
+        if (relativePath.equals(configuredPath + "/")) {
+            reroute(rc, rootPath + INTERNAL_PATH);
             return;
         }
 
-        // Rewrite the configured path to the internal path.
-        if (relativePath.equals(configuredPath) || relativePath.startsWith(configuredPath + "/")) {
-            String suffix = relativePath.substring(configuredPath.length()); // "" or "/.."
-            // Build the reroute target including the root-path prefix (reroute() takes a full path).
-            String reroutePath = rootPath + INTERNAL_PATH + suffix;
-            rc.put(REROUTE_MARKER, Boolean.TRUE);
-            rc.reroute(reroutePath);
+        if (!INTERNAL_API_PATH.equals(configuredApiPath) && isSameOrChild(relativePath, configuredApiPath)) {
+            reroute(rc, rootPath + INTERNAL_API_PATH + relativePath.substring(configuredApiPath.length()));
+            return;
+        }
+
+        if (!INTERNAL_PATH.equals(configuredPath) && isSameOrChild(relativePath, configuredPath)) {
+            reroute(rc, rootPath + INTERNAL_PATH + relativePath.substring(configuredPath.length()));
+            return;
+        }
+
+        if (isSameOrChild(relativePath, INTERNAL_API_PATH)) {
+            if (INTERNAL_API_PATH.equals(configuredApiPath)) {
+                rc.next();
+            } else {
+                notFound(rc);
+            }
+            return;
+        }
+
+        if (isSameOrChild(relativePath, INTERNAL_PATH)) {
+            if (INTERNAL_PATH.equals(configuredPath)) {
+                rc.next();
+            } else {
+                notFound(rc);
+            }
             return;
         }
 
         rc.next();
     }
 
-    private String bootUiPath() {
-        return config.getOptionalValue(PATH_KEY, String.class).orElse(INTERNAL_PATH);
+    private static boolean isSameOrChild(String path, String basePath) {
+        return path.equals(basePath) || path.startsWith(basePath + "/");
+    }
+
+    private static void notFound(RoutingContext rc) {
+        rc.response().setStatusCode(404).end();
+    }
+
+    private static void reroute(RoutingContext rc, String path) {
+        String query = rc.request().query();
+        String target = query == null || query.isEmpty() ? path : path + "?" + query;
+        rc.put(REROUTE_MARKER, Boolean.TRUE);
+        rc.reroute(target);
     }
 }

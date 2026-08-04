@@ -25,7 +25,7 @@ const actionTools = computed(() => (status.value?.tools ?? []).filter((tool) => 
 const readTools = computed(() => (status.value?.tools ?? []).filter((tool) => !tool.action))
 
 const endpointUrl = computed(() => {
-  const path = status.value?.endpoint ?? getBootUiApiPath() + '/mcp'
+  const path = getBootUiApiPath() + '/mcp'
   const origin = typeof window !== 'undefined' && window.location ? window.location.origin : ''
   return origin + path
 })

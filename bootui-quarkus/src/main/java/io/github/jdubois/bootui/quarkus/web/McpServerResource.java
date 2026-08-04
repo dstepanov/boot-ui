@@ -5,6 +5,7 @@ import io.github.jdubois.bootui.core.dto.McpToolInfo;
 import io.github.jdubois.bootui.engine.mcp.McpDispatcher;
 import io.github.jdubois.bootui.engine.mcp.McpProtocol;
 import io.github.jdubois.bootui.engine.mcp.McpTool;
+import io.github.jdubois.bootui.quarkus.QuarkusBootUiPaths;
 import io.github.jdubois.bootui.quarkus.QuarkusPanelAccessConfig;
 import io.github.jdubois.bootui.quarkus.mcp.McpServerState;
 import jakarta.inject.Inject;
@@ -51,8 +52,7 @@ public class McpServerResource {
         this.maxResults = Math.max(
                 1,
                 config.getOptionalValue("bootui.mcp.max-results", Integer.class).orElse(200));
-        String bootUiPath = config.getOptionalValue("bootui.path", String.class).orElse("/bootui");
-        this.mcpEndpoint = bootUiPath + "/api/mcp";
+        this.mcpEndpoint = QuarkusBootUiPaths.applicationPath(config, QuarkusBootUiPaths.apiPath(config)) + "/mcp";
     }
 
     @GET

@@ -102,7 +102,7 @@ function activityUrl(extra = {}) {
 
 async function loadActivity() {
   try {
-    const response = await fetch(activityUrl())
+    const response = await apiFetch(activityUrl())
     if (!response.ok) {
       throw new Error(`Request failed with status ${response.status}`)
     }
@@ -135,7 +135,7 @@ async function loadOlder() {
   if (!info?.hasMore || !info.nextCursor || loadingOlder.value) return
   loadingOlder.value = true
   try {
-    const response = await fetch(activityUrl({cursor: info.nextCursor}))
+    const response = await apiFetch(activityUrl({cursor: info.nextCursor}))
     if (!response.ok) {
       throw new Error(`Request failed with status ${response.status}`)
     }
@@ -379,7 +379,7 @@ async function openProfile(entry) {
   profileError.value = null
   profile.value = null
   try {
-    const response = await fetch(`api/activity/request/${encodeURIComponent(entry.id)}`)
+    const response = await apiFetch(`api/activity/request/${encodeURIComponent(entry.id)}`)
     if (!response.ok) {
       throw new Error(`Request failed with status ${response.status}`)
     }

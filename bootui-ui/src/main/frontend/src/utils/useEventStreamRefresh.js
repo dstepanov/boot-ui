@@ -1,4 +1,5 @@
 import {computed, onBeforeUnmount, onMounted, ref, unref, watch} from 'vue'
+import {resolveBootUiApiUrl} from './bootUiPath.js'
 import {useRefreshState} from './useRefreshState.js'
 
 /**
@@ -49,7 +50,7 @@ export function useEventStreamRefresh(
     if (!refreshEnabled.value || !autoRefresh.value || document.visibilityState !== 'visible') {
       return
     }
-    eventSource = new EventSource(streamUrl)
+    eventSource = new EventSource(resolveBootUiApiUrl(streamUrl))
     eventSource.addEventListener('update', () => {
       if (refreshEnabled.value && autoRefresh.value && document.visibilityState === 'visible') {
         load()

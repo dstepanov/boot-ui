@@ -10,7 +10,7 @@ import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.Config;
 
 /**
- * Keeps the whole {@code /bootui} surface dark in production, including the parts that are reachable for
+ * Keeps the configured BootUI surface and its private {@code /bootui} mount dark in production, including the parts that are reachable for
  * reasons {@link BootUiQuarkusSafetyFilter} and {@link QuarkusPanelAccessFilter} cannot fix: those two
  * (like the rest of the console) are only wired in dev/test, and the data-bearing {@code /bootui/api/**}
  * endpoints are already unreachable in {@link LaunchMode#NORMAL} simply because nothing registers them —
@@ -38,7 +38,9 @@ import org.eclipse.microprofile.config.Config;
  *
  * <p>Registered as a global Vert.x HTTP route filter (via the {@link Filters} event), exactly like
  * {@link BootUiQuarkusSafetyFilter}, so it runs before route dispatch — including before Quarkus' static-
- * resource route — for every request, in every launch mode. The {@code quarkus.http.root-path} prefix is
+ * resource route — for every request, in every launch mode. It suppresses the normalized configured UI/API
+ * paths as well as the fixed classpath mount, while invalid dormant production configuration falls back to
+ * safe defaults rather than activating any console route. The {@code quarkus.http.root-path} prefix is
  * stripped before matching (shared {@link QuarkusRootPath} helper), so a host application running under a
  * non-default root-path is still fully covered in production.
  */
@@ -48,18 +50,19 @@ public class BootUiProdShellGuardFilter {
     /** Internal classpath path — always {@code /bootui}; the compiled SPA assets live here. */
     static final String INTERNAL_PATH = "/bootui";
 
-    /** Config key for the user-facing base path. */
-    static final String BASE_PATH_KEY = "bootui.path";
-
     private static final int PRIORITY = 1000;
 
-    private final Config config;
     private final LaunchMode launchMode;
+    private final String configuredPath;
+    private final String configuredApiPath;
+    private final String rootPrefix;
 
     @Inject
     public BootUiProdShellGuardFilter(Config config, LaunchMode launchMode) {
-        this.config = config;
         this.launchMode = launchMode;
+        this.configuredPath = QuarkusBootUiPaths.safeUiPath(config);
+        this.configuredApiPath = QuarkusBootUiPaths.safeApiPath(config);
+        this.rootPrefix = QuarkusBootUiPaths.rootPrefix(config);
     }
 
     public void register(@Observes Filters filters) {
@@ -74,22 +77,17 @@ public class BootUiProdShellGuardFilter {
         }
 
         String path = rc.normalizedPath();
-        // Cheap pre-check: read the configured base path to narrow the check. Any path that cannot
-        // possibly match either the configured path or the internal classpath path (/bootui) is
-        // let through immediately without the more-expensive root-path-aware Config lookup.
-        String configuredPath = bootUiPath();
-        if (path == null || (!path.contains(configuredPath) && !path.contains(INTERNAL_PATH))) {
+        if (path == null) {
             rc.next();
             return;
         }
 
-        String relativePath = QuarkusRootPath.stripPrefix(path, QuarkusRootPath.normalize(rootPath()));
+        String relativePath = QuarkusRootPath.stripPrefix(path, rootPrefix);
         String internalApiPath = INTERNAL_PATH + "/api";
-        String configuredApiPath = configuredPath + "/api";
-        if (isBootUiPath(relativePath, configuredPath)) {
+        if (isBootUiPath(relativePath, configuredPath, configuredApiPath)) {
             // Determine the API path for cache-control header differentiation: use the configuredApiPath
             // for requests at the configured path, internalApiPath for direct internal-path access.
-            String apiPath = relativePath.equals(configuredPath) || relativePath.startsWith(configuredPath + "/")
+            String apiPath = relativePath.equals(configuredApiPath) || relativePath.startsWith(configuredApiPath + "/")
                     ? configuredApiPath
                     : internalApiPath;
             rc.response().setStatusCode(404);
@@ -113,20 +111,19 @@ public class BootUiProdShellGuardFilter {
      * the internal classpath path ({@code /bootui}), so the static Vue assets at their classpath
      * location are suppressed even when a custom {@code bootui.path} is configured.
      */
-    static boolean isBootUiPath(String path, String configuredPath) {
+    static boolean isBootUiPath(String path, String configuredPath, String configuredApiPath) {
         if (path == null) {
             return false;
         }
-        return path.equals(configuredPath) || path.startsWith(configuredPath + "/")
-                || path.equals(INTERNAL_PATH) || path.startsWith(INTERNAL_PATH + "/");
+        return path.equals(configuredPath)
+                || path.startsWith(configuredPath + "/")
+                || path.equals(configuredApiPath)
+                || path.startsWith(configuredApiPath + "/")
+                || path.equals(INTERNAL_PATH)
+                || path.startsWith(INTERNAL_PATH + "/");
     }
 
-    private String bootUiPath() {
-        return config.getOptionalValue(BASE_PATH_KEY, String.class).orElse(INTERNAL_PATH);
-    }
-
-    private String rootPath() {
-        return config.getOptionalValue(QuarkusRootPath.ROOT_PATH_KEY, String.class)
-                .orElse("/");
+    static boolean isBootUiPath(String path, String configuredPath) {
+        return isBootUiPath(path, configuredPath, configuredPath + "/api");
     }
 }

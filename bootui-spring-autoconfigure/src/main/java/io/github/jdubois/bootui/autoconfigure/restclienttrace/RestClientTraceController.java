@@ -26,7 +26,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * {@link RestClientTraceRecorder#report(boolean, io.github.jdubois.bootui.core.ValueExposure)}).</p>
  */
 @RestController
-@RequestMapping("${bootui.path}/api/rest-client-trace")
+@RequestMapping("${bootui.api-path:${bootui.path:/bootui}/api}/rest-client-trace")
 public class RestClientTraceController {
 
     private static final String NOT_CONFIGURED = "REST client tracing is not configured";

@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  * action.
  */
 @RestController
-@RequestMapping("${bootui.path}/api/mcp-server")
+@RequestMapping("${bootui.api-path:${bootui.path:/bootui}/api}/mcp-server")
 public class McpServerController {
 
     private final McpServerState state;

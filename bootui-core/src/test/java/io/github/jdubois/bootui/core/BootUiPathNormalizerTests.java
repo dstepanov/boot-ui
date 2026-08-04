@@ -28,6 +28,11 @@ class BootUiPathNormalizerTests {
     }
 
     @Test
+    void acceptsRfc3986UnreservedCharacters() {
+        assertThat(BootUiPathNormalizer.normalize("/admin_ui/v1.2~preview")).isEqualTo("/admin_ui/v1.2~preview");
+    }
+
+    @Test
     void stripsTrailingSlash() {
         assertThat(BootUiPathNormalizer.normalize("/bootui/")).isEqualTo("/bootui");
     }
@@ -87,6 +92,18 @@ class BootUiPathNormalizerTests {
     }
 
     @Test
+    void rejectsSingleDotPathSegment() {
+        assertThatThrownBy(() -> BootUiPathNormalizer.normalize("/admin/./bootui"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("'.'");
+    }
+
+    @Test
+    void acceptsDotsWithinAPathSegment() {
+        assertThat(BootUiPathNormalizer.normalize("/release..preview")).isEqualTo("/release..preview");
+    }
+
+    @Test
     void rejectsPathWithQueryComponent() {
         assertThatThrownBy(() -> BootUiPathNormalizer.normalize("/bootui?foo=bar"))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -115,10 +132,72 @@ class BootUiPathNormalizerTests {
     }
 
     @Test
+    void rejectsPathWithEncodedBackslash() {
+        assertThatThrownBy(() -> BootUiPathNormalizer.normalize("/boot%5Cui"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("%5C");
+    }
+
+    @Test
+    void rejectsOtherEncodedCharacters() {
+        assertThatThrownBy(() -> BootUiPathNormalizer.normalize("/boot%2eui"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("only letters");
+    }
+
+    @Test
+    void rejectsRawBackslash() {
+        assertThatThrownBy(() -> BootUiPathNormalizer.normalize("/admin\\bootui"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("only letters");
+    }
+
+    @Test
+    void rejectsRoutePatternCharacters() {
+        assertThatThrownBy(() -> BootUiPathNormalizer.normalize("/admin/{path}"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("only letters");
+        assertThatThrownBy(() -> BootUiPathNormalizer.normalize("/admin/**"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("only letters");
+    }
+
+    @Test
+    void rejectsInteriorWhitespace() {
+        assertThatThrownBy(() -> BootUiPathNormalizer.normalize("/admin console"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("only letters");
+    }
+
+    @Test
     void rejectsPathWithDoubleSlash() {
         assertThatThrownBy(() -> BootUiPathNormalizer.normalize("/admin//bootui"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("//");
+    }
+
+    @Test
+    void rejectsReservedInternalChildPath() {
+        assertThatThrownBy(() -> BootUiPathNormalizer.normalize("/bootui/custom"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("reserved internal");
+    }
+
+    @Test
+    void acceptsDefaultPathSibling() {
+        assertThat(BootUiPathNormalizer.normalize("/bootui-console")).isEqualTo("/bootui-console");
+    }
+
+    @Test
+    void acceptsDefaultApiPathBelowInternalMount() {
+        assertThat(BootUiPathNormalizer.normalizeApiPath("/bootui/api/")).isEqualTo("/bootui/api");
+    }
+
+    @Test
+    void apiPathUsesItsOwnPropertyNameInErrors() {
+        assertThatThrownBy(() -> BootUiPathNormalizer.normalizeApiPath("/api/**"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("bootui.api-path");
     }
 
     // --- DEFAULT_PATH constant ---

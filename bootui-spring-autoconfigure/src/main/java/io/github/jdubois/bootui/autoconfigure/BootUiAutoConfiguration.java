@@ -6,6 +6,7 @@ import io.github.jdubois.bootui.autoconfigure.activity.RequestCorrelationRegistr
 import io.github.jdubois.bootui.autoconfigure.activity.SecurityEventCorrelationRegistry;
 import io.github.jdubois.bootui.autoconfigure.architecture.ArchitectureController;
 import io.github.jdubois.bootui.autoconfigure.config.BootUiExposure;
+import io.github.jdubois.bootui.autoconfigure.config.BootUiPathPropertySource;
 import io.github.jdubois.bootui.autoconfigure.config.ConfigOverrideService;
 import io.github.jdubois.bootui.autoconfigure.crac.CracController;
 import io.github.jdubois.bootui.autoconfigure.exceptions.BootUiExceptionHandlerResolver;
@@ -32,6 +33,7 @@ import io.github.jdubois.bootui.autoconfigure.pentesting.*;
 import io.github.jdubois.bootui.autoconfigure.restapi.RestApiController;
 import io.github.jdubois.bootui.autoconfigure.restclienttrace.RestClientTraceController;
 import io.github.jdubois.bootui.autoconfigure.safety.ApiAuthenticationFilter;
+import io.github.jdubois.bootui.autoconfigure.safety.LegacyBootUiPathFilter;
 import io.github.jdubois.bootui.autoconfigure.safety.LocalhostOnlyFilter;
 import io.github.jdubois.bootui.autoconfigure.safety.PanelAccessFilter;
 import io.github.jdubois.bootui.autoconfigure.safety.SecurityHeadersFilter;
@@ -229,8 +231,9 @@ public class BootUiAutoConfiguration {
             Set.of("bootUiConfigOverrideService", "bootUiDevToolsBridge", "bootUiOtlpSpanDecoder");
 
     @Bean
-    static BeanFactoryPostProcessor bootUiLazyBeanPostProcessor() {
+    static BeanFactoryPostProcessor bootUiLazyBeanPostProcessor(ConfigurableEnvironment environment) {
         return beanFactory -> {
+            BootUiPathPropertySource.apply(environment);
             for (String beanName : beanFactory.getBeanDefinitionNames()) {
                 BeanDefinition beanDefinition = beanFactory.getBeanDefinition(beanName);
                 String beanClassName = beanDefinition.getBeanClassName();
@@ -653,6 +656,17 @@ public class BootUiAutoConfiguration {
             store.start();
         }
         return store;
+    }
+
+    @Bean
+    public FilterRegistrationBean<LegacyBootUiPathFilter> bootUiLegacyPathFilterRegistration(
+            BootUiProperties properties) {
+        FilterRegistrationBean<LegacyBootUiPathFilter> registration =
+                new FilterRegistrationBean<>(new LegacyBootUiPathFilter(properties));
+        registration.addUrlPatterns("/bootui/*");
+        registration.setOrder(Integer.MIN_VALUE);
+        registration.setName("bootUiLegacyPathFilter");
+        return registration;
     }
 
     @Bean

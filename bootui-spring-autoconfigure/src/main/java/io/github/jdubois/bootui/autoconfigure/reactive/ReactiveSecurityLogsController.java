@@ -43,7 +43,7 @@ import reactor.core.publisher.Flux;
  */
 @RestController
 @ConditionalOnClass(AuditEventRepository.class)
-@RequestMapping("${bootui.path}/api/security-logs")
+@RequestMapping("${bootui.api-path:${bootui.path:/bootui}/api}/security-logs")
 public class ReactiveSecurityLogsController implements ApplicationListener<AuditApplicationEvent> {
 
     private final ObjectProvider<AuditEventRepository> auditEventRepositoryProvider;

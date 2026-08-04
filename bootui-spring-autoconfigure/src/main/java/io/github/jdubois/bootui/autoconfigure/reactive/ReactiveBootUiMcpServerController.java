@@ -16,7 +16,7 @@ import reactor.core.publisher.Mono;
 
 /** Reactive WebFlux twin of {@code McpServerController}. */
 @RestController
-@RequestMapping("${bootui.path}/api/mcp-server")
+@RequestMapping("${bootui.api-path:${bootui.path:/bootui}/api}/mcp-server")
 public class ReactiveBootUiMcpServerController {
 
     private final McpServerState state;

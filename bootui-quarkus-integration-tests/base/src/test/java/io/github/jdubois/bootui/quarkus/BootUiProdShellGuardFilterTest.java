@@ -171,14 +171,18 @@ class BootUiProdShellGuardFilterTest {
 
     @Test
     void scopeCoversTheWholeBootuiSurfaceButNotLookalikePaths() {
-        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui", "/bootui")).isTrue();
-        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui/", "/bootui")).isTrue();
+        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui", "/bootui"))
+                .isTrue();
+        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui/", "/bootui"))
+                .isTrue();
         assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui/index.html", "/bootui"))
                 .isTrue();
         assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui/api/overview", "/bootui"))
                 .isTrue();
-        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui-other", "/bootui")).isFalse();
-        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootuixyz", "/bootui")).isFalse();
+        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui-other", "/bootui"))
+                .isFalse();
+        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootuixyz", "/bootui"))
+                .isFalse();
         assertThat(BootUiProdShellGuardFilter.isBootUiPath("/other", "/bootui")).isFalse();
         assertThat(BootUiProdShellGuardFilter.isBootUiPath("/", "/bootui")).isFalse();
         assertThat(BootUiProdShellGuardFilter.isBootUiPath(null, "/bootui")).isFalse();
@@ -189,10 +193,13 @@ class BootUiProdShellGuardFilterTest {
         // When a custom path is configured, the guard blocks both the configured path and
         // the internal /bootui classpath path.
         assertThat(BootUiProdShellGuardFilter.isBootUiPath("/myapp", "/myapp")).isTrue();
-        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/myapp/api/overview", "/myapp")).isTrue();
+        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/myapp/api/overview", "/myapp"))
+                .isTrue();
         assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui", "/myapp")).isTrue();
-        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui/index.html", "/myapp")).isTrue();
-        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/myapp-other", "/myapp")).isFalse();
+        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui/index.html", "/myapp"))
+                .isTrue();
+        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/myapp-other", "/myapp"))
+                .isFalse();
         assertThat(BootUiProdShellGuardFilter.isBootUiPath("/other", "/myapp")).isFalse();
     }
 
@@ -219,6 +226,29 @@ class BootUiProdShellGuardFilterTest {
 
         verify(resp).setStatusCode(404);
         verify(resp).end();
+        verify(rc, never()).next();
+    }
+
+    @Test
+    void invalidBlankPathCannotMatchTheWholeHostApplication() {
+        RoutingContext hostRequest = mockRequest("/api/orders");
+        BootUiProdShellGuardFilter filter = newFilter(Map.of("bootui.path", ""), LaunchMode.NORMAL);
+
+        filter.handle(hostRequest);
+
+        verify(hostRequest).next();
+        verify(hostRequest.response(), never()).setStatusCode(anyInt());
+    }
+
+    @Test
+    void productionGuardsAnExplicitSeparateApiPath() {
+        RoutingContext rc = mockRequest("/internal/bootui-api/overview");
+        BootUiProdShellGuardFilter filter = newFilter(
+                Map.of("bootui.path", "/console", "bootui.api-path", "/internal/bootui-api"), LaunchMode.NORMAL);
+
+        filter.handle(rc);
+
+        verify(rc.response()).setStatusCode(404);
         verify(rc, never()).next();
     }
 

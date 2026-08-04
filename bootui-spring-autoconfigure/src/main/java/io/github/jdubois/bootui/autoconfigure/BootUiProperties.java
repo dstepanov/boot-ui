@@ -213,7 +213,7 @@ public class BootUiProperties {
     }
 
     public void setApiPath(String apiPath) {
-        this.apiPath = apiPath;
+        this.apiPath = BootUiPathNormalizer.normalizeApiPath(apiPath);
     }
 
     public boolean isAllowNonLocalhost() {
