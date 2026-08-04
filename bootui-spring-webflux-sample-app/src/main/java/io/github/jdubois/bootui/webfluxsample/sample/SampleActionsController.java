@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,9 +26,8 @@ import reactor.core.scheduler.Schedulers;
 /**
  * Reactive counterpart of the servlet sample app's {@code SampleController}: a small "action lab" of
  * safe, idempotent endpoints backing the WebFlux sample app's landing page buttons, each engineered to
- * light up a specific BootUI panel. Deliberately excludes the servlet sample's Security- and Spring
- * AI-gated actions (secure admin/user, AI chat) - see {@link io.github.jdubois.bootui.webfluxsample.BootUiWebfluxSampleApplication}'s
- * Javadoc for why this app does not add Spring Security.
+ * light up a specific BootUI panel. Deliberately excludes the servlet sample's Spring AI-gated action
+ * (AI chat).
  *
  * <p>Every action that does non-trivial work runs on {@code Schedulers.boundedElastic()}, the same
  * off-event-loop pattern {@code NoteController}/{@code GreetingController} already use, so a slow or
@@ -44,6 +43,7 @@ public class SampleActionsController {
     private final GreetingService greetingService;
     private final ObservationRegistry observationRegistry;
     private final WebClient webClient;
+    private final WebServerApplicationContext webServerApplicationContext;
     private final Counter ordersProcessedCounter;
     private final Timer orderDurationTimer;
 
@@ -52,11 +52,13 @@ public class SampleActionsController {
             GreetingService greetingService,
             MeterRegistry meterRegistry,
             ObservationRegistry observationRegistry,
-            WebClient webClient) {
+            WebClient webClient,
+            WebServerApplicationContext webServerApplicationContext) {
         this.noteRepository = noteRepository;
         this.greetingService = greetingService;
         this.observationRegistry = observationRegistry;
         this.webClient = webClient;
+        this.webServerApplicationContext = webServerApplicationContext;
         this.ordersProcessedCounter = Counter.builder("sample.orders.processed")
                 .description("Sample orders processed by the BootUI demo metrics button")
                 .register(meterRegistry);
@@ -67,12 +69,15 @@ public class SampleActionsController {
 
     /** Makes a real instrumented outbound WebClient call back into the sample application. */
     @GetMapping("/rest-client")
-    public Mono<Map<String, String>> restClient(
-            @RequestParam(defaultValue = "WebFlux") String name, ServerHttpRequest request) {
-        var target = UriComponentsBuilder.fromUri(request.getURI())
-                .replacePath("/api/greetings/{name}")
-                .replaceQuery(null)
-                .build(name);
+    public Mono<Map<String, String>> restClient(@RequestParam(defaultValue = "WebFlux") String name) {
+        var target = UriComponentsBuilder.newInstance()
+                .scheme("http")
+                .host("127.0.0.1")
+                .port(webServerApplicationContext.getWebServer().getPort())
+                .pathSegment("api", "greetings", name)
+                .build()
+                .encode()
+                .toUri();
         return webClient
                 .get()
                 .uri(target)
