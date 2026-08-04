@@ -13,6 +13,7 @@ import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import reactor.test.StepVerifier;
 
 class ReactiveRestClientTraceControllerTests {
 
@@ -131,8 +132,17 @@ class ReactiveRestClientTraceControllerTests {
     }
 
     @Test
-    void streamOpensAReactiveChangeStream() {
-        ReactiveRestClientTraceController controller = controller(instrumentedRecorder(true));
-        assertThat(controller.stream()).isNotNull();
+    void streamPublishesRecorderChanges() {
+        RestClientTraceRecorder recorder = instrumentedRecorder(true);
+        ReactiveRestClientTraceController controller = controller(recorder);
+
+        StepVerifier.create(controller.stream())
+                .then(recorder::clear)
+                .assertNext(event -> {
+                    assertThat(event.event()).isEqualTo("update");
+                    assertThat(event.data()).containsKey("ts");
+                })
+                .thenCancel()
+                .verify(java.time.Duration.ofSeconds(2));
     }
 }

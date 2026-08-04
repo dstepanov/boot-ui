@@ -12,10 +12,13 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -40,6 +43,7 @@ public class SampleActionsController {
     private final NoteRepository noteRepository;
     private final GreetingService greetingService;
     private final ObservationRegistry observationRegistry;
+    private final WebClient webClient;
     private final Counter ordersProcessedCounter;
     private final Timer orderDurationTimer;
 
@@ -47,16 +51,34 @@ public class SampleActionsController {
             NoteRepository noteRepository,
             GreetingService greetingService,
             MeterRegistry meterRegistry,
-            ObservationRegistry observationRegistry) {
+            ObservationRegistry observationRegistry,
+            WebClient webClient) {
         this.noteRepository = noteRepository;
         this.greetingService = greetingService;
         this.observationRegistry = observationRegistry;
+        this.webClient = webClient;
         this.ordersProcessedCounter = Counter.builder("sample.orders.processed")
                 .description("Sample orders processed by the BootUI demo metrics button")
                 .register(meterRegistry);
         this.orderDurationTimer = Timer.builder("sample.orders.duration")
                 .description("Simulated sample order processing time")
                 .register(meterRegistry);
+    }
+
+    /** Makes a real instrumented outbound WebClient call back into the sample application. */
+    @GetMapping("/rest-client")
+    public Mono<Map<String, String>> restClient(
+            @RequestParam(defaultValue = "WebFlux") String name, ServerHttpRequest request) {
+        var target = UriComponentsBuilder.fromUri(request.getURI())
+                .replacePath("/api/greetings/{name}")
+                .replaceQuery(null)
+                .build(name);
+        return webClient
+                .get()
+                .uri(target)
+                .retrieve()
+                .bodyToMono(String.class)
+                .map(greeting -> Map.of("greeting", greeting));
     }
 
     /** Throws on purpose so the BootUI Exceptions panel has a captured failure to inspect. */
