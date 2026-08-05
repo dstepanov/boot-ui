@@ -1,5 +1,5 @@
 <script setup>
-import {computed, inject, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {apiFetch} from '../api.js'
 import {
   conditionClassFromResource,
@@ -10,10 +10,18 @@ import {
 import {describeLoadError} from '../utils/loadError.js'
 import BeanGraph from './BeanGraph.vue'
 
+const props = defineProps({
+  focusRequest: {
+    type: Object,
+    default: null
+  }
+})
+
 const MAX_CONDITION_SOURCES = 5
 const CONDITION_LOOKUP_LIMIT = 1000
 
 const graphFocusInput = ref('')
+const graphFocusInputElement = ref(null)
 const graphSearchMessage = ref('')
 const graphDatalistId = 'beans-graph-datalist'
 const graphClassification = ref('APPLICATION')
@@ -45,6 +53,7 @@ const conditionLoading = ref(false)
 const conditionMessage = ref('')
 const conditionLookupTruncated = ref(false)
 let conditionRequestId = 0
+let appliedFocusRequestId = null
 
 const focusedDefinitions = computed(() => definitionsByName.value.get(focusName.value) || [])
 const focusedBean = computed(() => byName.value.get(focusName.value) || null)
@@ -78,6 +87,24 @@ watch(graphClassification, () => {
     setFocus(null)
   }
 })
+watch(
+  [loaded, () => props.focusRequest],
+  ([isLoaded, request]) => {
+    if (!isLoaded || !request || request.id === appliedFocusRequestId) return
+    appliedFocusRequestId = request.id
+    graphClassification.value = request.classification || ''
+    graphFocusInput.value = request.name
+    if (byName.value.has(request.name)) {
+      setFocus(request.name)
+      graphSearchMessage.value = ''
+    } else {
+      setFocus(null)
+      graphSearchMessage.value = 'This bean is outside the bounded graph inventory.'
+    }
+    nextTick(() => graphFocusInputElement.value?.focus())
+  },
+  {immediate: true}
+)
 onBeforeUnmount(() => {
   conditionRequestId += 1
 })
@@ -246,6 +273,7 @@ async function loadConditionEvidence() {
         <div>
           <label :for="graphDatalistId + '-input'" class="form-label">Focus bean</label>
           <input
+            ref="graphFocusInputElement"
             :id="graphDatalistId + '-input'"
             v-model="graphFocusInput"
             :list="graphDatalistId"

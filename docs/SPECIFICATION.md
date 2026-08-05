@@ -309,6 +309,8 @@ Features:
 - Show bean name, type, scope, resource/declaring class when available, dependencies, aliases, and classification.
 - **Dependency graph mode** (toggle in the panel header):
   - Is the panel's default view; the server-paged list remains available from the header toggle and loads only when selected.
+  - Each bean name in the list is a keyboard-accessible action that opens its focused graph and selects the bean's
+    classification.
   - Loads beans in bounded 1 000-row pages, up to a 2 000-bean client-side inventory. When
     more beans exist, the UI reports the loaded and total counts instead of implying that the graph is complete.
   - A search field selects the focus bean by name, alias, or a unique type match. Application beans are the default

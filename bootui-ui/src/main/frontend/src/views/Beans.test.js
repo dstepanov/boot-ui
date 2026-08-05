@@ -121,6 +121,27 @@ describe('Beans — list mode', () => {
     expect(wrapper.text()).toContain('42 beans')
     expect(wrapper.text()).toContain('3 matched')
   })
+
+  it('opens the focused graph when a bean name is clicked', async () => {
+    stubFetch(
+      beanList([
+        bean('frameworkBean', ['frameworkDependency'], 'FRAMEWORK'),
+        bean('frameworkDependency', [], 'FRAMEWORK')
+      ])
+    )
+    const wrapper = mountBeans()
+    await vi.dynamicImportSettled()
+    await flushPromises()
+    await openList(wrapper)
+
+    await wrapper.find('[aria-label="Show dependency graph for frameworkBean"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="Dependency graph"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.find('#beans-graph-classification').element.value).toBe('FRAMEWORK')
+    expect(wrapper.find('input[placeholder*="Search for a bean"]').element.value).toBe('frameworkBean')
+    expect(wrapper.find('[aria-label*="frameworkBean"][aria-pressed="true"]').exists()).toBe(true)
+  })
 })
 
 // ── Graph mode toggle ─────────────────────────────────────────────────────────

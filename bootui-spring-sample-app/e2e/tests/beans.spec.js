@@ -31,7 +31,16 @@ test.describe('Beans view', () => {
     await expect(page.locator('table tbody')).toContainText('productRepository')
     await expect.poll(async () => rows.count()).toBeLessThan(10)
 
+    const productGraphLink = page.getByRole('button', {name: 'Show dependency graph for productRepository'})
+    await productGraphLink.focus()
+    await productGraphLink.press('Enter')
+    await expect(page.getByRole('button', {name: 'Dependency graph'})).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByPlaceholder(/Search for a bean/)).toBeFocused()
+    await expect(page.getByPlaceholder(/Search for a bean/)).toHaveValue('productRepository')
+    await expect(page.locator('[aria-label*="productRepository"][aria-pressed="true"]')).toBeVisible()
+
     // Classification filter restricts to a single category (BootUI internals are hidden by default).
+    await page.getByRole('button', {name: 'List view'}).click()
     await page.getByPlaceholder(/Filter by name or type/).fill('')
     await page.locator('select.form-select').selectOption('FRAMEWORK')
     const badges = page.locator('table tbody tr td:nth-child(4) .badge')

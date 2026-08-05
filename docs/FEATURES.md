@@ -894,7 +894,8 @@ own beans are hidden by default; when self-data filtering is disabled they are c
 Large bean lists load in bounded pages so the initial payload stays small while filters still apply to the full bean set.
 
 **Dependency graph mode.** The panel opens on the dependency neighbourhood graph; a header toggle switches to the
-server-paged list when needed. Graph mode fetches beans in bounded 1 000-row pages, up to a 2 000-bean client-side
+server-paged list when needed. Each bean name in the list is a keyboard-accessible link back to its focused graph and
+automatically selects that bean's classification. Graph mode fetches beans in bounded 1 000-row pages, up to a 2 000-bean client-side
 inventory; if the inventory is larger, the panel reports both the loaded and total counts. Focus search starts with
 Application beans selected while a classification control can switch the graph to Framework, BootUI, Platform, Other, or
 all beans. The selected classification applies to both focus choices and rendered neighbours, so the Application graph

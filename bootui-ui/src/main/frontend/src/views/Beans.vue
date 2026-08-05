@@ -39,6 +39,8 @@ watch([filter, classification], scheduleReload)
 
 const graphMode = ref(true)
 const listActivated = ref(false)
+const graphFocusRequest = ref(null)
+let graphFocusRequestId = 0
 
 function activateGraphMode() {
   graphMode.value = true
@@ -50,6 +52,15 @@ function deactivateGraphMode() {
     listActivated.value = true
     load()
   }
+}
+
+function showBeanGraph(bean) {
+  graphFocusRequest.value = {
+    id: ++graphFocusRequestId,
+    name: bean.name,
+    classification: bean.classification || ''
+  }
+  graphMode.value = true
 }
 </script>
 
@@ -124,7 +135,15 @@ function deactivateGraphMode() {
           <tbody>
             <tr v-for="b in visibleBeans" :key="b.name">
               <td>
-                <code :title="b.name" class="text-truncate d-block">{{ b.name }}</code>
+                <button
+                  class="bean-graph-link"
+                  type="button"
+                  :title="`Show dependency graph for ${b.name}`"
+                  :aria-label="`Show dependency graph for ${b.name}`"
+                  @click="showBeanGraph(b)"
+                >
+                  <code class="text-truncate d-block">{{ b.name }}</code>
+                </button>
               </td>
               <td>
                 <small :title="b.type" class="text-truncate d-block">{{ b.type }}</small>
@@ -158,7 +177,7 @@ function deactivateGraphMode() {
     </template>
 
     <KeepAlive>
-      <BeansGraphMode v-if="graphMode" />
+      <BeansGraphMode v-if="graphMode" :focus-request="graphFocusRequest" />
     </KeepAlive>
   </div>
 </template>
@@ -166,6 +185,26 @@ function deactivateGraphMode() {
 <style scoped>
 .beans-table {
   table-layout: fixed;
+}
+
+.bean-graph-link {
+  background: none;
+  border: 0;
+  color: var(--bootui-blue);
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  text-align: left;
+}
+
+.bean-graph-link:hover code {
+  text-decoration: underline;
+}
+
+.bean-graph-link:focus-visible {
+  border-radius: var(--bootui-radius-sm);
+  outline: 2px solid var(--bootui-blue);
+  outline-offset: 2px;
 }
 
 .beans-table-name {
