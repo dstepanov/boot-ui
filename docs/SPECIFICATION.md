@@ -291,19 +291,25 @@ Acceptance criteria:
 
 ### 5.2 Beans Explorer
 
-Purpose: answer "Which beans exist, and where did they come from?"
+Purpose: answer "Which beans exist, and where did they come from?" and "How is a given bean wired into the application?"
 
 Data sources:
 
-- Actuator `beans` endpoint.
+- Actuator `beans` endpoint (Spring Boot); Arc/CDI `BeanManager` (Quarkus).
+- Actuator `conditions` endpoint for exact positive auto-configuration evidence when a Spring bean resource identifies
+  its configuration class.
 - Spring application context.
 - Optional internal BootUI metadata for auto-configured vs user-defined beans.
 
 Features:
 
 - Search by bean name, class name, package, scope, and resource.
+- Provide a clearly labeled Graph/List segmented control, with Graph selected by default.
+- On first open, select the Application bean with the most direct dependencies and dependents, break ties alphabetically,
+  and center its graph node in the bounded scroll viewport. Leave isolated inventories unfocused.
 - Hide BootUI's own beans by default so the report focuses on the host application; `bootui.monitoring.exclude-self=false`
-  includes them when debugging BootUI itself.
+  includes them when debugging BootUI itself. Omit the BootUI classification option when the loaded inventory contains no
+  BootUI beans.
 - Filter by current classification:
   - application beans.
   - BootUI beans, when self-data filtering is disabled.
@@ -311,12 +317,49 @@ Features:
   - Java/Jakarta platform beans.
   - other beans.
 - Show bean name, type, scope, resource/declaring class when available, dependencies, aliases, and classification.
+- **Dependency graph mode** (toggle in the panel header):
+  - Is the panel's default view; the server-paged list remains available from the header toggle and loads only when selected.
+  - Each bean name in the list is a keyboard-accessible action that opens its focused graph and selects the bean's
+    classification.
+  - Loads beans in bounded 1 000-row pages, up to a 2 000-bean client-side inventory. When
+    more beans exist, the UI reports the loaded and total counts instead of implying that the graph is complete.
+  - A search field selects the focus bean by name, alias, or a unique type match. Application beans are the default
+    classification; the operator can select another classification or all beans. The classification applies to focus
+    choices and rendered neighbours, so the Application graph contains only host-application beans.
+  - Renders a concentric-ring SVG neighbourhood centred on the focus bean: direct
+    dependencies (focus → node), direct dependents (node → focus), mutual/cycle nodes, and
+    deeper-hop nodes up to depth 3 and 60 nodes total.
+  - Provides keyboard-accessible zoom-out, reset, and zoom-in controls from 60% to 200%; the bounded graph region scrolls
+    when the scaled SVG exceeds its viewport.
+  - Nodes are colour-coded by role (focus, dependency, dependent, mutual, deep) in both
+    light and dark themes at WCAG 2.1 AA contrast.
+  - Clicking any node navigates the graph to that bean's neighbourhood.
+  - When the 60-node or depth-3 limit is reached, a notice identifies which bound was reached.
+  - Cycle-safe: a visited-set prevents infinite BFS traversal on any dependency cycle.
+  - Duplicate bean names are represented by one deterministic node with the definitions' dependencies merged; focusing
+    that node explains the ambiguity rather than silently discarding a definition.
+  - The focused-bean details area shows type, scope, resource, aliases, definition count, and direct relationship counts.
+    For an exact classpath-resource match, it queries the existing bounded positive Conditions endpoint and shows only
+    evidence whose source is that configuration class or one of its methods. Missing resources, no exact match, disabled
+    Conditions, and request failures remain explicit non-evidence states; provenance is never inferred.
+  - Graph and list data paths remain independent: the default graph does not fetch the server-paged list, and the list
+    loads only when selected.
+  - Keyboard-navigable: one graph tab stop, arrow/Home/End movement between SVG nodes, Enter/Space to focus, visible
+    focus rings, and an `aria-label` with the full bean name.
+  - Reduced-motion safe: the graph uses a deterministic static layout with no motion or transition.
+  - **Quarkus capture:** capture Arc's resolved injection edges during augmentation and overlay them on the live CDI
+    inventory through the same `BeanSummary.dependencies` contract. Defining resources and Spring Boot Conditions
+    evidence remain explicitly unavailable.
 
 Acceptance criteria:
 
 - A developer can find a bean by name or type.
 - A developer can inspect why a bean matters by seeing dependencies.
 - Large applications remain usable through search and lazy loading.
+- A developer can focus any bean and explore its dependency neighbourhood by clicking through nodes.
+- Cycles, isolated beans, depth limits, node limits, and missing dependency data each produce
+  a deterministic, explained result rather than an error or blank state.
+- The existing list/filter/paging behaviour remains available after switching from the default graph view.
 
 ### 5.3 Conditions Explorer
 

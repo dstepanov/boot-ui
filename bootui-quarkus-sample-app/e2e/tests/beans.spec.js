@@ -4,6 +4,7 @@ import {expect, test} from './fixtures.js'
 test.describe('Beans view (Quarkus)', () => {
   test('lists real Arc/CDI beans and supports filtering by name and classification', async ({openView, page}) => {
     const beansPage = await openView('beans', 'Beans')
+    await beansPage.getByRole('button', {name: 'List view'}).click()
 
     const rows = beansPage.locator('table tbody tr')
     await expect.poll(async () => rows.count()).toBeGreaterThan(5)
@@ -77,6 +78,7 @@ test.describe('Beans view (Quarkus)', () => {
     })
 
     await openView('beans', 'Beans')
+    await page.getByRole('button', {name: 'List view'}).click()
 
     const rows = page.locator('table tbody tr')
     await expect(rows).toHaveCount(200)

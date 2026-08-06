@@ -1,9 +1,27 @@
 // @ts-check
 import {expect, test} from './fixtures.js'
 
+/** Build a minimal BeanList response for route mocking. */
+function beanListResponse(beans, extra = {}) {
+  return {
+    total: beans.length,
+    beans,
+    page: {
+      total: beans.length,
+      matched: beans.length,
+      offset: 0,
+      limit: 2000,
+      returned: beans.length,
+      hasMore: false,
+      ...extra
+    }
+  }
+}
+
 test.describe('Beans view', () => {
   test('lists beans and supports filtering by name and classification', async ({openView}) => {
     const page = await openView('beans', 'Beans')
+    await page.getByRole('button', {name: 'List view'}).click()
 
     const rows = page.locator('table tbody tr')
     await expect.poll(async () => rows.count()).toBeGreaterThan(5)
@@ -13,7 +31,16 @@ test.describe('Beans view', () => {
     await expect(page.locator('table tbody')).toContainText('productRepository')
     await expect.poll(async () => rows.count()).toBeLessThan(10)
 
+    const productGraphLink = page.getByRole('button', {name: 'Show dependency graph for productRepository'})
+    await productGraphLink.focus()
+    await productGraphLink.press('Enter')
+    await expect(page.getByRole('button', {name: 'Dependency graph'})).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByPlaceholder(/Search for a bean/)).toBeFocused()
+    await expect(page.getByPlaceholder(/Search for a bean/)).toHaveValue('productRepository')
+    await expect(page.locator('[aria-label*="productRepository"][aria-pressed="true"]')).toBeVisible()
+
     // Classification filter restricts to a single category (BootUI internals are hidden by default).
+    await page.getByRole('button', {name: 'List view'}).click()
     await page.getByPlaceholder(/Filter by name or type/).fill('')
     await page.locator('select.form-select').selectOption('FRAMEWORK')
     const badges = page.locator('table tbody tr td:nth-child(4) .badge')
@@ -23,6 +50,7 @@ test.describe('Beans view', () => {
         return values.length > 0 && values.every((c) => c === 'FRAMEWORK')
       })
       .toBeTruthy()
+    await expect(page.locator('select.form-select option[value="BOOTUI"]')).toHaveCount(0)
   })
 
   test('keeps large bean lists responsive while filters search the full set', async ({openView, page}) => {
@@ -63,6 +91,7 @@ test.describe('Beans view', () => {
     })
 
     await openView('beans', 'Beans')
+    await page.getByRole('button', {name: 'List view'}).click()
 
     const rows = page.locator('table tbody tr')
     await expect(rows).toHaveCount(200)
@@ -72,5 +101,348 @@ test.describe('Beans view', () => {
     await page.getByPlaceholder(/Filter by name or type/).fill('demoBean204')
     await expect(rows).toHaveCount(1)
     await expect(rows.first()).toContainText('demoBean204')
+  })
+
+  test.describe('dependency graph', () => {
+    /** Minimal bean set: orderService depends on orderRepository and dataSource. */
+    const graphBeans = [
+      {
+        name: 'orderService',
+        type: 'com.example.OrderService',
+        scope: 'singleton',
+        classification: 'APPLICATION',
+        dependencies: ['orderRepository', 'dataSource']
+      },
+      {
+        name: 'orderRepository',
+        type: 'com.example.OrderRepository',
+        scope: 'singleton',
+        classification: 'APPLICATION',
+        dependencies: ['dataSource']
+      },
+      {
+        name: 'dataSource',
+        type: 'com.zaxxer.hikari.HikariDataSource',
+        scope: 'singleton',
+        classification: 'FRAMEWORK',
+        dependencies: []
+      },
+      {
+        name: 'productService',
+        type: 'com.example.ProductService',
+        scope: 'singleton',
+        classification: 'APPLICATION',
+        dependencies: ['orderRepository']
+      }
+    ]
+
+    test('focuses and centers a connected application bean on first open', async ({openView, page}) => {
+      await openView('beans', 'Beans')
+
+      const focusInput = page.getByPlaceholder(/Search for a bean/)
+      await expect(focusInput).not.toHaveValue('')
+      const selectedBean = await focusInput.inputValue()
+      expect(selectedBean).not.toBe('bootUiSampleApplication')
+      const focusNode = page.locator('.bean-graph-svg [aria-pressed="true"]')
+      const graphScroll = page.locator('.bean-graph-scroll')
+      await expect(focusNode).toBeVisible()
+      expect(await focusNode.getAttribute('aria-label')).toContain(selectedBean)
+      expect(await page.locator('.bean-graph-svg .bg-node').count()).toBeGreaterThan(1)
+
+      const [nodeBox, scrollCenter] = await Promise.all([
+        focusNode.boundingBox(),
+        graphScroll.evaluate((element) => {
+          const rect = element.getBoundingClientRect()
+          return {
+            x: rect.left + element.clientLeft + element.clientWidth / 2,
+            y: rect.top + element.clientTop + element.clientHeight / 2
+          }
+        })
+      ])
+      expect(nodeBox).not.toBeNull()
+      expect(Math.abs(nodeBox.x + nodeBox.width / 2 - scrollCenter.x)).toBeLessThan(8)
+      expect(Math.abs(nodeBox.y + nodeBox.height / 2 - scrollCenter.y)).toBeLessThan(8)
+    })
+
+    test('opens in graph mode with application beans selected', async ({openView, page}) => {
+      const requestedLimits = []
+      await page.route('**/bootui/api/beans?*', (route) => {
+        requestedLimits.push(new URL(route.request().url()).searchParams.get('limit'))
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(beanListResponse(graphBeans))
+        })
+      })
+      await openView('beans', 'Beans')
+
+      const graphBtn = page.getByRole('button', {name: 'Dependency graph'})
+      const listBtn = page.getByRole('button', {name: 'List view'})
+      await expect(graphBtn).toBeVisible()
+      await expect(graphBtn).toHaveText(/Graph/)
+      await expect(listBtn).toHaveText(/List/)
+      await expect(graphBtn).toHaveAttribute('aria-pressed', 'true')
+      await expect(page.locator('table')).not.toBeVisible()
+      await expect(page.getByPlaceholder(/Search for a bean/)).toBeVisible()
+      await expect.poll(() => requestedLimits).toContain('1000')
+      await expect(page.locator('#beans-graph-classification')).toHaveValue('APPLICATION')
+      await expect(page.locator('#beans-graph-datalist option')).toHaveCount(3)
+    })
+
+    test('renders the neighbourhood graph after focusing a bean', async ({openView, page}) => {
+      await page.route('**/bootui/api/beans?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(beanListResponse(graphBeans))
+        })
+      )
+      await openView('beans', 'Beans')
+      await page.getByRole('button', {name: 'Dependency graph'}).click()
+
+      // Wait for beans to load (loading text disappears)
+      await expect(page.getByText(/Loading bean graph/)).not.toBeVisible({timeout: 5000})
+
+      // Type a bean name into the search
+      const focusInput = page.getByPlaceholder(/Search for a bean/)
+      await focusInput.fill('orderService')
+      await focusInput.dispatchEvent('change')
+
+      // The SVG graph should appear
+      const graphSvg = page.locator('svg.bean-graph-svg')
+      const graphScroll = page.locator('.bean-graph-scroll')
+      const focusNode = page.locator('[aria-label*="orderService"][aria-pressed="true"]')
+      await expect(graphSvg).toBeVisible()
+      const defaultWidth = Number(await graphSvg.getAttribute('width'))
+      const defaultViewportHeight = await graphScroll.evaluate((element) => element.clientHeight)
+      const defaultScrollHeight = await graphScroll.evaluate((element) => element.scrollHeight)
+
+      await page.getByRole('button', {name: 'Zoom in'}).click()
+      await expect(page.getByRole('button', {name: 'Reset zoom'})).toHaveText('120%')
+      await expect.poll(async () => Number(await graphSvg.getAttribute('width'))).toBeGreaterThan(defaultWidth)
+      await expect.poll(async () => graphScroll.evaluate((element) => element.clientHeight)).toBe(defaultViewportHeight)
+      await expect
+        .poll(async () => graphScroll.evaluate((element) => element.scrollHeight))
+        .toBeGreaterThan(defaultScrollHeight)
+      await page.getByRole('button', {name: 'Reset zoom'}).click()
+      await expect.poll(async () => Number(await graphSvg.getAttribute('width'))).toBe(defaultWidth)
+
+      await page.getByRole('button', {name: 'Zoom out'}).click()
+      await page.getByRole('button', {name: 'Zoom out'}).click()
+      await expect(page.getByRole('button', {name: 'Reset zoom'})).toHaveText('60%')
+      const centerDelta = await page.evaluate(() => {
+        const scroll = document.querySelector('.bean-graph-scroll')
+        const focus = document.querySelector('.bean-graph-svg [aria-pressed="true"]')
+        const scrollRect = scroll.getBoundingClientRect()
+        const focusRect = focus.getBoundingClientRect()
+        return {
+          x: Math.abs(
+            focusRect.left + focusRect.width / 2 - (scrollRect.left + scroll.clientLeft + scroll.clientWidth / 2)
+          ),
+          y: Math.abs(
+            focusRect.top + focusRect.height / 2 - (scrollRect.top + scroll.clientTop + scroll.clientHeight / 2)
+          )
+        }
+      })
+      expect(centerDelta.x).toBeLessThan(2)
+      expect(centerDelta.y).toBeLessThan(2)
+      await page.getByRole('button', {name: 'Reset zoom'}).click()
+
+      // The focused bean node should be present with aria label
+      await expect(focusNode).toBeVisible()
+
+      // The dependency node should also be visible
+      await expect(page.locator('[aria-label*="orderRepository"]')).toBeVisible()
+      await expect(page.locator('[aria-label*="dataSource"]')).not.toBeVisible()
+
+      await page.locator('#beans-graph-classification').selectOption('')
+      await expect(page.locator('[aria-label*="dataSource"]')).toBeVisible()
+    })
+
+    test('shows exact positive condition evidence for a focused bean', async ({openView, page}) => {
+      const beansWithResource = graphBeans.map((bean) =>
+        bean.name === 'orderService'
+          ? {
+              ...bean,
+              resource: 'class path resource [com/example/OrderAutoConfiguration.class]'
+            }
+          : bean
+      )
+      await page.route('**/bootui/api/beans?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(beanListResponse(beansWithResource))
+        })
+      )
+      await page.route('**/bootui/api/conditions?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            positiveMatches: [
+              {
+                autoConfigurationClass: 'com.example.OrderAutoConfiguration',
+                condition: 'OnClassCondition',
+                message: 'Required order classes were found.',
+                outcome: 'MATCH'
+              },
+              {
+                autoConfigurationClass: 'com.example.OtherAutoConfiguration',
+                condition: 'OtherCondition',
+                message: 'Only mentions com.example.OrderAutoConfiguration.',
+                outcome: 'MATCH'
+              }
+            ],
+            negativeMatches: [],
+            unconditionalClasses: [],
+            exclusions: [],
+            page: {total: 2, matched: 2, offset: 0, limit: 1000, returned: 2, hasMore: false}
+          })
+        })
+      )
+      await openView('beans', 'Beans')
+      await page.getByRole('button', {name: 'Dependency graph'}).click()
+
+      const focusInput = page.getByPlaceholder(/Search for a bean/)
+      await focusInput.fill('orderService')
+      await focusInput.press('Enter')
+
+      await expect(page.getByRole('heading', {name: 'Why this bean exists'})).toBeVisible()
+      await expect(page.getByText('Required order classes were found.')).toBeVisible()
+      await expect(page.getByText('OtherCondition')).not.toBeVisible()
+    })
+
+    test('shows an explicit empty state when no beans are available to graph', async ({openView, page}) => {
+      await page.route('**/bootui/api/beans?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(beanListResponse([]))
+        })
+      )
+      await openView('beans', 'Beans')
+      await page.getByRole('button', {name: 'Dependency graph'}).click()
+
+      await expect(page.getByRole('heading', {name: 'No beans available to graph'})).toBeVisible()
+      await expect(page.getByPlaceholder(/Search for a bean/)).not.toBeVisible()
+    })
+
+    test('allows navigating to a neighbour by clicking its node', async ({openView, page}) => {
+      await page.route('**/bootui/api/beans?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(beanListResponse(graphBeans))
+        })
+      )
+      await openView('beans', 'Beans')
+      await page.getByRole('button', {name: 'Dependency graph'}).click()
+      await expect(page.getByText(/Loading bean graph/)).not.toBeVisible({timeout: 5000})
+
+      const focusInput = page.getByPlaceholder(/Search for a bean/)
+      await focusInput.fill('orderService')
+      await focusInput.dispatchEvent('change')
+      await expect(page.locator('svg.bean-graph-svg')).toBeVisible()
+
+      // Click on the orderRepository neighbour node to re-focus
+      await page.locator('[aria-label*="orderRepository"]').first().click()
+
+      // orderRepository should now be the focus node (aria-pressed="true")
+      await expect(page.locator('[aria-label*="orderRepository"][aria-pressed="true"]')).toBeVisible()
+    })
+
+    test('supports roving keyboard navigation and focus selection', async ({openView, page}) => {
+      await page.route('**/bootui/api/beans?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(beanListResponse(graphBeans))
+        })
+      )
+      await openView('beans', 'Beans')
+      await page.getByRole('button', {name: 'Dependency graph'}).click()
+      const focusInput = page.getByPlaceholder(/Search for a bean/)
+      await focusInput.fill('orderService')
+      await focusInput.press('Enter')
+
+      const focusNode = page.locator('.bg-node[aria-pressed="true"]')
+      await focusNode.focus()
+      await focusNode.press('ArrowRight')
+      const movedNode = page.locator('.bg-node:focus')
+      await expect(movedNode).not.toHaveAttribute('aria-pressed', 'true')
+      const movedName = (await movedNode.getAttribute('aria-label')).split('.')[0]
+      await movedNode.press('Enter')
+      await expect(page.locator(`[aria-label^="${movedName}"][aria-pressed="true"]`)).toBeFocused()
+    })
+
+    test('uses a motion-free graph when reduced motion is requested', async ({openView, page}) => {
+      await page.emulateMedia({reducedMotion: 'reduce'})
+      await page.route('**/bootui/api/beans?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(beanListResponse(graphBeans))
+        })
+      )
+      await openView('beans', 'Beans')
+      await page.getByRole('button', {name: 'Dependency graph'}).click()
+      const focusInput = page.getByPlaceholder(/Search for a bean/)
+      await focusInput.fill('orderService')
+      await focusInput.press('Enter')
+
+      const node = page.locator('.bg-node').first()
+      await expect(node).toBeVisible()
+      expect(await node.evaluate((element) => getComputedStyle(element).animationName)).toBe('none')
+      expect(await node.evaluate((element) => getComputedStyle(element).transitionDuration)).toBe('0s')
+    })
+
+    test('returns to list view when the list toggle is clicked', async ({openView, page}) => {
+      await page.route('**/bootui/api/beans?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(beanListResponse(graphBeans))
+        })
+      )
+      await openView('beans', 'Beans')
+      await page.getByRole('button', {name: 'Dependency graph'}).click()
+
+      await page.getByRole('button', {name: 'List view'}).click()
+
+      // The table should be visible again
+      await expect(page.locator('table')).toBeVisible()
+    })
+
+    test('shows a message for beans with no dependency data (reduced fidelity)', async ({openView, page}) => {
+      const emptyDepBeans = [
+        {
+          name: 'isolatedBean',
+          type: 'com.example.IsolatedBean',
+          scope: 'ApplicationScoped',
+          classification: 'APPLICATION',
+          dependencies: []
+        }
+      ]
+      await page.route('**/bootui/api/beans?*', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(beanListResponse(emptyDepBeans))
+        })
+      )
+      await openView('beans', 'Beans')
+      await page.getByRole('button', {name: 'Dependency graph'}).click()
+      await expect(page.getByText(/Loading bean graph/)).not.toBeVisible({timeout: 5000})
+
+      const focusInput = page.getByPlaceholder(/Search for a bean/)
+      await focusInput.fill('isolatedBean')
+      await focusInput.dispatchEvent('change')
+      await expect(page.locator('svg.bean-graph-svg')).toBeVisible()
+      await expect(page.locator('[aria-label*="isolatedBean"][aria-pressed="true"]')).toBeVisible()
+
+      // Keep the selected bean visible while explaining why no edges can be drawn.
+      await expect(page.getByText(/has no recorded dependencies/)).toBeVisible()
+    })
   })
 })

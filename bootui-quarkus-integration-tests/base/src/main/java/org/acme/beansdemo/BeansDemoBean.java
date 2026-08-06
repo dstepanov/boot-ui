@@ -16,7 +16,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 @Unremovable
 public class BeansDemoBean {
 
+    private final BeansDemoDependency dependency;
+
+    public BeansDemoBean(BeansDemoDependency dependency) {
+        this.dependency = dependency;
+    }
+
     public String describe() {
-        return "bootui-quarkus beans panel integration sample";
+        return "bootui-quarkus beans panel integration sample " + dependency.value();
     }
 }

@@ -40,8 +40,8 @@ import org.eclipse.microprofile.config.Config;
  * ported. The <strong>Beans</strong> panel is also lit up (always available like Architecture/Metrics): the
  * shared engine {@code BeansService} reads the live Arc/CDI container through {@code QuarkusBeanProvider}
  * (the Quarkus analogue of the Spring adapter's Actuator-backed provider), with BootUI's own beans filtered
- * out; {@code resource} and inter-bean {@code dependencies} are empty on Quarkus (Arc exposes neither at
- * runtime) and {@code scope} uses the CDI vocabulary. The <strong>Pentesting</strong> (local OWASP hygiene) advisor is also lit up: it reuses the shared
+ * out; Arc injection dependencies are captured at build time, while {@code resource} remains empty and
+ * {@code scope} uses the CDI vocabulary. The <strong>Pentesting</strong> (local OWASP hygiene) advisor is also lit up: it reuses the shared
  * engine {@code PentestingScanner}, whose framework-neutral value comes from two synthetic loopback probes
  * (security headers, cookies, CORS, TRACE, technology disclosure), so the Quarkus adapter supplies only the
  * live server port + context path and a deliberately neutral endpoint/security/config snapshot (the

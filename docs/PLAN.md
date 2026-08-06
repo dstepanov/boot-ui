@@ -64,15 +64,16 @@ Each new panel must:
 
 ## 2. Scope of this workstream
 
-One open feature remains. The §3.1 correlation item has shipped as the **Live Activity** panel; the §3.3 e-mail viewer
+This workstream is complete. The §3.1 correlation item has shipped as the **Live Activity** panel; the §3.3 e-mail viewer
 has shipped too, both as a standalone panel and as a `MAIL` entry type feeding the Live Activity stream; and all five
 §3.4 event-type extensions (Scheduled Task runs, Cache operations, messaging, Mail, and REST call capture) have
-shipped. The bean/dependency graph visualization (§3.2) is the one remaining item in this workstream.
+shipped. The bean/dependency graph visualization (§3.2) has now also shipped as the **graph mode** of the existing Beans
+panel — all features in this workstream are complete.
 
 | Priority | Feature                               | Group         | Primary data source                                | Mutation?         | Origin           |
 | -------- | ------------------------------------- | ------------- | -------------------------------------------------- | ----------------- | ---------------- |
 | Done     | Trace ↔ Log ↔ Request correlation     | Diagnostics   | Existing Traces, Log Tail, and HTTP Exchanges data | No                | Existing roadmap |
-| 1        | Bean / dependency graph visualization | Configuration | Existing Beans and Conditions data                 | No                | Existing roadmap |
+| Done     | Bean / dependency graph visualization | Configuration | Existing Beans and Conditions data                 | No                | Existing roadmap |
 | Done     | E-mail Viewer                         | Services      | Intercepted `JavaMailSender`                       | No (capture only) | New addition     |
 | Done     | Live Activity — REST call capture     | Diagnostics   | Intercepted `RestClient`/`RestTemplate`/`WebClient` | No (capture only) | Shipped |
 | Done     | Live Activity — new event types       | Diagnostics   | Cache, scheduled-task, Kafka, RabbitMQ, JMS, and mail capture sources (see §3.4) | No (capture only) | Cache, Scheduled Tasks, Kafka, RabbitMQ, JMS (Spring), and Mail all shipped |
@@ -84,8 +85,9 @@ pass-through by default, with an explicitly opt-in `bootui.email.dev-trap` mode,
 default (opt-in `bootui.email.mask-content`), a sandboxed HTML preview, and a per-message `.eml` download. All five of
 the §3.4 Live Activity event-type extensions have
 now shipped — Scheduled Task runs, Cache operations, messaging (Kafka and RabbitMQ on both adapters; JMS on Spring), an E-mail Viewer-backed `MAIL` event type, and
-outbound `RestClient`/`RestTemplate`/`WebClient` capture — leaving only the bean/dependency graph visualization (§3.2) as
-the remaining item in this workstream. Each capture-oriented feature keeps pass-through application behaviour by default
+outbound `RestClient`/`RestTemplate`/`WebClient` capture. The bean/dependency graph visualization (§3.2) has shipped as a
+graph mode in the existing Beans panel, completing this workstream. Each capture-oriented feature keeps pass-through
+application behaviour by default
 and makes any dev-trap mode explicitly opt-in.
 
 ## 3. Feature specifications
@@ -117,7 +119,10 @@ Design constraints:
 - Trace propagation is best-effort. Correlation is presented as a convenience, not a guarantee, and must work for the
   common case where Micrometer Tracing/OTLP is active without breaking when it is not.
 
-### 3.2 Bean / dependency graph visualization — Configuration
+### 3.2 Bean / dependency graph visualization — Configuration ✅ Completed
+
+**Status: completed.** Shipped as the **graph mode** of the existing Beans panel (see `docs/FEATURES.md` → *Beans*). The
+original scope and design constraints below are retained for reference.
 
 Layers an Aspire-style relationship view on top of data BootUI already has from the Beans and Conditions panels, without a
 new data source.

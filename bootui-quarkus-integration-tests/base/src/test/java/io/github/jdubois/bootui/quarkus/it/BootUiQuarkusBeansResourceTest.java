@@ -10,6 +10,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -50,5 +51,13 @@ class BootUiQuarkusBeansResourceTest {
         assertThat(types)
                 .as("BootUI's own beans must be filtered out of the Beans panel")
                 .noneMatch(type -> type.startsWith("io.github.jdubois.bootui"));
+
+        JsonNode demoBean = StreamSupport.stream(body.path("beans").spliterator(), false)
+                .filter(bean -> bean.path("type").asText().equals("org.acme.beansdemo.BeansDemoBean"))
+                .findFirst()
+                .orElseThrow();
+        List<String> dependencies = new ArrayList<>();
+        demoBean.path("dependencies").forEach(dependency -> dependencies.add(dependency.asText()));
+        assertThat(dependencies).containsExactly("beansDemoDependency");
     }
 }
