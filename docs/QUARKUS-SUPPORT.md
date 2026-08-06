@@ -180,7 +180,7 @@ Logic lives entirely in `bootui-core` + `bootui-engine`; the Quarkus adapter add
 
 `Memory` · `Live Memory` · `JVM Tuning` · `Heap Dump` · `Threads` (pure JVM MXBeans) · `Metrics` (Micrometer — same API)
 · `Hibernate` advisor (Hibernate ORM + `jakarta.persistence`; rules port directly) · `Vulnerabilities` (classpath Maven
-metadata + OSV) · `Pentesting` · `HTTP Probe` (local HTTP probing) · `AI Usage` · `Traces` (OTLP — a standard;
+metadata + OSV) · `Pentesting` · `HTTP Probe` (local HTTP probing) · `AI Framework` · `Traces` (OTLP — a standard;
 Quarkus/LangChain4j export it) · `GitHub` (`HttpClient`) · `Copilot` · `Claude Code` (read `~/.copilot` / `~/.claude`) ·
 `MCP Server` (**Implemented** — full JSON-RPC bridge: the shared engine `McpDispatcher` owns method routing/gating/tool
 lookup, a thin Jackson-2 `QuarkusMcpEnvelope` codec + `QuarkusMcpTools` catalog + working enable toggle sit behind the
@@ -435,7 +435,7 @@ counterpart; ingredients for dropped/replaced panels are swapped or omitted.
 | `bootui-spring-boot-starter` (dev profile)                                         | activation                             | `bootui-quarkus` extension (dev mode)                                    |
 | `spring-boot-starter-data-jpa` + JPA entities/repos with intentional anti-patterns | Hibernate advisor, DB pools, SQL Trace | `quarkus-hibernate-orm-panache` with the same intentional anti-patterns  |
 | `@RestController`s (Hello/Admin/Sample + `ArchitectureIssuesController`)           | REST API, Mappings, Architecture       | `quarkus-rest` (JAX-RS) resources with equivalent issues                 |
-| `spring-ai-starter-model-ollama` + `ChatController`                                | AI Usage, Traces                       | `quarkus-langchain4j-ollama` + `quarkus-opentelemetry`                   |
+| `spring-ai-starter-model-ollama` + `ChatController`                                | AI Framework, Traces                   | `quarkus-langchain4j-ollama` + `quarkus-opentelemetry`                   |
 | `@Scheduled` `EchoScheduler`                                                       | Scheduled Tasks                        | `quarkus-scheduler` `@Scheduled`                                         |
 | Flyway **and** Liquibase (both, same changelogs)                                   | Flyway, Liquibase                      | `quarkus-flyway` + `quarkus-liquibase` (reuse the migrations/changelogs) |
 | `spring-boot-starter-cache` + Redis                                                | Spring Cache → **Quarkus Cache**       | `quarkus-cache`                                                          |
@@ -518,7 +518,7 @@ Pentesting, HTTP Probe, MCP Server) need no special ingredients — they work ag
 | Vulnerabilities     | as-is       | Port    | OSV scanner + dependency catalog | —                                           |
 | Pentesting          | as-is       | Port    | Pentesting engine                | deliberately empty endpoint inventory (avoids a false-positive `spring-security-web` finding) |
 | HTTP Probe          | as-is       | Port    | HTTP probe service               | —                                           |
-| AI Usage            | as-is       | Port    | TelemetryStore (OTLP)            | —                                           |
+| AI Framework        | as-is       | Port    | TelemetryStore (OTLP)            | —                                           |
 | Traces              | as-is       | Port    | OTLP receiver + TelemetryStore   | —                                           |
 | GitHub              | as-is       | Port    | GitHub `HttpClient` service      | —                                           |
 | Copilot             | as-is       | Port    | CLI log reader                   | —                                           |

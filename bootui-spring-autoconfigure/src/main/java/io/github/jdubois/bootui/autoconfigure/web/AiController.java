@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Read-only API for the BootUI AI Usage panel. Thin Spring adapter over the framework-neutral
+ * Read-only API for the BootUI AI Framework panel. Thin Spring adapter over the framework-neutral
  * {@link AiUsageService} in {@code bootui-engine}.
  *
  * <p>The data is derived from the OTLP spans accumulated in {@link TelemetryStore}. Spring AI and

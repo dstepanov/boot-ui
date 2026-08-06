@@ -14,7 +14,7 @@ import org.eclipse.microprofile.config.Config;
 /**
  * Produces the framework-neutral telemetry <em>read</em> services for the Quarkus adapter — the engine
  * {@link TelemetryStore} and the {@link TracesService} / {@link AiUsageService} that transform the spans
- * it holds into the Traces and AI Usage panel DTOs.
+ * it holds into the Traces and AI Framework panel DTOs.
  *
  * <p>These are produced <strong>unconditionally</strong> (no OpenTelemetry on the classpath required), so
  * the Traces and AI panels are always available on Quarkus and simply render empty when no spans have been

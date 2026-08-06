@@ -11,14 +11,14 @@ the Playwright suite under `e2e/` exercises.
 - A relational Spring Data repository so the Spring Data panel has data to show
   (in-memory H2 by default, PostgreSQL with the `docker` profile).
 - Optional PostgreSQL, Redis, Kafka, and Ollama Docker Compose services (`compose.yaml`, enabled by the `docker`
-  profile) so the Spring Data, Database Connection Pools, Cache, Kafka, AI Usage, and Dev Services panels have
+  profile) so the Spring Data, Database Connection Pools, Cache, Kafka, AI Framework, and Dev Services panels have
   realistic infrastructure to show.
 - Flyway migrations (the `catalog_*` tables) and Liquibase change sets (the separate
   `inventory_*` tables) with two pending updates each so the Flyway and Liquibase actions can be exercised manually.
 - Spring Security, scheduled tasks, custom metrics, and a small static welcome
   page so the corresponding BootUI panels are populated.
 - Local diagnostics for Architecture, Pentesting, Vulnerabilities, Traces,
-  HTTP Exchanges, Security Logs, Threads, GraalVM, AI Usage, Heap Dump, and other release-supported panels.
+  HTTP Exchanges, Security Logs, Threads, GraalVM, AI Framework, Heap Dump, and other release-supported panels.
 
 ## Prerequisites
 
@@ -40,7 +40,7 @@ download is needed:
 `dev` is the default Spring profile ([`application-dev.properties`](src/main/resources/application-dev.properties)), so
 it applies whenever no other profile is active (a bare run, the Playwright e2e suite, etc.); pass
 `-Dspring-boot.run.profiles=dev` explicitly for the same result. Most panels work normally, including Configuration,
-Database, Spring Data, Flyway, Liquibase, and Cache. The Chat and AI Usage panels report that AI is unavailable,
+Database, Spring Data, Flyway, Liquibase, and Cache. The Chat and AI Framework panels report that AI is unavailable,
 and Dev Services lists no containers. The published [`jdubois/bootui-sample-app`](../docs/TRY-SAMPLE-APP.md) Docker image
 runs this same Docker-free `dev` profile.
 
@@ -72,7 +72,7 @@ Useful URLs:
 ## Suggested walkthrough
 
 This walkthrough follows the default Docker-free `dev` mode (a bare `spring-boot:run`). The Dev Services, Cache,
-and AI Usage steps note where the `docker` profile adds Postgres/Redis/Ollama-backed behavior.
+and AI Framework steps note where the `docker` profile adds Postgres/Redis/Ollama-backed behavior.
 
 1. **Overview and GitHub** — confirm BootUI is active (the activation reason is `devtools` for a bare run, or
    `profile=dev` when you pass the profile explicitly), localhost-only is `true`, and the local GitHub origin is
@@ -117,7 +117,7 @@ and AI Usage steps note where the `docker` profile adds Postgres/Redis/Ollama-ba
     inbound requests, and run explicit local scans as development hygiene prompts.
 17. **HTTP Probe** — send a request to `/api/echo`, then try to send one to an
     external host and confirm it is rejected as non-loopback.
-18. **AI Usage** — the Chat and AI Usage panels report AI is unavailable in the
+18. **AI Framework** — the Chat and AI Framework panels report AI is unavailable in the
     default mode; with the `docker` profile, exercise the sample AI endpoints and
     local AI helper paths, then inspect the retained in-memory spans and token summaries.
 19. **DevTools, Dev Services, Copilot, Claude Code** — confirm the developer-tool panels show local status, bounded service

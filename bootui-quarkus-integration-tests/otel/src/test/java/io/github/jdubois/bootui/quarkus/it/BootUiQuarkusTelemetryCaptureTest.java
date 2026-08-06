@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * Proves the Quarkus in-process span-capture pipeline end to end: a GenAI-style span emitted through the
  * real OpenTelemetry SDK is delivered to the BootUI {@code SpanProcessor} (registered by the extension's
  * OpenTelemetry-capability build step), normalized by the engine {@code BootUiSpanExporter}, stored in the
- * shared {@code TelemetryStore}, and surfaced on the Traces and AI Usage panels — with no OTLP receiver and
+ * shared {@code TelemetryStore}, and surfaced on the Traces and AI Framework panels — with no OTLP receiver and
  * no network (see {@code application.properties}: {@code quarkus.otel.traces.exporter=none}).
  *
  * <p>This is the OpenTelemetry-<em>present</em> half of the telemetry coverage; the sibling

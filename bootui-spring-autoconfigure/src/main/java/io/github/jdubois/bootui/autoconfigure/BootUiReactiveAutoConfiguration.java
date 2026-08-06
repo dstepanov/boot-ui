@@ -531,7 +531,7 @@ public class BootUiReactiveAutoConfiguration {
     /**
      * Duplicates {@link BootUiAutoConfiguration#bootUiTelemetryStore}: a plain
      * {@code new TelemetryStore(...)} with no stack-specific dependency, needed by
-     * {@link BootUiOpenTelemetryConfiguration} and the Traces/AI Usage/OTLP controllers. Deliberately
+     * {@link BootUiOpenTelemetryConfiguration} and the Traces/AI Framework/OTLP controllers. Deliberately
      * does not also duplicate {@code bootUiTelemetryStoreIdleReclaimable} &mdash; the idle-reclaim
      * feature needs a reactive {@code ConsoleActivityFilter}/{@code ConsoleActivityTracker} port that is
      * deferred; without it, span capture simply never suspends while idle (a resource-usage gap, not a
@@ -833,7 +833,7 @@ public class BootUiReactiveAutoConfiguration {
      * the OpenTelemetry SDK being present, exactly like {@link BootUiOpenTelemetryConfiguration} and
      * Quarkus's own {@code Capability.OPENTELEMETRY_TRACER} gate - deliberately <em>not</em> also gated on
      * {@code bootui.telemetry.enabled} (that property governs BootUI's own span capture for the
-     * Traces/AI Usage panels, a separate concern from reading the id of a span the application's own
+     * Traces/AI Framework panels, a separate concern from reading the id of a span the application's own
      * tracing already started). When OpenTelemetry is absent, every capture point keeps its existing
      * behavior unchanged (MDC-based for SQL, header-derived for HTTP exchanges, none for
      * exceptions/security events).</p>

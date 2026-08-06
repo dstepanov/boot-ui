@@ -3,7 +3,7 @@
  * span buffer, the in-process OpenTelemetry {@link io.github.jdubois.bootui.engine.telemetry.BootUiSpanExporter},
  * the self-traffic {@link io.github.jdubois.bootui.engine.telemetry.SelfTelemetryClassifier}, and the
  * {@link io.github.jdubois.bootui.engine.telemetry.TracesService} / {@link io.github.jdubois.bootui.engine.telemetry.AiUsageService}
- * read models that transform normalized spans into BootUI core DTOs for the Traces and AI Usage panels.
+ * read models that transform normalized spans into BootUI core DTOs for the Traces and AI Framework panels.
  *
  * <p>Plain Java plus the OpenTelemetry SDK (an optional dependency, concentrated in
  * {@link io.github.jdubois.bootui.engine.telemetry.BootUiSpanExporter}); no framework or transport types.

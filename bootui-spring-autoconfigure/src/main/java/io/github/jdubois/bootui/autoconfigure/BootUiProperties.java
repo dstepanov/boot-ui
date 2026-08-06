@@ -167,7 +167,7 @@ public class BootUiProperties {
      */
     private Telemetry telemetry = new Telemetry();
     /**
-     * AI Usage panel settings.
+     * AI Framework panel settings.
      */
     private Ai ai = new Ai();
     /**

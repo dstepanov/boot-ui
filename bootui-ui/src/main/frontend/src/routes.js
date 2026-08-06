@@ -621,6 +621,29 @@ export const routes = [
     }
   },
   {
+    path: '/ai',
+    name: 'ai',
+    component: Ai,
+    meta: {
+      group: groups.services,
+      icon: 'bi-cpu',
+      title: 'AI Framework',
+      shortcut: 'ai',
+      keywords: [
+        'llm',
+        'spring ai',
+        'langchain4j',
+        'tokens',
+        'gpt',
+        'openai',
+        'chat model',
+        'genai',
+        'embeddings',
+        'prompts'
+      ]
+    }
+  },
+  {
     path: '/cache',
     name: 'cache',
     component: SpringCache,
@@ -709,29 +732,6 @@ export const routes = [
         'topic',
         'producer',
         'consumer'
-      ]
-    }
-  },
-  {
-    path: '/ai',
-    name: 'ai',
-    component: Ai,
-    meta: {
-      group: groups.services,
-      icon: 'bi-cpu',
-      title: 'AI Usage',
-      shortcut: 'ai',
-      keywords: [
-        'llm',
-        'spring ai',
-        'langchain4j',
-        'tokens',
-        'gpt',
-        'openai',
-        'chat model',
-        'genai',
-        'embeddings',
-        'prompts'
       ]
     }
   },

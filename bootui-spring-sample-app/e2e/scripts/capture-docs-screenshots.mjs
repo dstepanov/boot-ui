@@ -88,8 +88,8 @@ const panelOrder = [
   ['vulnerabilities', 'Vulnerabilities'],
   ['scheduled', 'Scheduled Tasks'],
   ['rest-client-trace', 'REST Client'],
+  ['ai', 'AI Framework'],
   ['cache', 'Cache'],
-  ['ai', 'AI Usage'],
   ['activity', 'Live Activity'],
   ['traces', 'Traces'],
   ['log-tail', 'Log Tail'],
@@ -3924,8 +3924,8 @@ const screenshots = [
       await page.getByText('Call site').waitFor()
     }
   ],
+  ['ai', 'AI Framework', 'bootui-ai.webp', waitForText('Token usage')],
   ['cache', 'Cache', 'bootui-cache.webp', waitForText('sample-products')],
-  ['ai', 'AI Usage', 'bootui-ai.webp', waitForText('Token usage')],
   [
     'activity',
     'Live Activity',

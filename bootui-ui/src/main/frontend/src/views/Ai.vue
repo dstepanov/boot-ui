@@ -410,7 +410,7 @@ const detectedFrameworkLabel = computed(() => {
   <div>
     <PanelHeader
       icon="bi-cpu"
-      title="AI Usage"
+      title="AI Framework"
       :subtitle="overview ? detectedFrameworkLabel : null"
       :loading="loading"
       :error="error"

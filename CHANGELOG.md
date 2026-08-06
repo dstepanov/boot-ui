@@ -7,6 +7,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Renamed the AI Usage panel to AI Framework and placed it directly after REST Client in the Services group. The existing
+  `ai` route, `/bootui/api/ai/**` contract, and `bootui.ai.*` / `bootui.panels.ai.*` property keys remain stable.
+
 ## [1.12.0] - 2026-07-12
 
 Security and hardening release that adds authenticated remote API access, brings the MCP Server to Spring WebFlux,

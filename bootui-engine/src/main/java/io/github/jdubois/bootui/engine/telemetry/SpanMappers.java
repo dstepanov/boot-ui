@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Shared mappers from normalized spans/events to the immutable DTOs the Traces and AI Usage panels
+ * Shared mappers from normalized spans/events to the immutable DTOs the Traces and AI Framework panels
  * serialize. Centralized so both {@link TracesService} and {@link AiUsageService} stay in sync.
  */
 public final class SpanMappers {

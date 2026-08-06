@@ -44,7 +44,7 @@ const PANEL_HEADINGS = {
   vulnerabilities: /^Vulnerabilities/,
   scheduled: /Scheduled Tasks/,
   cache: /^Cache$/,
-  ai: /AI Usage/,
+  ai: /AI Framework/,
   traces: /^Traces/,
   'log-tail': /Log Tail/,
   exceptions: /^Exceptions/,

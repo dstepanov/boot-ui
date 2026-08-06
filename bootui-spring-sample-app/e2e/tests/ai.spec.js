@@ -72,11 +72,11 @@ const detail = {
   contentBanner: 'Message content is not on this span.'
 }
 
-test.describe('AI Usage view', () => {
+test.describe('AI Framework view', () => {
   test('renders AI token usage, model breakdowns, and chat detail', async ({openView, page}) => {
     await stubAi(page, overview)
 
-    await openView('ai', /AI Usage/)
+    await openView('ai', /AI Framework/)
     await expect(page.getByText('Spring AI detected')).toBeVisible()
     await expect(page.locator('.kpi-card-body', {hasText: 'Total tokens'}).getByText('49', {exact: true})).toBeVisible()
     await expect(page.locator('.card', {hasText: 'Usage by model'}).getByText('qwen2.5:0.5b')).toBeVisible()
@@ -211,7 +211,7 @@ async function stubShell(page, aiAvailable) {
           panels: [
             {
               id: 'ai',
-              title: 'AI Usage',
+              title: 'AI Framework',
               available: aiAvailable,
               unavailableReason: aiAvailable ? null : 'AI usage unavailable in this test state'
             }

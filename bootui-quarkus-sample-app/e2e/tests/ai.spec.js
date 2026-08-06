@@ -83,11 +83,11 @@ const detail = {
   contentBanner: 'Message content is not on this span.'
 }
 
-test.describe('AI Usage view (Quarkus)', () => {
+test.describe('AI Framework view (Quarkus)', () => {
   test('renders AI token usage, model breakdowns, and chat detail', async ({openView, page}) => {
     await stubAi(page, overview)
 
-    await openView('ai', 'AI Usage')
+    await openView('ai', 'AI Framework')
     // Quarkus reports LangChain4j (not Spring AI) as the detected framework.
     await expect(page.getByText('LangChain4j detected')).toBeVisible()
     await expect(page.locator('.kpi-card-body', {hasText: 'Total tokens'}).getByText('49', {exact: true})).toBeVisible()
@@ -117,7 +117,7 @@ test.describe('AI Usage view (Quarkus)', () => {
       contentBanner: null
     })
 
-    await openView('ai', 'AI Usage')
+    await openView('ai', 'AI Framework')
     await expect(page.getByText('Enable BootUI telemetry capture', {exact: true})).toBeVisible()
     await expect(page.getByText('No AI chat completions recorded yet')).toHaveCount(0)
   })
@@ -136,7 +136,7 @@ test.describe('AI Usage view (Quarkus)', () => {
       recent: []
     })
 
-    await openView('ai', 'AI Usage')
+    await openView('ai', 'AI Framework')
     await expect(page.getByText('No AI chat completions recorded yet')).toBeVisible()
     await expect(page.getByText('Telemetry ready')).toBeVisible()
     await expect(page.getByText('Enable BootUI telemetry capture')).toHaveCount(0)
@@ -159,7 +159,7 @@ test.describe('AI Usage view (Quarkus)', () => {
       contentBanner: null
     })
 
-    await openView('ai', 'AI Usage')
+    await openView('ai', 'AI Framework')
     // The static checklist heading is Quarkus-specific: only LangChain4j applies (no Spring AI).
     await expect(page.getByText('LangChain4j on classpath', {exact: true})).toBeVisible()
     await expect(page.getByText('No AI framework is detected. Add')).toBeVisible()
