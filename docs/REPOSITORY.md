@@ -11,6 +11,7 @@
 - `bootui-conformance`: shared HTTP contract suite and golden panel manifests for all adapters.
 - `bootui-spring-sample-app`: Spring MVC sample app + Playwright e2e coverage.
 - `bootui-spring-webflux-sample-app`: Spring WebFlux sample app.
+- `bootui-quarkus-parent`: shared Quarkus LTS BOM and plugin management.
 - `bootui-quarkus`: Quarkus runtime adapter.
 - `bootui-quarkus-deployment`: Quarkus build-time wiring module.
 - `bootui-quarkus-integration-tests`: Quarkus `@QuarkusTest` suites.
@@ -24,9 +25,10 @@ Spring Boot and Quarkus compatibility references for the published adapters shou
 - `quarkus.platform.version`
 
 When these are updated, refresh matching documentation references in the same pull request (`README.md`,
-`docs/SETUP.md`, `docs/FEATURES.md`, and `.github/copilot-instructions.md`).
-The non-published Quarkus sample app keeps a separate platform pin aligned with its Quarkus LangChain4j dependency;
-that demo-specific pin is not the public compatibility version.
+`docs/SETUP.md`, `docs/FEATURES.md`, and `.github/copilot-instructions.md`). All Quarkus modules inherit
+`bootui-quarkus-parent`, which imports the Quarkus BOM closer than the root parent imports Spring Boot's BOM. This keeps
+the two frameworks' shared transitive dependencies isolated while giving the extension, tests, and sample app one
+Quarkus LTS version.
 
 ## Documentation website
 

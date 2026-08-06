@@ -6,26 +6,15 @@
 
     <parent>
         <groupId>com.julien-dubois.bootui</groupId>
-        <artifactId>bootui-parent</artifactId>
+        <artifactId>bootui-quarkus-parent</artifactId>
         <version>1.12.0</version>
+        <relativePath>../bootui-quarkus-parent/pom.xml</relativePath>
     </parent>
 
     <artifactId>bootui-quarkus-deployment</artifactId>
     <name>BootUI :: Quarkus Extension (Deployment)</name>
     <description>Build-time half of the BootUI Quarkus extension: registers the console's beans, JAX-RS
         resources and the safety filter, and gates them to non-production launch modes.</description>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>io.quarkus</groupId>
-                <artifactId>quarkus-bom</artifactId>
-                <version>${quarkus.platform.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 
     <dependencies>
         <!-- Arc deployment brings AdditionalBeanBuildItem + the core deployment API (Feature/IndexDependency/

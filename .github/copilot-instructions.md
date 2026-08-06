@@ -30,6 +30,7 @@ bootui-spring-boot-starter  Drop-in dependency (autoconfigure + ui + spring-boot
 bootui-spring-sample-app           Reference Spring Boot 4 app for demos + Playwright e2e
 
 # Quarkus adapter
+bootui-quarkus-parent       Shared Quarkus LTS BOM + plugin management (keeps it nearer than the Spring Boot BOM)
 bootui-quarkus              Runtime: JAX-RS resources + SPI impls + CDI @Produces + Vert.x safety filter
 bootui-quarkus-deployment   Build-time wiring (build steps, bean registration, prod gating)
 bootui-quarkus-integration-tests   @QuarkusTest conformance + smoke (Docker-free)
@@ -77,12 +78,14 @@ Load-bearing rules:
 
 - Java 17 (compiler `release` 17, `-parameters`). Maven Wrapper (`./mvnw`), Maven 3.9.16; do not require a system Maven.
 - Spring Boot 4.1.x (`spring-boot.version` in root `pom.xml`; currently 4.1.0).
-- Quarkus 3.37.x for the extension and integration suites (`quarkus.platform.version` in the root `pom.xml`; currently
-  3.37.2). The Quarkus sample app has a separate platform pin aligned with its Quarkus LangChain4j dependency.
+- Quarkus 3.33 LTS for the runtime, deployment, integration suites, and sample app
+  (`quarkus.platform.version` in the root `pom.xml`; currently 3.33.3.1). They all inherit
+  `bootui-quarkus-parent`, whose nearer Quarkus BOM overrides the root parent's Spring Boot BOM only for Quarkus modules.
+  Keep the sample app's Quarkus LangChain4j BOM compatible with this shared LTS line.
 - Published Maven coordinates use `com.julien-dubois.bootui:*`; Java packages remain `io.github.jdubois.bootui.*`.
 - Node.js / npm for the packaged Vue app are downloaded automatically by the `frontend-maven-plugin` (`node.version` /
   `npm.version` in root `pom.xml`); do not add a manual Node install step for the Maven build.
-- **JDK caveat for the Quarkus sample app:** Hibernate ORM's build-time ByteBuddy enhancement (via its pinned Quarkus
+- **JDK caveat for the Quarkus sample app:** Hibernate ORM's build-time ByteBuddy enhancement (via the shared Quarkus
   platform) cannot read class files newer than the JDKs that platform supports (17, 21 and 25). So `bootui-quarkus-sample-app`
   stays in the always-on reactor (so IDEs such as IntelliJ import it on any JDK), but its Hibernate/Quarkus build-time
   augmentation is gated: a `skip-quarkus-build-on-unsupported-jdk` profile (`<jdk>[26,)</jdk>`) in the module's own pom
@@ -699,7 +702,7 @@ hide newer ones. Keep API, UI,
 
 Subtle constraints that have burned past releases — preserve them when touching `pom.xml` files or the release profile.
 The published artifacts are the shared modules and both adapters (`bootui-core`, `-engine`, `-ui`,
-`-spring-autoconfigure`, `-spring-boot-starter`, `-quarkus`, `-quarkus-deployment`); the demo/test modules (`bootui-spring-sample-app`,
+`-spring-autoconfigure`, `-spring-boot-starter`, `-quarkus-parent`, `-quarkus`, `-quarkus-deployment`); the demo/test modules (`bootui-spring-sample-app`,
 `bootui-quarkus-sample-app`, `bootui-quarkus-integration-tests`, `bootui-conformance`) set
 `<maven.deploy.skip>true</maven.deploy.skip>` — they must still build so the publishing plugin sees the full reactor, but
 must not be published.
