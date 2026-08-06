@@ -75,7 +75,12 @@ watch(filter, scheduleReload)
     <PanelHeader icon="bi-journal-text" title="Loggers" :error="error" />
     <ReadOnlyNotice v-if="readOnly" :reason="readOnlyReason">Logger levels are read-only.</ReadOnlyNotice>
     <FlashBanner :message="message" @dismiss="clear" />
-    <input v-model="filter" class="form-control mb-3" placeholder="Filter loggers by name…" />
+    <input
+      v-model="filter"
+      aria-label="Filter loggers"
+      class="form-control mb-3"
+      placeholder="Filter loggers by name…"
+    />
     <p v-if="data" class="small text-muted">{{ matchedCount }} of {{ totalCount }} loggers matched</p>
     <div class="table-responsive">
       <table class="table table-sm table-hover loggers-table">

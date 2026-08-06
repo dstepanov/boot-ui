@@ -227,6 +227,7 @@ function showReadOnlyMessage() {
           </h5>
           <input
             v-model="cacheFilter"
+            aria-label="Filter caches"
             class="form-control form-control-sm cache-filter"
             placeholder="Filter by manager, cache, or implementation…"
           />
@@ -296,6 +297,7 @@ function showReadOnlyMessage() {
           </h5>
           <input
             v-model="operationFilter"
+            aria-label="Filter cache operations"
             class="form-control form-control-sm cache-filter"
             placeholder="Filter by bean, method, operation, or cache…"
           />

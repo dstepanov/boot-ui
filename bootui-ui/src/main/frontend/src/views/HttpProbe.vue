@@ -3,12 +3,14 @@ import {apiFetch} from '../api.js'
 import {computed, inject, ref} from 'vue'
 import {panelProps, usePanelState} from '../utils/panelState.js'
 import {formatLoadError} from '../utils/loadError.js'
+import {useConfirm} from '../utils/useConfirm.js'
 import PanelHeader from './components/PanelHeader.vue'
 import ReadOnlyNotice from './components/ReadOnlyNotice.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
 
 const props = defineProps(panelProps)
 const {readOnly, readOnlyReason} = usePanelState(props)
+const {confirm} = useConfirm()
 const panels = inject('panels', ref(null))
 const frameworkLabel = computed(() => (panels.value?.platform === 'quarkus' ? 'Quarkus' : 'Spring Boot'))
 const probeSubtitle = computed(
@@ -18,9 +20,11 @@ const method = ref('GET')
 const path = ref('')
 const requestBody = ref('')
 const loading = ref(false)
+const confirming = ref(false)
 const response = ref(null)
 
 const methodsWithBody = ['POST', 'PUT', 'PATCH']
+const safeMethods = new Set(['GET', 'HEAD'])
 
 const showRequestBody = computed(() => methodsWithBody.includes(method.value))
 
@@ -52,7 +56,8 @@ const statusBadgeClass = computed(() => {
 })
 
 async function sendProbe() {
-  if (readOnly.value) {
+  if (readOnly.value || loading.value || confirming.value) {
+    if (!readOnly.value) return
     response.value = {
       status: 0,
       statusText: 'Read-only',
@@ -63,17 +68,34 @@ async function sendProbe() {
     }
     return
   }
+  const request = {
+    method: method.value,
+    path: normalizePath(path.value),
+    body: showRequestBody.value && requestBody.value ? requestBody.value : null,
+    headers: requestHeaders.value
+  }
+  if (!safeMethods.has(request.method)) {
+    confirming.value = true
+    let confirmed
+    try {
+      confirmed = await confirm({
+        title: `Send ${request.method} request?`,
+        message: 'This request may change state in your running app. Review the method and path before continuing.',
+        resource: `${request.method} ${request.path}`,
+        confirmLabel: `Send ${request.method}`,
+        danger: true
+      })
+    } finally {
+      confirming.value = false
+    }
+    if (!confirmed) return
+  }
   loading.value = true
   try {
     const res = await apiFetch('api/http-probe', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        method: method.value,
-        path: normalizePath(path.value),
-        body: showRequestBody.value && requestBody.value ? requestBody.value : null,
-        headers: requestHeaders.value
-      })
+      body: JSON.stringify(request)
     })
     response.value = await res.json()
   } catch (error) {
@@ -102,6 +124,7 @@ function clearForm() {
   requestBody.value = ''
   response.value = null
   loading.value = false
+  confirming.value = false
 }
 </script>
 
@@ -109,12 +132,12 @@ function clearForm() {
   <div>
     <PanelHeader icon="bi-send" title="HTTP Probe" :subtitle="probeSubtitle">
       <template #actions>
-        <button :disabled="loading" class="btn btn-outline-secondary" @click="clearForm">
+        <button :disabled="loading || confirming" class="btn btn-outline-secondary" @click="clearForm">
           <i class="bi bi-x-circle me-1"></i>Clear
         </button>
         <SpinnerButton
           :loading="loading"
-          :disabled="loading || readOnly"
+          :disabled="loading || confirming || readOnly"
           class="btn btn-primary"
           icon="bi-send"
           label="Send"
@@ -131,9 +154,10 @@ function clearForm() {
       <div class="card-body">
         <div class="row g-3 align-items-start">
           <div class="col-md-3 col-lg-2">
-            <label class="form-label">Method</label>
-            <select v-model="method" class="form-select">
+            <label class="form-label" for="http-probe-method">Method</label>
+            <select id="http-probe-method" v-model="method" class="form-select">
               <option value="GET">GET</option>
+              <option value="HEAD">HEAD</option>
               <option value="POST">POST</option>
               <option value="PUT">PUT</option>
               <option value="DELETE">DELETE</option>
@@ -141,8 +165,9 @@ function clearForm() {
             </select>
           </div>
           <div class="col-md-9 col-lg-10">
-            <label class="form-label">Path</label>
+            <label class="form-label" for="http-probe-path">Path</label>
             <input
+              id="http-probe-path"
               v-model="path"
               class="form-control font-monospace"
               placeholder="/api/sample/hello"
@@ -153,8 +178,9 @@ function clearForm() {
         </div>
 
         <div v-if="showRequestBody" class="mt-3">
-          <label class="form-label">Request body</label>
+          <label class="form-label" for="http-probe-body">Request body</label>
           <textarea
+            id="http-probe-body"
             v-model="requestBody"
             class="form-control font-monospace"
             placeholder='{

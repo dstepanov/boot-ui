@@ -6,8 +6,9 @@
 
     <parent>
         <groupId>com.julien-dubois.bootui</groupId>
-        <artifactId>bootui-parent</artifactId>
+        <artifactId>bootui-quarkus-parent</artifactId>
         <version>1.12.0</version>
+        <relativePath>../bootui-quarkus-parent/pom.xml</relativePath>
     </parent>
 
     <artifactId>bootui-quarkus-sample-app</artifactId>
@@ -26,36 +27,20 @@
         unsupported JDK stays green. On a supported JDK the app builds and augments normally; run/demo it with
         `./mvnw -pl bootui-quarkus-sample-app -am install` (or `quarkus:dev`) on a JDK 17/21/25.
 
-        Versions below (Quarkus platform, LangChain4j) stay aligned with each other for demo compatibility and are
-        independent of the published extension's platform property in the root pom.
+        The Quarkus platform comes from the shared Quarkus parent. The sample keeps only its additional
+        LangChain4j BOM, whose 1.12.1 release targets the same Quarkus 3.33 LTS line.
     -->
 
     <properties>
         <!-- Demo/integration module only: never publish to Maven Central (mirrors bootui-spring-sample-app). -->
         <maven.deploy.skip>true</maven.deploy.skip>
 
-        <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
-        <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
-        <!-- 3.33 LTS targets Java 17/21/25, matching this repo's java.version. Bump as needed. -->
-        <quarkus.platform.version>3.38.0</quarkus.platform.version>
-        <!-- Align with the Quarkus platform above: quarkus-langchain4j 1.11.2 targets Quarkus 3.33.2. -->
+        <!-- Quarkus LangChain4j 1.12.1 targets Quarkus 3.33.2 and is compatible with LTS patch releases. -->
         <quarkus-langchain4j.version>1.12.1</quarkus-langchain4j.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
-            <!--
-                Import the Quarkus platform BOM in THIS module's dependencyManagement so Quarkus
-                artifacts resolve from it (nearest-wins) rather than from the Spring Boot BOM that
-                bootui-parent imports. Keep an eye on shared transitive artifacts (Jackson, JUnit).
-            -->
-            <dependency>
-                <groupId>${quarkus.platform.group-id}</groupId>
-                <artifactId>${quarkus.platform.artifact-id}</artifactId>
-                <version>${quarkus.platform.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
             <dependency>
                 <groupId>io.quarkiverse.langchain4j</groupId>
                 <artifactId>quarkus-langchain4j-bom</artifactId>
@@ -173,13 +158,13 @@
             <artifactId>quarkus-micrometer-registry-prometheus</artifactId>
         </dependency>
 
-        <!-- Tracing: feeds the Traces panel (and AI Usage GenAI spans) via OpenTelemetry. -->
+        <!-- Tracing: feeds the Traces panel (and AI Framework GenAI spans) via OpenTelemetry. -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-opentelemetry</artifactId>
         </dependency>
 
-        <!-- AI: LangChain4j + Ollama, drives the AI Usage panel. -->
+        <!-- AI: LangChain4j + Ollama, drives the AI Framework panel. -->
         <dependency>
             <groupId>io.quarkiverse.langchain4j</groupId>
             <artifactId>quarkus-langchain4j-ollama</artifactId>
@@ -207,9 +192,8 @@
     <build>
         <plugins>
             <plugin>
-                <groupId>${quarkus.platform.group-id}</groupId>
+                <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-maven-plugin</artifactId>
-                <version>${quarkus.platform.version}</version>
                 <extensions>true</extensions>
                 <executions>
                     <execution>
@@ -244,7 +228,7 @@
             <build>
                 <plugins>
                     <plugin>
-                        <groupId>${quarkus.platform.group-id}</groupId>
+                        <groupId>io.quarkus</groupId>
                         <artifactId>quarkus-maven-plugin</artifactId>
                         <executions>
                             <execution>

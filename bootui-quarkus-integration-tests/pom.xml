@@ -6,8 +6,9 @@
 
     <parent>
         <groupId>com.julien-dubois.bootui</groupId>
-        <artifactId>bootui-parent</artifactId>
+        <artifactId>bootui-quarkus-parent</artifactId>
         <version>1.12.0</version>
+        <relativePath>../bootui-quarkus-parent/pom.xml</relativePath>
     </parent>
 
     <artifactId>bootui-quarkus-integration-tests-aggregator</artifactId>

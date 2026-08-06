@@ -30,6 +30,7 @@ bootui-spring-boot-starter  Drop-in dependency (autoconfigure + ui + spring-boot
 bootui-spring-sample-app           Reference Spring Boot 4 app for demos + Playwright e2e
 
 # Quarkus adapter
+bootui-quarkus-parent       Shared Quarkus LTS BOM + plugin management (keeps it nearer than the Spring Boot BOM)
 bootui-quarkus              Runtime: JAX-RS resources + SPI impls + CDI @Produces + Vert.x safety filter
 bootui-quarkus-deployment   Build-time wiring (build steps, bean registration, prod gating)
 bootui-quarkus-integration-tests   @QuarkusTest conformance + smoke (Docker-free)
@@ -77,12 +78,14 @@ Load-bearing rules:
 
 - Java 17 (compiler `release` 17, `-parameters`). Maven Wrapper (`./mvnw`), Maven 3.9.16; do not require a system Maven.
 - Spring Boot 4.1.x (`spring-boot.version` in root `pom.xml`; currently 4.1.0).
-- Quarkus 3.37.x for the extension and integration suites (`quarkus.platform.version` in the root `pom.xml`; currently
-  3.37.2). The Quarkus sample app has a separate platform pin aligned with its Quarkus LangChain4j dependency.
+- Quarkus 3.33 LTS for the runtime, deployment, integration suites, and sample app
+  (`quarkus.platform.version` in the root `pom.xml`; currently 3.33.3.1). They all inherit
+  `bootui-quarkus-parent`, whose nearer Quarkus BOM overrides the root parent's Spring Boot BOM only for Quarkus modules.
+  Keep the sample app's Quarkus LangChain4j BOM compatible with this shared LTS line.
 - Published Maven coordinates use `com.julien-dubois.bootui:*`; Java packages remain `io.github.jdubois.bootui.*`.
 - Node.js / npm for the packaged Vue app are downloaded automatically by the `frontend-maven-plugin` (`node.version` /
   `npm.version` in root `pom.xml`); do not add a manual Node install step for the Maven build.
-- **JDK caveat for the Quarkus sample app:** Hibernate ORM's build-time ByteBuddy enhancement (via its pinned Quarkus
+- **JDK caveat for the Quarkus sample app:** Hibernate ORM's build-time ByteBuddy enhancement (via the shared Quarkus
   platform) cannot read class files newer than the JDKs that platform supports (17, 21 and 25). So `bootui-quarkus-sample-app`
   stays in the always-on reactor (so IDEs such as IntelliJ import it on any JDK), but its Hibernate/Quarkus build-time
   augmentation is gated: a `skip-quarkus-build-on-unsupported-jdk` profile (`<jdk>[26,)</jdk>`) in the module's own pom
@@ -360,7 +363,7 @@ catalogue of panel ids used by the API access filters and per-adapter availabili
 `QuarkusPanelAvailability`; `docs/QUARKUS-SUPPORT.md` is the prose source for Quarkus-live status (`docs/FEATURES.md` does
 not yet carry a per-platform column). The `/bootui/api/panels` manifest (`PanelsReport`) also carries a top-level
 `platform` discriminator (`spring-boot` | `quarkus`, set by each adapter's manifest builder) so the shared Vue UI can
-render framework-correct setup/empty-state copy (e.g. Traces and AI Usage point Quarkus users at in-process
+render framework-correct setup/empty-state copy (e.g. Traces and AI Framework point Quarkus users at in-process
 `quarkus-opentelemetry` capture instead of the embedded OTLP receiver). The UI reads it via `inject('panels')` and
 **defaults to `spring-boot` when absent** — keep that field populated in both adapters and in the conformance fixtures
 (`expected-panels-spring.json` / `expected-panels-quarkus.json`). The stance is to harden **all visible panels**, not
@@ -373,7 +376,7 @@ hide newer ones. Keep API, UI,
 - **Configuration**: Configuration, Profile Diff, Loggers, Beans, Conditions, Mappings
 - **Database**: Database Connection Pools, SQL Trace, Spring Data, Flyway, Liquibase
 - **Security**: Spring Security, Security Logs
-- **Services**: Scheduled Tasks, REST Client, Cache, Email, Kafka, RabbitMQ, AI Usage
+- **Services**: Scheduled Tasks, REST Client, AI Framework, Cache, Email, Kafka, RabbitMQ, JMS
 - **Diagnostics**: Traces, Log Tail, Exceptions, HTTP Exchanges, HTTP Probe
 - **Developer Tools**: MCP Server, DevTools, Dev Services, Copilot, Claude Code
 
@@ -396,7 +399,7 @@ hide newer ones. Keep API, UI,
   `GET /bootui/api/overview` supplies the header data), Architecture, the Quarkus application advisor (panel id
   `spring`), Pentesting, Vulnerabilities,
   Memory, Threads, Heap Dump, Live Memory, JVM Tuning, Metrics, Loggers, Log Tail, Health, HTTP Probe, Beans, Mappings,
-  Configuration (read-only — no override write path), Traces, AI Usage, HTTP Exchanges, Live Activity, Exceptions, MCP
+  Configuration (read-only — no override write path), Traces, AI Framework, HTTP Exchanges, Live Activity, Exceptions, MCP
   Server, and Security (a Quarkus-native ruleset — Elytron/OIDC, `quarkus.http.auth.permission.*`, TLS, CORS,
   `@RolesAllowed` — replacing the Spring-Security-coupled advisor; see `docs/QUARKUS-CHECKS.md`). **Available when their
   capability or detector is present:** Hibernate (Hibernate ORM), Scheduled Tasks (`quarkus-scheduler`), Cache
@@ -409,9 +412,9 @@ hide newer ones. Keep API, UI,
   `LocalhostGuard` write floor: the advisor scans (Architecture, the Quarkus app advisor, Pentesting, Hibernate,
   Security, Memory, REST API, and Vulnerabilities/OSV), Heap Dump (capture/analyze/delete/download), Threads (download),
   Loggers (set level), HTTP Probe, Cache (clear), Kafka (clear), RabbitMQ (clear), Email (clear), Flyway (migrate/clean), Liquibase
-  (update), Traces (clear), REST Client (clear/recording), and the MCP Server toggle. Only GraalVM, CRaC, Conditions,
-  Startup Timeline, HTTP Sessions, Spring Data, Spring Security, and DevTools
-  stay unavailable, most with a panel-specific not-applicable reason. The
+  (update), Traces (clear), REST Client (clear/recording), and the MCP Server toggle. GraalVM, CRaC, Conditions,
+  Startup Timeline, HTTP Sessions, Spring Data, Spring Security, and DevTools are intentionally not applicable; JMS is
+  separately not yet available on Quarkus. The
   **Memory** advisor is the cleanest port: every scanner/rule/context class was already framework-neutral (JMX +
   `java.lang.management` only), so it relocated wholesale into the engine `MemoryScanner` (built via
   `MemoryScanner.create(ThreadDumpService, Clock)`) with the Spring `MemoryController` reduced to thin wiring and a
@@ -438,7 +441,7 @@ hide newer ones. Keep API, UI,
   on Quarkus, but reports real meters only when the application adds a `quarkus-micrometer` registry: the engine
   `MetricsReportProvider` resolves the live composite `MeterRegistry` through a CDI `Instance` (absent → renders
   unavailable), and the meter-visibility predicate is the shared engine `MeterSelfFilter` (so BootUI's own `/bootui/**`
-  meters stay hidden, exactly as the Spring adapter feeds `BootUiSelfDataFilter::shouldIncludeMeter`). Traces and AI Usage
+  meters stay hidden, exactly as the Spring adapter feeds `BootUiSelfDataFilter::shouldIncludeMeter`). Traces and AI Framework
   reuse the engine telemetry services; their read endpoints are always wired (so the panels render even with no data), but spans
   are only captured when the application adds `quarkus-opentelemetry` (in-process via a CDI `SpanProcessor`, no OTLP
   receiver). Hibernate is the second **advisor** on Quarkus and the first **optional-dependency** advisor port: the
@@ -699,7 +702,7 @@ hide newer ones. Keep API, UI,
 
 Subtle constraints that have burned past releases — preserve them when touching `pom.xml` files or the release profile.
 The published artifacts are the shared modules and both adapters (`bootui-core`, `-engine`, `-ui`,
-`-spring-autoconfigure`, `-spring-boot-starter`, `-quarkus`, `-quarkus-deployment`); the demo/test modules (`bootui-spring-sample-app`,
+`-spring-autoconfigure`, `-spring-boot-starter`, `-quarkus-parent`, `-quarkus`, `-quarkus-deployment`); the demo/test modules (`bootui-spring-sample-app`,
 `bootui-quarkus-sample-app`, `bootui-quarkus-integration-tests`, `bootui-conformance`) set
 `<maven.deploy.skip>true</maven.deploy.skip>` — they must still build so the publishing plugin sees the full reactor, but
 must not be published.

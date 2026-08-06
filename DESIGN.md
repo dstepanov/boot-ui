@@ -13,8 +13,10 @@ colors:
   accessible-warning-strong: "#6f5300"
   accessible-warning-strong-dark: "#e0a800"
   ink: "#152033"
-  slate-muted: "#64748b"
-  slate-subtle: "#94a3b8"
+  slate-muted: "#56667b"
+  slate-subtle: "#5b6b80"
+  slate-muted-dark-theme: "#a3b1c6"
+  slate-subtle-dark-theme: "#94a3b8"
   surface-white: "#ffffff"
   surface-frost: "#ffffffd1"
   border-ink: "#0f172a14"
@@ -176,8 +178,8 @@ Saturated **status fills** back badges, latency-heat rows, and advisor severity,
 
 ### Neutral
 - **Ink** (`#152033`): primary body and heading text on light surfaces (near-navy, not pure black). Dark theme inverts to **Ink (Dark)** (`#e2e8f0`).
-- **Slate Muted** (`#64748b`): secondary text, captions, and nav-group labels. Verified for AA at body sizes on the light shell.
-- **Slate Subtle** (`#94a3b8`): tertiary/disabled hints and placeholder-weight text only — never load-bearing body copy.
+- **Slate Muted** (`#56667b` light, `#a3b1c6` dark): secondary text, captions, and nav-group labels.
+- **Slate Subtle** (`#5b6b80` light, `#94a3b8` dark): tertiary/disabled hints, helper text, metadata, and placeholders. It remains visually secondary through size, weight, and placement rather than reduced opacity, and clears AA on the body, card, input, and selected/tinted surfaces.
 - **Surface White / Frost** (`#ffffff` solid, `#ffffffd1` = `rgba(255,255,255,0.82)` frosted): card and panel fills. Dark theme uses **Surface (Dark)** (`#1e293b`).
 - **Border Ink** (`#0f172a14` = `rgba(15,23,42,0.08)`): the hairline that separates frosted panels from the gradient field.
 - **Body Field**: `linear-gradient(135deg, #f6fbf8 0%, #eef6ff 46%, #f7f4ff 100%)` (mint → sky → lilac) plus a soft radial green orb — the "control room ambiance." Dark theme: `linear-gradient(135deg, #0d1a12, #0f1929, #100f1a)`.

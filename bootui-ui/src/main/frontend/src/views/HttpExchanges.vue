@@ -159,12 +159,17 @@ onMounted(() => {
 
     <div class="row g-2 mb-3">
       <div class="col-lg-6">
-        <label class="form-label">Path or trace filter</label>
-        <input v-model="filter" class="form-control" placeholder="Filter by path, query, URL, or trace id…" />
+        <label class="form-label" for="http-exchanges-filter">Path or trace filter</label>
+        <input
+          id="http-exchanges-filter"
+          v-model="filter"
+          class="form-control"
+          placeholder="Filter by path, query, URL, or trace id…"
+        />
       </div>
       <div class="col-sm-6 col-lg-3">
-        <label class="form-label">Method</label>
-        <select v-model="method" class="form-select">
+        <label class="form-label" for="http-exchanges-method">Method</label>
+        <select id="http-exchanges-method" v-model="method" class="form-select">
           <option value="">All methods</option>
           <option>GET</option>
           <option>POST</option>
@@ -176,8 +181,8 @@ onMounted(() => {
         </select>
       </div>
       <div class="col-sm-6 col-lg-3">
-        <label class="form-label">Status</label>
-        <select v-model="statusClass" class="form-select">
+        <label class="form-label" for="http-exchanges-status">Status</label>
+        <select id="http-exchanges-status" v-model="statusClass" class="form-select">
           <option value="">All statuses</option>
           <option value="2xx">2xx success</option>
           <option value="3xx">3xx redirect</option>

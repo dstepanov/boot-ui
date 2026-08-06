@@ -69,7 +69,6 @@ import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.DevServicesResultBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
-import io.quarkus.deployment.builditem.GeneratedServiceProviderBuildItem;
 import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigurationDefaultBuildItem;
@@ -79,6 +78,7 @@ import io.quarkus.maven.dependency.ResolvedDependency;
 import io.quarkus.resteasy.reactive.server.spi.PreExceptionMapperHandlerBuildItem;
 import io.quarkus.runtime.LaunchMode;
 import jakarta.inject.Singleton;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -234,6 +234,8 @@ class BootUiQuarkusProcessor {
     // which is absent when the REST Client extension is absent — R2).
     private static final String REST_CLIENT_TRACE_LISTENER_CLASS =
             "io.github.jdubois.bootui.quarkus.restclienttrace.QuarkusRestClientTraceListener";
+    private static final String REST_CLIENT_LISTENER_SERVICE =
+            "org.eclipse.microprofile.rest.client.spi.RestClientListener";
 
     // Referenced by class name only: BootUiSqlTraceProducer @Produces an Alternative DataSource that wraps the
     // default Agroal pool, and imports io.agroal.*; the deployment classloader must never load it without a JDBC
@@ -266,7 +268,7 @@ class BootUiQuarkusProcessor {
         indexDependency.produce(new IndexDependencyBuildItem("com.julien-dubois.bootui", "bootui-quarkus"));
         // Register the producer (which has @Produces methods) and the SPI-backed beans, and keep them even
         // if Arc's unused-bean analysis can't see the RESTEasy-mediated injection points. The telemetry read
-        // services (Traces + AI Usage) are produced unconditionally here — they hold no OpenTelemetry types,
+        // services (Traces + AI Framework) are produced unconditionally here — they hold no OpenTelemetry types,
         // so they wire (and render empty) whether or not the app has quarkus-opentelemetry. The OTel-importing
         // capture producer is gated separately in {@link #registerOpenTelemetryCapture}.
         additionalBeans.produce(AdditionalBeanBuildItem.builder()
@@ -912,7 +914,7 @@ class BootUiQuarkusProcessor {
      * it is registered (and pinned unremovable, since its {@code SpanProcessor} is consumed by Quarkus
      * OpenTelemetry through a build step Arc's usage analysis cannot see). Quarkus then auto-discovers the
      * produced {@code SpanProcessor} and feeds finished spans through the engine exporter into the shared
-     * {@code TelemetryStore}, lighting up the Traces and AI Usage panels with real data.</p>
+     * {@code TelemetryStore}, lighting up the Traces and AI Framework panels with real data.</p>
      */
     @BuildStep
     void registerOpenTelemetryCapture(
@@ -1645,7 +1647,7 @@ class BootUiQuarkusProcessor {
     void registerRestClientTrace(
             LaunchModeBuildItem launchMode,
             Capabilities capabilities,
-            BuildProducer<GeneratedServiceProviderBuildItem> serviceProviders,
+            BuildProducer<GeneratedResourceBuildItem> generatedResources,
             BuildProducer<ExcludedTypeBuildItem> excludedTypes,
             BuildProducer<RunTimeConfigurationDefaultBuildItem> runtimeDefaults) {
         boolean present = launchMode.getLaunchMode() != LaunchMode.NORMAL
@@ -1656,8 +1658,9 @@ class BootUiQuarkusProcessor {
             excludedTypes.produce(new ExcludedTypeBuildItem(REST_CLIENT_TRACE_LISTENER_CLASS));
             return;
         }
-        serviceProviders.produce(new GeneratedServiceProviderBuildItem(
-                "org.eclipse.microprofile.rest.client.spi.RestClientListener", REST_CLIENT_TRACE_LISTENER_CLASS));
+        generatedResources.produce(new GeneratedResourceBuildItem(
+                "META-INF/services/" + REST_CLIENT_LISTENER_SERVICE,
+                (REST_CLIENT_TRACE_LISTENER_CLASS + System.lineSeparator()).getBytes(StandardCharsets.UTF_8)));
     }
 
     /**

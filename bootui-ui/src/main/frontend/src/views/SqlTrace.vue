@@ -341,7 +341,11 @@ function clearTrace() {
               Recent executions <span class="badge bg-secondary">{{ filteredEntries.length }}</span>
             </h5>
             <div class="d-flex flex-wrap gap-2">
-              <select v-model="categoryFilter" class="form-select form-select-sm sql-filter-select">
+              <select
+                v-model="categoryFilter"
+                aria-label="Filter SQL executions by category"
+                class="form-select form-select-sm sql-filter-select"
+              >
                 <option value="">All categories</option>
                 <option v-for="category in categories" :key="category" :value="category">{{ category }}</option>
               </select>
@@ -357,6 +361,7 @@ function clearTrace() {
               </div>
               <input
                 v-model="filter"
+                aria-label="Filter SQL executions"
                 class="form-control form-control-sm trace-filter"
                 placeholder="Filter by SQL, category, connection, thread, or parameter…"
               />
@@ -382,9 +387,22 @@ function clearTrace() {
               </thead>
               <tbody>
                 <template v-for="entry in filteredEntries" :key="entry.id">
-                  <tr class="sql-row" @click="toggleRow(entry)">
+                  <tr class="sql-row" data-keyboard-delegate="toggleRow(entry)" @click="toggleRow(entry)">
                     <td class="text-muted">
-                      <i class="bi" :class="isExpanded(entry) ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
+                      <button
+                        class="btn btn-sm btn-link p-0 bootui-keyboard-target sql-row-toggle"
+                        type="button"
+                        :aria-controls="`sql-details-${entry.id}`"
+                        :aria-expanded="isExpanded(entry)"
+                        :aria-label="`${isExpanded(entry) ? 'Collapse' : 'Expand'} details for ${entry.category} query at ${formatClockTime(entry.timestamp)}`"
+                        @click.stop="toggleRow(entry)"
+                      >
+                        <i
+                          aria-hidden="true"
+                          class="bi"
+                          :class="isExpanded(entry) ? 'bi-chevron-down' : 'bi-chevron-right'"
+                        ></i>
+                      </button>
                     </td>
                     <td class="text-nowrap font-monospace small">{{ formatClockTime(entry.timestamp) }}</td>
                     <td>
@@ -406,7 +424,7 @@ function clearTrace() {
                       <span v-if="entry.slow" class="badge text-bg-warning ms-1">slow</span>
                     </td>
                   </tr>
-                  <tr v-if="isExpanded(entry)" class="sql-detail-row">
+                  <tr v-if="isExpanded(entry)" :id="`sql-details-${entry.id}`" class="sql-detail-row">
                     <td></td>
                     <td colspan="6">
                       <dl class="row mb-0 small">

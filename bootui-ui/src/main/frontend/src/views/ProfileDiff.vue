@@ -63,7 +63,12 @@ onMounted(load)
         <span v-else class="text-muted small">(none)</span>
       </div>
 
-      <input v-model="filter" class="form-control mb-3" placeholder="Filter by property name or value…" />
+      <input
+        v-model="filter"
+        aria-label="Filter profile differences"
+        class="form-control mb-3"
+        placeholder="Filter by property name or value…"
+      />
 
       <div v-if="filteredSources.length === 0" class="alert alert-info">
         <i class="bi bi-info-circle me-1"></i>

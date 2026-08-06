@@ -193,7 +193,13 @@ function treeStepHasChildren(stepId) {
       <div class="col-12 col-md-7 col-lg-6 px-0">
         <div class="input-group mb-2">
           <span class="input-group-text"><i class="bi bi-search"></i></span>
-          <input v-model="filter" class="form-control" placeholder="Filter by step name…" type="search" />
+          <input
+            v-model="filter"
+            aria-label="Filter startup steps"
+            class="form-control"
+            placeholder="Filter by step name…"
+            type="search"
+          />
           <button
             :disabled="loading || report.steps.length === 0"
             class="btn btn-outline-secondary"

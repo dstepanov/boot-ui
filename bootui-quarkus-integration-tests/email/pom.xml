@@ -6,9 +6,9 @@
 
     <parent>
         <groupId>com.julien-dubois.bootui</groupId>
-        <artifactId>bootui-parent</artifactId>
+        <artifactId>bootui-quarkus-integration-tests-aggregator</artifactId>
         <version>1.12.0</version>
-        <relativePath>../../pom.xml</relativePath>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>bootui-quarkus-email-integration-tests</artifactId>
@@ -28,22 +28,6 @@
         Like the other Quarkus integration-test modules, this app has NO datasource / messaging dependencies, so
         a @QuarkusTest boots without Docker. It is never published.
     -->
-    <properties>
-        <maven.deploy.skip>true</maven.deploy.skip>
-    </properties>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>io.quarkus</groupId>
-                <artifactId>quarkus-bom</artifactId>
-                <version>${quarkus.platform.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
     <dependencies>
         <!-- The extension under test. Brings bootui-engine, bootui-ui (the shared bundle), quarkus-rest and
              quarkus-vertx-http transitively, so this app serves /bootui/ and /bootui/api/** with no extra deps. -->
@@ -86,7 +70,6 @@
             <plugin>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-maven-plugin</artifactId>
-                <version>${quarkus.platform.version}</version>
                 <extensions>true</extensions>
                 <executions>
                     <execution>

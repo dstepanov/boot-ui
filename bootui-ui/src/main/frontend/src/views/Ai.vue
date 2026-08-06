@@ -132,6 +132,11 @@ function sortTable(col) {
   }
 }
 
+function ariaSort(activeColumn, column, direction) {
+  if (activeColumn !== column) return 'none'
+  return direction === 'asc' ? 'ascending' : 'descending'
+}
+
 const distinctProviders = computed(() => {
   if (!overview.value || !overview.value.recent) return []
   return [...new Set(overview.value.recent.map((c) => c.provider).filter(Boolean))].sort()
@@ -410,7 +415,7 @@ const detectedFrameworkLabel = computed(() => {
   <div>
     <PanelHeader
       icon="bi-cpu"
-      title="AI Usage"
+      title="AI Framework"
       :subtitle="overview ? detectedFrameworkLabel : null"
       :loading="loading"
       :error="error"
@@ -528,7 +533,12 @@ const detectedFrameworkLabel = computed(() => {
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h6 class="mb-0">Token usage (last {{ series.minutes }} min)</h6>
-              <select v-model="windowMinutes" class="form-select form-select-sm w-auto" @change="onWindowChange">
+              <select
+                v-model="windowMinutes"
+                aria-label="Token usage time window"
+                class="form-select form-select-sm w-auto"
+                @change="onWindowChange"
+              >
                 <option :value="15">15 min</option>
                 <option :value="60">60 min</option>
                 <option :value="240">240 min</option>
@@ -607,41 +617,61 @@ const detectedFrameworkLabel = computed(() => {
                 </caption>
                 <thead>
                   <tr>
-                    <th scope="col" class="cursor-pointer user-select-none" @click="sortByModel('model')">
-                      Model
-                      <i
-                        v-if="byModelSort === 'model'"
-                        :class="byModelSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
-                        class="bi"
-                      ></i>
+                    <th scope="col" :aria-sort="ariaSort(byModelSort, 'model', byModelSortDir)">
+                      <button class="sort-button bootui-keyboard-target" type="button" @click="sortByModel('model')">
+                        Model
+                        <i
+                          v-if="byModelSort === 'model'"
+                          aria-hidden="true"
+                          :class="byModelSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
+                          class="bi"
+                        ></i>
+                      </button>
                     </th>
-                    <th scope="col" class="text-end cursor-pointer user-select-none" @click="sortByModel('calls')">
-                      Calls
-                      <i
-                        v-if="byModelSort === 'calls'"
-                        :class="byModelSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
-                        class="bi"
-                      ></i>
+                    <th scope="col" :aria-sort="ariaSort(byModelSort, 'calls', byModelSortDir)">
+                      <button
+                        class="sort-button bootui-keyboard-target text-end"
+                        type="button"
+                        @click="sortByModel('calls')"
+                      >
+                        Calls
+                        <i
+                          v-if="byModelSort === 'calls'"
+                          aria-hidden="true"
+                          :class="byModelSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
+                          class="bi"
+                        ></i>
+                      </button>
                     </th>
-                    <th
-                      scope="col"
-                      class="text-end cursor-pointer user-select-none"
-                      @click="sortByModel('totalTokens')"
-                    >
-                      Total tokens
-                      <i
-                        v-if="byModelSort === 'totalTokens'"
-                        :class="byModelSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
-                        class="bi"
-                      ></i>
+                    <th scope="col" :aria-sort="ariaSort(byModelSort, 'totalTokens', byModelSortDir)">
+                      <button
+                        class="sort-button bootui-keyboard-target text-end"
+                        type="button"
+                        @click="sortByModel('totalTokens')"
+                      >
+                        Total tokens
+                        <i
+                          v-if="byModelSort === 'totalTokens'"
+                          aria-hidden="true"
+                          :class="byModelSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
+                          class="bi"
+                        ></i>
+                      </button>
                     </th>
-                    <th scope="col" class="text-end cursor-pointer user-select-none" @click="sortByModel('avgTokens')">
-                      Avg tokens/call
-                      <i
-                        v-if="byModelSort === 'avgTokens'"
-                        :class="byModelSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
-                        class="bi"
-                      ></i>
+                    <th scope="col" :aria-sort="ariaSort(byModelSort, 'avgTokens', byModelSortDir)">
+                      <button
+                        class="sort-button bootui-keyboard-target text-end"
+                        type="button"
+                        @click="sortByModel('avgTokens')"
+                      >
+                        Avg tokens/call
+                        <i
+                          v-if="byModelSort === 'avgTokens'"
+                          aria-hidden="true"
+                          :class="byModelSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
+                          class="bi"
+                        ></i>
+                      </button>
                     </th>
                     <th scope="col"></th>
                   </tr>
@@ -677,25 +707,34 @@ const detectedFrameworkLabel = computed(() => {
           <div class="col-md-4">
             <input
               v-model="tableSearch"
+              aria-label="Search recent chats"
               class="form-control form-control-sm"
               placeholder="Search model, provider, span…"
               type="search"
             />
           </div>
           <div class="col-md-2">
-            <select v-model="providerFilter" class="form-select form-select-sm">
+            <select
+              v-model="providerFilter"
+              aria-label="Filter recent chats by provider"
+              class="form-select form-select-sm"
+            >
               <option value="">All providers</option>
               <option v-for="p in distinctProviders" :key="p" :value="p">{{ p }}</option>
             </select>
           </div>
           <div class="col-md-3">
-            <select v-model="modelFilter" class="form-select form-select-sm">
+            <select v-model="modelFilter" aria-label="Filter recent chats by model" class="form-select form-select-sm">
               <option value="">All models</option>
               <option v-for="m in distinctModels" :key="m" :value="m">{{ m }}</option>
             </select>
           </div>
           <div class="col-md-2">
-            <select v-model="statusFilter" class="form-select form-select-sm">
+            <select
+              v-model="statusFilter"
+              aria-label="Filter recent chats by status"
+              class="form-select form-select-sm"
+            >
               <option value="">All statuses</option>
               <option value="OK">OK</option>
               <option value="ERROR">ERROR</option>
@@ -710,45 +749,64 @@ const detectedFrameworkLabel = computed(() => {
             </caption>
             <thead>
               <tr>
-                <th scope="col" class="cursor-pointer user-select-none" @click="sortTable('startEpochNanos')">
-                  Started
-                  <i
-                    v-if="tableSort === 'startEpochNanos'"
-                    :class="tableSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
-                    class="bi"
-                  ></i>
+                <th scope="col" :aria-sort="ariaSort(tableSort, 'startEpochNanos', tableSortDir)">
+                  <button
+                    class="sort-button bootui-keyboard-target"
+                    type="button"
+                    @click="sortTable('startEpochNanos')"
+                  >
+                    Started
+                    <i
+                      v-if="tableSort === 'startEpochNanos'"
+                      aria-hidden="true"
+                      :class="tableSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
+                      class="bi"
+                    ></i>
+                  </button>
                 </th>
-                <th scope="col" class="cursor-pointer user-select-none" @click="sortTable('provider')">
-                  Provider
-                  <i
-                    v-if="tableSort === 'provider'"
-                    :class="tableSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
-                    class="bi"
-                  ></i>
+                <th scope="col" :aria-sort="ariaSort(tableSort, 'provider', tableSortDir)">
+                  <button class="sort-button bootui-keyboard-target" type="button" @click="sortTable('provider')">
+                    Provider
+                    <i
+                      v-if="tableSort === 'provider'"
+                      aria-hidden="true"
+                      :class="tableSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
+                      class="bi"
+                    ></i>
+                  </button>
                 </th>
-                <th scope="col" class="cursor-pointer user-select-none" @click="sortTable('requestModel')">
-                  Model
-                  <i
-                    v-if="tableSort === 'requestModel'"
-                    :class="tableSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
-                    class="bi"
-                  ></i>
+                <th scope="col" :aria-sort="ariaSort(tableSort, 'requestModel', tableSortDir)">
+                  <button class="sort-button bootui-keyboard-target" type="button" @click="sortTable('requestModel')">
+                    Model
+                    <i
+                      v-if="tableSort === 'requestModel'"
+                      aria-hidden="true"
+                      :class="tableSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
+                      class="bi"
+                    ></i>
+                  </button>
                 </th>
-                <th scope="col" class="cursor-pointer user-select-none" @click="sortTable('totalTokens')">
-                  Tokens
-                  <i
-                    v-if="tableSort === 'totalTokens'"
-                    :class="tableSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
-                    class="bi"
-                  ></i>
+                <th scope="col" :aria-sort="ariaSort(tableSort, 'totalTokens', tableSortDir)">
+                  <button class="sort-button bootui-keyboard-target" type="button" @click="sortTable('totalTokens')">
+                    Tokens
+                    <i
+                      v-if="tableSort === 'totalTokens'"
+                      aria-hidden="true"
+                      :class="tableSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
+                      class="bi"
+                    ></i>
+                  </button>
                 </th>
-                <th scope="col" class="cursor-pointer user-select-none" @click="sortTable('durationNanos')">
-                  Duration
-                  <i
-                    v-if="tableSort === 'durationNanos'"
-                    :class="tableSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
-                    class="bi"
-                  ></i>
+                <th scope="col" :aria-sort="ariaSort(tableSort, 'durationNanos', tableSortDir)">
+                  <button class="sort-button bootui-keyboard-target" type="button" @click="sortTable('durationNanos')">
+                    Duration
+                    <i
+                      v-if="tableSort === 'durationNanos'"
+                      aria-hidden="true"
+                      :class="tableSortDir === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill'"
+                      class="bi"
+                    ></i>
+                  </button>
                 </th>
                 <th scope="col">Status</th>
                 <th scope="col">Finish reason</th>
@@ -972,8 +1030,20 @@ const detectedFrameworkLabel = computed(() => {
 code {
   overflow-wrap: anywhere;
 }
-.cursor-pointer {
+.sort-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
   cursor: pointer;
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  width: 100%;
+}
+
+.sort-button.text-end {
+  justify-content: flex-end;
 }
 .kpi-card-body {
   min-height: 90px;

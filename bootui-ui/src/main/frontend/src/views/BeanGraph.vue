@@ -183,12 +183,7 @@ async function refocus(name) {
   graphElement.value?.querySelector('[aria-pressed="true"]')?.focus()
 }
 
-function onKeydown(event, name) {
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault()
-    refocus(name)
-    return
-  }
+function onKeydown(event) {
   const nodes = [...event.currentTarget.ownerSVGElement.querySelectorAll('.bg-node[role="button"]')]
   const current = nodes.indexOf(event.currentTarget)
   const targetIndex = {
@@ -347,7 +342,9 @@ function centerFocusedNode() {
             }`"
             :aria-pressed="node.role === 'focus'"
             @click="refocus(node.name)"
-            @keydown="onKeydown($event, node.name)"
+            @keydown.enter="refocus(node.name)"
+            @keydown.space.prevent="refocus(node.name)"
+            @keydown="onKeydown"
           >
             <title>{{ nodeTitle(node.name) }}</title>
             <rect class="bg-focus-ring bg-focus-ring--outer" x="-5" y="-5" :width="NODE_W + 10" :height="NODE_H + 10" />

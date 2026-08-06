@@ -191,10 +191,24 @@ test.describe('Copilot panel', () => {
     await expect(page.getByText('1 / 5 sessions')).toBeVisible()
     await expect(page.getByText('bootui.copilot.max-sessions')).toBeVisible()
 
+    const sessionSelector = page.getByRole('button', {name: 'View session session-one'})
+    await sessionSelector.click()
+    await expect(page.getByRole('tab', {name: /Activity/})).toHaveClass(/active/)
+
     await page.getByRole('button', {name: 'Show failures for session-one'}).click()
     await expect(page.getByRole('tab', {name: /Failures/})).toHaveClass(/active/)
     await expect(page.getByText('SHELL · bash · failed')).toBeVisible()
     await expect(page.getByText('FILE_EDIT · apply_patch · failed')).toBeVisible()
+
+    await sessionSelector.focus()
+    await sessionSelector.press('Enter')
+    await expect(page.getByRole('tab', {name: /Activity/})).toHaveClass(/active/)
+
+    await page.getByRole('button', {name: 'Show failures for session-one'}).click()
+    await expect(page.getByRole('tab', {name: /Failures/})).toHaveClass(/active/)
+    await sessionSelector.focus()
+    await sessionSelector.press('Space')
+    await expect(page.getByRole('tab', {name: /Activity/})).toHaveClass(/active/)
 
     await page.getByRole('tab', {name: 'Turn story'}).click()
     await expect(page.getByRole('tab', {name: 'Turn story'})).toHaveClass(/active/)

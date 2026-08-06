@@ -1,0 +1,290 @@
+package io.github.jdubois.bootui.autoconfigure.web;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+
+import io.github.jdubois.bootui.core.dto.LogLineDto;
+import io.github.jdubois.bootui.engine.logtail.LogTailBuffer;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import org.junit.jupiter.api.Test;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+class LogTailSseSessionTests {
+
+    @Test
+    void blockedEmitterDoesNotHoldPublisherAndEventsRemainOrdered() throws Exception {
+        LogTailBuffer buffer = new LogTailBuffer();
+        BootUiLogAppender appender = freshAppender(buffer);
+        TestEmitter emitter = new TestEmitter();
+        CountDownLatch firstSendStarted = new CountDownLatch(1);
+        CountDownLatch releaseFirstSend = new CountDownLatch(1);
+        List<String> sent = new CopyOnWriteArrayList<>();
+        AtomicInteger sendCount = new AtomicInteger();
+        LogTailController controller = new LogTailController(appender, () -> emitter, 4, (ignored, line) -> {
+            sent.add(line.message());
+            if (sendCount.incrementAndGet() == 1) {
+                firstSendStarted.countDown();
+                awaitLatch(releaseFirstSend);
+            }
+        });
+        ExecutorService publisher = Executors.newSingleThreadExecutor();
+
+        try {
+            controller.stream();
+            Future<?> firstPublication = publisher.submit(() -> buffer.add(line("first")));
+            firstPublication.get(1, TimeUnit.SECONDS);
+            assertThat(firstSendStarted.await(1, TimeUnit.SECONDS)).isTrue();
+
+            Future<?> secondPublication = publisher.submit(() -> buffer.add(line("second")));
+            secondPublication.get(1, TimeUnit.SECONDS);
+
+            releaseFirstSend.countDown();
+            await().atMost(Duration.ofSeconds(2))
+                    .untilAsserted(() -> assertThat(sent).containsExactly("first", "second"));
+        } finally {
+            releaseFirstSend.countDown();
+            emitter.fireCompletion();
+            controller.shutdown();
+            publisher.shutdownNow();
+        }
+    }
+
+    @Test
+    void sendFailureUnsubscribesAndStopsFurtherDelivery() {
+        LogTailBuffer buffer = new LogTailBuffer();
+        BootUiLogAppender appender = freshAppender(buffer);
+        TestEmitter emitter = new TestEmitter();
+        AtomicInteger attempts = new AtomicInteger();
+        IOException failure = new IOException("client disconnected");
+        LogTailController controller = new LogTailController(appender, () -> emitter, 4, (ignored, line) -> {
+            attempts.incrementAndGet();
+            throw failure;
+        });
+
+        try {
+            controller.stream();
+            buffer.add(line("first"));
+
+            await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
+                assertThat(controller.activeStreamCount()).isZero();
+                assertThat(emitter.completedError.get()).isSameAs(failure);
+            });
+
+            buffer.add(line("second"));
+            assertThat(attempts).hasValue(1);
+        } finally {
+            controller.shutdown();
+        }
+    }
+
+    @Test
+    void completionAndTimeoutReleaseTheirSubscriptions() {
+        LogTailBuffer buffer = new LogTailBuffer();
+        BootUiLogAppender appender = freshAppender(buffer);
+        TestEmitter completed = new TestEmitter();
+        TestEmitter timedOut = new TestEmitter();
+        List<TestEmitter> emitters = new CopyOnWriteArrayList<>(List.of(completed, timedOut));
+        AtomicInteger sends = new AtomicInteger();
+        LogTailController controller = new LogTailController(
+                appender, () -> emitters.remove(0), 4, (ignored, line) -> sends.incrementAndGet());
+
+        try {
+            controller.stream();
+            controller.stream();
+            assertThat(controller.activeStreamCount()).isEqualTo(2);
+
+            completed.fireCompletion();
+            timedOut.fireTimeout();
+
+            await().atMost(Duration.ofSeconds(2))
+                    .untilAsserted(
+                            () -> assertThat(controller.activeStreamCount()).isZero());
+            buffer.add(line("after-cleanup"));
+            assertThat(sends).hasValue(0);
+        } finally {
+            controller.shutdown();
+        }
+    }
+
+    @Test
+    void queueOverflowDisconnectsSlowSubscriberWithoutBlockingPublisher() throws Exception {
+        LogTailBuffer buffer = new LogTailBuffer();
+        BootUiLogAppender appender = freshAppender(buffer);
+        TestEmitter emitter = new TestEmitter();
+        CountDownLatch firstSendStarted = new CountDownLatch(1);
+        CountDownLatch holdSender = new CountDownLatch(1);
+        CountDownLatch completionStarted = new CountDownLatch(1);
+        CountDownLatch releaseCompletion = new CountDownLatch(1);
+        emitter.blockErrorCompletion(completionStarted, releaseCompletion);
+        AtomicReference<Thread> worker = new AtomicReference<>();
+        LogTailController controller = new LogTailController(appender, () -> emitter, 2, (ignored, line) -> {
+            worker.set(Thread.currentThread());
+            firstSendStarted.countDown();
+            awaitLatch(holdSender);
+        });
+        ExecutorService publisher = Executors.newSingleThreadExecutor();
+
+        try {
+            controller.stream();
+            publisher.submit(() -> buffer.add(line("sending"))).get(1, TimeUnit.SECONDS);
+            assertThat(firstSendStarted.await(1, TimeUnit.SECONDS)).isTrue();
+
+            Future<?> burst = publisher.submit(() -> {
+                buffer.add(line("queued-1"));
+                buffer.add(line("queued-2"));
+                buffer.add(line("overflow"));
+            });
+            burst.get(1, TimeUnit.SECONDS);
+            assertThat(completionStarted.await(1, TimeUnit.SECONDS)).isTrue();
+            releaseCompletion.countDown();
+
+            await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
+                assertThat(controller.activeStreamCount()).isZero();
+                assertThat(emitter.completedError.get())
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("pending event queue is full");
+                assertThat(worker.get().isAlive()).isFalse();
+            });
+        } finally {
+            holdSender.countDown();
+            releaseCompletion.countDown();
+            controller.shutdown();
+            publisher.shutdownNow();
+        }
+    }
+
+    @Test
+    void shutdownCompletesEmitterAndInterruptsWorker() throws Exception {
+        LogTailBuffer buffer = new LogTailBuffer();
+        BootUiLogAppender appender = freshAppender(buffer);
+        TestEmitter emitter = new TestEmitter();
+        AtomicReference<Thread> worker = new AtomicReference<>();
+        CountDownLatch sendStarted = new CountDownLatch(1);
+        CountDownLatch holdSender = new CountDownLatch(1);
+        CountDownLatch completionStarted = new CountDownLatch(1);
+        CountDownLatch releaseCompletion = new CountDownLatch(1);
+        emitter.blockCompletion(completionStarted, releaseCompletion);
+        LogTailController controller = new LogTailController(appender, () -> emitter, 4, (ignored, line) -> {
+            worker.set(Thread.currentThread());
+            sendStarted.countDown();
+            awaitLatch(holdSender);
+        });
+
+        controller.stream();
+        buffer.add(line("blocked"));
+        await().atMost(Duration.ofSeconds(2)).until(() -> sendStarted.getCount() == 0);
+
+        ExecutorService shutdownExecutor = Executors.newSingleThreadExecutor();
+        Future<?> shutdown = shutdownExecutor.submit(controller::shutdown);
+
+        try {
+            shutdown.get(1, TimeUnit.SECONDS);
+            assertThat(completionStarted.await(1, TimeUnit.SECONDS)).isTrue();
+            releaseCompletion.countDown();
+            await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
+                assertThat(controller.activeStreamCount()).isZero();
+                assertThat(emitter.completions).hasValue(1);
+                assertThat(worker.get().isAlive()).isFalse();
+                assertThat(appender.isStarted()).isFalse();
+            });
+        } finally {
+            releaseCompletion.countDown();
+            shutdownExecutor.shutdownNow();
+        }
+    }
+
+    private static BootUiLogAppender freshAppender(LogTailBuffer buffer) {
+        BootUiLogAppender appender = new BootUiLogAppender(buffer);
+        appender.setName("TEST_APPENDER_" + System.nanoTime());
+        appender.start();
+        return appender;
+    }
+
+    private static LogLineDto line(String message) {
+        return new LogLineDto(0L, "INFO", "test", message, "publisher");
+    }
+
+    private static void awaitLatch(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static final class TestEmitter extends SseEmitter {
+
+        private Runnable completion = () -> {};
+        private Runnable timeout = () -> {};
+        private Consumer<Throwable> error = ignored -> {};
+        private final AtomicInteger completions = new AtomicInteger();
+        private final AtomicReference<Throwable> completedError = new AtomicReference<>();
+        private CountDownLatch completionStarted = new CountDownLatch(0);
+        private CountDownLatch releaseCompletion = new CountDownLatch(0);
+        private CountDownLatch errorCompletionStarted = new CountDownLatch(0);
+        private CountDownLatch releaseErrorCompletion = new CountDownLatch(0);
+
+        private TestEmitter() {
+            super(0L);
+        }
+
+        @Override
+        public void onCompletion(Runnable callback) {
+            completion = callback;
+        }
+
+        @Override
+        public void onTimeout(Runnable callback) {
+            timeout = callback;
+        }
+
+        @Override
+        public void onError(Consumer<Throwable> callback) {
+            error = callback;
+        }
+
+        @Override
+        public void complete() {
+            completionStarted.countDown();
+            awaitLatch(releaseCompletion);
+            completions.incrementAndGet();
+        }
+
+        @Override
+        public void completeWithError(Throwable ex) {
+            completedError.set(ex);
+            errorCompletionStarted.countDown();
+            awaitLatch(releaseErrorCompletion);
+            error.accept(ex);
+        }
+
+        private void blockCompletion(CountDownLatch started, CountDownLatch release) {
+            completionStarted = started;
+            releaseCompletion = release;
+        }
+
+        private void blockErrorCompletion(CountDownLatch started, CountDownLatch release) {
+            errorCompletionStarted = started;
+            releaseErrorCompletion = release;
+        }
+
+        private void fireCompletion() {
+            completion.run();
+        }
+
+        private void fireTimeout() {
+            timeout.run();
+        }
+    }
+}

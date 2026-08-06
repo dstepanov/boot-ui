@@ -6,6 +6,13 @@ import io.github.jdubois.bootui.engine.logtail.LogTailBuffer;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
@@ -20,17 +27,56 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @ConditionalOnClass(name = "ch.qos.logback.classic.LoggerContext")
 public class LogTailController {
 
+    private static final AtomicLong THREAD_SEQUENCE = new AtomicLong();
+
     private final BootUiLogAppender appender;
     private final LogTailBuffer buffer;
-    private final CopyOnWriteArrayList<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private final Supplier<SseEmitter> emitterFactory;
+    private final int pendingEventCapacity;
+    private final LogTailSseSession.EventSender eventSender;
+    private final ExecutorService streamExecutor;
+    private final CopyOnWriteArrayList<LogTailSseSession> sessions = new CopyOnWriteArrayList<>();
 
     /** Upper bound on simultaneous log-tail streams; this is a local dev tool, not a fan-out hub. */
     static final int MAX_CONCURRENT_STREAMS = 20;
 
+    /**
+     * Per-client pending event bound. It holds the full 500-line replay plus a bounded live burst; a
+     * client that cannot drain it is disconnected rather than consuming memory indefinitely.
+     */
+    static final int MAX_PENDING_EVENTS = LogTailBuffer.DEFAULT_MAX_LINES * 2;
+
+    @Autowired
     public LogTailController(BootUiProperties properties) {
-        this.appender = BootUiLogAppender.install(new LogTailBuffer(
-                LogTailBuffer.DEFAULT_MAX_LINES, properties.getLogTail().getMaxBytes()));
+        this(
+                BootUiLogAppender.install(new LogTailBuffer(
+                        LogTailBuffer.DEFAULT_MAX_LINES, properties.getLogTail().getMaxBytes())),
+                () -> new SseEmitter(0L),
+                MAX_PENDING_EVENTS,
+                LogTailController::sendLog,
+                createStreamExecutor());
+    }
+
+    LogTailController(
+            BootUiLogAppender appender,
+            Supplier<SseEmitter> emitterFactory,
+            int pendingEventCapacity,
+            LogTailSseSession.EventSender eventSender) {
+        this(appender, emitterFactory, pendingEventCapacity, eventSender, createStreamExecutor());
+    }
+
+    private LogTailController(
+            BootUiLogAppender appender,
+            Supplier<SseEmitter> emitterFactory,
+            int pendingEventCapacity,
+            LogTailSseSession.EventSender eventSender,
+            ExecutorService streamExecutor) {
+        this.appender = appender;
         this.buffer = appender.buffer();
+        this.emitterFactory = emitterFactory;
+        this.pendingEventCapacity = pendingEventCapacity;
+        this.eventSender = eventSender;
+        this.streamExecutor = streamExecutor;
     }
 
     @GetMapping("/recent")
@@ -40,38 +86,30 @@ public class LogTailController {
 
     @GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream() {
-        SseEmitter emitter = new SseEmitter(0L);
-        if (emitters.size() >= MAX_CONCURRENT_STREAMS) {
-            emitter.completeWithError(new IllegalStateException("Too many concurrent BootUI log-tail streams"));
-            return emitter;
-        }
-        emitters.add(emitter);
-
-        LogTailBuffer.Subscription subscription = buffer.subscribeWithReplay(line -> {
-            try {
-                sendLog(emitter, line);
-            } catch (IOException ex) {
-                emitter.completeWithError(ex);
+        SseEmitter emitter = emitterFactory.get();
+        LogTailSseSession session = new LogTailSseSession(
+                emitter, pendingEventCapacity, streamExecutor, eventSender, () -> removeSession(emitter));
+        synchronized (sessions) {
+            if (sessions.size() >= MAX_CONCURRENT_STREAMS) {
+                emitter.completeWithError(new IllegalStateException("Too many concurrent BootUI log-tail streams"));
+                return emitter;
             }
-        });
-        emitter.onCompletion(() -> cleanup(emitter, subscription.unsubscribe()));
-        emitter.onTimeout(() -> cleanup(emitter, subscription.unsubscribe()));
-        emitter.onError(error -> cleanup(emitter, subscription.unsubscribe()));
-
-        try {
-            for (LogLineDto line : subscription.backlog()) {
-                sendLog(emitter, line);
-            }
-        } catch (IOException ex) {
-            cleanup(emitter, subscription.unsubscribe());
-            emitter.completeWithError(ex);
+            sessions.add(session);
         }
+
+        emitter.onCompletion(session::close);
+        emitter.onTimeout(session::close);
+        emitter.onError(error -> session.close());
+        session.start(buffer);
         return emitter;
     }
 
-    private void cleanup(SseEmitter emitter, Runnable unsubscribe) {
-        emitters.remove(emitter);
-        unsubscribe.run();
+    private void removeSession(SseEmitter emitter) {
+        sessions.removeIf(session -> sessionMatches(session, emitter));
+    }
+
+    private boolean sessionMatches(LogTailSseSession session, SseEmitter emitter) {
+        return session.emitter() == emitter;
     }
 
     /**
@@ -88,14 +126,34 @@ public class LogTailController {
      */
     @EventListener(ContextClosedEvent.class)
     void shutdown() {
-        for (SseEmitter emitter : emitters) {
-            emitter.complete();
+        for (LogTailSseSession session : sessions) {
+            session.complete();
         }
-        emitters.clear();
+        sessions.clear();
+        streamExecutor.shutdownNow();
         appender.uninstall();
     }
 
-    private void sendLog(SseEmitter emitter, LogLineDto line) throws IOException {
+    int activeStreamCount() {
+        return sessions.size();
+    }
+
+    private static void sendLog(SseEmitter emitter, LogLineDto line) throws IOException {
         emitter.send(SseEmitter.event().name("log").data(line, MediaType.APPLICATION_JSON));
+    }
+
+    private static ExecutorService createStreamExecutor() {
+        return new ThreadPoolExecutor(
+                0,
+                MAX_CONCURRENT_STREAMS,
+                100L,
+                TimeUnit.MILLISECONDS,
+                new SynchronousQueue<>(),
+                runnable -> {
+                    Thread thread = new Thread(runnable, "bootui-log-tail-stream-" + THREAD_SEQUENCE.incrementAndGet());
+                    thread.setDaemon(true);
+                    return thread;
+                },
+                new ThreadPoolExecutor.AbortPolicy());
     }
 }

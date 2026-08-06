@@ -4,17 +4,20 @@ import {apiFetch} from '../api.js'
 import {formatNumber} from '../utils/format.js'
 import {panelProps, usePanelState} from '../utils/panelState.js'
 import {useAutoRefresh} from '../utils/useAutoRefresh.js'
+import {useConfirm} from '../utils/useConfirm.js'
 import {useServerPagedList} from '../utils/useServerPagedList.js'
 import PanelHeader from './components/PanelHeader.vue'
 import ServerListFooter from './components/ServerListFooter.vue'
 
 const props = defineProps(panelProps)
 const {readOnly, readOnlyReason} = usePanelState(props)
+const {confirm} = useConfirm()
 
 const filter = ref('')
 const state = ref('')
 const expanded = ref(new Set())
 const downloading = ref(false)
+const confirmingDownload = ref(false)
 const downloadError = ref(null)
 
 const {
@@ -91,7 +94,20 @@ function isExpanded(id) {
 }
 
 async function downloadDump() {
-  if (readOnly.value || downloading.value) return
+  if (readOnly.value || downloading.value || confirmingDownload.value) return
+  confirmingDownload.value = true
+  let confirmed
+  try {
+    confirmed = await confirm({
+      title: 'Download thread dump?',
+      message: 'Capture a fresh raw thread dump from the running application and download it to this device.',
+      resource: 'thread-dump.txt',
+      confirmLabel: 'Download'
+    })
+  } finally {
+    confirmingDownload.value = false
+  }
+  if (!confirmed) return
   downloading.value = true
   downloadError.value = null
   try {
@@ -130,7 +146,7 @@ watch([filter, state], scheduleReload)
     >
       <template #actions>
         <button
-          :disabled="readOnly || downloading || !available"
+          :disabled="readOnly || downloading || confirmingDownload || !available"
           :title="readOnly ? readOnlyReason : 'Download a raw thread dump snapshot'"
           class="btn btn-outline-primary btn-sm"
           type="button"
@@ -167,10 +183,15 @@ watch([filter, state], scheduleReload)
 
       <div class="row g-2 mb-3">
         <div class="col-md-8">
-          <input v-model="filter" class="form-control" placeholder="Filter by name, state, or stack frame…" />
+          <input
+            v-model="filter"
+            aria-label="Filter threads"
+            class="form-control"
+            placeholder="Filter by name, state, or stack frame…"
+          />
         </div>
         <div class="col-md-4">
-          <select v-model="state" class="form-select">
+          <select v-model="state" aria-label="Filter threads by state" class="form-select">
             <option value="">All states</option>
             <option v-for="count in stateCounts" :key="count.state" :value="count.state">
               {{ count.state }} ({{ count.count }})

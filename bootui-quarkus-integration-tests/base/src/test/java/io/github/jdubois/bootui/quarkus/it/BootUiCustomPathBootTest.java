@@ -40,6 +40,7 @@ class BootUiCustomPathBootTest {
         assertThat(bareShell.status()).isEqualTo(200);
         assertThat(shell.body())
                 .contains("<base href=\"/host/dev-console/\" />")
+                .contains("content=\"/host/\" name=\"bootui-application-path\"")
                 .contains("content=\"/host/internal/bootui-api\" name=\"bootui-api-path\"");
         assertThat(asset.find()).isTrue();
         assertThat(probe.get("/host/dev-console/" + asset.group(1)).status()).isEqualTo(200);

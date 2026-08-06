@@ -107,10 +107,15 @@ onMounted(load)
     <template v-else-if="report">
       <div class="row g-2 mb-3">
         <div class="col-md-6">
-          <input v-model="filter" class="form-control" placeholder="Filter by interface, entity, or bean name…" />
+          <input
+            v-model="filter"
+            aria-label="Filter repositories"
+            class="form-control"
+            placeholder="Filter by interface, entity, or bean name…"
+          />
         </div>
         <div class="col-md-3">
-          <select v-model="storeFilter" class="form-select">
+          <select v-model="storeFilter" aria-label="Filter repositories by store" class="form-select">
             <option value="">All stores</option>
             <option v-for="s in stores" :key="s" :value="s">{{ s }}</option>
           </select>

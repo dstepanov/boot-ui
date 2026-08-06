@@ -9,6 +9,7 @@ import SpinnerButton from './components/SpinnerButton.vue'
 import {formatBytes, formatClockTime, formatNumber} from '../utils/format.js'
 import {formatLoadError} from '../utils/loadError.js'
 import {panelProps, usePanelState} from '../utils/panelState.js'
+import {safeLocalStorage} from '../utils/safeStorage.js'
 import {useConfirm} from '../utils/useConfirm.js'
 import {useFlashMessage} from '../utils/useFlashMessage.js'
 import {useEventStreamRefresh} from '../utils/useEventStreamRefresh.js'
@@ -498,33 +499,21 @@ function renderProfileReport() {
 }
 
 function restoreFilters() {
-  try {
-    const raw = localStorage.getItem(FILTERS_STORAGE_KEY)
-    if (!raw) return
-    const saved = JSON.parse(raw)
-    if (typeof saved.type === 'string') typeFilter.value = saved.type
-    if (typeof saved.severity === 'string') severityFilter.value = saved.severity
-    if (typeof saved.text === 'string') textFilter.value = saved.text
-    if (typeof saved.errorsOnly === 'boolean') errorsOnly.value = saved.errorsOnly
-  } catch (_) {
-    // Corrupt or unavailable storage: fall back to defaults silently.
-  }
+  const saved = safeLocalStorage.getJson(FILTERS_STORAGE_KEY, null)
+  if (!saved || Array.isArray(saved) || typeof saved !== 'object') return
+  if (saved.type === '' || TYPES.includes(saved.type)) typeFilter.value = saved.type
+  if (saved.severity === '' || SEVERITIES.includes(saved.severity)) severityFilter.value = saved.severity
+  if (typeof saved.text === 'string') textFilter.value = saved.text
+  if (typeof saved.errorsOnly === 'boolean') errorsOnly.value = saved.errorsOnly
 }
 
 function persistFilters() {
-  try {
-    localStorage.setItem(
-      FILTERS_STORAGE_KEY,
-      JSON.stringify({
-        type: typeFilter.value,
-        severity: severityFilter.value,
-        text: textFilter.value,
-        errorsOnly: errorsOnly.value
-      })
-    )
-  } catch (_) {
-    // Ignore storage write failures (private mode, quota); filters still work in-session.
-  }
+  return safeLocalStorage.setJson(FILTERS_STORAGE_KEY, {
+    type: typeFilter.value,
+    severity: severityFilter.value,
+    text: textFilter.value,
+    errorsOnly: errorsOnly.value
+  })
 }
 
 // A filter change invalidates any accumulated "older" pages (they were queried under the old
@@ -801,25 +790,25 @@ function clearFilters() {
 
       <div class="d-flex flex-wrap align-items-end gap-2 mb-3">
         <div class="activity-text-filter">
-          <label class="form-label small mb-1">Filter</label>
+          <label class="form-label small mb-1" for="activity-text-filter">Filter</label>
           <input
+            id="activity-text-filter"
             v-model="textFilter"
             type="search"
             class="form-control form-control-sm"
             placeholder="Path, status, SQL, exception…"
-            aria-label="Free-text activity filter"
           />
         </div>
         <div>
-          <label class="form-label small mb-1">Type</label>
-          <select v-model="typeFilter" class="form-select form-select-sm">
+          <label class="form-label small mb-1" for="activity-type-filter">Type</label>
+          <select id="activity-type-filter" v-model="typeFilter" class="form-select form-select-sm">
             <option value="">All types</option>
             <option v-for="type in TYPES" :key="type" :value="type">{{ type }}</option>
           </select>
         </div>
         <div>
-          <label class="form-label small mb-1">Severity</label>
-          <select v-model="severityFilter" class="form-select form-select-sm">
+          <label class="form-label small mb-1" for="activity-severity-filter">Severity</label>
+          <select id="activity-severity-filter" v-model="severityFilter" class="form-select form-select-sm">
             <option value="">All severities</option>
             <option v-for="severity in SEVERITIES" :key="severity" :value="severity">{{ severity }}</option>
           </select>
@@ -895,9 +884,8 @@ function clearFilters() {
                   entry.profileable ? 'activity-row-clickable' : '',
                   hasChildren(entry) ? 'activity-parent-row' : ''
                 ]"
-                :tabindex="entry.profileable ? 0 : undefined"
+                data-keyboard-delegate="openProfile(entry)"
                 @click="onRowClick(entry)"
-                @keydown.enter="onRowClick(entry)"
               >
                 <td class="text-nowrap small">{{ formatClockTime(entry.timestamp) }}</td>
                 <td class="text-nowrap"><i :class="['bi', typeIcon(entry.type), 'me-1']"></i>{{ entry.type }}</td>
@@ -959,7 +947,7 @@ function clearFilters() {
                   </router-link>
                   <button
                     v-if="entry.profileable"
-                    class="btn btn-outline-primary btn-sm rounded-pill"
+                    class="btn btn-outline-primary btn-sm rounded-pill bootui-keyboard-target"
                     type="button"
                     @click="openProfile(entry)"
                   >

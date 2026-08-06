@@ -188,6 +188,24 @@ describe('RestClientTrace', () => {
     expect(text).toContain('trace-42')
   })
 
+  it('provides a native keyboard action without changing row pointer behavior', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(traceReport())))
+
+    wrapper = mount(RestClientTrace, {props: {panel: {id: 'rest-client-trace'}}})
+    await flushPromises()
+
+    const row = wrapper.get('tr.rest-row')
+    const toggle = row.get('button.rest-row-toggle')
+    expect(toggle.element.tagName).toBe('BUTTON')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+
+    await row.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+  })
+
   it('filters calls by URI text', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(traceReport())))
 

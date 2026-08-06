@@ -6,8 +6,9 @@
 
     <parent>
         <groupId>com.julien-dubois.bootui</groupId>
-        <artifactId>bootui-parent</artifactId>
+        <artifactId>bootui-quarkus-parent</artifactId>
         <version>1.12.0</version>
+        <relativePath>../bootui-quarkus-parent/pom.xml</relativePath>
     </parent>
 
     <artifactId>bootui-quarkus</artifactId>
@@ -16,24 +17,10 @@
         framework-neutral bootui-engine, the analogue of bootui-spring-autoconfigure on Spring Boot.</description>
 
     <!--
-        This is the RUNTIME half of the BootUI Quarkus extension (deployment half: bootui-quarkus-deployment).
-        It inherits bootui-parent for coordinates/formatting but imports the Quarkus BOM in its OWN
-        dependencyManagement so Quarkus artifacts resolve from it (nearest-wins) rather than from the Spring
-        Boot BOM the parent imports. Spring Boot 4 uses Jackson 3 (tools.jackson) and Quarkus uses Jackson 2
-        (com.fasterxml), so the two coexist without a clash.
+        This is the runtime half of the BootUI Quarkus extension (deployment half:
+        bootui-quarkus-deployment). The shared Quarkus parent keeps the Quarkus BOM nearer than
+        bootui-parent's Spring Boot BOM, so Jackson 2 and the rest of the Quarkus platform stay aligned.
     -->
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>io.quarkus</groupId>
-                <artifactId>quarkus-bom</artifactId>
-                <version>${quarkus.platform.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 
     <dependencies>
         <!-- Framework-neutral DTO/wire contract: the immutable records the engine returns and this adapter
@@ -311,7 +298,6 @@
             <plugin>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-extension-maven-plugin</artifactId>
-                <version>${quarkus.platform.version}</version>
                 <executions>
                     <execution>
                         <id>generate-extension-descriptor</id>

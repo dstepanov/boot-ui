@@ -140,6 +140,12 @@ Both values are application-relative. Spring's `server.servlet.context-path` or 
 `/host` is served at `/host/dev-console`; the generated shell injects that browser-visible base and API path for the
 shared Vue application.
 
+The generated shell also injects the normalized, same-origin host-application path used by the Overview panel's
+**Application homepage** link. It is `/` at the default application root and includes exactly one trailing slash for a
+custom root (for example, `/host/`). The link therefore returns to `/` from `/bootui/` and to `/host/` from
+`/host/dev-console/`, independently of `bootui.path` depth and `bootui.api-path`, without carrying BootUI query or hash
+state.
+
 Path configuration is normalized once and then used by every adapter:
 
 - leading/trailing whitespace and one or more trailing slashes are removed;
@@ -410,6 +416,7 @@ Features:
 - Add a runtime-only override for a new property key.
 - Edit a runtime override.
 - Remove a runtime override.
+- Require explicit confirmation before creating, updating, or removing an override file entry.
 - Show whether a displayed value comes from a BootUI runtime override.
 - Clearly label modified values as local, runtime-only, and not persisted to `application.properties`, environment
   variables, or config server.
@@ -427,6 +434,8 @@ Acceptance criteria:
 - BootUI never writes secrets or modified values back to source files by default.
 - Every property mutation is local-development-only and is persisted only to BootUI's override file,
   `.bootui/application-bootui.properties` by default.
+- The UI does not write the override file until the developer explicitly confirms the pending create, update, or remove
+  action.
 - Mutating a property returns a clear result that states whether the new value is visible in the Spring `Environment`
   and whether restart/rebind may be required.
 
@@ -735,11 +744,13 @@ Features:
 - Normalize method and path.
 - Restrict targets to localhost.
 - Support request bodies only for methods that can carry a body.
+- Require explicit confirmation before sending any method other than `GET` or `HEAD`.
 - Display status, selected response headers, body, timing, and errors.
 
 Acceptance criteria:
 
 - BootUI never proxies arbitrary external URLs.
+- `GET` and `HEAD` probes run directly; unsafe probes do not reach the backend until the developer confirms them.
 - Unsafe-body behavior is explicit and predictable.
 - Response headers are filtered to a small allow-list.
 
@@ -1511,6 +1522,7 @@ Acceptance criteria:
 - The panel fails closed, returning a stable empty report with an explained unavailable reason when thread information
   cannot be read.
 - The raw dump download is a `POST` and is blocked when the panel is read-only.
+- The UI does not issue the download `POST` until the developer explicitly confirms the capture.
 
 ## 6. Technical architecture
 
@@ -1793,15 +1805,15 @@ Initial properties:
 | `bootui.github.allowed-api-hosts`            | `api.github.com`                        | Allowed GitHub API hosts; add a GitHub Enterprise host to enable enterprise remotes.              |
 | `bootui.dev-services.restart-enabled`        | `false`                                 | Enables restart controls for bean-backed Testcontainers services.                                 |
 | `bootui.dev-services.log-tail-bytes`         | `65536`                                 | Maximum bytes returned by one Dev Services log request.                                           |
-| `bootui.telemetry.enabled`                   | `true`                                  | Enables local trace capture and the OTLP/HTTP receiver used by the Traces and AI Usage panels.    |
+| `bootui.telemetry.enabled`                   | `true`                                  | Enables local trace capture and the OTLP/HTTP receiver used by the Traces and AI Framework panels. |
 | `bootui.telemetry.max-traces`                | `500`                                   | Maximum distinct traces retained in memory; internally capped for UI safety.                      |
 | `bootui.telemetry.max-spans-per-trace`       | `500`                                   | Maximum spans retained for one trace; internally capped for UI safety.                            |
 | `bootui.telemetry.max-attribute-value-bytes` | `4096`                                  | Maximum attribute string length before truncation; internally capped for UI safety.               |
 | `bootui.telemetry.exclude-self-spans`        | `true`                                  | Drops ingested spans for BootUI's own API routes before they enter the local trace store.         |
 | `bootui.telemetry.enrich`                    | `true`                                  | Stamp BootUI `bootui.*` attributes (service identity, SQL query count / suspected N+1, exceptions) on the active span at BootUI's capture points; effective only while `bootui.telemetry.enabled` is on. |
 | `bootui.telemetry.max-request-bytes`         | `8388608`                               | Maximum OTLP payload size accepted by the local receiver.                                         |
-| `bootui.ai.token-series-minutes`             | `60`                                    | Default token-usage chart window for the AI Usage panel, capped by the API.                       |
-| `bootui.ai.max-recent-chats`                 | `100`                                   | Maximum recent chat rows surfaced by the AI Usage panel, capped by the API.                       |
+| `bootui.ai.token-series-minutes`             | `60`                                    | Default token-usage chart window for the AI Framework panel, capped by the API.                   |
+| `bootui.ai.max-recent-chats`                 | `100`                                   | Maximum recent chat rows surfaced by the AI Framework panel, capped by the API.                   |
 | `bootui.ai.show-content-capture-banner`      | `true`                                  | Shows guidance when Spring AI or LangChain4j prompt/completion content is not captured in spans.  |
 | `bootui.copilot.enabled`                     | `AUTO`                                  | Enable the Copilot panel when local Copilot CLI session state exists.                             |
 | `bootui.copilot.session-state-dir`           | `~/.copilot/session-state`              | Directory scanned for Copilot CLI session directories and `events.jsonl` files.                   |
@@ -1921,6 +1933,7 @@ Top-level navigation:
 
 - Overview:
   - Overview.
+  - Live Activity.
   - GitHub.
 - Advisors:
   - Architecture.
@@ -1941,6 +1954,7 @@ Top-level navigation:
   - Threads.
   - Startup Timeline.
   - GraalVM.
+  - CRaC.
 - Configuration:
   - Configuration.
   - Profile Diff.
@@ -1950,6 +1964,7 @@ Top-level navigation:
   - Mappings.
 - Database:
   - Database Connection Pools.
+  - SQL Trace.
   - Spring Data.
   - Flyway.
   - Liquibase.
@@ -1958,16 +1973,21 @@ Top-level navigation:
   - Security Logs.
 - Services:
   - Scheduled Tasks.
+  - REST Client.
+  - AI Framework.
   - Cache.
-  - AI Usage.
+  - Email.
+  - Kafka.
+  - RabbitMQ.
+  - JMS.
 - Diagnostics:
   - Traces.
   - Log Tail.
   - Exceptions.
   - HTTP Exchanges.
   - HTTP Probe.
-  - Email.
 - Developer tools:
+  - MCP Server.
   - DevTools.
   - Dev Services.
   - Copilot.
@@ -2060,14 +2080,8 @@ Future compatibility:
 BootUI's 1.0 release surface is complete when:
 
 - A sample Spring Boot app can add the starter and open `/bootui`.
-- The UI shows Overview, Advisors, Runtime, Configuration, Database, Security, Services, Diagnostics, Developer tools, and
-  Disabled / unavailable navigation groups covering Health, HTTP Sessions, Metrics, Live Memory, JVM Tuning, Heap Dump,
-  Threads, Startup Timeline, GraalVM, Configuration, Profile Diff, Loggers, Beans, Conditions, Mappings, Database
-  Connection Pools, Spring Data, Hibernate, Flyway, Liquibase, Spring Security, Security Logs, Security, Pentesting,
-  Vulnerabilities, Scheduled Tasks, Cache, AI Usage, Traces, Log Tail, HTTP Exchanges, HTTP Probe, Architecture,
-  REST API, Spring, Memory,
-  DevTools,
-  Dev Services, Copilot, Claude Code, and GitHub.
+- The UI shows the complete grouped panel inventory defined in §7.1, plus the Disabled / unavailable navigation group for
+  panels whose backing infrastructure is unavailable.
 - Secret-like values are masked.
 - BootUI is disabled by default outside local/dev contexts.
 - Tests verify activation and safety behavior.

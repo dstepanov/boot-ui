@@ -26,6 +26,15 @@ test.describe('SQL Trace view', () => {
     // Expanding a row reveals the full statement and connection metadata.
     const selectRow = executions.locator('tbody tr.sql-row', {hasText: 'sample_products'}).first()
     await selectRow.click()
+    const rowToggle = selectRow.locator('button.sql-row-toggle')
+    await expect(rowToggle).toHaveAttribute('aria-expanded', 'true')
+
+    await rowToggle.focus()
+    await rowToggle.press('Space')
+    await expect(rowToggle).toHaveAttribute('aria-expanded', 'false')
+    await rowToggle.press('Enter')
+    await expect(rowToggle).toHaveAttribute('aria-expanded', 'true')
+
     await expect(executions).toContainText('Connection')
     await expect(executions).toContainText('Thread')
   })

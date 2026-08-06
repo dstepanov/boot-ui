@@ -7,6 +7,7 @@ import com.rabbitmq.client.Envelope;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder.Direction;
 import io.smallrye.reactive.messaging.rabbitmq.IncomingRabbitMQMetadata;
+import io.smallrye.reactive.messaging.rabbitmq.IncomingRabbitMQMetadataTestFactory;
 import io.smallrye.reactive.messaging.rabbitmq.OutgoingRabbitMQMetadata;
 import java.util.Optional;
 import org.eclipse.microprofile.reactive.messaging.Message;
@@ -82,7 +83,7 @@ class QuarkusRabbitCaptureTests {
         AMQP.BasicProperties properties =
                 new AMQP.BasicProperties.Builder().correlationId(correlationId).build();
         Envelope envelope = new Envelope(1L, false, exchange, routingKey);
-        IncomingRabbitMQMetadata metadata = new IncomingRabbitMQMetadata(properties, envelope, "orders-in");
+        IncomingRabbitMQMetadata metadata = IncomingRabbitMQMetadataTestFactory.create(properties, envelope);
         return Message.of("sensitive payload", Metadata.of(metadata));
     }
 

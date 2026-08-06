@@ -144,6 +144,7 @@ onMounted(load)
         <div class="col-md-6">
           <input
             v-model="filter"
+            aria-label="Filter change sets"
             class="form-control"
             placeholder="Filter by id, author, change-log, or description…"
           />

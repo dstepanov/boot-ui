@@ -168,11 +168,11 @@ extension of the mechanism `App.vue` already uses, so the same UI build renders 
 > **Action-capable panels behave identically to Spring**, behind the shared `LocalhostGuard` write floor: Heap Dump
 > (capture/analyze/delete/download), Threads (download), the advisor scans, Loggers (set level), HTTP Probe, Cache
 > (clear), Flyway (migrate/clean), Liquibase (update), Traces (clear), Email (clear), Kafka (clear), RabbitMQ (clear),
-> REST Client Reactive (clear + recording toggle), and the MCP Server toggle. Only **GraalVM**, **CRaC**,
-> **Conditions**, **Startup Timeline**,
-> **HTTP Sessions**, **Spring Data**, **Spring Security**, and **DevTools** stay unavailable with a panel-specific
-> not-applicable reason (§5.5). The per-panel `**Implemented**` markers below and `docs/FEATURES.md` carry the authoritative, current
-> per-platform detail.
+> REST Client Reactive (clear + recording toggle), and the MCP Server toggle. Eight panels — **GraalVM**, **CRaC**,
+> **Conditions**, **Startup Timeline**, **HTTP Sessions**, **Spring Data**, **Spring Security**, and **DevTools** — are
+> intentionally unavailable with a panel-specific not-applicable reason (§5.5). **JMS** is the sole panel that is not yet
+> available on Quarkus (§5.6). The per-panel `**Implemented**` markers below and `docs/FEATURES.md` carry the authoritative,
+> current per-platform detail.
 
 ### 5.1 Ported as-is — framework-agnostic or same library (17)
 
@@ -180,7 +180,7 @@ Logic lives entirely in `bootui-core` + `bootui-engine`; the Quarkus adapter add
 
 `Memory` · `Live Memory` · `JVM Tuning` · `Heap Dump` · `Threads` (pure JVM MXBeans) · `Metrics` (Micrometer — same API)
 · `Hibernate` advisor (Hibernate ORM + `jakarta.persistence`; rules port directly) · `Vulnerabilities` (classpath Maven
-metadata + OSV) · `Pentesting` · `HTTP Probe` (local HTTP probing) · `AI Usage` · `Traces` (OTLP — a standard;
+metadata + OSV) · `Pentesting` · `HTTP Probe` (local HTTP probing) · `AI Framework` · `Traces` (OTLP — a standard;
 Quarkus/LangChain4j export it) · `GitHub` (`HttpClient`) · `Copilot` · `Claude Code` (read `~/.copilot` / `~/.claude`) ·
 `MCP Server` (**Implemented** — full JSON-RPC bridge: the shared engine `McpDispatcher` owns method routing/gating/tool
 lookup, a thin Jackson-2 `QuarkusMcpEnvelope` codec + `QuarkusMcpTools` catalog + working enable toggle sit behind the
@@ -327,11 +327,17 @@ No equivalent, low value, or superseded by Quarkus's own tooling:
   it niche), `DevTools` (**Implemented as `NOT_APPLICABLE`** — Quarkus has built-in dev-mode live reload, so there is no
   Spring-style DevTools restart/LiveReload to expose; the panel reports *not applicable* rather than *not yet*).
 
-**Result:** 42 of the 50 panels ship on Quarkus (17 ported as-is, 11 source-swapped, 11 capture-rebuilt, and 3 replaced
-with a Quarkus-native panel), and 8 are
-dropped as *not applicable* (GraalVM, CRaC, Conditions, Startup Timeline, HTTP Sessions, Spring Data, Spring
-Security, DevTools). The Overview dashboard panel is available (its scoring dashboard renders client-side from the
-advisor endpoints, and the shell-chrome `GET /bootui/api/overview` endpoint is served on both adapters).
+### 5.6 Not yet available on Quarkus (1)
+
+- `JMS` uses Spring JMS (`JmsTemplate` and `@JmsListener`) today. Quarkus users can use the implemented Kafka and RabbitMQ
+  panels while a Quarkus-native JMS capture layer remains unimplemented.
+
+**Result:** 43 of the 52 panels ship on Quarkus: 25 are statically available and 18 are capability/detector-gated. The
+remaining 9 panels do not ship: 8 are intentionally not applicable (GraalVM, CRaC, Conditions, Startup Timeline, HTTP
+Sessions, Spring Data, Spring Security, DevTools), and 1 (`JMS`) is not yet available. By portability strategy, the 43
+shipped panels comprise 17 ported as-is, 11 source-swapped, 12 capture-rebuilt, and 3 replaced with a Quarkus-native
+panel. The Overview dashboard panel is available (its scoring dashboard renders client-side from the advisor endpoints,
+and the shell-chrome `GET /bootui/api/overview` endpoint is served on both adapters).
 
 ## 6. Activation & safety on Quarkus
 
@@ -436,7 +442,7 @@ counterpart; ingredients for dropped/replaced panels are swapped or omitted.
 | `bootui-spring-boot-starter` (dev profile)                                         | activation                             | `bootui-quarkus` extension (dev mode)                                    |
 | `spring-boot-starter-data-jpa` + JPA entities/repos with intentional anti-patterns | Hibernate advisor, DB pools, SQL Trace | `quarkus-hibernate-orm-panache` with the same intentional anti-patterns  |
 | `@RestController`s (Hello/Admin/Sample + `ArchitectureIssuesController`)           | REST API, Mappings, Architecture       | `quarkus-rest` (JAX-RS) resources with equivalent issues                 |
-| `spring-ai-starter-model-ollama` + `ChatController`                                | AI Usage, Traces                       | `quarkus-langchain4j-ollama` + `quarkus-opentelemetry`                   |
+| `spring-ai-starter-model-ollama` + `ChatController`                                | AI Framework, Traces                   | `quarkus-langchain4j-ollama` + `quarkus-opentelemetry`                   |
 | `@Scheduled` `EchoScheduler`                                                       | Scheduled Tasks                        | `quarkus-scheduler` `@Scheduled`                                         |
 | Flyway **and** Liquibase (both, same changelogs)                                   | Flyway, Liquibase                      | `quarkus-flyway` + `quarkus-liquibase` (reuse the migrations/changelogs) |
 | `spring-boot-starter-cache` + Redis                                                | Spring Cache → **Quarkus Cache**       | `quarkus-cache`                                                          |
@@ -505,7 +511,7 @@ Pentesting, HTTP Probe, MCP Server) need no special ingredients — they work ag
 ## 11. Appendix — full panel disposition
 
 `Port` = ships from shared code · `Adapt` = swap data source via SPI · `Rebuild` = reimplement capture ·
-`Replace` = Quarkus-native panel · `Drop` = not shipped.
+`Replace` = Quarkus-native panel · `Drop` = intentionally not applicable · `Not yet` = not currently shipped.
 
 | Panel               | Tier        | Quarkus | Shared component                 | Quarkus adapter / reason                    |
 | ------------------- | ----------- | ------- | -------------------------------- | ------------------------------------------- |
@@ -519,7 +525,7 @@ Pentesting, HTTP Probe, MCP Server) need no special ingredients — they work ag
 | Vulnerabilities     | as-is       | Port    | OSV scanner + dependency catalog | —                                           |
 | Pentesting          | as-is       | Port    | Pentesting engine                | deliberately empty endpoint inventory (avoids a false-positive `spring-security-web` finding) |
 | HTTP Probe          | as-is       | Port    | HTTP probe service               | —                                           |
-| AI Usage            | as-is       | Port    | TelemetryStore (OTLP)            | —                                           |
+| AI Framework        | as-is       | Port    | TelemetryStore (OTLP)            | —                                           |
 | Traces              | as-is       | Port    | OTLP receiver + TelemetryStore   | —                                           |
 | GitHub              | as-is       | Port    | GitHub `HttpClient` service      | —                                           |
 | Copilot             | as-is       | Port    | CLI log reader                   | —                                           |
@@ -536,7 +542,7 @@ Pentesting, HTTP Probe, MCP Server) need no special ingredients — they work ag
 | Scheduled Tasks     | equiv       | Adapt   | Scheduled mapper                 | `ScheduledTaskProvider` → quarkus-scheduler |
 | Architecture        | equiv       | Adapt   | ArchUnit engine                  | `BasePackageProvider` (rules run unmodified) |
 | REST API            | **done**    | Rebuild | REST conventions engine          | JAX-RS handler-model builder                |
-| DB Connection Pools | **done**    | Rebuild | Pool model                       | `DataSourcePoolProvider` → Agroal           |
+| Database Connection Pools | **done**    | Rebuild | Pool model                       | `DataSourcePoolProvider` → Agroal           |
 | SQL Trace           | **done**    | Rebuild | SQL trace model                  | `SqlTraceSource` → Agroal/JDBC              |
 | Live Activity       | **done**    | Rebuild | Activity model                   | `RequestCaptureSource` → Vert.x; OTel trace-id correlation + trace-id-only profile drill-down; optional JDBC persistence backend via `QuarkusActivityCapture` (unconditional producers, identical to Spring); Kafka and RabbitMQ messaging capture via SmallRye `Outgoing`/`IncomingInterceptor` feeding the shared transport recorders; captured email (`MAIL`) reuses the shared `EmailCaptureService` directly, no separate capture needed |
 | HTTP Exchanges      | **done**    | Rebuild | Exchange model                   | `HttpExchangeProvider` → Vert.x             |
@@ -546,13 +552,13 @@ Pentesting, HTTP Probe, MCP Server) need no special ingredients — they work ag
 | Email               | **done**    | Rebuild | Email capture service            | CDI `@Observes SentMail` observer → quarkus-mailer |
 | Kafka               | **done**    | Rebuild | `KafkaActivityRecorder`          | SmallRye `Outgoing`/`IncomingInterceptor` (`Capability.KAFKA`-gated); same recorder as Live Activity |
 | RabbitMQ            | **done**    | Rebuild | `RabbitActivityRecorder`         | SmallRye `Outgoing`/`IncomingInterceptor` (`quarkus-messaging-rabbitmq` class-presence-gated); same recorder as Live Activity |
-| JMS                 | spring-only | Rebuild | `JmsActivityRecorder`            | Quarkus JMS capture not yet implemented; use Kafka/RabbitMQ panels |
+| JMS                 | spring-only | Not yet | `JmsActivityRecorder`            | Quarkus JMS capture not yet implemented; use Kafka/RabbitMQ panels |
 | REST Client         | **done**    | Rebuild | `RestClientTraceRecorder`        | `Capability.REST_CLIENT_REACTIVE`-gated generated `RestClientListener` service provider → metadata-only `QuarkusRestClientTraceFilter`; URI sanitization, status-0 transport failures, trace correlation, SSE/actions, and absent-extension type exclusion |
 | Spring              | **done**    | Replace | Scanning engine                  | new `Quarkus` advisor ruleset               |
 | Cache               | **done**    | Replace | Cache model                      | `CacheProvider` → quarkus-cache             |
 | Beans               | **done**    | Adapt   | Beans service                    | `BeanProvider` → Arc (build-time; low fidelity) |
 | Profile Diff        | **done**    | Adapt   | Config service                   | `ConfigProvider` → SmallRye profiles        |
-| Security (advisor)  | **done**    | Replace | Quarkus security ruleset         | Quarkus-native checks (OIDC/auth/TLS/CORS/annotations); see QUARKUS-CHECKS.md |
+| Security            | **done**    | Replace | Quarkus security ruleset         | Quarkus-native checks (OIDC/auth/TLS/CORS/annotations); see QUARKUS-CHECKS.md |
 | GraalVM             | **done**    | Drop    | —                                | Quarkus native-first; `NOT_APPLICABLE`      |
 | CRaC                | **done**    | Drop    | —                                | native focus; `NOT_APPLICABLE`              |
 | DevTools            | **done**    | Drop    | —                                | Quarkus live reload built in; `NOT_APPLICABLE` |

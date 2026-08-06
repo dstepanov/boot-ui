@@ -1,10 +1,11 @@
 <script setup>
 import {apiFetch} from './api.js'
-import {computed, onBeforeUnmount, onMounted, provide, reactive, ref, watch} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {
   applyTheme,
   nextTheme,
+  normalizeThemePreference,
   readThemePreference,
   resolveTheme,
   THEME_QUERY,
@@ -12,6 +13,7 @@ import {
 } from './utils/theme.js'
 import {describeLoadError} from './utils/loadError.js'
 import {recordRecentPanel} from './utils/recentPanels.js'
+import {safeLocalStorage} from './utils/safeStorage.js'
 import CommandPalette from './views/components/CommandPalette.vue'
 import ConfirmDialog from './views/components/ConfirmDialog.vue'
 
@@ -25,27 +27,47 @@ const authenticationToken = ref('')
 const authenticationError = ref(null)
 const authenticating = ref(false)
 const bearerScheme = 'Bearer'
-const savedCollapsed = localStorage.getItem('bootui.sidebar.collapsed')
-const sidebarCollapsed = ref(savedCollapsed === 'true')
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'bootui.sidebar.collapsed'
+const sidebarCollapsed = ref(safeLocalStorage.getBoolean(SIDEBAR_COLLAPSED_STORAGE_KEY))
 
 const NARROW_QUERY = '(max-width: 991.98px)'
 const narrowMediaQuery =
   typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(NARROW_QUERY) : null
 const isNarrow = ref(narrowMediaQuery?.matches === true)
 const mobileNavOpen = ref(false)
+const mobileNavRef = ref(null)
+const mobileNavCloseRef = ref(null)
+const mobileNavToggleRef = ref(null)
+const mainContentRef = ref(null)
+const mobileDrawerOpen = computed(() => isNarrow.value && mobileNavOpen.value)
+const mobileDrawerClosed = computed(() => isNarrow.value && !mobileNavOpen.value)
+const mobileNavToggleLabel = computed(() => (mobileDrawerOpen.value ? 'Close navigation menu' : 'Open navigation menu'))
+let mobileNavInvoker = null
 
-function onNarrowChange(e) {
-  isNarrow.value = e.matches === true
-  if (!isNarrow.value) {
+async function onNarrowChange(e) {
+  const becomingNarrow = e.matches === true
+  const activeElement = document.activeElement
+  const focusWasInSidebar =
+    becomingNarrow && activeElement instanceof HTMLElement && mobileNavRef.value?.contains(activeElement)
+  if (focusWasInSidebar) activeElement.blur()
+
+  isNarrow.value = becomingNarrow
+  if (!becomingNarrow) {
     mobileNavOpen.value = false
+    mobileNavInvoker = null
+  } else if (focusWasInSidebar) {
+    await nextTick()
+    mobileNavToggleRef.value?.focus()
   }
 }
 
 const commandPaletteOpen = ref(false)
 const commandPaletteRef = ref(null)
+const commandPaletteTriggerRef = ref(null)
+let commandPaletteInvoker = null
 const themeMediaQuery =
   typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(THEME_QUERY) : null
-const themePreference = ref(readThemePreference(typeof window === 'undefined' ? null : window.localStorage))
+const themePreference = ref(readThemePreference())
 const systemPrefersDark = ref(themeMediaQuery?.matches === true)
 const resolvedTheme = computed(() => resolveTheme(themePreference.value, systemPrefersDark.value))
 const darkTheme = computed(() => resolvedTheme.value === 'dark')
@@ -55,18 +77,44 @@ const themeToggleText = computed(() => `${darkTheme.value ? 'Light' : 'Dark'} mo
 provide('overview', overview)
 provide('panels', panels)
 
-function openCommandPalette() {
+async function openCommandPalette(event) {
+  if (commandPaletteOpen.value || mobileDrawerOpen.value) return
+  const eventTarget = event?.currentTarget
+  const activeElement = typeof document === 'undefined' ? null : document.activeElement
+  commandPaletteInvoker =
+    eventTarget instanceof HTMLElement
+      ? eventTarget
+      : activeElement instanceof HTMLElement
+        ? activeElement
+        : commandPaletteTriggerRef.value
   commandPaletteOpen.value = true
+  await nextTick()
   commandPaletteRef.value?.focusInput()
 }
 
-watch(sidebarCollapsed, (v) => localStorage.setItem('bootui.sidebar.collapsed', String(v)))
+async function closeCommandPalette(focusTarget = 'invoker') {
+  if (!commandPaletteOpen.value) return
+  commandPaletteOpen.value = false
+  await nextTick()
+  const target =
+    focusTarget === 'content'
+      ? mainContentRef.value
+      : commandPaletteInvoker?.isConnected
+        ? commandPaletteInvoker
+        : commandPaletteTriggerRef.value
+  target?.focus()
+  commandPaletteInvoker = null
+}
+
+watch(sidebarCollapsed, (value) => safeLocalStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, value))
 
 watch(
   () => route.name,
-  (name) => {
+  async (name) => {
     if (name) recordRecentPanel(name)
-    mobileNavOpen.value = false
+    if (mobileDrawerOpen.value) {
+      await closeMobileNav('content')
+    }
   },
   {immediate: true}
 )
@@ -79,18 +127,74 @@ function toggleSidebar() {
 
 function onSidebarToggle() {
   if (isNarrow.value) {
-    mobileNavOpen.value = false
+    dismissMobileNav()
   } else {
     toggleSidebar()
   }
 }
 
-function openMobileNav() {
+async function openMobileNav() {
+  if (!isNarrow.value || mobileNavOpen.value) return
+  mobileNavInvoker = mobileNavToggleRef.value
   mobileNavOpen.value = true
+  await nextTick()
+  mobileNavCloseRef.value?.focus()
 }
 
-function closeMobileNav() {
+async function closeMobileNav(focusTarget = 'toggle') {
+  if (!mobileDrawerOpen.value) return
+  const activeElement = document.activeElement
+  if (activeElement instanceof HTMLElement && mobileNavRef.value?.contains(activeElement)) {
+    activeElement.blur()
+  }
   mobileNavOpen.value = false
+  await nextTick()
+  const target =
+    focusTarget === 'content'
+      ? mainContentRef.value
+      : mobileNavInvoker?.isConnected
+        ? mobileNavInvoker
+        : mobileNavToggleRef.value
+  target?.focus()
+  mobileNavInvoker = null
+}
+
+function dismissMobileNav() {
+  closeMobileNav('toggle')
+}
+
+async function onSidebarLinkClick(navigate, event) {
+  const navigatingFromMobileDrawer = mobileDrawerOpen.value
+  await navigate(event)
+  if (navigatingFromMobileDrawer && mobileDrawerOpen.value) {
+    await closeMobileNav('content')
+  }
+}
+
+function onMobileNavKeydown(event) {
+  if (!mobileDrawerOpen.value) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    dismissMobileNav()
+    return
+  }
+  if (event.key !== 'Tab') return
+
+  const focusable = mobileNavRef.value?.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )
+  if (!focusable?.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  const active = document.activeElement
+  if (event.shiftKey && (active === first || active === mobileNavRef.value)) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault()
+    first.focus()
+  }
 }
 
 function syncTheme(theme) {
@@ -100,11 +204,7 @@ function syncTheme(theme) {
 }
 
 function persistThemePreference(theme) {
-  try {
-    window.localStorage?.setItem(THEME_STORAGE_KEY, theme)
-  } catch {
-    // Ignore unavailable storage; the in-memory theme still applies for this session.
-  }
+  return safeLocalStorage.setItem(THEME_STORAGE_KEY, theme)
 }
 
 function toggleTheme() {
@@ -115,6 +215,12 @@ function toggleTheme() {
 
 function onSystemThemeChange(e) {
   systemPrefersDark.value = e.matches === true
+}
+
+function onStorageChange(event) {
+  if (event.key === THEME_STORAGE_KEY || event.key === null) {
+    themePreference.value = normalizeThemePreference(event.newValue)
+  }
 }
 
 const semanticNavigationGroups = [
@@ -137,18 +243,19 @@ const EXPANDED_GROUPS_STORAGE_KEY = 'bootui.expandedGroups'
 
 function loadExpandedGroups() {
   const defaults = {advisors: true}
-  try {
-    const stored = window.localStorage?.getItem(EXPANDED_GROUPS_STORAGE_KEY)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      if (parsed && typeof parsed === 'object') {
-        return {...defaults, ...parsed}
-      }
-    }
-  } catch {
-    // Ignore unavailable or malformed storage; fall back to defaults.
+  const stored = safeLocalStorage.getJson(EXPANDED_GROUPS_STORAGE_KEY, null)
+  if (!stored || Array.isArray(stored) || typeof stored !== 'object') {
+    if (stored !== null) safeLocalStorage.removeItem(EXPANDED_GROUPS_STORAGE_KEY)
+    return defaults
   }
-  return defaults
+  const validGroupKeys = new Set([
+    ...semanticNavigationGroups.map((group) => group.key),
+    unavailableNavigationGroup.key
+  ])
+  const expanded = Object.fromEntries(
+    Object.entries(stored).filter(([key, value]) => validGroupKeys.has(key) && typeof value === 'boolean')
+  )
+  return {...defaults, ...expanded}
 }
 
 const expandedGroups = reactive(loadExpandedGroups())
@@ -452,11 +559,7 @@ watch(
 watch(
   expandedGroups,
   (groups) => {
-    try {
-      window.localStorage?.setItem(EXPANDED_GROUPS_STORAGE_KEY, JSON.stringify(groups))
-    } catch {
-      // Ignore storage write failures (e.g. private mode / quota).
-    }
+    safeLocalStorage.setJson(EXPANDED_GROUPS_STORAGE_KEY, groups)
   },
   {deep: true}
 )
@@ -464,23 +567,33 @@ watch(
 onMounted(() => {
   loadShellData()
   window.addEventListener('keydown', onGlobalKeydown)
+  window.addEventListener('storage', onStorageChange)
   themeMediaQuery?.addEventListener?.('change', onSystemThemeChange)
   narrowMediaQuery?.addEventListener?.('change', onNarrowChange)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKeydown)
+  window.removeEventListener('storage', onStorageChange)
   themeMediaQuery?.removeEventListener?.('change', onSystemThemeChange)
   narrowMediaQuery?.removeEventListener?.('change', onNarrowChange)
   clearFlyoutTimer()
 })
 
 function onGlobalKeydown(e) {
-  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+  if (mobileDrawerOpen.value) {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      dismissMobileNav()
+    }
+    return
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault()
-    commandPaletteOpen.value = !commandPaletteOpen.value
     if (commandPaletteOpen.value) {
-      commandPaletteRef.value?.focusInput()
+      closeCommandPalette()
+    } else {
+      openCommandPalette()
     }
   }
 }
@@ -488,14 +601,19 @@ function onGlobalKeydown(e) {
 
 <template>
   <div class="bootui-shell min-vh-100">
-    <CommandPalette v-if="commandPaletteOpen" ref="commandPaletteRef" @close="commandPaletteOpen = false" />
+    <CommandPalette v-if="commandPaletteOpen" ref="commandPaletteRef" @close="closeCommandPalette" />
     <ConfirmDialog />
     <div class="ambient-orb ambient-orb-one"></div>
     <div class="ambient-orb ambient-orb-two"></div>
 
-    <div v-if="isNarrow && mobileNavOpen" class="bootui-nav-backdrop" @click="closeMobileNav"></div>
+    <div v-if="mobileDrawerOpen" aria-hidden="true" class="bootui-nav-backdrop" @click="dismissMobileNav"></div>
 
-    <section v-if="authenticationRequired" class="authentication-gate" aria-labelledby="authentication-title">
+    <section
+      v-if="authenticationRequired"
+      :inert="commandPaletteOpen ? true : undefined"
+      class="authentication-gate"
+      aria-labelledby="authentication-title"
+    >
       <div class="authentication-card">
         <span class="authentication-icon"><i class="bi bi-shield-lock"></i></span>
         <div>
@@ -526,28 +644,42 @@ function onGlobalKeydown(e) {
 
     <template v-else>
       <aside
+        id="bootui-mobile-navigation"
+        ref="mobileNavRef"
+        :aria-hidden="mobileDrawerClosed ? 'true' : undefined"
+        :aria-label="isNarrow ? 'Navigation menu' : undefined"
+        :aria-modal="mobileDrawerOpen ? 'true' : undefined"
         :class="{
           'bootui-sidebar--collapsed': collapsedRail,
           'bootui-sidebar--drawer': isNarrow,
-          'bootui-sidebar--open': isNarrow && mobileNavOpen
+          'bootui-sidebar--open': mobileDrawerOpen
         }"
+        :inert="commandPaletteOpen || mobileDrawerClosed ? true : undefined"
+        :role="isNarrow ? 'dialog' : undefined"
         class="bootui-sidebar"
+        @keydown="onMobileNavKeydown"
       >
         <div class="brand-area">
-          <router-link class="brand-card text-decoration-none" to="/overview">
-            <span class="brand-mark"><i class="bi bi-cup-hot-fill"></i></span>
-            <span class="brand-text">
-              <span class="brand-name">BootUI</span>
-              <span class="brand-subtitle">Local developer console</span>
-            </span>
+          <router-link v-slot="{href, navigate}" custom to="/overview">
+            <a :href="href" class="brand-card text-decoration-none" @click="onSidebarLinkClick(navigate, $event)">
+              <span class="brand-mark"><i class="bi bi-cup-hot-fill"></i></span>
+              <span class="brand-text">
+                <span class="brand-name">BootUI</span>
+                <span class="brand-subtitle">Local developer console</span>
+              </span>
+            </a>
           </router-link>
           <button
+            ref="mobileNavCloseRef"
+            :aria-label="isNarrow ? 'Close navigation menu' : sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
             class="sidebar-toggle"
             :title="isNarrow ? 'Close menu' : sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+            type="button"
             @click="onSidebarToggle"
           >
             <i
               :class="isNarrow ? 'bi-x-lg' : sidebarCollapsed ? 'bi-chevron-double-right' : 'bi-chevron-double-left'"
+              aria-hidden="true"
               class="bi"
             ></i>
           </button>
@@ -612,7 +744,7 @@ function onGlobalKeydown(e) {
                   :href="href"
                   :title="routeAvailabilityLabel(r)"
                   class="nav-link bootui-nav-link"
-                  @click="navigate"
+                  @click="onSidebarLinkClick(navigate, $event)"
                 >
                   <i :class="['bi', r.meta.icon]"></i>
                   <span class="bootui-nav-link__label">{{ navTitle(r) }}</span>
@@ -650,6 +782,7 @@ function onGlobalKeydown(e) {
       <transition name="flyout-fade">
         <div
           v-if="railFlyout"
+          :inert="commandPaletteOpen ? true : undefined"
           class="bootui-nav-flyout"
           :style="{top: railFlyout.top + 'px', left: railFlyout.left + 'px'}"
           role="group"
@@ -692,11 +825,19 @@ function onGlobalKeydown(e) {
         </div>
       </transition>
 
-      <div class="bootui-workspace">
+      <div :inert="commandPaletteOpen || mobileDrawerOpen ? true : undefined" class="bootui-workspace">
         <header class="topbar">
           <div class="topbar-lead">
-            <button class="nav-hamburger" type="button" aria-label="Open navigation menu" @click="openMobileNav">
-              <i class="bi bi-list"></i>
+            <button
+              ref="mobileNavToggleRef"
+              :aria-expanded="mobileDrawerOpen"
+              :aria-label="mobileNavToggleLabel"
+              aria-controls="bootui-mobile-navigation"
+              class="nav-hamburger"
+              type="button"
+              @click="openMobileNav"
+            >
+              <i aria-hidden="true" class="bi bi-list"></i>
             </button>
             <div class="topbar-heading">
               <div class="eyebrow">Inspecting</div>
@@ -705,7 +846,13 @@ function onGlobalKeydown(e) {
             </div>
           </div>
           <div class="topbar-actions">
-            <button class="cp-trigger" title="Open command palette (⌘K)" @click="openCommandPalette">
+            <button
+              ref="commandPaletteTriggerRef"
+              class="cp-trigger"
+              title="Open command palette (⌘K)"
+              type="button"
+              @click="openCommandPalette"
+            >
               <i class="bi bi-search me-1"></i>
               <span class="cp-trigger-label">Go to panel</span>
               <kbd class="cp-trigger-hint">⌘K</kbd>
@@ -731,7 +878,7 @@ function onGlobalKeydown(e) {
           </div>
         </header>
 
-        <main class="content-stage">
+        <main ref="mainContentRef" class="content-stage" tabindex="-1">
           <div
             v-if="shellErrorMessage"
             :class="['alert', shellServerUnreachable ? 'alert-warning' : 'alert-danger']"
@@ -789,8 +936,8 @@ function onGlobalKeydown(e) {
   --bootui-green-dark: #146c43;
   --bootui-blue: #0d6efd;
   --bootui-text: #152033;
-  --bootui-text-muted: #64748b;
-  --bootui-text-subtle: #94a3b8;
+  --bootui-text-muted: #56667b;
+  --bootui-text-subtle: #5b6b80;
 
   /* Status / severity palette (consistent meaning across light & dark) */
   --bootui-danger: #dc3545;
@@ -838,7 +985,7 @@ function onGlobalKeydown(e) {
   --bootui-nav-active-bg: linear-gradient(135deg, #198754, #0d6efd);
   --bootui-nav-active-color: #ffffff;
   --bootui-nav-group-bg: rgba(255, 255, 255, 0.58);
-  --bootui-nav-group-color: #64748b;
+  --bootui-nav-group-color: var(--bootui-text-muted);
   --bootui-nav-link-color: #334155;
 
   /* Chart legend */
@@ -921,8 +1068,8 @@ function onGlobalKeydown(e) {
   --bootui-green-dark: #4ade80;
   --bootui-blue: #60a5fa;
   --bootui-text: #e2e8f0;
-  --bootui-text-muted: #94a3b8;
-  --bootui-text-subtle: #64748b;
+  --bootui-text-muted: #a3b1c6;
+  --bootui-text-subtle: #94a3b8;
 
   /* Status text re-lit for dark-surface contrast (see Semantic Status) */
   --bootui-warning-text-strong: #e0a800;
@@ -951,7 +1098,7 @@ function onGlobalKeydown(e) {
   --bootui-nav-active-bg: linear-gradient(135deg, #198754, #2563eb);
   --bootui-nav-active-color: #ffffff;
   --bootui-nav-group-bg: rgba(30, 41, 59, 0.7);
-  --bootui-nav-group-color: #94a3b8;
+  --bootui-nav-group-color: var(--bootui-text-muted);
   --bootui-nav-link-color: #cbd5e1;
 
   /* Chart legend */
@@ -996,8 +1143,9 @@ function onGlobalKeydown(e) {
   color: var(--bootui-text);
 }
 
-:global(:root[data-bootui-theme='dark'] .form-control::placeholder) {
+:global(.form-control::placeholder) {
   color: var(--bootui-text-subtle);
+  opacity: 1;
 }
 
 :global(:root[data-bootui-theme='dark'] .text-muted) {
@@ -1131,7 +1279,8 @@ function onGlobalKeydown(e) {
 .bootui-nav-group__toggle:focus-visible,
 .nav-hamburger:focus-visible,
 .cp-trigger:focus-visible,
-.theme-toggle:focus-visible {
+.theme-toggle:focus-visible,
+:global(.bootui-keyboard-target:focus-visible) {
   outline: 2px solid var(--bootui-blue);
   outline-offset: 2px;
 }
@@ -1549,7 +1698,6 @@ function onGlobalKeydown(e) {
   background: rgba(148, 163, 184, 0.08);
   border-color: rgba(100, 116, 139, 0.12);
   color: var(--bootui-text-subtle);
-  opacity: 0.72;
 }
 
 .bootui-nav-section--unavailable .bootui-nav-group__count {
@@ -1580,11 +1728,14 @@ function onGlobalKeydown(e) {
 .bootui-nav-link__status {
   color: var(--bootui-text-subtle);
   font-size: 0.95rem;
-  opacity: 0.65;
 }
 
 .bootui-nav-link--unavailable {
-  opacity: 0.55;
+  color: var(--bootui-text-subtle);
+}
+
+.bootui-nav-link.active .bootui-nav-link__status {
+  color: inherit;
 }
 
 .bootui-nav-link--unavailable .bootui-nav-link__label {

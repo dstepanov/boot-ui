@@ -34,8 +34,9 @@ const allPanelLinks = [
   {id: 'pentesting', title: 'Pentesting', heading: /^Pentesting/},
   {id: 'vulnerabilities', title: 'Vulnerabilities', heading: /^Vulnerabilities/},
   {id: 'scheduled', title: 'Scheduled Tasks', heading: /Scheduled Tasks/},
+  {id: 'rest-client-trace', title: 'REST Client', heading: /^REST Client$/},
+  {id: 'ai', title: 'AI Framework', heading: /AI Framework/},
   {id: 'cache', title: 'Cache', heading: /^Cache$/},
-  {id: 'ai', title: 'AI Usage', heading: /AI Usage/},
   {id: 'traces', title: 'Traces', heading: /^Traces/},
   {id: 'log-tail', title: 'Log Tail', heading: /Log Tail/},
   {id: 'exceptions', title: 'Exceptions', heading: /^Exceptions/},
@@ -45,7 +46,6 @@ const allPanelLinks = [
   {id: 'kafka', title: 'Kafka', heading: /^Kafka/},
   {id: 'rabbitmq', title: 'RabbitMQ', heading: /^RabbitMQ/},
   {id: 'jms', title: 'JMS', heading: /^JMS/},
-  {id: 'rest-client-trace', title: 'REST Client', heading: /^REST Client$/},
   {id: 'architecture', title: 'Architecture', heading: /^Architecture/},
   {id: 'rest-api', title: 'REST API', heading: /^REST API/},
   {id: 'mcp-server', title: 'MCP Server', heading: /^MCP Server/},
@@ -102,6 +102,150 @@ test.describe('BootUI app shell', () => {
     const contributeLink = page.getByRole('link', {name: /Contribute to the project/})
     await expect(contributeLink).toHaveAttribute('href', 'https://github.com/jdubois/boot-ui')
     await expect(contributeLink.locator('.bi-github')).toBeVisible()
+  })
+
+  test('shell and current-page controls work when browser storage is denied before startup', async ({page}) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        get() {
+          throw new DOMException('Storage denied by browser policy', 'SecurityError')
+        }
+      })
+    })
+    await page.goto('/bootui/')
+
+    await expect(page.locator('.bootui-shell')).toBeVisible()
+    const root = page.locator('html')
+    const themeToggle = page.locator('.theme-toggle')
+    const initialTheme = await root.getAttribute('data-bs-theme')
+    await themeToggle.click()
+    await expect(root).toHaveAttribute('data-bs-theme', initialTheme === 'dark' ? 'light' : 'dark')
+
+    const sidebar = page.locator('aside.bootui-sidebar')
+    await expect(sidebar).not.toHaveClass(/bootui-sidebar--collapsed/)
+    await page.locator('.sidebar-toggle').click()
+    await expect(sidebar).toHaveClass(/bootui-sidebar--collapsed/)
+  })
+
+  test('mobile navigation contains focus and closes without stranding it', async ({page}) => {
+    await page.setViewportSize({width: 390, height: 844})
+    await page.goto('/bootui/')
+
+    const drawer = page.locator('#bootui-mobile-navigation')
+    const toggle = page.locator('.nav-hamburger')
+    await expect(drawer).toHaveAttribute('aria-hidden', 'true')
+    await expect(drawer).toHaveAttribute('inert', '')
+    await expect(toggle).toHaveAttribute('aria-controls', 'bootui-mobile-navigation')
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(toggle).toHaveAccessibleName('Open navigation menu')
+
+    await page.keyboard.press('Tab')
+    await expect(toggle).toBeFocused()
+
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('button', {name: 'Close navigation menu'}).first()).toBeFocused()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(toggle).toHaveAttribute('aria-label', 'Close navigation menu')
+    await expect(drawer).not.toHaveAttribute('aria-hidden', 'true')
+    await expect(drawer).toHaveAttribute('aria-modal', 'true')
+    await expect(page.locator('.bootui-workspace')).toHaveAttribute('inert', '')
+    await page.keyboard.press('Control+K')
+    await expect(page.getByRole('dialog', {name: 'Command palette'})).toHaveCount(0)
+    await expect(drawer).toHaveAttribute('aria-modal', 'true')
+
+    const firstDrawerLink = drawer.locator('.brand-card')
+    const lastDrawerLink = drawer.locator('.contribute-card')
+    await firstDrawerLink.focus()
+    await page.keyboard.press('Shift+Tab')
+    await expect(lastDrawerLink).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(firstDrawerLink).toBeFocused()
+
+    await page.keyboard.press('Escape')
+    await expect(toggle).toBeFocused()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(drawer).toHaveAttribute('aria-hidden', 'true')
+
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('button', {name: 'Close navigation menu'}).first()).toBeFocused()
+    const backdropBounds = await page.locator('.bootui-nav-backdrop').boundingBox()
+    if (!backdropBounds) throw new Error('Navigation backdrop is not visible')
+    await page.mouse.click(backdropBounds.x + backdropBounds.width - 4, backdropBounds.y + backdropBounds.height / 2)
+    await expect(toggle).toBeFocused()
+    await expect(drawer).toHaveAttribute('aria-hidden', 'true')
+
+    await page.keyboard.press('Enter')
+    const architectureLink = drawer.getByRole('link', {name: 'Architecture'})
+    await architectureLink.focus()
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/#\/architecture$/)
+    await expect(page.locator('main.content-stage')).toBeFocused()
+    await expect(drawer).toHaveAttribute('aria-hidden', 'true')
+    expect(await drawer.evaluate((element) => element.contains(document.activeElement))).toBe(false)
+  })
+
+  test('command palette contains focus, tracks its active option, and hands route focus to content', async ({page}) => {
+    await page.setViewportSize({width: 1280, height: 800})
+    await page.goto('/bootui/')
+
+    const trigger = page.getByRole('button', {name: /Go to panel/})
+    await trigger.focus()
+    await page.keyboard.press('Enter')
+
+    const palette = page.getByRole('dialog', {name: 'Command palette'})
+    const input = palette.getByRole('combobox', {name: 'Search panels'})
+    const listbox = palette.getByRole('listbox', {name: 'Panel results'})
+    await expect(input).toBeFocused()
+    await expect(input).toHaveAttribute('aria-controls', await listbox.getAttribute('id'))
+    await expect(page.locator('.bootui-workspace')).toHaveAttribute('inert', '')
+    await expect(page.locator('#bootui-mobile-navigation')).toHaveAttribute('inert', '')
+
+    const firstActiveId = await input.getAttribute('aria-activedescendant')
+    await page.keyboard.press('ArrowDown')
+    await expect(input).not.toHaveAttribute('aria-activedescendant', firstActiveId)
+    const secondActiveId = await input.getAttribute('aria-activedescendant')
+    await expect(page.locator(`#${secondActiveId}`)).toHaveAttribute('aria-selected', 'true')
+
+    await page.keyboard.press('Tab')
+    await expect(input).toBeFocused()
+    await page.keyboard.press('Shift+Tab')
+    await expect(input).toBeFocused()
+
+    await input.fill('no-panel-has-this-name')
+    await expect(input).not.toHaveAttribute('aria-activedescendant', /.+/)
+
+    await page.keyboard.press('Escape')
+    await expect(palette).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+
+    await page.keyboard.press('Control+K')
+    await expect(input).toBeFocused()
+    await input.fill('Architecture')
+    await page.keyboard.press('Enter')
+
+    await expect(page).toHaveURL(/#\/architecture$/)
+    await expect(palette).toHaveCount(0)
+    await expect(page.locator('main.content-stage')).toBeFocused()
+  })
+
+  test('mobile command palette restores shortcut focus on cancel', async ({page}) => {
+    await page.setViewportSize({width: 390, height: 844})
+    await page.goto('/bootui/')
+
+    const themeToggle = page.locator('.theme-toggle')
+    await themeToggle.focus()
+    await page.keyboard.press('Control+K')
+
+    const palette = page.getByRole('dialog', {name: 'Command palette'})
+    const input = palette.getByRole('combobox', {name: 'Search panels'})
+    await expect(input).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(input).toBeFocused()
+    await page.keyboard.press('Escape')
+
+    await expect(palette).toHaveCount(0)
+    await expect(themeToggle).toBeFocused()
   })
 
   test('main content scrolls while the sidebar stays fixed', async ({page}) => {
@@ -197,12 +341,12 @@ test.describe('BootUI app shell', () => {
     await expect(page.getByRole('group', {name: 'Services panels'}).locator('.bootui-nav-link__label')).toHaveText([
       'Scheduled Tasks',
       'REST Client',
+      'AI Framework',
       'Cache',
       'Email',
       'Kafka',
       'RabbitMQ',
-      'JMS',
-      'AI Usage'
+      'JMS'
     ])
 
     await page.getByRole('button', {name: /Diagnostics\s+5/}).click()
@@ -265,16 +409,16 @@ test.describe('BootUI app shell', () => {
     const unavailableToggle = page.getByRole('button', {name: /Disabled \/ unavailable\s+1/})
     await expect(unavailableToggle).toBeVisible()
     await expect(unavailableToggle).toHaveAttribute('aria-expanded', 'false')
-    await expect(page.locator('aside .nav-link', {hasText: 'AI Usage'})).not.toBeVisible()
+    await expect(page.locator('aside .nav-link', {hasText: 'AI Framework'})).not.toBeVisible()
 
     await unavailableToggle.click()
 
-    const aiLink = page.locator('aside .nav-link', {hasText: 'AI Usage'})
+    const aiLink = page.locator('aside .nav-link', {hasText: 'AI Framework'})
     await expect(aiLink).toBeVisible()
     await expect(aiLink).toHaveClass(/bootui-nav-link--unavailable/)
     await expect(aiLink).toHaveAttribute(
       'aria-label',
-      'AI Usage - unavailable: Spring AI is not available in this test state'
+      'AI Framework - unavailable: Spring AI is not available in this test state'
     )
   })
 

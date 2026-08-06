@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * AI Usage overview payload.
+ * AI Framework overview payload.
  */
 public record AiOverviewDto(
         boolean enabled,

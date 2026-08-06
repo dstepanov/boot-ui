@@ -1,5 +1,5 @@
 // @ts-check
-import {expect, test} from './fixtures.js'
+import {acceptConfirm, expect, test} from './fixtures.js'
 
 /**
  * Threads renders the same shared Threads.vue on both adapters over a byte-identical DTO; the data is
@@ -41,7 +41,8 @@ test.describe('Threads view', () => {
 
     // The button is a real POST /bootui/api/threads/download that streams a text attachment; Chromium
     // reports that as a Playwright download event rather than a navigation.
-    const [download] = await Promise.all([page.waitForEvent('download'), downloadButton.click()])
+    await downloadButton.click()
+    const [download] = await Promise.all([page.waitForEvent('download'), acceptConfirm(page)])
 
     expect(download.suggestedFilename()).toBe('thread-dump.txt')
     const stream = await download.createReadStream()

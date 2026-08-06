@@ -48,8 +48,8 @@ Use the root Maven properties as the source of truth for the published adapters 
 
 When updating compatibility text in docs (README, `docs/SETUP.md`, `docs/FEATURES.md`,
 `.github/copilot-instructions.md`), reference those properties and refresh any explicit version strings in the same PR.
-The non-published Quarkus sample app keeps a separate platform pin aligned with its Quarkus LangChain4j dependency; do
-not treat that demo-specific pin as the public compatibility version.
+All Quarkus modules, including the non-published sample app, inherit the Quarkus platform through
+`bootui-quarkus-parent`; keep its LangChain4j BOM compatible with that shared LTS line.
 
 ## Build
 
@@ -195,16 +195,18 @@ non-default port, point the proxy at it with `BOOTUI_API_PROXY_TARGET`. Use
 run `./mvnw install -pl bootui-ui` once to re-bundle the assets into the JAR.
 
 To develop against custom BootUI mounts, set `BOOTUI_DEV_PATH` for the Vite shell base and, when the API path is not
-`<BOOTUI_DEV_PATH>/api`, set `BOOTUI_DEV_API_PATH` independently:
+`<BOOTUI_DEV_PATH>/api`, set `BOOTUI_DEV_API_PATH` independently. When the host application has a non-root context,
+also set `BOOTUI_DEV_APPLICATION_PATH` so the Overview link targets that application root:
 
 ```bash
-BOOTUI_DEV_PATH=/dev-console \
-  BOOTUI_DEV_API_PATH=/internal/bootui-api \
+BOOTUI_DEV_PATH=/host/dev-console \
+  BOOTUI_DEV_API_PATH=/host/internal/bootui-api \
+  BOOTUI_DEV_APPLICATION_PATH=/host \
   BOOTUI_API_PROXY_TARGET=http://localhost:8083 \
   npm run dev
 ```
 
-Then open <http://localhost:5173/dev-console/>. These values affect only Vite development; the packaged build uses
+Then open <http://localhost:5173/host/dev-console/>. These values affect only Vite development; the packaged build uses
 relative asset URLs and receives the actual UI/API paths from the backend at runtime.
 
 ### Bootstrap Icons subsetting

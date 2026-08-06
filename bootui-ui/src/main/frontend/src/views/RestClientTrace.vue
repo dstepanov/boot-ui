@@ -373,7 +373,11 @@ function clearTrace() {
               Recent calls <span class="badge bg-secondary">{{ filteredEntries.length }}</span>
             </h5>
             <div class="d-flex flex-wrap gap-2">
-              <select v-model="methodFilter" class="form-select form-select-sm rest-filter-select">
+              <select
+                v-model="methodFilter"
+                aria-label="Filter recent calls by HTTP method"
+                class="form-select form-select-sm rest-filter-select"
+              >
                 <option value="">All methods</option>
                 <option v-for="method in methods" :key="method" :value="method">{{ method }}</option>
               </select>
@@ -389,6 +393,7 @@ function clearTrace() {
               </div>
               <input
                 v-model="filter"
+                aria-label="Filter recent REST client calls"
                 class="form-control form-control-sm trace-filter"
                 placeholder="Filter by URI, host, method, client, or thread…"
               />
@@ -415,9 +420,22 @@ function clearTrace() {
               </thead>
               <tbody>
                 <template v-for="entry in filteredEntries" :key="entry.id">
-                  <tr class="rest-row" @click="toggleRow(entry)">
+                  <tr class="rest-row" data-keyboard-delegate="toggleRow(entry)" @click="toggleRow(entry)">
                     <td class="text-muted">
-                      <i class="bi" :class="isExpanded(entry) ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
+                      <button
+                        class="btn btn-sm btn-link p-0 bootui-keyboard-target rest-row-toggle"
+                        type="button"
+                        :aria-controls="`rest-details-${entry.id}`"
+                        :aria-expanded="isExpanded(entry)"
+                        :aria-label="`${isExpanded(entry) ? 'Collapse' : 'Expand'} details for ${entry.method} call to ${entry.host}${entry.path}`"
+                        @click.stop="toggleRow(entry)"
+                      >
+                        <i
+                          aria-hidden="true"
+                          class="bi"
+                          :class="isExpanded(entry) ? 'bi-chevron-down' : 'bi-chevron-right'"
+                        ></i>
+                      </button>
                     </td>
                     <td class="text-nowrap font-monospace small">{{ formatClockTime(entry.timestamp) }}</td>
                     <td>
@@ -437,7 +455,7 @@ function clearTrace() {
                     </td>
                     <td class="text-nowrap small">{{ entry.clientType }}</td>
                   </tr>
-                  <tr v-if="isExpanded(entry)" class="rest-detail-row">
+                  <tr v-if="isExpanded(entry)" :id="`rest-details-${entry.id}`" class="rest-detail-row">
                     <td></td>
                     <td colspan="6">
                       <dl class="row mb-0 small">

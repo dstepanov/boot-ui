@@ -151,4 +151,53 @@ describe('Copilot', () => {
 
     expect(wrapper.get('.activity-tooltip').text()).toBe('Events: 4 · Failures: 1')
   })
+
+  it('keeps the session selector and nested activity actions independent', async () => {
+    const session = {
+      id: 'session-one',
+      updatedAtEpochMillis: Date.now() - 60_000,
+      eventCount: 2,
+      errorCount: 1,
+      inputTokens: 123,
+      outputTokens: 45
+    }
+    const detail = {
+      summary: session,
+      counts: {total: 2, byCategory: {SHELL: 2}, errors: 1},
+      turns: [],
+      recentEvents: [],
+      failureEvents: [{id: 'failure', category: 'SHELL', summary: 'SHELL failed', success: false}],
+      warnings: []
+    }
+    const fetchMock = vi.fn((url) => {
+      if (url === 'api/copilot/dashboard') {
+        return Promise.resolve(jsonResponse(dashboard({recentSessions: [session]})))
+      }
+      if (url === 'api/copilot/sessions') {
+        return Promise.resolve(jsonResponse(sessionList({total: 1, returned: 1, sessions: [session]})))
+      }
+      if (url === 'api/copilot/sessions/session-one') {
+        return Promise.resolve(jsonResponse(detail))
+      }
+      return Promise.resolve(jsonResponse({}, false, 404))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    wrapper = mount(Copilot)
+    await flushPromises()
+
+    const selectSession = wrapper.get('button.session-row-target')
+    expect(selectSession.attributes('aria-label')).toBe('View session session-one')
+    await selectSession.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="tab"].active').text()).toContain('Activity')
+
+    await wrapper.get('button[aria-label="Show failures for session-one"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="tab"].active').text()).toContain('Failures')
+
+    await selectSession.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="tab"].active').text()).toContain('Activity')
+  })
 })

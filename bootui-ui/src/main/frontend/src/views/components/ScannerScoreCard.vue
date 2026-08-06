@@ -194,7 +194,7 @@ function onRun() {
 }
 
 .scanner-score--secondary {
-  color: #64748b;
+  color: var(--bootui-text-muted, #56667b);
 }
 
 .min-w-0 {

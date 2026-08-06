@@ -871,8 +871,14 @@ watch(
                   :key="session.id"
                   :class="{active: session.id === selectedSessionId}"
                   class="list-group-item list-group-item-action session-row"
-                  @click="pickSession(session.id)"
                 >
+                  <button
+                    :aria-current="session.id === selectedSessionId ? 'true' : undefined"
+                    :aria-label="`View session ${session.id}`"
+                    class="bootui-keyboard-target session-row-target"
+                    type="button"
+                    @click="pickSession(session.id)"
+                  ></button>
                   <div class="d-flex justify-content-between align-items-start">
                     <div class="me-2 text-truncate">
                       <div class="fw-semibold text-truncate">
@@ -890,7 +896,7 @@ watch(
                       <div>
                         <button
                           :aria-label="`Show activity for ${session.id}`"
-                          class="badge text-bg-secondary border-0 me-1"
+                          class="badge text-bg-secondary border-0 me-1 bootui-keyboard-target session-row-action"
                           type="button"
                           @click.stop="pickSession(session.id, {tab: 'activity'})"
                         >
@@ -899,7 +905,7 @@ watch(
                         <button
                           v-if="session.errorCount > 0"
                           :aria-label="`Show failures for ${session.id}`"
-                          class="badge text-bg-danger border-0"
+                          class="badge text-bg-danger border-0 bootui-keyboard-target session-row-action"
                           type="button"
                           @click.stop="pickSession(session.id, {tab: 'failures'})"
                         >
@@ -997,14 +1003,19 @@ watch(
 
                 <div class="row g-2 mb-3 align-items-end">
                   <div class="col-md-4">
-                    <label class="form-label">Category</label>
-                    <select v-model="categoryFilter" class="form-select">
+                    <label class="form-label" for="copilot-category-filter">Category</label>
+                    <select id="copilot-category-filter" v-model="categoryFilter" class="form-select">
                       <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
                     </select>
                   </div>
                   <div class="col-md-6">
-                    <label class="form-label">Filter</label>
-                    <input v-model="textFilter" class="form-control" placeholder="Tool name, summary, or type…" />
+                    <label class="form-label" for="copilot-text-filter">Filter</label>
+                    <input
+                      id="copilot-text-filter"
+                      v-model="textFilter"
+                      class="form-control"
+                      placeholder="Tool name, summary, or type…"
+                    />
                   </div>
                   <div class="col-md-2 text-end small text-muted">
                     {{ filteredEvents.length }} / {{ detail.recentEvents.length }}
@@ -1279,6 +1290,30 @@ watch(
 
 .session-row {
   cursor: pointer;
+  position: relative;
+}
+
+.session-row-target {
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+  inset: 0;
+  position: absolute;
+  z-index: 1;
+}
+
+.session-row-target:focus-visible {
+  outline-offset: -3px;
+}
+
+.session-row.active .bootui-keyboard-target:focus-visible {
+  box-shadow: 0 0 0 4px var(--bootui-blue);
+  outline-color: var(--bs-body-bg);
+}
+
+.session-row-action {
+  position: relative;
+  z-index: 2;
 }
 
 .session-list {

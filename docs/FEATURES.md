@@ -46,7 +46,7 @@ gracefully when optional infrastructure is missing.
 On Quarkus the Overview panel is fully available. Its scoring *dashboard* is rendered entirely in the browser:
 the shell aggregates each advisor's own scan/report endpoints (only those whose panels are available on Quarkus
 contribute) and computes the same combined score, so no backend dashboard service is involved. The shared shell
-chrome around every panel — the header application name, framework and version (for example "Quarkus 3.37"), Java
+chrome around every panel — the header application name, framework and version (for example "Quarkus 3.33"), Java
 version, active profiles, and the active/disabled status — is populated by the same framework-neutral
 `GET /bootui/api/overview` endpoint that both adapters expose for the shell.
 
@@ -1241,6 +1241,36 @@ identical.
 
 ![BootUI REST Client panel](./images/bootui-rest-client-trace.webp)
 
+### AI Framework
+
+The AI Framework panel summarizes Spring AI and LangChain4j activity collected from OpenTelemetry spans emitted by their
+built-in
+observability. It groups chat client and chat model spans by conversation so you can see request count, token usage (
+prompt, completion, total), latency, model, and the prompt/response snippet when the framework is configured to capture
+content (for Spring AI: `spring.ai.chat.client.observations.log-prompt`, `spring.ai.chat.observations.log-prompt`,
+`spring.ai.chat.observations.log-completion`; for LangChain4j: enable GenAI message-content capture on the OpenTelemetry
+instrumentation). A small inline chart shows total token usage over recent calls so you can
+spot expensive interactions during local development. Vector store and embedding spans appear alongside chat spans when
+present. The BootUI starter captures local application spans automatically when telemetry is enabled. Cooperating local
+services can still send OTLP spans to the embedded receiver. The sidebar dims the panel when telemetry is disabled or
+neither Spring AI nor LangChain4j is on the classpath, and the view
+explains the unavailable state. When no framework is detected, the setup checklist also shows two side-by-side guides —
+one for Spring AI and one for LangChain4j — explaining the dependency and configuration each needs to emit GenAI spans
+(including optional prompt/completion content capture). When both prerequisites are ready but no chat spans have arrived
+yet, the panel shows a ready empty state rather than setup guidance. Recent chats, model breakdowns, token-series
+windows, spans, and attributes
+are bounded so large local runs stay responsive. As with the Traces panel, data is sourced from BootUI's local telemetry
+capture, is in-memory only, and is cleared on restart.
+
+On Quarkus the AI Framework panel is identical and reads from the same in-memory telemetry store; GenAI spans are captured
+when the application depends on `quarkus-opentelemetry` (for example alongside `quarkus-langchain4j`, or any
+OpenTelemetry GenAI instrumentation that emits the `gen_ai.*` semantic-convention spans). When no framework is detected,
+the setup checklist adapts to the platform: on Quarkus it shows a single LangChain4j guide using `quarkus-langchain4j`
+plus `quarkus-opentelemetry` and BootUI's in-process capture model — no embedded OTLP receiver — instead of the Spring
+AI / LangChain4j side-by-side guides.
+
+![BootUI AI Framework panel](./images/bootui-ai.webp)
+
 ### Cache
 
 The Cache panel inspects the application's cache infrastructure on **both** frameworks from one shared panel and report
@@ -1377,36 +1407,6 @@ interception uses runtime class proxies, so the JMS panel reports unavailable in
 claiming capture is active when those proxies cannot be generated.
 
 ![BootUI JMS panel](./images/bootui-jms.webp)
-
-### AI Usage
-
-The AI Usage panel summarizes Spring AI and LangChain4j activity collected from OpenTelemetry spans emitted by their
-built-in
-observability. It groups chat client and chat model spans by conversation so you can see request count, token usage (
-prompt, completion, total), latency, model, and the prompt/response snippet when the framework is configured to capture
-content (for Spring AI: `spring.ai.chat.client.observations.log-prompt`, `spring.ai.chat.observations.log-prompt`,
-`spring.ai.chat.observations.log-completion`; for LangChain4j: enable GenAI message-content capture on the OpenTelemetry
-instrumentation). A small inline chart shows total token usage over recent calls so you can
-spot expensive interactions during local development. Vector store and embedding spans appear alongside chat spans when
-present. The BootUI starter captures local application spans automatically when telemetry is enabled. Cooperating local
-services can still send OTLP spans to the embedded receiver. The sidebar dims the panel when telemetry is disabled or
-neither Spring AI nor LangChain4j is on the classpath, and the view
-explains the unavailable state. When no framework is detected, the setup checklist also shows two side-by-side guides —
-one for Spring AI and one for LangChain4j — explaining the dependency and configuration each needs to emit GenAI spans
-(including optional prompt/completion content capture). When both prerequisites are ready but no chat spans have arrived
-yet, the panel shows a ready empty state rather than setup guidance. Recent chats, model breakdowns, token-series
-windows, spans, and attributes
-are bounded so large local runs stay responsive. As with the Traces panel, data is sourced from BootUI's local telemetry
-capture, is in-memory only, and is cleared on restart.
-
-On Quarkus the AI Usage panel is identical and reads from the same in-memory telemetry store; GenAI spans are captured
-when the application depends on `quarkus-opentelemetry` (for example alongside `quarkus-langchain4j`, or any
-OpenTelemetry GenAI instrumentation that emits the `gen_ai.*` semantic-convention spans). When no framework is detected,
-the setup checklist adapts to the platform: on Quarkus it shows a single LangChain4j guide using `quarkus-langchain4j`
-plus `quarkus-opentelemetry` and BootUI's in-process capture model — no embedded OTLP receiver — instead of the Spring
-AI / LangChain4j side-by-side guides.
-
-![BootUI AI Usage panel](./images/bootui-ai.webp)
 
 ## Diagnostics
 
