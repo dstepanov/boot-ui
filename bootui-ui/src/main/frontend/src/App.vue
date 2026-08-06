@@ -933,8 +933,8 @@ function onGlobalKeydown(e) {
   --bootui-green-dark: #146c43;
   --bootui-blue: #0d6efd;
   --bootui-text: #152033;
-  --bootui-text-muted: #64748b;
-  --bootui-text-subtle: #94a3b8;
+  --bootui-text-muted: #56667b;
+  --bootui-text-subtle: #5b6b80;
 
   /* Status / severity palette (consistent meaning across light & dark) */
   --bootui-danger: #dc3545;
@@ -982,7 +982,7 @@ function onGlobalKeydown(e) {
   --bootui-nav-active-bg: linear-gradient(135deg, #198754, #0d6efd);
   --bootui-nav-active-color: #ffffff;
   --bootui-nav-group-bg: rgba(255, 255, 255, 0.58);
-  --bootui-nav-group-color: #64748b;
+  --bootui-nav-group-color: var(--bootui-text-muted);
   --bootui-nav-link-color: #334155;
 
   /* Chart legend */
@@ -1065,8 +1065,8 @@ function onGlobalKeydown(e) {
   --bootui-green-dark: #4ade80;
   --bootui-blue: #60a5fa;
   --bootui-text: #e2e8f0;
-  --bootui-text-muted: #94a3b8;
-  --bootui-text-subtle: #64748b;
+  --bootui-text-muted: #a3b1c6;
+  --bootui-text-subtle: #94a3b8;
 
   /* Status text re-lit for dark-surface contrast (see Semantic Status) */
   --bootui-warning-text-strong: #e0a800;
@@ -1095,7 +1095,7 @@ function onGlobalKeydown(e) {
   --bootui-nav-active-bg: linear-gradient(135deg, #198754, #2563eb);
   --bootui-nav-active-color: #ffffff;
   --bootui-nav-group-bg: rgba(30, 41, 59, 0.7);
-  --bootui-nav-group-color: #94a3b8;
+  --bootui-nav-group-color: var(--bootui-text-muted);
   --bootui-nav-link-color: #cbd5e1;
 
   /* Chart legend */
@@ -1140,8 +1140,9 @@ function onGlobalKeydown(e) {
   color: var(--bootui-text);
 }
 
-:global(:root[data-bootui-theme='dark'] .form-control::placeholder) {
+:global(.form-control::placeholder) {
   color: var(--bootui-text-subtle);
+  opacity: 1;
 }
 
 :global(:root[data-bootui-theme='dark'] .text-muted) {
@@ -1694,7 +1695,6 @@ function onGlobalKeydown(e) {
   background: rgba(148, 163, 184, 0.08);
   border-color: rgba(100, 116, 139, 0.12);
   color: var(--bootui-text-subtle);
-  opacity: 0.72;
 }
 
 .bootui-nav-section--unavailable .bootui-nav-group__count {
@@ -1725,11 +1725,14 @@ function onGlobalKeydown(e) {
 .bootui-nav-link__status {
   color: var(--bootui-text-subtle);
   font-size: 0.95rem;
-  opacity: 0.65;
 }
 
 .bootui-nav-link--unavailable {
-  opacity: 0.55;
+  color: var(--bootui-text-subtle);
+}
+
+.bootui-nav-link.active .bootui-nav-link__status {
+  color: inherit;
 }
 
 .bootui-nav-link--unavailable .bootui-nav-link__label {

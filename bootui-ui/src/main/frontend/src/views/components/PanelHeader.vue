@@ -134,7 +134,7 @@ onBeforeUnmount(stopRelativeTimer)
 }
 
 .last-fetched-text {
-  color: var(--bootui-text-subtle, #94a3b8);
+  color: var(--bootui-text-subtle, #5b6b80);
   font-size: 0.78rem;
   white-space: nowrap;
 }
