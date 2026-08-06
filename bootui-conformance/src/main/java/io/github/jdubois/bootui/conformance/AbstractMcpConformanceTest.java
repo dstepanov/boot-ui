@@ -183,6 +183,25 @@ public abstract class AbstractMcpConformanceTest {
     }
 
     @Test
+    void testMcpUnknownToolRetainsSafeActionableError() {
+        assumeTrue(enableMcp());
+        try {
+            Response response = probe().request(
+                            "POST",
+                            "/bootui/api/mcp",
+                            Map.of("Content-Type", "application/json"),
+                            "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\","
+                                    + "\"params\":{\"name\":\"does_not_exist\"}}");
+            assertThat(response.status()).isEqualTo(200);
+            JsonNode error = response.json().path("error");
+            assertThat(error.path("code").asInt()).isEqualTo(-32602);
+            assertThat(error.path("message").asText()).isEqualTo("Unknown tool: does_not_exist");
+        } finally {
+            disableMcp();
+        }
+    }
+
+    @Test
     void testMcpPromptsWhenEnabled() {
         assumeTrue(enableMcp());
         try {

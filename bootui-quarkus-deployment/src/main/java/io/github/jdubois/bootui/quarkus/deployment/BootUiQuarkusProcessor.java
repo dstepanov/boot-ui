@@ -32,6 +32,7 @@ import io.github.jdubois.bootui.quarkus.mappings.QuarkusMappings;
 import io.github.jdubois.bootui.quarkus.mappings.RawMapping;
 import io.github.jdubois.bootui.quarkus.mcp.BootUiMcpProducer;
 import io.github.jdubois.bootui.quarkus.mcp.QuarkusMcpEnvelope;
+import io.github.jdubois.bootui.quarkus.mcp.QuarkusMcpFailureReporter;
 import io.github.jdubois.bootui.quarkus.mcp.QuarkusMcpTools;
 import io.github.jdubois.bootui.quarkus.scheduled.QuarkusScheduledTaskProvider;
 import io.github.jdubois.bootui.quarkus.scheduled.QuarkusScheduledTasks;
@@ -299,6 +300,7 @@ class BootUiQuarkusProcessor {
                         BootUiMcpProducer.class,
                         QuarkusMcpTools.class,
                         QuarkusMcpEnvelope.class,
+                        QuarkusMcpFailureReporter.class,
                         BootUiQuarkusSafetyFilter.class,
                         BootUiPathRewriteFilter.class,
                         BootUiQuarkusAuthenticationFilter.class,

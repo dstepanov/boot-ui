@@ -11,7 +11,10 @@ import io.github.jdubois.bootui.engine.mcp.McpDispatchOutcome.ToolCallResult;
 import io.github.jdubois.bootui.engine.mcp.McpDispatchOutcome.ToolsListResult;
 import io.github.jdubois.bootui.spi.McpPanelPolicy;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.Semaphore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Framework- and JSON-free core of the BootUI MCP server: it routes an already-parsed
@@ -24,12 +27,14 @@ import java.util.concurrent.Semaphore;
  * {@code ObjectMapper} (Jackson 3 on Spring Boot, Jackson 2 on Quarkus). The control flow here is a
  * one-to-one translation of the original Spring {@code BootUiMcpService} so both adapters answer
  * byte-identically: a refused panel gate is an in-band {@link ToolCallError} ({@code isError:true});
- * malformed tool calls are JSON-RPC {@link ProtocolError}s; a tool handler throwing a
- * {@link RuntimeException} becomes a JSON-RPC {@link ProtocolError} ({@code -32603}); serialization of
- * a successful payload (the only remaining Jackson step) is performed and error-handled by the adapter
- * codec.
+ * malformed tool calls are JSON-RPC {@link ProtocolError}s; an unexpected failure becomes the standard,
+ * detail-free JSON-RPC internal error ({@code -32603}) and is sent to the server-side diagnostic
+ * reporter. Serialization of a successful payload (the only remaining Jackson step) is performed and
+ * error-handled by the adapter codec.
  */
 public final class McpDispatcher {
+
+    private static final Logger log = LoggerFactory.getLogger(McpDispatcher.class);
 
     private final List<McpTool> tools;
     private final List<McpPrompt> prompts;
@@ -38,6 +43,7 @@ public final class McpDispatcher {
     private final String instructions;
     private final int maxResults;
     private final Semaphore toolCallSemaphore;
+    private final McpFailureReporter failureReporter;
 
     /**
      * @param tools the advertised tool catalog, in order (each adapter wires its own controllers /
@@ -57,13 +63,39 @@ public final class McpDispatcher {
             String instructions,
             int maxResults,
             int maxConcurrentCalls) {
+        this(
+                tools,
+                prompts,
+                policy,
+                serverVersion,
+                instructions,
+                maxResults,
+                maxConcurrentCalls,
+                (operation, failure) -> log.error("BootUI MCP failure while {}", operation, failure));
+    }
+
+    /**
+     * Creates a dispatcher with an adapter-owned diagnostic reporter.
+     *
+     * @param failureReporter receives each unexpected failure exactly once with its original stack trace
+     */
+    public McpDispatcher(
+            List<McpTool> tools,
+            List<McpPrompt> prompts,
+            McpPanelPolicy policy,
+            String serverVersion,
+            String instructions,
+            int maxResults,
+            int maxConcurrentCalls,
+            McpFailureReporter failureReporter) {
         this.tools = List.copyOf(tools);
         this.prompts = List.copyOf(prompts);
-        this.policy = policy;
+        this.policy = Objects.requireNonNull(policy, "policy");
         this.serverVersion = serverVersion == null ? "dev" : serverVersion;
         this.instructions = instructions;
         this.maxResults = Math.max(1, maxResults);
         this.toolCallSemaphore = new Semaphore(Math.max(1, maxConcurrentCalls));
+        this.failureReporter = Objects.requireNonNull(failureReporter, "failureReporter");
     }
 
     /**
@@ -102,6 +134,17 @@ public final class McpDispatcher {
      * notification with no applicable response; the adapter then emits no body (HTTP 202).
      */
     public McpDispatchOutcome dispatch(McpRequest request) {
+        try {
+            return dispatchRequest(request);
+        } catch (RuntimeException | Error failure) {
+            failureReporter.report("dispatching a request", failure);
+            return request != null && request.notification()
+                    ? new NoResponse()
+                    : new ProtocolError(McpProtocol.INTERNAL_ERROR, McpProtocol.INTERNAL_ERROR_MESSAGE);
+        }
+    }
+
+    private McpDispatchOutcome dispatchRequest(McpRequest request) {
         String method = request.method();
         if (method == null || method.isEmpty()) {
             return request.notification()
@@ -160,10 +203,6 @@ public final class McpDispatcher {
         try {
             Object payload = tool.invoke(arguments);
             return new ToolCallResult(payload);
-        } catch (RuntimeException ex) {
-            // A tool handler failure becomes a JSON-RPC error (-32603), exactly as the original Spring
-            // service reported a generic RuntimeException out of the tools/call switch.
-            return new ProtocolError(McpProtocol.INTERNAL_ERROR, ex.getMessage());
         } finally {
             toolCallSemaphore.release();
         }

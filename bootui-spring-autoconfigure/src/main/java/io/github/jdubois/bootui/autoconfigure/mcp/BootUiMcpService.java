@@ -13,6 +13,7 @@ import io.github.jdubois.bootui.engine.mcp.McpDispatchOutcome.ToolCallError;
 import io.github.jdubois.bootui.engine.mcp.McpDispatchOutcome.ToolCallResult;
 import io.github.jdubois.bootui.engine.mcp.McpDispatchOutcome.ToolsListResult;
 import io.github.jdubois.bootui.engine.mcp.McpDispatcher;
+import io.github.jdubois.bootui.engine.mcp.McpFailureReporter;
 import io.github.jdubois.bootui.engine.mcp.McpGuidance;
 import io.github.jdubois.bootui.engine.mcp.McpPrompt;
 import io.github.jdubois.bootui.engine.mcp.McpProtocol;
@@ -66,6 +67,7 @@ public class BootUiMcpService {
 
     private final McpDispatcher dispatcher;
     private final ObjectMapper objectMapper;
+    private final McpFailureReporter failureReporter;
 
     public BootUiMcpService(
             BootUiMcpTools tools, BootUiProperties properties, ObjectMapper objectMapper, String serverVersion) {
@@ -82,7 +84,22 @@ public class BootUiMcpService {
 
     private BootUiMcpService(
             List<McpTool> tools, BootUiProperties properties, ObjectMapper objectMapper, String serverVersion) {
+        this(
+                tools,
+                properties,
+                objectMapper,
+                serverVersion,
+                (operation, failure) -> log.error("BootUI MCP failure while {}", operation, failure));
+    }
+
+    BootUiMcpService(
+            List<McpTool> tools,
+            BootUiProperties properties,
+            ObjectMapper objectMapper,
+            String serverVersion,
+            McpFailureReporter failureReporter) {
         this.objectMapper = objectMapper;
+        this.failureReporter = failureReporter;
         int maxResults = Math.max(1, properties.getMcp().getMaxResults());
         int maxConcurrentCalls = Math.max(1, properties.getMcp().getMaxConcurrentCalls());
         this.dispatcher = new McpDispatcher(
@@ -92,7 +109,8 @@ public class BootUiMcpService {
                 serverVersion,
                 INSTRUCTIONS,
                 maxResults,
-                maxConcurrentCalls);
+                maxConcurrentCalls,
+                failureReporter);
     }
 
     /** Parse raw request bytes into a Jackson node. */
@@ -118,8 +136,13 @@ public class BootUiMcpService {
         if (jsonrpc == null || !McpProtocol.JSONRPC_VERSION.equals(jsonrpc.asString())) {
             return error(id, McpProtocol.INVALID_REQUEST, "Request must include jsonrpc: \"2.0\"");
         }
-        McpDispatchOutcome outcome = dispatcher.dispatch(parse(request));
-        return render(outcome, id);
+        try {
+            McpDispatchOutcome outcome = dispatcher.dispatch(parse(request));
+            return render(outcome, id);
+        } catch (RuntimeException | Error failure) {
+            failureReporter.report("rendering a response", failure);
+            return error(id, McpProtocol.INTERNAL_ERROR, McpProtocol.INTERNAL_ERROR_MESSAGE);
+        }
     }
 
     private static McpRequest parse(JsonNode request) {
@@ -275,9 +298,9 @@ public class BootUiMcpService {
         try {
             payloadNode = objectMapper.valueToTree(call.payload());
             text = objectMapper.writeValueAsString(payloadNode);
-        } catch (RuntimeException ex) {
-            log.debug("BootUI MCP tool result serialization failed", ex);
-            return error(id, McpProtocol.INTERNAL_ERROR, ex.getMessage());
+        } catch (RuntimeException | Error failure) {
+            failureReporter.report("serializing a tool result", failure);
+            return error(id, McpProtocol.INTERNAL_ERROR, McpProtocol.INTERNAL_ERROR_MESSAGE);
         }
         ObjectNode result = JsonNodeFactory.instance.objectNode();
         ArrayNode content = JsonNodeFactory.instance.arrayNode();

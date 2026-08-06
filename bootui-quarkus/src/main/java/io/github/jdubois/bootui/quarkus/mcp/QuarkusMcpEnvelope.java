@@ -23,8 +23,6 @@ import io.github.jdubois.bootui.engine.mcp.McpRequest;
 import io.github.jdubois.bootui.engine.mcp.McpToolDescriptor;
 import io.github.jdubois.bootui.engine.mcp.McpToolSchema;
 import jakarta.inject.Singleton;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Quarkus (Jackson 2) JSON-RPC envelope codec for the BootUI MCP server — the byte-for-byte twin of
@@ -34,14 +32,15 @@ import java.util.logging.Logger;
 @Singleton
 public class QuarkusMcpEnvelope {
 
-    private static final Logger LOG = Logger.getLogger(QuarkusMcpEnvelope.class.getName());
-
     private final McpDispatcher dispatcher;
     private final ObjectMapper objectMapper;
+    private final QuarkusMcpFailureReporter failureReporter;
 
-    public QuarkusMcpEnvelope(McpDispatcher dispatcher, ObjectMapper objectMapper) {
+    public QuarkusMcpEnvelope(
+            McpDispatcher dispatcher, ObjectMapper objectMapper, QuarkusMcpFailureReporter failureReporter) {
         this.dispatcher = dispatcher;
         this.objectMapper = objectMapper;
+        this.failureReporter = failureReporter;
     }
 
     /** Parse raw request bytes into a Jackson node. */
@@ -67,8 +66,13 @@ public class QuarkusMcpEnvelope {
         if (jsonrpc == null || !McpProtocol.JSONRPC_VERSION.equals(jsonrpc.asText())) {
             return error(id, McpProtocol.INVALID_REQUEST, "Request must include jsonrpc: \"2.0\"");
         }
-        McpDispatchOutcome outcome = dispatcher.dispatch(parse(request));
-        return render(outcome, id);
+        try {
+            McpDispatchOutcome outcome = dispatcher.dispatch(parse(request));
+            return render(outcome, id);
+        } catch (RuntimeException | Error failure) {
+            failureReporter.report("rendering a response", failure);
+            return error(id, McpProtocol.INTERNAL_ERROR, McpProtocol.INTERNAL_ERROR_MESSAGE);
+        }
     }
 
     /**
@@ -232,9 +236,9 @@ public class QuarkusMcpEnvelope {
         try {
             payloadNode = objectMapper.valueToTree(call.payload());
             text = objectMapper.writeValueAsString(payloadNode);
-        } catch (JsonProcessingException | RuntimeException ex) {
-            LOG.log(Level.FINE, "BootUI MCP tool result serialization failed", ex);
-            return error(id, McpProtocol.INTERNAL_ERROR, ex.getMessage());
+        } catch (JsonProcessingException | RuntimeException | Error failure) {
+            failureReporter.report("serializing a tool result", failure);
+            return error(id, McpProtocol.INTERNAL_ERROR, McpProtocol.INTERNAL_ERROR_MESSAGE);
         }
         ObjectNode result = JsonNodeFactory.instance.objectNode();
         ArrayNode content = JsonNodeFactory.instance.arrayNode();
