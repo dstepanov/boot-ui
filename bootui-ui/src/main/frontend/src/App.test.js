@@ -56,8 +56,8 @@ function mockShellFetch(platform = 'spring-boot') {
   )
 }
 
-function stubLocalStorage() {
-  const storage = new Map()
+function stubLocalStorage(initialValues = {}) {
+  const storage = new Map(Object.entries(initialValues))
   const localStorageStub = {
     clear: () => storage.clear(),
     getItem: (key) => storage.get(key) ?? null,
@@ -73,6 +73,20 @@ function stubLocalStorage() {
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
       value: localStorageStub
+    })
+  }
+  return {localStorageStub, storage}
+}
+
+function stubLocalStorageGetter(getter) {
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    get: getter
+  })
+  if (globalThis !== window) {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get: getter
     })
   }
 }
@@ -352,6 +366,118 @@ describe('App command palette', () => {
     expect(router.currentRoute.value.name).toBe('architecture')
     expect(wrapper.find('[aria-label="Command palette"]').exists()).toBe(false)
     expect(document.activeElement).toBe(wrapper.find('main').element)
+  })
+})
+
+describe('App optional browser storage', () => {
+  beforeEach(() => {
+    mockShellFetch()
+    stubMatchMedia()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    restoreLocalStorage()
+    document.body.innerHTML = ''
+    delete document.documentElement.dataset.bootuiTheme
+    delete document.documentElement.dataset.bsTheme
+    document.documentElement.style.removeProperty('color-scheme')
+  })
+
+  it('mounts and keeps theme, sidebar, and recent panels usable when the storage getter is denied', async () => {
+    stubLocalStorageGetter(() => {
+      throw new DOMException('Storage denied', 'SecurityError')
+    })
+
+    const {wrapper} = await mountApp('/overview', {stubCommandPalette: false})
+    expect(wrapper.find('.bootui-shell').exists()).toBe(true)
+
+    await wrapper.find('.theme-toggle').trigger('click')
+    expect(document.documentElement.dataset.bsTheme).toBe('dark')
+
+    await wrapper.find('.sidebar-toggle').trigger('click')
+    expect(wrapper.find('aside.bootui-sidebar').classes()).toContain('bootui-sidebar--collapsed')
+
+    await wrapper.find('.cp-trigger').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.cp-section-label').text()).toBe('Recent')
+    expect(wrapper.find('.cp-item-title').text()).toBe('Overview')
+  })
+
+  it('keeps current-page controls working when storage methods start throwing', async () => {
+    const target = {
+      getItem() {
+        throw new DOMException('Read denied', 'SecurityError')
+      },
+      setItem() {
+        throw new DOMException('Quota denied', 'QuotaExceededError')
+      },
+      removeItem() {
+        throw new DOMException('Remove denied', 'SecurityError')
+      }
+    }
+    stubLocalStorageGetter(() => target)
+
+    const {wrapper} = await mountApp()
+    await wrapper.find('.theme-toggle').trigger('click')
+    await wrapper.find('.sidebar-toggle').trigger('click')
+
+    expect(document.documentElement.dataset.bsTheme).toBe('dark')
+    expect(wrapper.find('aside.bootui-sidebar').classes()).toContain('bootui-sidebar--collapsed')
+  })
+
+  it('ignores malformed persisted values and synchronizes theme storage events without reading storage', async () => {
+    const values = new Map([
+      ['bootui.sidebar.collapsed', 'sometimes'],
+      ['bootui.theme', 'purple'],
+      ['bootui.expandedGroups', '{bad']
+    ])
+    stubLocalStorageGetter(() => ({
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value),
+      removeItem() {
+        throw new DOMException('Cleanup denied', 'SecurityError')
+      }
+    }))
+
+    const {wrapper} = await mountApp()
+    expect(wrapper.find('aside.bootui-sidebar').classes()).not.toContain('bootui-sidebar--collapsed')
+    expect(document.documentElement.dataset.bsTheme).toBe('light')
+    expect(groupToggle(wrapper, 'Advisors').attributes('aria-expanded')).toBe('true')
+
+    stubLocalStorageGetter(() => {
+      throw new DOMException('Storage denied', 'SecurityError')
+    })
+    window.dispatchEvent(new StorageEvent('storage', {key: 'bootui.theme', newValue: 'dark'}))
+    await flushPromises()
+    expect(document.documentElement.dataset.bsTheme).toBe('dark')
+
+    window.dispatchEvent(new StorageEvent('storage', {key: 'bootui.theme', newValue: 'invalid'}))
+    await flushPromises()
+    expect(document.documentElement.dataset.bsTheme).toBe('light')
+  })
+
+  it('persists again after a write-denied period without losing current-page state', async () => {
+    const values = new Map()
+    let denyWrites = true
+    stubLocalStorageGetter(() => ({
+      getItem: (key) => values.get(key) ?? null,
+      setItem(key, value) {
+        if (denyWrites) throw new DOMException('Quota denied', 'QuotaExceededError')
+        values.set(key, value)
+      },
+      removeItem: (key) => values.delete(key)
+    }))
+
+    const {wrapper} = await mountApp()
+    await wrapper.find('.sidebar-toggle').trigger('click')
+    expect(wrapper.find('aside.bootui-sidebar').classes()).toContain('bootui-sidebar--collapsed')
+    expect(values.has('bootui.sidebar.collapsed')).toBe(false)
+
+    denyWrites = false
+    await wrapper.find('.sidebar-toggle').trigger('click')
+    expect(wrapper.find('aside.bootui-sidebar').classes()).not.toContain('bootui-sidebar--collapsed')
+    expect(values.get('bootui.sidebar.collapsed')).toBe('false')
   })
 })
 

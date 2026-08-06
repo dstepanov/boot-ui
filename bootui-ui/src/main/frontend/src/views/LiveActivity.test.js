@@ -135,6 +135,30 @@ describe('LiveActivity', () => {
     expect(wrapper.text()).toContain('—')
   })
 
+  it('keeps filters usable when browser storage reads and writes are denied', async () => {
+    vi.stubGlobal('localStorage', {
+      getItem() {
+        throw new DOMException('Read denied', 'SecurityError')
+      },
+      setItem() {
+        throw new DOMException('Quota denied', 'QuotaExceededError')
+      },
+      removeItem() {
+        throw new DOMException('Remove denied', 'SecurityError')
+      }
+    })
+    vi.stubGlobal('fetch', stubFetch(activityReport(), requestProfile()))
+
+    wrapper = mount(LiveActivity)
+    await flushPromises()
+    const filter = wrapper.get('#activity-text-filter')
+    await filter.setValue('/api/orders')
+
+    expect(filter.element.value).toBe('/api/orders')
+    expect(wrapper.find('button').text()).toBeTruthy()
+    await filter.setValue('')
+  })
+
   it('renders a list-level N+1 badge for a request with a suspected N+1 pattern', async () => {
     vi.stubGlobal(
       'fetch',

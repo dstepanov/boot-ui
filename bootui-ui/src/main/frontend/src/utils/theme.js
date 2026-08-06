@@ -1,3 +1,5 @@
+import {safeLocalStorage} from './safeStorage.js'
+
 export const THEME_QUERY = '(prefers-color-scheme: dark)'
 export const THEME_STORAGE_KEY = 'bootui.theme'
 
@@ -5,12 +7,8 @@ export function normalizeThemePreference(value) {
   return value === 'dark' || value === 'light' ? value : null
 }
 
-export function readThemePreference(storage) {
-  try {
-    return normalizeThemePreference(storage?.getItem(THEME_STORAGE_KEY))
-  } catch {
-    return null
-  }
+export function readThemePreference(storage = safeLocalStorage) {
+  return normalizeThemePreference(storage.getItem(THEME_STORAGE_KEY))
 }
 
 export function resolveTheme(preference, prefersDark) {
