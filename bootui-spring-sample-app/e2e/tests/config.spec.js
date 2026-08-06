@@ -25,6 +25,7 @@ test.describe('Configuration view', () => {
     await page.locator('tr.table-warning input').first().fill(propertyName)
     await page.locator('tr.table-warning input').nth(1).fill(propertyValue)
     await page.locator('tr.table-warning button.btn-success', {hasText: 'Save'}).click()
+    await acceptConfirm(page)
 
     // Wait for the banner confirmation.
     await expect(page.locator('.alert.alert-success')).toContainText(

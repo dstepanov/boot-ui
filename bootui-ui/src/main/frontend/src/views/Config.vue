@@ -29,6 +29,7 @@ const showOnlyOverrides = ref(false)
 const editingName = ref(null)
 const editedValue = ref('')
 const saving = ref(false)
+const confirmingMutation = ref(false)
 const newRow = ref(null)
 const newRowName = ref('')
 const newRowValue = ref('')
@@ -123,7 +124,10 @@ function startEdit(p) {
   newRow.value = null
   editingName.value = p.name
   editedValue.value = p.value == null ? '' : String(p.value)
-  nextTick(() => editInput.value?.focus())
+  nextTick(() => {
+    const input = Array.isArray(editInput.value) ? editInput.value[0] : editInput.value
+    input?.focus()
+  })
 }
 
 function cancelEdit() {
@@ -136,7 +140,7 @@ async function saveEdit(p) {
     showReadOnlyMessage()
     return
   }
-  await postOverride(p.name, editedValue.value)
+  await postOverride(p.name, editedValue.value, 'update')
 }
 
 function startCreate() {
@@ -204,17 +208,32 @@ async function saveCreate() {
     newRowError.value = 'Use letters, digits, dots, dashes, underscores or brackets only.'
     return
   }
-  await postOverride(name, newRowValue.value, () => {
+  await postOverride(name, newRowValue.value, 'create', () => {
     newRow.value = null
     newRowError.value = null
   })
 }
 
-async function postOverride(name, value, onSuccess) {
-  if (readOnly.value) {
+async function postOverride(name, value, action, onSuccess) {
+  if (readOnly.value || saving.value || confirmingMutation.value) {
+    if (!readOnly.value) return
     showReadOnlyMessage()
     return
   }
+  confirmingMutation.value = true
+  let confirmed
+  try {
+    confirmed = await confirm({
+      title: action === 'create' ? 'Create configuration override?' : 'Update configuration override?',
+      message:
+        'Write this property override to .bootui/application-bootui.properties. The running app may require a restart before the new value takes full effect.',
+      resource: name,
+      confirmLabel: action === 'create' ? 'Create override' : 'Update override'
+    })
+  } finally {
+    confirmingMutation.value = false
+  }
+  if (!confirmed) return
   saving.value = true
   try {
     const res = await apiFetch('api/config/overrides', {
@@ -240,20 +259,25 @@ async function postOverride(name, value, onSuccess) {
 }
 
 async function removeOverride(name) {
-  if (readOnly.value) {
+  if (readOnly.value || saving.value || confirmingMutation.value) {
+    if (!readOnly.value) return
     showReadOnlyMessage()
     return
   }
-  if (
-    !(await confirm({
+  confirmingMutation.value = true
+  let confirmed
+  try {
+    confirmed = await confirm({
       title: 'Remove override?',
-      message: `Remove the override for "${name}"? The property falls back to its underlying value.`,
+      message: `Remove the override for "${name}" from .bootui/application-bootui.properties? The property falls back to its underlying value.`,
       resource: name,
       confirmLabel: 'Remove',
       danger: true
-    }))
-  )
-    return
+    })
+  } finally {
+    confirmingMutation.value = false
+  }
+  if (!confirmed) return
   saving.value = true
   try {
     const res = await apiFetch(`api/config/overrides/${encodeURIComponent(name)}`, {method: 'DELETE'})
@@ -434,7 +458,11 @@ watch([filter, sourceFilter, showOnlyOverrides], scheduleReload)
             </td>
             <td><span class="badge bg-warning text-dark">new override</span></td>
             <td class="text-end">
-              <button :disabled="saving || readOnly" class="btn btn-sm btn-success" @click="saveCreate">
+              <button
+                :disabled="saving || confirmingMutation || readOnly"
+                class="btn btn-sm btn-success"
+                @click="saveCreate"
+              >
                 <i class="bi bi-check-lg"></i> Save
               </button>
               <button :disabled="saving" class="btn btn-sm btn-outline-secondary ms-1" @click="cancelCreate">
@@ -484,7 +512,11 @@ watch([filter, sourceFilter, showOnlyOverrides], scheduleReload)
             </td>
             <td class="text-end align-top pt-1">
               <template v-if="editingName === p.name">
-                <button :disabled="saving || readOnly" class="btn btn-sm btn-success" @click="saveEdit(p)">
+                <button
+                  :disabled="saving || confirmingMutation || readOnly"
+                  class="btn btn-sm btn-success"
+                  @click="saveEdit(p)"
+                >
                   <i class="bi bi-check-lg"></i> Save
                 </button>
                 <button :disabled="saving" class="btn btn-sm btn-outline-secondary ms-1" @click="cancelEdit">
@@ -492,12 +524,16 @@ watch([filter, sourceFilter, showOnlyOverrides], scheduleReload)
                 </button>
               </template>
               <template v-else>
-                <button :disabled="saving || readOnly" class="btn btn-sm btn-primary" @click="startEdit(p)">
+                <button
+                  :disabled="saving || confirmingMutation || readOnly"
+                  class="btn btn-sm btn-primary"
+                  @click="startEdit(p)"
+                >
                   <i class="bi bi-pencil"></i> Edit
                 </button>
                 <button
                   v-if="p.override"
-                  :disabled="saving || readOnly"
+                  :disabled="saving || confirmingMutation || readOnly"
                   class="btn btn-sm btn-outline-danger ms-1"
                   title="Remove override"
                   @click="removeOverride(p.name)"

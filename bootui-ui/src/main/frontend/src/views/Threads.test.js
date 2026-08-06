@@ -1,10 +1,21 @@
 import {flushPromises, mount} from '@vue/test-utils'
-import {afterEach, describe, expect, it, vi} from 'vitest'
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
+
+const {confirm} = vi.hoisted(() => ({confirm: vi.fn()}))
+vi.mock('../utils/useConfirm.js', () => ({useConfirm: () => ({confirm})}))
 
 import Threads from './Threads.vue'
 import AutoRefreshToggle from './components/AutoRefreshToggle.vue'
 
 let wrappers = []
+
+function deferred() {
+  let resolve
+  const promise = new Promise((resolver) => {
+    resolve = resolver
+  })
+  return {promise, resolve}
+}
 
 function thread(overrides = {}) {
   return {
@@ -57,11 +68,12 @@ function report(overrides = {}) {
   }
 }
 
-async function mountWithReport(body, panel = {}) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), {status: 200})))
-  )
+async function mountWithReport(
+  body,
+  panel = {},
+  fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), {status: 200})))
+) {
+  vi.stubGlobal('fetch', fetchMock)
   const wrapper = mount(Threads, {props: {panel}})
   wrappers.push(wrapper)
   await flushPromises()
@@ -69,6 +81,11 @@ async function mountWithReport(body, panel = {}) {
 }
 
 describe('Threads', () => {
+  beforeEach(() => {
+    confirm.mockReset()
+    confirm.mockResolvedValue(true)
+  })
+
   afterEach(() => {
     wrappers.forEach((wrapper) => wrapper.unmount())
     wrappers = []
@@ -152,7 +169,9 @@ describe('Threads', () => {
     expect(wrapper.text()).toContain('Thread-dump download is read-only')
   })
 
-  it('posts to the download endpoint when triggered', async () => {
+  it('waits for confirmation before posting to the download endpoint', async () => {
+    const confirmation = deferred()
+    confirm.mockReturnValueOnce(confirmation.promise)
     const fetchMock = vi.fn((url) => {
       if (typeof url === 'string' && url.includes('download')) {
         return Promise.resolve(new Response('dump', {status: 200}))
@@ -170,8 +189,35 @@ describe('Threads', () => {
     await wrapper.find('button.btn-outline-primary').trigger('click')
     await flushPromises()
 
+    expect(confirm).toHaveBeenCalledWith({
+      title: 'Download thread dump?',
+      message: 'Capture a fresh raw thread dump from the running application and download it to this device.',
+      resource: 'thread-dump.txt',
+      confirmLabel: 'Download'
+    })
+    expect(
+      fetchMock.mock.calls.some(([url, init]) => String(url).includes('threads/download') && init?.method === 'POST')
+    ).toBe(false)
+
+    confirmation.resolve(true)
+    await flushPromises()
+
     expect(
       fetchMock.mock.calls.some(([url, init]) => String(url).includes('threads/download') && init?.method === 'POST')
     ).toBe(true)
+  })
+
+  it('does not post a thread dump when confirmation is cancelled', async () => {
+    confirm.mockResolvedValueOnce(false)
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify(report()), {status: 200})))
+    const wrapper = await mountWithReport(report(), {}, fetchMock)
+
+    await wrapper.find('button.btn-outline-primary').trigger('click')
+    await flushPromises()
+
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(
+      fetchMock.mock.calls.some(([url, init]) => String(url).includes('threads/download') && init?.method === 'POST')
+    ).toBe(false)
   })
 })
