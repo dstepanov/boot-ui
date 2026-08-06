@@ -73,7 +73,13 @@ export default defineConfig(({command}) => ({
     outDir: 'dist',
     emptyOutDir: true,
     assetsDir: 'assets',
-    sourcemap: false
+    sourcemap: false,
+    rolldownOptions: {
+      checks: {
+        // vite-plugin-checker intentionally waits for vue-tsc in buildEnd.
+        pluginTimings: false
+      }
+    }
   },
   test: {
     environment: 'jsdom',
