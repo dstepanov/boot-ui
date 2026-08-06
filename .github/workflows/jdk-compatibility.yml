@@ -200,17 +200,20 @@ jobs:
       # No -am: bootui-core/-engine/-ui/-conformance are resolved as ordinary dependencies from the
       # restored local repository above instead of being rebuilt from source as reactor modules. The
       # Quarkus base integration-tests submodule is listed directly because selecting its aggregator does
-      # not include child modules in a Maven -pl build.
+      # not include child modules in a Maven -pl build. Installs (rather than just testing)
+      # bootui-quarkus/-quarkus-deployment so the sample-app augmentation step below can resolve them from
+      # the local repository too, instead of needing -am to rebuild them from source.
       - name: Build and test Quarkus adapter modules
         run: >
           ./mvnw -T 1C -B -ntp
           -pl bootui-quarkus-parent,bootui-quarkus,bootui-quarkus-deployment,bootui-quarkus-integration-tests/base
-          clean test
+          clean install
 
       # Ensures Quarkus build-time augmentation runs on supported JDKs (17/21/25) and catches
-      # ByteBuddy/build-plugin regressions without running browser tests.
+      # ByteBuddy/build-plugin regressions without running browser tests. No -am: bootui-quarkus/
+      # -quarkus-deployment (and the shared modules) were already installed above/restored from cache.
       - name: Exercise Quarkus sample app augmentation
-        run: ./mvnw -T 1C -B -ntp -pl bootui-quarkus-sample-app -am -DskipTests install
+        run: ./mvnw -T 1C -B -ntp -pl bootui-quarkus-sample-app -DskipTests install
 
       - name: Publish Java test report
         if: ${{ !cancelled() }}
