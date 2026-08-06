@@ -300,6 +300,7 @@ onMounted(loadDependencies)
             <div class="d-flex flex-wrap gap-2">
               <input
                 v-model="search"
+                aria-label="Filter runtime dependencies"
                 class="form-control form-control-sm dependency-search"
                 placeholder="Search group, artifact, or version"
               />

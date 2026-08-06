@@ -255,6 +255,7 @@ onMounted(() => {
             <div class="col-lg-6">
               <input
                 v-model="filter"
+                aria-label="Filter exception groups"
                 class="form-control form-control-sm"
                 placeholder="Filter by exception type, message, or location…"
               />

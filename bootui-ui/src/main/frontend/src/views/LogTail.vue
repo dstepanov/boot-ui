@@ -133,12 +133,17 @@ onBeforeUnmount(() => disconnect(false))
 
     <div class="row g-3 mb-3 align-items-end">
       <div class="col-lg-4">
-        <label class="form-label">Filter</label>
-        <input v-model="textFilter" class="form-control" placeholder="Logger prefix or message text" />
+        <label class="form-label" for="log-tail-text-filter">Filter</label>
+        <input
+          id="log-tail-text-filter"
+          v-model="textFilter"
+          class="form-control"
+          placeholder="Logger prefix or message text"
+        />
       </div>
       <div class="col-sm-4 col-lg-2">
-        <label class="form-label">Level</label>
-        <select v-model="levelFilter" class="form-select">
+        <label class="form-label" for="log-tail-level-filter">Level</label>
+        <select id="log-tail-level-filter" v-model="levelFilter" class="form-select">
           <option value="ALL">All</option>
           <option value="INFO+">Info+</option>
           <option value="WARN+">Warn+</option>

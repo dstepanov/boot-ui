@@ -347,11 +347,16 @@ watch([filter, sourceFilter, showOnlyOverrides], scheduleReload)
       <div class="col-md-6">
         <div class="input-group">
           <span class="input-group-text"><i class="bi bi-search"></i></span>
-          <input v-model="filter" class="form-control" placeholder="Filter by name or value…" />
+          <input
+            v-model="filter"
+            aria-label="Filter configuration properties"
+            class="form-control"
+            placeholder="Filter by name or value…"
+          />
         </div>
       </div>
       <div class="col-md-4">
-        <select v-if="data" v-model="sourceFilter" class="form-select">
+        <select v-if="data" v-model="sourceFilter" aria-label="Filter by property source" class="form-select">
           <option value="">All property sources</option>
           <option v-for="s in data.sources" :key="s" :value="s">{{ s }}</option>
         </select>
@@ -388,6 +393,7 @@ watch([filter, sourceFilter, showOnlyOverrides], scheduleReload)
               <input
                 ref="newNameInput"
                 v-model="newRowName"
+                aria-label="New configuration property name"
                 :disabled="readOnly"
                 class="form-control form-control-sm font-monospace"
                 list="bootPropertySuggestions"
@@ -429,6 +435,7 @@ watch([filter, sourceFilter, showOnlyOverrides], scheduleReload)
               <div class="input-group input-group-sm">
                 <input
                   v-model="newRowValue"
+                  aria-label="New configuration property value"
                   :disabled="readOnly"
                   :placeholder="
                     hasDefaultValue(selectedNewSuggestion)
@@ -487,6 +494,7 @@ watch([filter, sourceFilter, showOnlyOverrides], scheduleReload)
                 <input
                   ref="editInput"
                   v-model="editedValue"
+                  :aria-label="`Edit value for ${p.name}`"
                   :disabled="readOnly"
                   class="form-control form-control-sm font-monospace"
                   @keyup.enter="saveEdit(p)"

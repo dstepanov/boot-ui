@@ -138,12 +138,15 @@ async function copyKubernetesYaml() {
 
           <div class="row g-3 mb-3">
             <div class="col-md-5">
-              <label class="form-label small fw-semibold">Target JVM process memory (MB)</label>
+              <label class="form-label small fw-semibold" for="jvm-target-memory">
+                Target JVM process memory (MB)
+              </label>
               <div class="input-group input-group-sm">
                 <button aria-label="Decrease" class="btn btn-outline-secondary" type="button" @click="stepTotal(-64)">
                   −
                 </button>
                 <input
+                  id="jvm-target-memory"
                   v-model.number="totalMemoryMb"
                   class="form-control text-center"
                   max="65536"
@@ -158,11 +161,12 @@ async function copyKubernetesYaml() {
               </div>
             </div>
             <div class="col-md-4">
-              <label class="form-label small fw-semibold">
+              <label class="form-label small fw-semibold" for="jvm-thread-budget">
                 Platform thread budget
                 <span class="text-muted fw-normal"> (currently {{ data.calculation.liveThreadCount }}) </span>
               </label>
               <input
+                id="jvm-thread-budget"
                 v-model.number="threadCount"
                 class="form-control form-control-sm"
                 max="10000"
@@ -172,8 +176,9 @@ async function copyKubernetesYaml() {
               />
             </div>
             <div class="col-md-3">
-              <label class="form-label small fw-semibold">Headroom (%)</label>
+              <label class="form-label small fw-semibold" for="jvm-headroom">Headroom (%)</label>
               <input
+                id="jvm-headroom"
                 v-model.number="headRoomPercent"
                 class="form-control form-control-sm"
                 max="30"

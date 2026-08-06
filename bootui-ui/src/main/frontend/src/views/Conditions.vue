@@ -170,7 +170,7 @@ onBeforeUnmount(() => {
         </a>
       </li>
     </ul>
-    <input v-model="filter" class="form-control mb-3" placeholder="Filter…" />
+    <input v-model="filter" aria-label="Filter conditions" class="form-control mb-3" placeholder="Filter…" />
     <p class="small text-muted">{{ matchedCount }} of {{ totalCount }} {{ tab }} entries matched</p>
     <div v-for="e in entries" :key="e.autoConfigurationClass + e.condition + e.message" class="mb-2">
       <div class="d-flex">

@@ -373,7 +373,11 @@ function clearTrace() {
               Recent calls <span class="badge bg-secondary">{{ filteredEntries.length }}</span>
             </h5>
             <div class="d-flex flex-wrap gap-2">
-              <select v-model="methodFilter" class="form-select form-select-sm rest-filter-select">
+              <select
+                v-model="methodFilter"
+                aria-label="Filter recent calls by HTTP method"
+                class="form-select form-select-sm rest-filter-select"
+              >
                 <option value="">All methods</option>
                 <option v-for="method in methods" :key="method" :value="method">{{ method }}</option>
               </select>
@@ -389,6 +393,7 @@ function clearTrace() {
               </div>
               <input
                 v-model="filter"
+                aria-label="Filter recent REST client calls"
                 class="form-control form-control-sm trace-filter"
                 placeholder="Filter by URI, host, method, client, or thread…"
               />

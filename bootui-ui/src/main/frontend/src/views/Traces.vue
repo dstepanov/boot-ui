@@ -241,6 +241,7 @@ const {autoRefresh, loading, load} = useAutoRefresh(fetchTraces)
         <div class="mb-3">
           <input
             v-model="filter"
+            aria-label="Filter traces"
             class="form-control form-control-sm"
             placeholder="Filter by trace id, path, root span, or service…"
           />

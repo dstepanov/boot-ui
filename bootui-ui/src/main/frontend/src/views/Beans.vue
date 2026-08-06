@@ -46,10 +46,10 @@ watch([filter, classification], scheduleReload)
 
     <div class="row g-2 mb-3">
       <div class="col-md-8">
-        <input v-model="filter" class="form-control" placeholder="Filter by name or type…" />
+        <input v-model="filter" aria-label="Filter beans" class="form-control" placeholder="Filter by name or type…" />
       </div>
       <div class="col-md-4">
-        <select v-model="classification" class="form-select">
+        <select v-model="classification" aria-label="Filter beans by classification" class="form-select">
           <option value="">All classifications</option>
           <option value="APPLICATION">Application</option>
           <option value="FRAMEWORK">Framework</option>

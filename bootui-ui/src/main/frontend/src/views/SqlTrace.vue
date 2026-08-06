@@ -341,7 +341,11 @@ function clearTrace() {
               Recent executions <span class="badge bg-secondary">{{ filteredEntries.length }}</span>
             </h5>
             <div class="d-flex flex-wrap gap-2">
-              <select v-model="categoryFilter" class="form-select form-select-sm sql-filter-select">
+              <select
+                v-model="categoryFilter"
+                aria-label="Filter SQL executions by category"
+                class="form-select form-select-sm sql-filter-select"
+              >
                 <option value="">All categories</option>
                 <option v-for="category in categories" :key="category" :value="category">{{ category }}</option>
               </select>
@@ -357,6 +361,7 @@ function clearTrace() {
               </div>
               <input
                 v-model="filter"
+                aria-label="Filter SQL executions"
                 class="form-control form-control-sm trace-filter"
                 placeholder="Filter by SQL, category, connection, thread, or parameter…"
               />

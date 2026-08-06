@@ -105,6 +105,7 @@ defineExpose({focusInput})
         <input
           ref="inputEl"
           v-model="query"
+          aria-label="Search panels"
           class="cp-input"
           placeholder="Search panels by name or keyword…"
           type="search"

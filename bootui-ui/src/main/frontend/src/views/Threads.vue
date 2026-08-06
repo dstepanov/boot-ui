@@ -183,10 +183,15 @@ watch([filter, state], scheduleReload)
 
       <div class="row g-2 mb-3">
         <div class="col-md-8">
-          <input v-model="filter" class="form-control" placeholder="Filter by name, state, or stack frame…" />
+          <input
+            v-model="filter"
+            aria-label="Filter threads"
+            class="form-control"
+            placeholder="Filter by name, state, or stack frame…"
+          />
         </div>
         <div class="col-md-4">
-          <select v-model="state" class="form-select">
+          <select v-model="state" aria-label="Filter threads by state" class="form-select">
             <option value="">All states</option>
             <option v-for="count in stateCounts" :key="count.state" :value="count.state">
               {{ count.state }} ({{ count.count }})

@@ -319,6 +319,7 @@ onBeforeUnmount(() => {
                 <input
                   v-model="filter"
                   :disabled="!hasHistogram"
+                  aria-label="Filter heap histogram classes"
                   class="form-control form-control-sm"
                   style="width: 220px"
                   type="text"

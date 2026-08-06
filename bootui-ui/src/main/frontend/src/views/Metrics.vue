@@ -214,8 +214,13 @@ const {autoRefresh, loading, initialLoading, load: loadMetrics} = useAutoRefresh
               <div class="text-muted small">{{ filteredMeters.length }} of {{ data.total }} meters</div>
             </div>
             <div class="card-body border-bottom">
-              <input v-model="search" class="form-control form-control-sm mb-2" placeholder="Search meters" />
-              <select v-model="typeFilter" class="form-select form-select-sm">
+              <input
+                v-model="search"
+                aria-label="Search meters"
+                class="form-control form-control-sm mb-2"
+                placeholder="Search meters"
+              />
+              <select v-model="typeFilter" aria-label="Filter meters by type" class="form-select form-select-sm">
                 <option value="">All meter types</option>
                 <option v-for="type in metricTypes" :key="type" :value="type">{{ type }}</option>
               </select>
@@ -256,8 +261,13 @@ const {autoRefresh, loading, initialLoading, load: loadMetrics} = useAutoRefresh
             <div class="card-body">
               <div class="row g-3 align-items-stretch">
                 <div class="col-md-4">
-                  <label class="form-label small text-muted">Statistic</label>
-                  <select :value="selectedStatistic" class="form-select" @change="changeStatistic">
+                  <label class="form-label small text-muted" for="metric-statistic">Statistic</label>
+                  <select
+                    id="metric-statistic"
+                    :value="selectedStatistic"
+                    class="form-select"
+                    @change="changeStatistic"
+                  >
                     <option
                       v-for="measurement in detail.measurements"
                       :key="measurement.statistic"

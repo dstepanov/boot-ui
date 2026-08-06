@@ -312,6 +312,7 @@ onMounted(() => {
       <template v-else-if="endpoints">
         <input
           v-model="endpointFilter"
+          aria-label="Filter secured endpoints"
           class="form-control form-control-sm mb-2"
           placeholder="Filter by pattern, method, handler, or rule…"
         />
@@ -382,13 +383,19 @@ onMounted(() => {
       </p>
       <div class="row g-2 mb-3">
         <div class="col-auto">
-          <select v-model="explainMethod" class="form-select form-select-sm" style="width: auto">
+          <select
+            v-model="explainMethod"
+            aria-label="HTTP method to explain"
+            class="form-select form-select-sm"
+            style="width: auto"
+          >
             <option v-for="m in httpMethods" :key="m" :value="m">{{ m }}</option>
           </select>
         </div>
         <div class="col">
           <input
             v-model="explainPath"
+            aria-label="Request path to explain"
             class="form-control form-control-sm"
             placeholder="/api/example"
             @keyup.enter="explain"

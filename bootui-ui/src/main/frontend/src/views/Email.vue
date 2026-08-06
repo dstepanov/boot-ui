@@ -180,6 +180,7 @@ function downloadUrl(id) {
           <div class="mb-3">
             <input
               v-model="filter"
+              aria-label="Filter captured emails"
               class="form-control form-control-sm"
               placeholder="Filter by sender, recipient, or subject…"
             />

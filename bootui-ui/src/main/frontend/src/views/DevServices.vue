@@ -246,7 +246,12 @@ async function responseMessage(res) {
     <template v-else-if="report">
       <div class="row g-2 mb-3">
         <div class="col-md-8">
-          <input v-model="filter" class="form-control" placeholder="Filter by name, type, status, or image…" />
+          <input
+            v-model="filter"
+            aria-label="Filter dev services"
+            class="form-control"
+            placeholder="Filter by name, type, status, or image…"
+          />
         </div>
         <div class="col-md-4 text-end small text-muted align-self-center">
           {{ filtered.length }} / {{ report.total }} services
