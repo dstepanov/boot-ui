@@ -5,15 +5,44 @@ name: CodeQL
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      # Same non-functional paths build.yml ignores: root project-meta markdown, screenshots, and the
+      # design-skill sidecar don't affect either the Java or JS/TS CodeQL databases.
+      - 'CHANGELOG.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'CONTRIBUTING.md'
+      - 'SECURITY.md'
+      - 'README.md'
+      - 'PRODUCT.md'
+      - 'DESIGN.md'
+      - 'docs/images/**'
+      - '.impeccable/**'
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - 'CHANGELOG.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'CONTRIBUTING.md'
+      - 'SECURITY.md'
+      - 'README.md'
+      - 'PRODUCT.md'
+      - 'DESIGN.md'
+      - 'docs/images/**'
+      - '.impeccable/**'
   schedule:
     - cron: '0 6 * * 1'
+
+# A newer push/PR update supersedes any CodeQL run already in flight for the same ref, so we don't burn
+# runner time analyzing a commit that's no longer at the head of the branch/PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    runs-on: ubuntu-latest
+    # Opt-in larger/faster runner: see build.yml for the BOOTUI_CI_RUNNER variable this mirrors.
+    runs-on: ${{ vars.BOOTUI_CI_RUNNER || 'ubuntu-latest' }}
     permissions:
       actions: read
       contents: read
@@ -51,6 +80,18 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: bootui-ui/src/main/frontend/package-lock.json
+
+      # bootui-ui is part of the reactor `package` build below, so its frontend-maven-plugin Node.js/npm
+      # download (into bootui-ui/node, outside target/ so it survives `mvn clean`) is otherwise repeated
+      # on every CodeQL run. Cache hit skips the download entirely, same as build.yml.
+      - name: Cache frontend build tools
+        if: steps.code-scanning.outputs.enabled == 'true' && matrix.language == 'java-kotlin'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bootui-ui/node
+          key: frontend-tools-${{ runner.os }}-${{ hashFiles('pom.xml') }}
 
       - name: Initialize CodeQL
         if: steps.code-scanning.outputs.enabled == 'true'
@@ -63,7 +104,8 @@ jobs:
         # CodeQL only needs the Java sources compiled for analysis, so we skip
         # tests and the frontend bundling/release plumbing that the full
         # build.yml `clean install` runs. `package` is sufficient and faster here.
-        run: ./mvnw -B -ntp -DskipTests package
+        # `-T 1C` builds independent reactor modules in parallel (one thread per core), same as build.yml.
+        run: ./mvnw -T 1C -B -ntp -DskipTests package
 
       - name: Perform CodeQL Analysis
         if: steps.code-scanning.outputs.enabled == 'true'
