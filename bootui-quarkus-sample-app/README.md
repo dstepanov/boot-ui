@@ -21,7 +21,7 @@ Each ingredient maps to a BootUI panel, mirroring the Spring sample's demo inten
 | `quarkus-smallrye-health`                       | Health                                   |
 | `quarkus-micrometer-registry-prometheus`        | Metrics                                  |
 | `quarkus-opentelemetry`                         | Traces                                   |
-| `quarkus-langchain4j-ollama`                    | AI Usage                                 |
+| `quarkus-langchain4j-ollama`                    | AI Framework                             |
 
 ## Demo endpoints
 

@@ -11,7 +11,7 @@ import java.net.URL;
 import org.junit.jupiter.api.Test;
 
 /**
- * Pins the Traces and AI Usage panels' behavior on a Quarkus app that does <strong>not</strong> have
+ * Pins the Traces and AI Framework panels' behavior on a Quarkus app that does <strong>not</strong> have
  * {@code quarkus-opentelemetry} on its classpath (this integration-test module deliberately omits it).
  *
  * <p>This is the OpenTelemetry-<em>absent</em> half of the telemetry coverage (the OTel-present capture

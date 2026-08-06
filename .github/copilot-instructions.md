@@ -360,7 +360,7 @@ catalogue of panel ids used by the API access filters and per-adapter availabili
 `QuarkusPanelAvailability`; `docs/QUARKUS-SUPPORT.md` is the prose source for Quarkus-live status (`docs/FEATURES.md` does
 not yet carry a per-platform column). The `/bootui/api/panels` manifest (`PanelsReport`) also carries a top-level
 `platform` discriminator (`spring-boot` | `quarkus`, set by each adapter's manifest builder) so the shared Vue UI can
-render framework-correct setup/empty-state copy (e.g. Traces and AI Usage point Quarkus users at in-process
+render framework-correct setup/empty-state copy (e.g. Traces and AI Framework point Quarkus users at in-process
 `quarkus-opentelemetry` capture instead of the embedded OTLP receiver). The UI reads it via `inject('panels')` and
 **defaults to `spring-boot` when absent** — keep that field populated in both adapters and in the conformance fixtures
 (`expected-panels-spring.json` / `expected-panels-quarkus.json`). The stance is to harden **all visible panels**, not
@@ -373,7 +373,7 @@ hide newer ones. Keep API, UI,
 - **Configuration**: Configuration, Profile Diff, Loggers, Beans, Conditions, Mappings
 - **Database**: Database Connection Pools, SQL Trace, Spring Data, Flyway, Liquibase
 - **Security**: Spring Security, Security Logs
-- **Services**: Scheduled Tasks, REST Client, Cache, Email, Kafka, RabbitMQ, AI Usage
+- **Services**: Scheduled Tasks, REST Client, AI Framework, Cache, Email, Kafka, RabbitMQ
 - **Diagnostics**: Traces, Log Tail, Exceptions, HTTP Exchanges, HTTP Probe
 - **Developer Tools**: MCP Server, DevTools, Dev Services, Copilot, Claude Code
 
@@ -396,7 +396,7 @@ hide newer ones. Keep API, UI,
   `GET /bootui/api/overview` supplies the header data), Architecture, the Quarkus application advisor (panel id
   `spring`), Pentesting, Vulnerabilities,
   Memory, Threads, Heap Dump, Live Memory, JVM Tuning, Metrics, Loggers, Log Tail, Health, HTTP Probe, Beans, Mappings,
-  Configuration (read-only — no override write path), Traces, AI Usage, HTTP Exchanges, Live Activity, Exceptions, MCP
+  Configuration (read-only — no override write path), Traces, AI Framework, HTTP Exchanges, Live Activity, Exceptions, MCP
   Server, and Security (a Quarkus-native ruleset — Elytron/OIDC, `quarkus.http.auth.permission.*`, TLS, CORS,
   `@RolesAllowed` — replacing the Spring-Security-coupled advisor; see `docs/QUARKUS-CHECKS.md`). **Available when their
   capability or detector is present:** Hibernate (Hibernate ORM), Scheduled Tasks (`quarkus-scheduler`), Cache
@@ -438,7 +438,7 @@ hide newer ones. Keep API, UI,
   on Quarkus, but reports real meters only when the application adds a `quarkus-micrometer` registry: the engine
   `MetricsReportProvider` resolves the live composite `MeterRegistry` through a CDI `Instance` (absent → renders
   unavailable), and the meter-visibility predicate is the shared engine `MeterSelfFilter` (so BootUI's own `/bootui/**`
-  meters stay hidden, exactly as the Spring adapter feeds `BootUiSelfDataFilter::shouldIncludeMeter`). Traces and AI Usage
+  meters stay hidden, exactly as the Spring adapter feeds `BootUiSelfDataFilter::shouldIncludeMeter`). Traces and AI Framework
   reuse the engine telemetry services; their read endpoints are always wired (so the panels render even with no data), but spans
   are only captured when the application adds `quarkus-opentelemetry` (in-process via a CDI `SpanProcessor`, no OTLP
   receiver). Hibernate is the second **advisor** on Quarkus and the first **optional-dependency** advisor port: the

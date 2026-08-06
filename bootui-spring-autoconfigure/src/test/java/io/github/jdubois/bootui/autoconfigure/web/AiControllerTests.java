@@ -19,7 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 /**
  * HTTP-level tests for {@link AiController}.
  *
- * <p>The controller derives the AI Usage panel from the GenAI spans accumulated
+ * <p>The controller derives the AI Framework panel from the GenAI spans accumulated
  * in {@link TelemetryStore}, so the tests seed normalized spans directly and
  * assert the stable DTO JSON shape. They cover the aggregated overview, the
  * disabled/empty branches, the recent-chats list (limit and ordering), the chat

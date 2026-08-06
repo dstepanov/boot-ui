@@ -190,12 +190,12 @@ Enforced identically on Spring and Quarkus (`PanelAccessFilter` / `QuarkusPanelA
 | Security        | Security Logs             | `security-logs`             | `bootui.panels.security-logs.enabled`             | Not applicable; view-only.                |
 | Services        | Scheduled Tasks           | `scheduled`                 | `bootui.panels.scheduled.enabled`                 | Not applicable; view-only.                |
 | Services        | REST Client               | `rest-client-trace`         | `bootui.panels.rest-client-trace.enabled`         | `bootui.panels.rest-client-trace.read-only` |
+| Services        | AI Framework              | `ai`                        | `bootui.panels.ai.enabled`                        | Not applicable; view-only.                |
 | Services        | Cache                     | `cache`                     | `bootui.panels.cache.enabled`                     | `bootui.panels.cache.read-only`           |
 | Services        | Email                     | `email`                     | `bootui.panels.email.enabled`                     | `bootui.panels.email.read-only`           |
 | Services        | Kafka                     | `kafka`                     | `bootui.panels.kafka.enabled`                     | `bootui.panels.kafka.read-only`           |
 | Services        | RabbitMQ                  | `rabbitmq`                  | `bootui.panels.rabbitmq.enabled`                  | `bootui.panels.rabbitmq.read-only`    |
 | Services        | JMS                       | `jms`                       | `bootui.panels.jms.enabled`                       | `bootui.panels.jms.read-only`              |
-| Services        | AI Usage                  | `ai`                        | `bootui.panels.ai.enabled`                        | Not applicable; view-only.                |
 | Diagnostics     | Traces                    | `traces`                    | `bootui.panels.traces.enabled`                    | `bootui.panels.traces.read-only`          |
 | Diagnostics     | Log Tail                  | `log-tail`                  | `bootui.panels.log-tail.enabled`                  | Not applicable; view-only.                |
 | Diagnostics     | Exceptions                | `exceptions`                | `bootui.panels.exceptions.enabled`                | `bootui.panels.exceptions.read-only`      |
@@ -367,6 +367,15 @@ Enforced identically on Spring and Quarkus (`PanelAccessFilter` / `QuarkusPanelA
 | `bootui.rest-client-trace.max-uri-length`             | `2000`  | Maximum retained length of the request URI and path; longer values are truncated. |
 | `bootui.rest-client-trace.max-header-value-length`    | `200`   | **Spring only:** maximum retained length of a captured header value. Quarkus captures no headers. |
 | `bootui.rest-client-trace.chatty-call-threshold`      | `5`     | Number of calls to the same method/host/path (with numeric and UUID path segments normalized) within the buffer before the group is flagged as a likely repeated-call access pattern (minimum `2`). |
+
+### AI Framework
+
+| Property                                | Default | Description                                                        |
+| --------------------------------------- | ------- | ------------------------------------------------------------------ |
+| `bootui.panels.ai.enabled`              | `true`  | Show the AI Framework panel.                                       |
+| `bootui.ai.token-series-minutes`        | `60`    | Number of minutes retained in the AI Framework token series.       |
+| `bootui.ai.max-recent-chats`            | `100`   | Maximum recent chat completions surfaced by the AI Framework panel. |
+| `bootui.ai.show-content-capture-banner` | `true`  | Show the AI content-capture explanation banner.                    |
 
 ### Live Activity
 
@@ -627,15 +636,6 @@ The JMS panel is a dedicated view over the same bounded Spring JMS capture that 
 | `bootui.panels.dev-services.read-only` | `false` | Disable service restart actions. Bounded log reads remain available.                            |
 | `bootui.dev-services.restart-enabled`  | `false` | Additional action gate for restarting bean-backed Testcontainers services. Disabled by default. |
 | `bootui.dev-services.log-tail-bytes`   | `65536` | Maximum bytes returned by a single Dev Services log request.                                    |
-
-### AI Usage
-
-| Property                                | Default | Description                                                     |
-| --------------------------------------- | ------- | --------------------------------------------------------------- |
-| `bootui.panels.ai.enabled`              | `true`  | Show the AI Usage panel.                                        |
-| `bootui.ai.token-series-minutes`        | `60`    | Number of minutes retained in the AI Usage token series.        |
-| `bootui.ai.max-recent-chats`            | `100`   | Maximum recent chat completions surfaced by the AI Usage panel. |
-| `bootui.ai.show-content-capture-banner` | `true`  | Show the AI content-capture explanation banner.                 |
 
 ### Copilot
 

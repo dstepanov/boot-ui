@@ -17,7 +17,7 @@ import jakarta.ws.rs.core.MediaType;
 import java.util.List;
 
 /**
- * JAX-RS resource for the BootUI AI Usage panel. The Quarkus analogue of the Spring adapter's
+ * JAX-RS resource for the BootUI AI Framework panel. The Quarkus analogue of the Spring adapter's
  * {@code AiController}: a thin, read-only delegator over the framework-neutral {@link AiUsageService} in
  * {@code bootui-engine}, exposing the exact same {@code /bootui/api/ai/**} contract.
  *

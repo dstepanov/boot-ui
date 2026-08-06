@@ -1750,15 +1750,15 @@ Initial properties:
 | `bootui.github.allowed-api-hosts`            | `api.github.com`                        | Allowed GitHub API hosts; add a GitHub Enterprise host to enable enterprise remotes.              |
 | `bootui.dev-services.restart-enabled`        | `false`                                 | Enables restart controls for bean-backed Testcontainers services.                                 |
 | `bootui.dev-services.log-tail-bytes`         | `65536`                                 | Maximum bytes returned by one Dev Services log request.                                           |
-| `bootui.telemetry.enabled`                   | `true`                                  | Enables local trace capture and the OTLP/HTTP receiver used by the Traces and AI Usage panels.    |
+| `bootui.telemetry.enabled`                   | `true`                                  | Enables local trace capture and the OTLP/HTTP receiver used by the Traces and AI Framework panels. |
 | `bootui.telemetry.max-traces`                | `500`                                   | Maximum distinct traces retained in memory; internally capped for UI safety.                      |
 | `bootui.telemetry.max-spans-per-trace`       | `500`                                   | Maximum spans retained for one trace; internally capped for UI safety.                            |
 | `bootui.telemetry.max-attribute-value-bytes` | `4096`                                  | Maximum attribute string length before truncation; internally capped for UI safety.               |
 | `bootui.telemetry.exclude-self-spans`        | `true`                                  | Drops ingested spans for BootUI's own API routes before they enter the local trace store.         |
 | `bootui.telemetry.enrich`                    | `true`                                  | Stamp BootUI `bootui.*` attributes (service identity, SQL query count / suspected N+1, exceptions) on the active span at BootUI's capture points; effective only while `bootui.telemetry.enabled` is on. |
 | `bootui.telemetry.max-request-bytes`         | `8388608`                               | Maximum OTLP payload size accepted by the local receiver.                                         |
-| `bootui.ai.token-series-minutes`             | `60`                                    | Default token-usage chart window for the AI Usage panel, capped by the API.                       |
-| `bootui.ai.max-recent-chats`                 | `100`                                   | Maximum recent chat rows surfaced by the AI Usage panel, capped by the API.                       |
+| `bootui.ai.token-series-minutes`             | `60`                                    | Default token-usage chart window for the AI Framework panel, capped by the API.                   |
+| `bootui.ai.max-recent-chats`                 | `100`                                   | Maximum recent chat rows surfaced by the AI Framework panel, capped by the API.                   |
 | `bootui.ai.show-content-capture-banner`      | `true`                                  | Shows guidance when Spring AI or LangChain4j prompt/completion content is not captured in spans.  |
 | `bootui.copilot.enabled`                     | `AUTO`                                  | Enable the Copilot panel when local Copilot CLI session state exists.                             |
 | `bootui.copilot.session-state-dir`           | `~/.copilot/session-state`              | Directory scanned for Copilot CLI session directories and `events.jsonl` files.                   |
@@ -1915,8 +1915,9 @@ Top-level navigation:
   - Security Logs.
 - Services:
   - Scheduled Tasks.
+  - REST Client.
+  - AI Framework.
   - Cache.
-  - AI Usage.
 - Diagnostics:
   - Traces.
   - Log Tail.
@@ -2021,7 +2022,8 @@ BootUI's 1.0 release surface is complete when:
   Disabled / unavailable navigation groups covering Health, HTTP Sessions, Metrics, Live Memory, JVM Tuning, Heap Dump,
   Threads, Startup Timeline, GraalVM, Configuration, Profile Diff, Loggers, Beans, Conditions, Mappings, Database
   Connection Pools, Spring Data, Hibernate, Flyway, Liquibase, Spring Security, Security Logs, Security, Pentesting,
-  Vulnerabilities, Scheduled Tasks, Cache, AI Usage, Traces, Log Tail, HTTP Exchanges, HTTP Probe, Architecture,
+  Vulnerabilities, Scheduled Tasks, REST Client, AI Framework, Cache, Traces, Log Tail, HTTP Exchanges, HTTP Probe,
+  Architecture,
   REST API, Spring, Memory,
   DevTools,
   Dev Services, Copilot, Claude Code, and GitHub.

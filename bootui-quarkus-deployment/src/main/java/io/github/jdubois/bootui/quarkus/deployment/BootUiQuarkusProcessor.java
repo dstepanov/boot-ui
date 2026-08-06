@@ -258,7 +258,7 @@ class BootUiQuarkusProcessor {
         indexDependency.produce(new IndexDependencyBuildItem("com.julien-dubois.bootui", "bootui-quarkus"));
         // Register the producer (which has @Produces methods) and the SPI-backed beans, and keep them even
         // if Arc's unused-bean analysis can't see the RESTEasy-mediated injection points. The telemetry read
-        // services (Traces + AI Usage) are produced unconditionally here — they hold no OpenTelemetry types,
+        // services (Traces + AI Framework) are produced unconditionally here — they hold no OpenTelemetry types,
         // so they wire (and render empty) whether or not the app has quarkus-opentelemetry. The OTel-importing
         // capture producer is gated separately in {@link #registerOpenTelemetryCapture}.
         additionalBeans.produce(AdditionalBeanBuildItem.builder()
@@ -904,7 +904,7 @@ class BootUiQuarkusProcessor {
      * it is registered (and pinned unremovable, since its {@code SpanProcessor} is consumed by Quarkus
      * OpenTelemetry through a build step Arc's usage analysis cannot see). Quarkus then auto-discovers the
      * produced {@code SpanProcessor} and feeds finished spans through the engine exporter into the shared
-     * {@code TelemetryStore}, lighting up the Traces and AI Usage panels with real data.</p>
+     * {@code TelemetryStore}, lighting up the Traces and AI Framework panels with real data.</p>
      */
     @BuildStep
     void registerOpenTelemetryCapture(

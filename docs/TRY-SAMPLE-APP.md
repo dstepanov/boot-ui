@@ -22,7 +22,7 @@ the browser on your host reach BootUI through Docker's bridge gateway while keep
 defenses in force — see the [container access](SETUP.md#running-inside-a-docker-container) notes in the setup guide for details.
 
 In this Docker-free mode most panels work normally (Configuration, Database, Spring Data, Flyway, Liquibase, Cache); the
-Chat and AI Usage panels report that AI is unavailable, and Dev Services lists no containers.
+Chat and AI Framework panels report that AI is unavailable, and Dev Services lists no containers.
 
 Populate the Flyway and Liquibase panels with the sample migrations (disabled by default for a faster boot):
 

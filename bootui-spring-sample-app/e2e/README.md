@@ -33,7 +33,7 @@ flow) exposed by the sample app:
 | `cache.spec.js`           | Cache managers, cache details, annotations, metrics, and guarded clear actions                                                                |
 | `spring-security.spec.js` | Filter chains list `/api/secure`, explain endpoint returns a match                                                                            |
 | `security-logs.spec.js`   | Security Logs list recent audit events with filters, auto-refresh, and masked sensitive event data                                            |
-| `ai.spec.js`              | AI Usage summaries, token charts, content-capture guidance, and disabled states                                                               |
+| `ai.spec.js`              | AI Framework summaries, token charts, content-capture guidance, and disabled states                                                           |
 | `traces.spec.js`          | Local trace list, waterfall details, OTLP ingest behavior, and clear action                                                                   |
 | `log-tail.spec.js`        | Log Tail connects, streams new events, pause / resume / clear controls work                                                                   |
 | `http-exchanges.spec.js`  | Recent inbound requests, masked header details, paging, and security failures                                                                 |

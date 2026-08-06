@@ -18,7 +18,7 @@ import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
- * Framework-neutral read model for the BootUI AI Usage panel. Derives Spring-AI / LangChain4j usage
+ * Framework-neutral read model for the BootUI AI Framework panel. Derives Spring-AI / LangChain4j usage
  * metrics from the OTLP spans accumulated in {@link TelemetryStore}.
  *
  * <p>Live configuration is read through a {@code Supplier<AiUsageSettings>} and the wall clock

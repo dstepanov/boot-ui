@@ -54,7 +54,7 @@ describe('CommandPalette', () => {
     await setQuery(wrapper, 'ai')
 
     const titles = wrapper.findAll('.cp-item-title').map((item) => item.text())
-    expect(titles[0]).toBe('AI Usage')
+    expect(titles[0]).toBe('AI Framework')
   })
 
   it('finds panels by keyword synonyms absent from the title', async () => {
@@ -69,7 +69,7 @@ describe('CommandPalette', () => {
     expect(await titlesFor('csrf')).toContain('Security')
     expect(await titlesFor('gc')).toContain('Memory')
     // Word-prefix matching: "gc" must not match the "gc" inside "langchain4j".
-    expect(await titlesFor('gc')).not.toContain('AI Usage')
+    expect(await titlesFor('gc')).not.toContain('AI Framework')
     expect(await titlesFor('env')).toContain('Configuration')
     expect(await titlesFor('hikari')).toContain('Database Connection Pools')
     expect(await titlesFor('cron')).toContain('Scheduled Tasks')

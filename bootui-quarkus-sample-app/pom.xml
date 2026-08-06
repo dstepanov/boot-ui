@@ -173,13 +173,13 @@
             <artifactId>quarkus-micrometer-registry-prometheus</artifactId>
         </dependency>
 
-        <!-- Tracing: feeds the Traces panel (and AI Usage GenAI spans) via OpenTelemetry. -->
+        <!-- Tracing: feeds the Traces panel (and AI Framework GenAI spans) via OpenTelemetry. -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-opentelemetry</artifactId>
         </dependency>
 
-        <!-- AI: LangChain4j + Ollama, drives the AI Usage panel. -->
+        <!-- AI: LangChain4j + Ollama, drives the AI Framework panel. -->
         <dependency>
             <groupId>io.quarkiverse.langchain4j</groupId>
             <artifactId>quarkus-langchain4j-ollama</artifactId>

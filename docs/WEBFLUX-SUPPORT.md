@@ -100,7 +100,7 @@ controllers were already framework-neutral in practice, not just in the engine u
 Overview · GitHub · Beans · Conditions · Configuration · Mappings · Health · Loggers · Startup Timeline · Spring Data ·
 Hibernate · Flyway · Liquibase · Database Connection Pools · Cache · Dev Services · Vulnerabilities · Scheduled Tasks ·
 HTTP Probe · Pentesting · Heap Dump · Architecture · REST API advisor · Profile Diff · Spring advisor[^spring-advisor-reactive] ·
-Live Memory · JVM Tuning · Metrics · DevTools · Traces · AI Usage · GraalVM · CRaC · Threads · Memory · Email · Kafka ·
+Live Memory · JVM Tuning · Metrics · DevTools · Traces · AI Framework · GraalVM · CRaC · Threads · Memory · Email · Kafka ·
 RabbitMQ · JMS. `KafkaController`, `RabbitController`, and `JmsController`, plus their template/listener-factory
 `BeanPostProcessor` capture pairs, have no `ConditionalOnWebApplication` or reactive-specific code, so the panels and
 their Live Activity `MESSAGING` capture work identically to the servlet adapter with zero adapter changes. JMS remains
@@ -187,7 +187,7 @@ populate directly), SQL (`SqlTraceRecorder.setTraceIdProvider`), exceptions (`Re
 `ReactiveSecurityEventTraceRegistry`) — replacing the earlier inbound-header/SLF4J-MDC-only reliance. All four are
 wired by `BootUiReactiveAutoConfiguration.ReactiveOpenTelemetryCorrelationConfiguration`, gated only on the
 OpenTelemetry SDK being present (matching Quarkus's own `Capability.OPENTELEMETRY_TRACER` gate) — deliberately
-*not* also gated on `bootui.telemetry.enabled`, which governs BootUI's own span export for the Traces/AI Usage
+*not* also gated on `bootui.telemetry.enabled`, which governs BootUI's own span export for the Traces/AI Framework
 panels, a separate concern from reading the id of a span the application's own tracing already started.
 
 **This alone is not sufficient — a second, non-obvious requirement makes it actually work.** WebFlux has no

@@ -6,7 +6,7 @@ import io.quarkiverse.langchain4j.RegisterAiService;
 
 /**
  * LangChain4j AI service backed by Ollama (configured under {@code quarkus.langchain4j.ollama.*}). Drives
- * the AI Usage panel via the GenAI spans the LangChain4j + OpenTelemetry integration emits.
+ * the AI Framework panel via the GenAI spans the LangChain4j + OpenTelemetry integration emits.
  */
 @RegisterAiService
 public interface AiAssistant {

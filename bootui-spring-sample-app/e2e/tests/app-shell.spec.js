@@ -34,8 +34,9 @@ const allPanelLinks = [
   {id: 'pentesting', title: 'Pentesting', heading: /^Pentesting/},
   {id: 'vulnerabilities', title: 'Vulnerabilities', heading: /^Vulnerabilities/},
   {id: 'scheduled', title: 'Scheduled Tasks', heading: /Scheduled Tasks/},
+  {id: 'rest-client-trace', title: 'REST Client', heading: /^REST Client$/},
+  {id: 'ai', title: 'AI Framework', heading: /AI Framework/},
   {id: 'cache', title: 'Cache', heading: /^Cache$/},
-  {id: 'ai', title: 'AI Usage', heading: /AI Usage/},
   {id: 'traces', title: 'Traces', heading: /^Traces/},
   {id: 'log-tail', title: 'Log Tail', heading: /Log Tail/},
   {id: 'exceptions', title: 'Exceptions', heading: /^Exceptions/},
@@ -45,7 +46,6 @@ const allPanelLinks = [
   {id: 'kafka', title: 'Kafka', heading: /^Kafka/},
   {id: 'rabbitmq', title: 'RabbitMQ', heading: /^RabbitMQ/},
   {id: 'jms', title: 'JMS', heading: /^JMS/},
-  {id: 'rest-client-trace', title: 'REST Client', heading: /^REST Client$/},
   {id: 'architecture', title: 'Architecture', heading: /^Architecture/},
   {id: 'rest-api', title: 'REST API', heading: /^REST API/},
   {id: 'mcp-server', title: 'MCP Server', heading: /^MCP Server/},
@@ -197,12 +197,12 @@ test.describe('BootUI app shell', () => {
     await expect(page.getByRole('group', {name: 'Services panels'}).locator('.bootui-nav-link__label')).toHaveText([
       'Scheduled Tasks',
       'REST Client',
+      'AI Framework',
       'Cache',
       'Email',
       'Kafka',
       'RabbitMQ',
-      'JMS',
-      'AI Usage'
+      'JMS'
     ])
 
     await page.getByRole('button', {name: /Diagnostics\s+5/}).click()
@@ -265,16 +265,16 @@ test.describe('BootUI app shell', () => {
     const unavailableToggle = page.getByRole('button', {name: /Disabled \/ unavailable\s+1/})
     await expect(unavailableToggle).toBeVisible()
     await expect(unavailableToggle).toHaveAttribute('aria-expanded', 'false')
-    await expect(page.locator('aside .nav-link', {hasText: 'AI Usage'})).not.toBeVisible()
+    await expect(page.locator('aside .nav-link', {hasText: 'AI Framework'})).not.toBeVisible()
 
     await unavailableToggle.click()
 
-    const aiLink = page.locator('aside .nav-link', {hasText: 'AI Usage'})
+    const aiLink = page.locator('aside .nav-link', {hasText: 'AI Framework'})
     await expect(aiLink).toBeVisible()
     await expect(aiLink).toHaveClass(/bootui-nav-link--unavailable/)
     await expect(aiLink).toHaveAttribute(
       'aria-label',
-      'AI Usage - unavailable: Spring AI is not available in this test state'
+      'AI Framework - unavailable: Spring AI is not available in this test state'
     )
   })
 

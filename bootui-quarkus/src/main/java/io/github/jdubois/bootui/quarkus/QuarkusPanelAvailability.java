@@ -31,7 +31,7 @@ import org.eclipse.microprofile.config.Config;
  * SmallRye Health when {@code quarkus-smallrye-health} is present and otherwise renders setup guidance), the
  * Architecture (ArchUnit) advisor (which bounds its bytecode import to the application base packages discovered
  * from the build-time Jandex index and runs the shared curated rule registry on demand), plus the
- * OpenTelemetry-backed Traces and AI Usage panels (whose read services are always wired — they simply
+ * OpenTelemetry-backed Traces and AI Framework panels (whose read services are always wired — they simply
  * render empty until spans are captured, which requires {@code quarkus-opentelemetry} on the application
  * classpath), plus the Vulnerabilities panel (statically available: it lists the application's local
  * dependency inventory, captured from the build-time application model, and reaches out to OSV.dev only on
