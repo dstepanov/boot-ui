@@ -871,8 +871,14 @@ watch(
                   :key="session.id"
                   :class="{active: session.id === selectedSessionId}"
                   class="list-group-item list-group-item-action session-row"
-                  @click="pickSession(session.id)"
                 >
+                  <button
+                    :aria-current="session.id === selectedSessionId ? 'true' : undefined"
+                    :aria-label="`View session ${session.id}`"
+                    class="bootui-keyboard-target session-row-target"
+                    type="button"
+                    @click="pickSession(session.id)"
+                  ></button>
                   <div class="d-flex justify-content-between align-items-start">
                     <div class="me-2 text-truncate">
                       <div class="fw-semibold text-truncate">
@@ -890,7 +896,7 @@ watch(
                       <div>
                         <button
                           :aria-label="`Show activity for ${session.id}`"
-                          class="badge text-bg-secondary border-0 me-1"
+                          class="badge text-bg-secondary border-0 me-1 bootui-keyboard-target session-row-action"
                           type="button"
                           @click.stop="pickSession(session.id, {tab: 'activity'})"
                         >
@@ -899,7 +905,7 @@ watch(
                         <button
                           v-if="session.errorCount > 0"
                           :aria-label="`Show failures for ${session.id}`"
-                          class="badge text-bg-danger border-0"
+                          class="badge text-bg-danger border-0 bootui-keyboard-target session-row-action"
                           type="button"
                           @click.stop="pickSession(session.id, {tab: 'failures'})"
                         >
@@ -1284,6 +1290,30 @@ watch(
 
 .session-row {
   cursor: pointer;
+  position: relative;
+}
+
+.session-row-target {
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+  inset: 0;
+  position: absolute;
+  z-index: 1;
+}
+
+.session-row-target:focus-visible {
+  outline-offset: -3px;
+}
+
+.session-row.active .bootui-keyboard-target:focus-visible {
+  box-shadow: 0 0 0 4px var(--bootui-blue);
+  outline-color: var(--bs-body-bg);
+}
+
+.session-row-action {
+  position: relative;
+  z-index: 2;
 }
 
 .session-list {

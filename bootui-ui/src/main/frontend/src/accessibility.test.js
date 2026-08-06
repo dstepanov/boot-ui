@@ -7,6 +7,7 @@ import {describe, expect, it} from 'vitest'
 
 const sourceRoot = path.dirname(fileURLToPath(import.meta.url))
 const formControlTags = new Set(['input', 'select', 'textarea'])
+const nativeInteractiveTags = new Set(['a', 'button', 'router-link', 'summary'])
 const staticallyEmptyExpressions = new Set(["''", '""', '``', 'null', 'undefined', 'false'])
 
 function vueFiles(directory) {
@@ -57,6 +58,80 @@ function hasNonEmptyAttribute(node, name) {
 
 function staticAttribute(node, name) {
   return node.props.find((property) => property.type === 6 && property.name === name)?.value?.content
+}
+
+function modifierNames(directive) {
+  return directive.modifiers.map((modifier) => modifier.content ?? modifier)
+}
+
+function eventDirective(node, eventName, modifier) {
+  return node.props.find(
+    (property) =>
+      property.type === 7 &&
+      property.name === 'on' &&
+      property.arg?.type === 4 &&
+      property.arg.content === eventName &&
+      (!modifier || modifierNames(property).includes(modifier))
+  )
+}
+
+function hasButtonRole(node) {
+  if (staticAttribute(node, 'role') === 'button') {
+    return true
+  }
+  const dynamicRole = node.props.find(
+    (property) =>
+      property.type === 7 && property.name === 'bind' && property.arg?.type === 4 && property.arg.content === 'role'
+  )
+  return /['"]button['"]/.test(dynamicRole?.exp?.content ?? '')
+}
+
+function hasKeyboardReachableTabindex(node) {
+  const tabindex = node.props.find(
+    (property) =>
+      (property.type === 6 && property.name === 'tabindex') ||
+      (property.type === 7 &&
+        property.name === 'bind' &&
+        property.arg?.type === 4 &&
+        property.arg.content === 'tabindex')
+  )
+  if (!tabindex) {
+    return false
+  }
+  if (tabindex.type === 6) {
+    return /^\d+$/.test(tabindex.value?.content.trim() ?? '')
+  }
+  const expression = tabindex.exp?.content.trim()
+  return expressionCanProvideText(expression) && !/^(?:['"`])?-\d+(?:['"`])?$/.test(expression)
+}
+
+function hasKeyboardClickEquivalent(node) {
+  const enter = eventDirective(node, 'keydown', 'enter')
+  const space = eventDirective(node, 'keydown', 'space')
+  return (
+    hasButtonRole(node) &&
+    hasAccessibleText(node) &&
+    hasKeyboardReachableTabindex(node) &&
+    enter &&
+    space &&
+    modifierNames(space).includes('prevent')
+  )
+}
+
+function hasNativeInteractiveDescendant(node, delegatedExpression) {
+  return node.children.some(
+    (child) =>
+      child.type === 1 &&
+      ((nativeInteractiveTags.has(child.tag) &&
+        hasAccessibleText(child) &&
+        eventDirective(child, 'click')?.exp?.content.trim() === delegatedExpression) ||
+        hasNativeInteractiveDescendant(child, delegatedExpression))
+  )
+}
+
+function hasKeyboardDelegate(node) {
+  const delegatedExpression = staticAttribute(node, 'data-keyboard-delegate')?.trim()
+  return Boolean(delegatedExpression) && hasNativeInteractiveDescendant(node, delegatedExpression)
 }
 
 function hasAccessibleText(node) {
@@ -143,7 +218,26 @@ function inspectTemplate(template, lineOffset = 0) {
     })
     .map(({node}) => `line ${lineOffset + node.loc.start.line}: unnamed <${node.tag}>`)
 
-  return [...duplicateIds, ...unnamedControls]
+  const inaccessibleClickTargets = elements
+    .filter((node) => {
+      const click = eventDirective(node, 'click')
+      if (!click?.exp || node.tagType !== 0 || nativeInteractiveTags.has(node.tag)) {
+        return false
+      }
+      if (
+        modifierNames(click).includes('self') ||
+        staticAttribute(node, 'aria-hidden') === 'true' ||
+        staticAttribute(node, 'role') === 'option' ||
+        hasKeyboardDelegate(node) ||
+        (node.tag === 'dialog' && (eventDirective(node, 'keydown', 'esc') || eventDirective(node, 'cancel')))
+      ) {
+        return false
+      }
+      return !hasKeyboardClickEquivalent(node)
+    })
+    .map((node) => `line ${lineOffset + node.loc.start.line}: keyboard-inaccessible click target <${node.tag}>`)
+
+  return [...duplicateIds, ...unnamedControls, ...inaccessibleClickTargets]
 }
 
 describe('frontend accessibility', () => {
@@ -186,5 +280,64 @@ describe('frontend accessibility', () => {
 
   it('accepts matching dynamic label associations', () => {
     expect(inspectTemplate('<label :for="inputId">Auto-refresh</label><input :id="inputId">')).toEqual([])
+  })
+
+  it('rejects non-semantic click targets without complete keyboard support', () => {
+    expect(inspectTemplate('<div @click="select"></div>')).toEqual(['line 1: keyboard-inaccessible click target <div>'])
+    expect(
+      inspectTemplate('<tr role="button" tabindex="0" @click="select" @keydown.enter="select"></tr>')
+    ).toHaveLength(1)
+    expect(
+      inspectTemplate(
+        '<tr role="button" tabindex="0" @click="select" @keydown.enter="select" @keydown.space="select"></tr>'
+      )
+    ).toHaveLength(1)
+    expect(
+      inspectTemplate(
+        '<div role="button" tabindex="0" @click="select" @keydown.enter="select" @keydown.space.prevent="select"></div>'
+      )
+    ).toHaveLength(1)
+    expect(
+      inspectTemplate(
+        '<div role="button" tabindex="-1" @click="select" @keydown.enter="select" @keydown.space.prevent="select">Select</div>'
+      )
+    ).toHaveLength(1)
+    expect(
+      inspectTemplate(
+        '<div role="button" tabindex @click="select" @keydown.enter="select" @keydown.space.prevent="select">Select</div>'
+      )
+    ).toHaveLength(1)
+    expect(
+      inspectTemplate('<tr data-keyboard-delegate="select" @click="select"><td>Missing action</td></tr>')
+    ).toHaveLength(1)
+    expect(
+      inspectTemplate(
+        '<tr data-keyboard-delegate="select" @click="select"><td><button type="button">Select</button></td></tr>'
+      )
+    ).toHaveLength(1)
+    expect(
+      inspectTemplate(
+        '<tr data-keyboard-delegate="select" @click="select"><td><button type="button" @click.stop="help">Help</button></td></tr>'
+      )
+    ).toHaveLength(1)
+  })
+
+  it('accepts native controls and complete keyboard equivalents', () => {
+    expect(inspectTemplate('<button type="button" @click="select">Select</button>')).toEqual([])
+    expect(
+      inspectTemplate(
+        '<tr role="button" tabindex="0" aria-label="Select row" @click="select" @keydown.enter="select" @keydown.space.prevent="select"></tr>'
+      )
+    ).toEqual([])
+    expect(
+      inspectTemplate(
+        '<div role="button" :tabindex="enabled ? 0 : undefined" @click="select" @keydown.enter="select" @keydown.space.prevent="select">Select</div>'
+      )
+    ).toEqual([])
+    expect(
+      inspectTemplate(
+        '<tr data-keyboard-delegate="select" @click="select"><td><button type="button" @click.stop="select">Select</button></td></tr>'
+      )
+    ).toEqual([])
   })
 })

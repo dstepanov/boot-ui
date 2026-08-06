@@ -151,6 +151,24 @@ describe('SqlTrace', () => {
     expect(text).toContain('com.example.TodoRepository.findById(TodoRepository.java:42)')
   })
 
+  it('provides a native keyboard action without changing row pointer behavior', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(traceReport())))
+
+    wrapper = mount(SqlTrace, {props: {panel: {id: 'sql-trace'}}})
+    await flushPromises()
+
+    const row = wrapper.get('tr.sql-row')
+    const toggle = row.get('button.sql-row-toggle')
+    expect(toggle.element.tagName).toBe('BUTTON')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+
+    await row.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+  })
+
   it('filters executions by SQL text', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(traceReport())))
 

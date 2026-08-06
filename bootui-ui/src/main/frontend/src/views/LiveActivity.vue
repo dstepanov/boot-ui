@@ -895,9 +895,8 @@ function clearFilters() {
                   entry.profileable ? 'activity-row-clickable' : '',
                   hasChildren(entry) ? 'activity-parent-row' : ''
                 ]"
-                :tabindex="entry.profileable ? 0 : undefined"
+                data-keyboard-delegate="openProfile(entry)"
                 @click="onRowClick(entry)"
-                @keydown.enter="onRowClick(entry)"
               >
                 <td class="text-nowrap small">{{ formatClockTime(entry.timestamp) }}</td>
                 <td class="text-nowrap"><i :class="['bi', typeIcon(entry.type), 'me-1']"></i>{{ entry.type }}</td>
@@ -959,7 +958,7 @@ function clearFilters() {
                   </router-link>
                   <button
                     v-if="entry.profileable"
-                    class="btn btn-outline-primary btn-sm rounded-pill"
+                    class="btn btn-outline-primary btn-sm rounded-pill bootui-keyboard-target"
                     type="button"
                     @click="openProfile(entry)"
                   >
