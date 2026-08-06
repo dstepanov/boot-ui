@@ -801,25 +801,25 @@ function clearFilters() {
 
       <div class="d-flex flex-wrap align-items-end gap-2 mb-3">
         <div class="activity-text-filter">
-          <label class="form-label small mb-1">Filter</label>
+          <label class="form-label small mb-1" for="activity-text-filter">Filter</label>
           <input
+            id="activity-text-filter"
             v-model="textFilter"
             type="search"
             class="form-control form-control-sm"
             placeholder="Path, status, SQL, exception…"
-            aria-label="Free-text activity filter"
           />
         </div>
         <div>
-          <label class="form-label small mb-1">Type</label>
-          <select v-model="typeFilter" class="form-select form-select-sm">
+          <label class="form-label small mb-1" for="activity-type-filter">Type</label>
+          <select id="activity-type-filter" v-model="typeFilter" class="form-select form-select-sm">
             <option value="">All types</option>
             <option v-for="type in TYPES" :key="type" :value="type">{{ type }}</option>
           </select>
         </div>
         <div>
-          <label class="form-label small mb-1">Severity</label>
-          <select v-model="severityFilter" class="form-select form-select-sm">
+          <label class="form-label small mb-1" for="activity-severity-filter">Severity</label>
+          <select id="activity-severity-filter" v-model="severityFilter" class="form-select form-select-sm">
             <option value="">All severities</option>
             <option v-for="severity in SEVERITIES" :key="severity" :value="severity">{{ severity }}</option>
           </select>

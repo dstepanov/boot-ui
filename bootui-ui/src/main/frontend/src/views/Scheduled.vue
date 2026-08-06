@@ -86,7 +86,12 @@ function formatExpression(task) {
     <template v-else-if="report">
       <div class="row g-2 mb-3">
         <div class="col-md-8">
-          <input v-model="filter" class="form-control" placeholder="Filter by runnable name or expression…" />
+          <input
+            v-model="filter"
+            aria-label="Filter scheduled tasks"
+            class="form-control"
+            placeholder="Filter by runnable name or expression…"
+          />
         </div>
         <div class="col-md-4 text-end small text-muted align-self-center">
           {{ filtered.length }} / {{ report.total }} tasks

@@ -135,7 +135,12 @@ onMounted(load)
 
       <div class="row g-2 mb-3">
         <div class="col-md-6">
-          <input v-model="filter" class="form-control" placeholder="Filter by version, description, or script…" />
+          <input
+            v-model="filter"
+            aria-label="Filter migrations"
+            class="form-control"
+            placeholder="Filter by version, description, or script…"
+          />
         </div>
         <div class="col-md-6 text-end small text-muted align-self-center">
           {{ report.total }} migration(s) across {{ report.databases.length }} database(s)

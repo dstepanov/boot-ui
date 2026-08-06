@@ -528,7 +528,12 @@ const detectedFrameworkLabel = computed(() => {
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h6 class="mb-0">Token usage (last {{ series.minutes }} min)</h6>
-              <select v-model="windowMinutes" class="form-select form-select-sm w-auto" @change="onWindowChange">
+              <select
+                v-model="windowMinutes"
+                aria-label="Token usage time window"
+                class="form-select form-select-sm w-auto"
+                @change="onWindowChange"
+              >
                 <option :value="15">15 min</option>
                 <option :value="60">60 min</option>
                 <option :value="240">240 min</option>
@@ -677,25 +682,34 @@ const detectedFrameworkLabel = computed(() => {
           <div class="col-md-4">
             <input
               v-model="tableSearch"
+              aria-label="Search recent chats"
               class="form-control form-control-sm"
               placeholder="Search model, provider, span…"
               type="search"
             />
           </div>
           <div class="col-md-2">
-            <select v-model="providerFilter" class="form-select form-select-sm">
+            <select
+              v-model="providerFilter"
+              aria-label="Filter recent chats by provider"
+              class="form-select form-select-sm"
+            >
               <option value="">All providers</option>
               <option v-for="p in distinctProviders" :key="p" :value="p">{{ p }}</option>
             </select>
           </div>
           <div class="col-md-3">
-            <select v-model="modelFilter" class="form-select form-select-sm">
+            <select v-model="modelFilter" aria-label="Filter recent chats by model" class="form-select form-select-sm">
               <option value="">All models</option>
               <option v-for="m in distinctModels" :key="m" :value="m">{{ m }}</option>
             </select>
           </div>
           <div class="col-md-2">
-            <select v-model="statusFilter" class="form-select form-select-sm">
+            <select
+              v-model="statusFilter"
+              aria-label="Filter recent chats by status"
+              class="form-select form-select-sm"
+            >
               <option value="">All statuses</option>
               <option value="OK">OK</option>
               <option value="ERROR">ERROR</option>

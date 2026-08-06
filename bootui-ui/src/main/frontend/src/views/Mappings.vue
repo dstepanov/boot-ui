@@ -44,7 +44,7 @@ watch(filter, scheduleReload)
 <template>
   <div>
     <PanelHeader icon="bi-signpost-2" title="HTTP mappings" :error="error" />
-    <input v-model="filter" class="form-control mb-3" placeholder="Filter…" />
+    <input v-model="filter" aria-label="Filter HTTP mappings" class="form-control mb-3" placeholder="Filter…" />
     <p class="small text-muted">{{ matchedCount }} of {{ totalCount }} mappings matched</p>
     <div class="table-responsive">
       <table class="table table-sm table-hover">

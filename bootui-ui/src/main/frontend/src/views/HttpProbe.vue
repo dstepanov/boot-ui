@@ -154,8 +154,8 @@ function clearForm() {
       <div class="card-body">
         <div class="row g-3 align-items-start">
           <div class="col-md-3 col-lg-2">
-            <label class="form-label">Method</label>
-            <select v-model="method" class="form-select">
+            <label class="form-label" for="http-probe-method">Method</label>
+            <select id="http-probe-method" v-model="method" class="form-select">
               <option value="GET">GET</option>
               <option value="HEAD">HEAD</option>
               <option value="POST">POST</option>
@@ -165,8 +165,9 @@ function clearForm() {
             </select>
           </div>
           <div class="col-md-9 col-lg-10">
-            <label class="form-label">Path</label>
+            <label class="form-label" for="http-probe-path">Path</label>
             <input
+              id="http-probe-path"
               v-model="path"
               class="form-control font-monospace"
               placeholder="/api/sample/hello"
@@ -177,8 +178,9 @@ function clearForm() {
         </div>
 
         <div v-if="showRequestBody" class="mt-3">
-          <label class="form-label">Request body</label>
+          <label class="form-label" for="http-probe-body">Request body</label>
           <textarea
+            id="http-probe-body"
             v-model="requestBody"
             class="form-control font-monospace"
             placeholder='{

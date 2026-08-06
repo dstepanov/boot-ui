@@ -997,14 +997,19 @@ watch(
 
                 <div class="row g-2 mb-3 align-items-end">
                   <div class="col-md-4">
-                    <label class="form-label">Category</label>
-                    <select v-model="categoryFilter" class="form-select">
+                    <label class="form-label" for="copilot-category-filter">Category</label>
+                    <select id="copilot-category-filter" v-model="categoryFilter" class="form-select">
                       <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
                     </select>
                   </div>
                   <div class="col-md-6">
-                    <label class="form-label">Filter</label>
-                    <input v-model="textFilter" class="form-control" placeholder="Tool name, summary, or type…" />
+                    <label class="form-label" for="copilot-text-filter">Filter</label>
+                    <input
+                      id="copilot-text-filter"
+                      v-model="textFilter"
+                      class="form-control"
+                      placeholder="Tool name, summary, or type…"
+                    />
                   </div>
                   <div class="col-md-2 text-end small text-muted">
                     {{ filteredEvents.length }} / {{ detail.recentEvents.length }}
