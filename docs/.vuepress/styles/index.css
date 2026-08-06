@@ -960,13 +960,18 @@ html[data-theme='dark'] [vp-content] code {
   }
 }
 
+/* Keep VuePress's heading box aligned with its router without letting the offset padding intercept clicks. */
 [vp-content] h1,
 [vp-content] h2,
 [vp-content] h3,
 [vp-content] h4,
 [vp-content] h5,
 [vp-content] h6 {
-  margin-top: 1.5rem;
-  padding-top: 0;
-  scroll-margin-top: calc(1rem + var(--header-offset));
+  margin-top: calc(0.5rem - var(--header-offset));
+  padding-top: calc(1rem + var(--header-offset));
+  pointer-events: none;
+}
+
+[vp-content] .header-anchor {
+  pointer-events: auto;
 }
