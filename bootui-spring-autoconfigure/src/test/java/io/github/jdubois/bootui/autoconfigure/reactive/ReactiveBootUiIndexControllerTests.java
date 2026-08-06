@@ -45,6 +45,7 @@ class ReactiveBootUiIndexControllerTests {
                 .expectBody(String.class)
                 .value(body -> assertThat(body)
                         .contains("<base href=\"/bootui/\" />")
+                        .contains("content=\"/\" name=\"bootui-application-path\"")
                         .contains("content=\"/bootui/api\" name=\"bootui-api-path\""));
     }
 
@@ -92,6 +93,7 @@ class ReactiveBootUiIndexControllerTests {
 
         assertThat(exchange.getResponse().getBodyAsString().block())
                 .contains("<base href=\"/host/devtools/\" />")
+                .contains("content=\"/host/\" name=\"bootui-application-path\"")
                 .contains("content=\"/host/internal/bootui-api\" name=\"bootui-api-path\"");
     }
 

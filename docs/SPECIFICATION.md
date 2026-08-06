@@ -140,6 +140,12 @@ Both values are application-relative. Spring's `server.servlet.context-path` or 
 `/host` is served at `/host/dev-console`; the generated shell injects that browser-visible base and API path for the
 shared Vue application.
 
+The generated shell also injects the normalized, same-origin host-application path used by the Overview panel's
+**Application homepage** link. It is `/` at the default application root and includes exactly one trailing slash for a
+custom root (for example, `/host/`). The link therefore returns to `/` from `/bootui/` and to `/host/` from
+`/host/dev-console/`, independently of `bootui.path` depth and `bootui.api-path`, without carrying BootUI query or hash
+state.
+
 Path configuration is normalized once and then used by every adapter:
 
 - leading/trailing whitespace and one or more trailing slashes are removed;

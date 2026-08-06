@@ -9,6 +9,27 @@ export function normalizeBootUiApiPath(rawPath) {
   return normalizePath(rawPath, false)
 }
 
+export function normalizeBootUiApplicationPath(rawPath) {
+  if (typeof rawPath !== 'string' || !rawPath.trim()) {
+    throw new Error('BootUI application path must not be blank')
+  }
+  const normalized = withoutTrailingSlash(rawPath.trim())
+  if (normalized === '/') return '/'
+  if (
+    !normalized.startsWith('/') ||
+    normalized
+      .slice(1)
+      .split('/')
+      .some((segment) => segment === '.' || segment === '..') ||
+    normalized.includes('?') ||
+    normalized.includes('#') ||
+    !SAFE_PATH.test(normalized)
+  ) {
+    throw new Error(`Invalid BootUI application path: '${normalized}'`)
+  }
+  return normalized + '/'
+}
+
 function normalizePath(rawPath, rejectInternalChild) {
   if (typeof rawPath !== 'string' || !rawPath.trim()) {
     throw new Error('BootUI path must not be blank')
@@ -49,6 +70,19 @@ export function getBootUiBasePath() {
 
 export function getBootUiApiPath() {
   return configuredApiPath() ?? getBootUiBasePath() + '/api'
+}
+
+export function getBootUiApplicationPath() {
+  if (typeof document === 'undefined') return '/'
+  const content = document.querySelector('meta[name="bootui-application-path"]')?.getAttribute('content')
+  if (!content) return '/'
+  try {
+    const base = typeof window === 'undefined' ? 'http://localhost/' : window.location.href
+    const pathname = new URL(content, base).pathname.replace(/^\/+/, '/')
+    return pathname === '/' ? '/' : withoutTrailingSlash(pathname) + '/'
+  } catch {
+    return '/'
+  }
 }
 
 export function resolveBootUiApiUrl(input) {

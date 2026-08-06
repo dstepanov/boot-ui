@@ -1,5 +1,6 @@
 <script setup>
 import {apiFetch, getJson} from '../api.js'
+import {getBootUiApplicationPath} from '../utils/bootUiPath.js'
 import {computed, inject, onActivated, onMounted, reactive, ref} from 'vue'
 import {describeLoadError} from '../utils/loadError.js'
 import {hasScanResult, scanStatusBadgeClass, scanStatusLabel} from '../utils/scanStatus.js'
@@ -9,6 +10,7 @@ import ScannerScoreCard from './components/ScannerScoreCard.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
 
 const injectedPanels = inject('panels', null)
+const applicationPath = getBootUiApplicationPath()
 
 // Locally fetched panel availability when the shell has not provided it yet.
 const localPanels = ref(null)
@@ -305,7 +307,7 @@ onActivated(refreshScores)
       :refreshable="false"
     >
       <template #actions>
-        <a class="btn btn-outline-secondary btn-sm" href="/">
+        <a class="btn btn-outline-secondary btn-sm" :href="applicationPath">
           <i class="bi bi-house-door me-1"></i>
           Application homepage
         </a>

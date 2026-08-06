@@ -49,6 +49,7 @@ class BootUiCustomPathIntegrationTests {
         assertThat(bareShell.status()).isEqualTo(200);
         assertThat(shell.body())
                 .contains("<base href=\"" + UI_PATH + "/\"")
+                .contains("content=\"/host/\" name=\"bootui-application-path\"")
                 .contains("content=\"" + API_PATH + "\" name=\"bootui-api-path\"");
         assertThat(asset.find()).isTrue();
         assertThat(probe.get(UI_PATH + "/" + asset.group(1)).status()).isEqualTo(200);

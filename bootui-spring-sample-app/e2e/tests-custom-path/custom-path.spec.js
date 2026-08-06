@@ -11,6 +11,7 @@ test('loads the SPA and assets only from the configured path', async ({page, req
   await expect(page).toHaveURL(new RegExp(`${UI_PATH}/#/overview$`))
   await expect(page.locator('.brand-name')).toHaveText('BootUI')
   await expect(page.locator('base')).toHaveAttribute('href', `${UI_PATH}/`)
+  await expect(page.locator('meta[name="bootui-application-path"]')).toHaveAttribute('content', '/host/')
   await expect(page.locator('meta[name="bootui-api-path"]')).toHaveAttribute('content', API_PATH)
 
   const resourcePaths = await page.evaluate(() =>
@@ -24,6 +25,11 @@ test('loads the SPA and assets only from the configured path', async ({page, req
 
   expect((await request.get('/host/bootui/')).status()).toBe(404)
   expect((await request.get('/host/bootui/api/overview')).status()).toBe(404)
+
+  const home = page.getByRole('link', {name: 'Application homepage'})
+  await expect(home).toHaveAttribute('href', '/host/')
+  await home.click()
+  await expect(page).toHaveURL(/\/host\/$/)
 })
 
 test('uses the configured API path for queries, SSE, and security', async ({page, request}) => {

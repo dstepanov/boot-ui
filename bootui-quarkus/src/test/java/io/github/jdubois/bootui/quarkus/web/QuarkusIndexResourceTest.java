@@ -46,11 +46,12 @@ class QuarkusIndexResourceTest {
     void injectsApplicationRootAwareApiPathWithoutDuplication() {
         String html = "<html><head></head><body></body></html>";
 
-        String once = QuarkusIndexResource.injectRuntimePaths(html, "/host/console/", "/host/internal/api");
-        String twice = QuarkusIndexResource.injectRuntimePaths(once, "/ignored/", "/ignored/api");
+        String once = QuarkusIndexResource.injectRuntimePaths(html, "/host/console/", "/host/internal/api", "/host/");
+        String twice = QuarkusIndexResource.injectRuntimePaths(once, "/ignored/", "/ignored/api", "/ignored/");
 
         assertThat(twice)
                 .contains("<base href=\"/host/console/\" />")
+                .contains("content=\"/host/\" name=\"bootui-application-path\"")
                 .contains("content=\"/host/internal/api\" name=\"bootui-api-path\"")
                 .doesNotContain("/ignored/api");
     }
