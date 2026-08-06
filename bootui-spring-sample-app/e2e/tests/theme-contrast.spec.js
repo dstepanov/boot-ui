@@ -1,0 +1,109 @@
+// @ts-check
+import {expect, test} from './fixtures.js'
+
+function parseColor(value) {
+  const channels = value.match(/[\d.]+/g)?.map(Number)
+  if (!channels || channels.length < 3) throw new Error(`Unsupported computed color: ${value}`)
+  return {
+    red: channels[0],
+    green: channels[1],
+    blue: channels[2],
+    alpha: channels[3] ?? 1
+  }
+}
+
+function composite(foreground, background) {
+  const alpha = foreground.alpha + background.alpha * (1 - foreground.alpha)
+  return {
+    red: (foreground.red * foreground.alpha + background.red * background.alpha * (1 - foreground.alpha)) / alpha,
+    green: (foreground.green * foreground.alpha + background.green * background.alpha * (1 - foreground.alpha)) / alpha,
+    blue: (foreground.blue * foreground.alpha + background.blue * background.alpha * (1 - foreground.alpha)) / alpha,
+    alpha
+  }
+}
+
+function linearChannel(channel) {
+  const srgb = channel / 255
+  return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4
+}
+
+function relativeLuminance(color) {
+  return 0.2126 * linearChannel(color.red) + 0.7152 * linearChannel(color.green) + 0.0722 * linearChannel(color.blue)
+}
+
+function contrastRatio(foreground, background) {
+  const foregroundLuminance = relativeLuminance(foreground)
+  const backgroundLuminance = relativeLuminance(background)
+  return (
+    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+  )
+}
+
+test('keeps placeholders, helper text, and selected identifiers readable in both themes', async ({page, openView}) => {
+  for (const theme of ['light', 'dark']) {
+    await page.goto('/bootui/')
+    await page.evaluate((value) => localStorage.setItem('bootui.theme', value), theme)
+    await page.reload()
+    await expect(page.locator('html')).toHaveAttribute('data-bootui-theme', theme)
+
+    await openView('loggers', 'Loggers')
+    const placeholderColors = await page.locator('input[placeholder="Filter loggers by name…"]').evaluate((input) => {
+      const rootStyle = getComputedStyle(document.documentElement)
+      return {
+        background: getComputedStyle(input).backgroundColor,
+        placeholder: getComputedStyle(input, '::placeholder').color,
+        subtleToken: rootStyle.getPropertyValue('--bootui-text-subtle').trim(),
+        surfaceSolid: rootStyle.getPropertyValue('--bootui-surface-solid').trim()
+      }
+    })
+    expect(placeholderColors.placeholder).toBe(
+      await page.evaluate((token) => {
+        const probe = document.createElement('span')
+        probe.style.color = token
+        document.body.append(probe)
+        const computed = getComputedStyle(probe).color
+        probe.remove()
+        return computed
+      }, placeholderColors.subtleToken)
+    )
+    const inputBackground = composite(
+      parseColor(placeholderColors.background),
+      parseColor(
+        await page.evaluate((token) => {
+          const probe = document.createElement('span')
+          probe.style.color = token
+          document.body.append(probe)
+          const computed = getComputedStyle(probe).color
+          probe.remove()
+          return computed
+        }, placeholderColors.surfaceSolid)
+      )
+    )
+    expect(contrastRatio(parseColor(placeholderColors.placeholder), inputBackground)).toBeGreaterThanOrEqual(4.5)
+
+    await openView('health', 'Health')
+    await expect(page.locator('.last-fetched-text')).toBeVisible()
+    const helperUsesSubtleToken = await page.locator('.last-fetched-text').evaluate((helper) => {
+      const rootStyle = getComputedStyle(document.documentElement)
+      const probe = document.createElement('span')
+      probe.style.color = rootStyle.getPropertyValue('--bootui-text-subtle')
+      document.body.append(probe)
+      const tokenColor = getComputedStyle(probe).color
+      probe.remove()
+      return getComputedStyle(helper).color === tokenColor
+    })
+    expect(helperUsesSubtleToken).toBe(true)
+
+    await openView('metrics', 'Metrics')
+    const selectedMeter = page.locator('.meter-list .list-group-item-action.active').first()
+    await expect(selectedMeter).toBeVisible()
+    const selectedIdentifierColors = await selectedMeter.evaluate((row) => ({
+      background: getComputedStyle(row).backgroundColor,
+      foreground: getComputedStyle(row.querySelector('code')).color
+    }))
+    expect(
+      contrastRatio(parseColor(selectedIdentifierColors.foreground), parseColor(selectedIdentifierColors.background))
+    ).toBeGreaterThanOrEqual(4.5)
+  }
+})

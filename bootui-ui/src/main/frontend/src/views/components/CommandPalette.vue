@@ -270,7 +270,7 @@ defineExpose({focusInput})
 }
 
 .cp-search-icon {
-  color: var(--bootui-text-muted, #64748b);
+  color: var(--bootui-text-muted, #56667b);
   flex-shrink: 0;
   font-size: 1rem;
 }
@@ -285,14 +285,15 @@ defineExpose({focusInput})
 }
 
 .cp-input::placeholder {
-  color: var(--bootui-text-muted, #94a3b8);
+  color: var(--bootui-text-subtle, #5b6b80);
+  opacity: 1;
 }
 
 .cp-esc-hint {
   background: var(--bootui-surface, #fff);
   border: 1px solid var(--bootui-border, rgba(15, 23, 42, 0.12));
   border-radius: var(--bootui-radius-xs);
-  color: var(--bootui-text-muted, #94a3b8);
+  color: var(--bootui-text-muted, #56667b);
   font-size: 0.7rem;
   padding: 0.15rem 0.4rem;
 }
@@ -338,7 +339,7 @@ defineExpose({focusInput})
 }
 
 .cp-item-group {
-  color: var(--bootui-text-muted, #94a3b8);
+  color: var(--bootui-text-muted, #56667b);
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -348,7 +349,7 @@ defineExpose({focusInput})
   align-items: center;
   background: var(--bootui-nav-group-bg, rgba(100, 116, 139, 0.08));
   border-radius: var(--bootui-radius-xs);
-  color: var(--bootui-text-muted, #94a3b8);
+  color: var(--bootui-text-muted, #56667b);
   display: inline-flex;
   font-size: 0.65rem;
   font-weight: 700;
@@ -361,7 +362,7 @@ defineExpose({focusInput})
 .cp-item-shortcut {
   background: var(--bootui-nav-group-bg, rgba(100, 116, 139, 0.08));
   border-radius: var(--bootui-radius-xs);
-  color: var(--bootui-text-muted, #94a3b8);
+  color: var(--bootui-text-muted, #56667b);
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -375,7 +376,7 @@ defineExpose({focusInput})
 }
 
 .cp-section-label {
-  color: var(--bootui-text-subtle, #94a3b8);
+  color: var(--bootui-text-subtle, #5b6b80);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -384,7 +385,7 @@ defineExpose({focusInput})
 }
 
 .cp-empty {
-  color: var(--bootui-text-muted, #94a3b8);
+  color: var(--bootui-text-muted, #56667b);
   font-size: 0.9rem;
   padding: 1.5rem;
   text-align: center;
