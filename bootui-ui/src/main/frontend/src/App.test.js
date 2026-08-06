@@ -316,6 +316,14 @@ describe('App command palette', () => {
 
     expect(wrapper.find('[aria-label="Command palette"]').exists()).toBe(false)
     expect(document.activeElement).toBe(trigger.element)
+
+    await trigger.trigger('click')
+    await flushPromises()
+    await wrapper.find('.cp-backdrop').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="Command palette"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger.element)
   })
 
   it('restores the invoking control after opening with the keyboard shortcut', async () => {
