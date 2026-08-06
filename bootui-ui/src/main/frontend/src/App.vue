@@ -1,6 +1,6 @@
 <script setup>
 import {apiFetch} from './api.js'
-import {computed, onBeforeUnmount, onMounted, provide, reactive, ref, watch} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {
   applyTheme,
@@ -33,11 +33,29 @@ const narrowMediaQuery =
   typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(NARROW_QUERY) : null
 const isNarrow = ref(narrowMediaQuery?.matches === true)
 const mobileNavOpen = ref(false)
+const mobileNavRef = ref(null)
+const mobileNavCloseRef = ref(null)
+const mobileNavToggleRef = ref(null)
+const mainContentRef = ref(null)
+const mobileDrawerOpen = computed(() => isNarrow.value && mobileNavOpen.value)
+const mobileDrawerClosed = computed(() => isNarrow.value && !mobileNavOpen.value)
+const mobileNavToggleLabel = computed(() => (mobileDrawerOpen.value ? 'Close navigation menu' : 'Open navigation menu'))
+let mobileNavInvoker = null
 
-function onNarrowChange(e) {
-  isNarrow.value = e.matches === true
-  if (!isNarrow.value) {
+async function onNarrowChange(e) {
+  const becomingNarrow = e.matches === true
+  const activeElement = document.activeElement
+  const focusWasInSidebar =
+    becomingNarrow && activeElement instanceof HTMLElement && mobileNavRef.value?.contains(activeElement)
+  if (focusWasInSidebar) activeElement.blur()
+
+  isNarrow.value = becomingNarrow
+  if (!becomingNarrow) {
     mobileNavOpen.value = false
+    mobileNavInvoker = null
+  } else if (focusWasInSidebar) {
+    await nextTick()
+    mobileNavToggleRef.value?.focus()
   }
 }
 
@@ -64,9 +82,11 @@ watch(sidebarCollapsed, (v) => localStorage.setItem('bootui.sidebar.collapsed', 
 
 watch(
   () => route.name,
-  (name) => {
+  async (name) => {
     if (name) recordRecentPanel(name)
-    mobileNavOpen.value = false
+    if (mobileDrawerOpen.value) {
+      await closeMobileNav('content')
+    }
   },
   {immediate: true}
 )
@@ -79,18 +99,74 @@ function toggleSidebar() {
 
 function onSidebarToggle() {
   if (isNarrow.value) {
-    mobileNavOpen.value = false
+    dismissMobileNav()
   } else {
     toggleSidebar()
   }
 }
 
-function openMobileNav() {
+async function openMobileNav() {
+  if (!isNarrow.value || mobileNavOpen.value) return
+  mobileNavInvoker = mobileNavToggleRef.value
   mobileNavOpen.value = true
+  await nextTick()
+  mobileNavCloseRef.value?.focus()
 }
 
-function closeMobileNav() {
+async function closeMobileNav(focusTarget = 'toggle') {
+  if (!mobileDrawerOpen.value) return
+  const activeElement = document.activeElement
+  if (activeElement instanceof HTMLElement && mobileNavRef.value?.contains(activeElement)) {
+    activeElement.blur()
+  }
   mobileNavOpen.value = false
+  await nextTick()
+  const target =
+    focusTarget === 'content'
+      ? mainContentRef.value
+      : mobileNavInvoker?.isConnected
+        ? mobileNavInvoker
+        : mobileNavToggleRef.value
+  target?.focus()
+  mobileNavInvoker = null
+}
+
+function dismissMobileNav() {
+  closeMobileNav('toggle')
+}
+
+async function onSidebarLinkClick(navigate, event) {
+  const navigatingFromMobileDrawer = mobileDrawerOpen.value
+  await navigate(event)
+  if (navigatingFromMobileDrawer && mobileDrawerOpen.value) {
+    await closeMobileNav('content')
+  }
+}
+
+function onMobileNavKeydown(event) {
+  if (!mobileDrawerOpen.value) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    dismissMobileNav()
+    return
+  }
+  if (event.key !== 'Tab') return
+
+  const focusable = mobileNavRef.value?.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )
+  if (!focusable?.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  const active = document.activeElement
+  if (event.shiftKey && (active === first || active === mobileNavRef.value)) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault()
+    first.focus()
+  }
 }
 
 function syncTheme(theme) {
@@ -476,6 +552,13 @@ onBeforeUnmount(() => {
 })
 
 function onGlobalKeydown(e) {
+  if (mobileDrawerOpen.value) {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      dismissMobileNav()
+    }
+    return
+  }
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
     e.preventDefault()
     commandPaletteOpen.value = !commandPaletteOpen.value
@@ -493,7 +576,7 @@ function onGlobalKeydown(e) {
     <div class="ambient-orb ambient-orb-one"></div>
     <div class="ambient-orb ambient-orb-two"></div>
 
-    <div v-if="isNarrow && mobileNavOpen" class="bootui-nav-backdrop" @click="closeMobileNav"></div>
+    <div v-if="mobileDrawerOpen" aria-hidden="true" class="bootui-nav-backdrop" @click="dismissMobileNav"></div>
 
     <section v-if="authenticationRequired" class="authentication-gate" aria-labelledby="authentication-title">
       <div class="authentication-card">
@@ -526,28 +609,42 @@ function onGlobalKeydown(e) {
 
     <template v-else>
       <aside
+        id="bootui-mobile-navigation"
+        ref="mobileNavRef"
+        :aria-hidden="mobileDrawerClosed ? 'true' : undefined"
+        :aria-label="isNarrow ? 'Navigation menu' : undefined"
+        :aria-modal="mobileDrawerOpen ? 'true' : undefined"
         :class="{
           'bootui-sidebar--collapsed': collapsedRail,
           'bootui-sidebar--drawer': isNarrow,
-          'bootui-sidebar--open': isNarrow && mobileNavOpen
+          'bootui-sidebar--open': mobileDrawerOpen
         }"
+        :inert="mobileDrawerClosed ? true : undefined"
+        :role="isNarrow ? 'dialog' : undefined"
         class="bootui-sidebar"
+        @keydown="onMobileNavKeydown"
       >
         <div class="brand-area">
-          <router-link class="brand-card text-decoration-none" to="/overview">
-            <span class="brand-mark"><i class="bi bi-cup-hot-fill"></i></span>
-            <span class="brand-text">
-              <span class="brand-name">BootUI</span>
-              <span class="brand-subtitle">Local developer console</span>
-            </span>
+          <router-link v-slot="{href, navigate}" custom to="/overview">
+            <a :href="href" class="brand-card text-decoration-none" @click="onSidebarLinkClick(navigate, $event)">
+              <span class="brand-mark"><i class="bi bi-cup-hot-fill"></i></span>
+              <span class="brand-text">
+                <span class="brand-name">BootUI</span>
+                <span class="brand-subtitle">Local developer console</span>
+              </span>
+            </a>
           </router-link>
           <button
+            ref="mobileNavCloseRef"
+            :aria-label="isNarrow ? 'Close navigation menu' : sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
             class="sidebar-toggle"
             :title="isNarrow ? 'Close menu' : sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+            type="button"
             @click="onSidebarToggle"
           >
             <i
               :class="isNarrow ? 'bi-x-lg' : sidebarCollapsed ? 'bi-chevron-double-right' : 'bi-chevron-double-left'"
+              aria-hidden="true"
               class="bi"
             ></i>
           </button>
@@ -612,7 +709,7 @@ function onGlobalKeydown(e) {
                   :href="href"
                   :title="routeAvailabilityLabel(r)"
                   class="nav-link bootui-nav-link"
-                  @click="navigate"
+                  @click="onSidebarLinkClick(navigate, $event)"
                 >
                   <i :class="['bi', r.meta.icon]"></i>
                   <span class="bootui-nav-link__label">{{ navTitle(r) }}</span>
@@ -692,11 +789,19 @@ function onGlobalKeydown(e) {
         </div>
       </transition>
 
-      <div class="bootui-workspace">
+      <div :inert="mobileDrawerOpen ? true : undefined" class="bootui-workspace">
         <header class="topbar">
           <div class="topbar-lead">
-            <button class="nav-hamburger" type="button" aria-label="Open navigation menu" @click="openMobileNav">
-              <i class="bi bi-list"></i>
+            <button
+              ref="mobileNavToggleRef"
+              :aria-expanded="mobileDrawerOpen"
+              :aria-label="mobileNavToggleLabel"
+              aria-controls="bootui-mobile-navigation"
+              class="nav-hamburger"
+              type="button"
+              @click="openMobileNav"
+            >
+              <i aria-hidden="true" class="bi bi-list"></i>
             </button>
             <div class="topbar-heading">
               <div class="eyebrow">Inspecting</div>
@@ -731,7 +836,7 @@ function onGlobalKeydown(e) {
           </div>
         </header>
 
-        <main class="content-stage">
+        <main ref="mainContentRef" class="content-stage" tabindex="-1">
           <div
             v-if="shellErrorMessage"
             :class="['alert', shellServerUnreachable ? 'alert-warning' : 'alert-danger']"
