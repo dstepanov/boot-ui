@@ -3,8 +3,31 @@ name: Build (Java 17 baseline)
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      # Root project-meta markdown that no test reads (unlike docs/FEATURES.md, docs/*-CHECKS.md, etc.,
+      # which bootui-conformance/routes.test.js consistency checks parse) plus screenshot assets and the
+      # design-skill sidecar, both non-functional. docs/ page content otherwise stays covered.
+      - 'CHANGELOG.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'CONTRIBUTING.md'
+      - 'SECURITY.md'
+      - 'README.md'
+      - 'PRODUCT.md'
+      - 'DESIGN.md'
+      - 'docs/images/**'
+      - '.impeccable/**'
   pull_request:
     branches: [ main ]
+    paths-ignore:
+      - 'CHANGELOG.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'CONTRIBUTING.md'
+      - 'SECURITY.md'
+      - 'README.md'
+      - 'PRODUCT.md'
+      - 'DESIGN.md'
+      - 'docs/images/**'
+      - '.impeccable/**'
   workflow_dispatch:
 
 concurrency:
@@ -18,7 +41,11 @@ permissions:
 jobs:
   build:
     name: Build (Java ${{ matrix.java }})
-    runs-on: ubuntu-latest
+    # Opt-in larger/faster runner: set the BOOTUI_CI_RUNNER repository or organization variable (Settings >
+    # Secrets and variables > Actions > Variables) to a larger GitHub-hosted runner label (e.g.
+    # ubuntu-latest-4-cores) if your plan has one available. Defaults to the standard free runner, since
+    # not every plan has larger runners enabled and an unavailable label would fail the job outright.
+    runs-on: ${{ vars.BOOTUI_CI_RUNNER || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -45,6 +72,15 @@ jobs:
           cache-dependency-path: |
             bootui-ui/src/main/frontend/package-lock.json
             bootui-spring-sample-app/e2e/package-lock.json
+
+      # bootui-ui is a dependency of both Spring and Quarkus adapters, so its frontend-maven-plugin
+      # Node.js/npm download (into bootui-ui/node, outside target/ so it survives `mvn clean`) otherwise
+      # repeats in every job below that builds it. Cache hit skips the download entirely.
+      - name: Cache frontend build tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bootui-ui/node
+          key: frontend-tools-${{ runner.os }}-${{ hashFiles('pom.xml') }}
 
       - name: Check Maven formatting
         run: ./mvnw -B -ntp spotless:check
@@ -109,7 +145,8 @@ jobs:
   # entirely: they can start as soon as a runner is available instead of waiting on the whole reactor.
   e2e:
     name: Spring end-to-end (${{ matrix.suite.name }})
-    runs-on: ubuntu-latest
+    # See the `build` job comment above for BOOTUI_CI_RUNNER; defaults to the standard free runner.
+    runs-on: ${{ vars.BOOTUI_CI_RUNNER || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -149,7 +186,15 @@ jobs:
           node-version: '24.18.0'
           cache: npm
           cache-dependency-path: |
+            bootui-ui/src/main/frontend/package-lock.json
             bootui-spring-sample-app/e2e/package-lock.json
+
+      # See the `build` job comment above: shares the same cache across all jobs that build bootui-ui.
+      - name: Cache frontend build tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bootui-ui/node
+          key: frontend-tools-${{ runner.os }}-${{ hashFiles('pom.xml') }}
 
       # Only builds the module(s) this suite's webServer(s) actually boot, not the whole reactor.
       - name: Build sample app module(s) for this suite
@@ -214,7 +259,8 @@ jobs:
 
   quarkus-e2e:
     name: Quarkus end-to-end (Java 17)
-    runs-on: ubuntu-latest
+    # See the `build` job comment above for BOOTUI_CI_RUNNER; defaults to the standard free runner.
+    runs-on: ${{ vars.BOOTUI_CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -231,10 +277,18 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '24.16.0'
+          node-version: '24.18.0'
           cache: npm
           cache-dependency-path: |
+            bootui-ui/src/main/frontend/package-lock.json
             bootui-quarkus-sample-app/e2e/package-lock.json
+
+      # See the `build` job comment above: shares the same cache across all jobs that build bootui-ui.
+      - name: Cache frontend build tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bootui-ui/node
+          key: frontend-tools-${{ runner.os }}-${{ hashFiles('pom.xml') }}
 
       # Build and install the BootUI Quarkus extension + the sample app into the local Maven
       # repository so Playwright's `quarkus:dev` web server can resolve them. BootUI activates
