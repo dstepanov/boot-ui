@@ -100,24 +100,28 @@ function showBeanGraph(bean) {
       :error="graphMode ? null : error"
     >
       <template #actions>
-        <div class="btn-group btn-group-sm" role="group" aria-label="View mode">
+        <div class="beans-view-switcher" role="group" aria-label="Beans view">
           <button
-            :class="['btn', graphMode ? 'btn-outline-secondary' : 'btn-secondary']"
-            title="List view"
-            aria-label="List view"
-            :aria-pressed="!graphMode"
-            @click="deactivateGraphMode"
-          >
-            <i class="bi bi-list-ul" aria-hidden="true"></i>
-          </button>
-          <button
-            :class="['btn', graphMode ? 'btn-secondary' : 'btn-outline-secondary']"
+            type="button"
+            class="beans-view-switcher__option"
             title="Dependency graph"
             aria-label="Dependency graph"
             :aria-pressed="graphMode"
             @click="activateGraphMode"
           >
             <i class="bi bi-diagram-3" aria-hidden="true"></i>
+            <span>Graph</span>
+          </button>
+          <button
+            type="button"
+            class="beans-view-switcher__option"
+            title="List view"
+            aria-label="List view"
+            :aria-pressed="!graphMode"
+            @click="deactivateGraphMode"
+          >
+            <i class="bi bi-list-ul" aria-hidden="true"></i>
+            <span>List</span>
           </button>
         </div>
       </template>
@@ -214,6 +218,53 @@ function showBeanGraph(bean) {
 </template>
 
 <style scoped>
+.beans-view-switcher {
+  align-items: center;
+  background: var(--bootui-surface-alt);
+  border: 1px solid var(--bootui-border);
+  border-radius: var(--bootui-radius-md);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
+  display: inline-flex;
+  gap: 0.2rem;
+  padding: 0.22rem;
+}
+
+.beans-view-switcher__option {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--bootui-radius-md) - 0.2rem);
+  color: var(--bootui-text-muted);
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 700;
+  gap: 0.4rem;
+  justify-content: center;
+  min-height: 2.25rem;
+  min-width: 5.25rem;
+  padding: 0.4rem 0.75rem;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.beans-view-switcher__option:hover:not([aria-pressed='true']) {
+  background: var(--bootui-nav-hover-bg);
+  color: var(--bootui-nav-hover-color);
+}
+
+.beans-view-switcher__option[aria-pressed='true'] {
+  background: var(--bootui-nav-active-bg);
+  box-shadow: 0 0.35rem 0.8rem rgba(25, 135, 84, 0.2);
+  color: var(--bootui-nav-active-color);
+}
+
+.beans-view-switcher__option:focus-visible {
+  outline: 2px solid var(--bootui-blue);
+  outline-offset: 2px;
+}
+
 .beans-table {
   table-layout: fixed;
 }

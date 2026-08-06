@@ -170,6 +170,12 @@ describe('Beans — graph mode toggle', () => {
     await flushPromises()
 
     expect(wrapper.find('[aria-label="Dependency graph"]').attributes('aria-pressed')).toBe('true')
+    expect(
+      wrapper
+        .find('[aria-label="Beans view"]')
+        .findAll('button')
+        .map((button) => button.text())
+    ).toEqual(['Graph', 'List'])
     await vi.dynamicImportSettled()
     await flushPromises()
     expect(wrapper.find('input[placeholder*="Search for a bean"]').exists()).toBe(true)

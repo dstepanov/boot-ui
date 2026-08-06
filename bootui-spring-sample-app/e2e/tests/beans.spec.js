@@ -149,7 +149,10 @@ test.describe('Beans view', () => {
       await openView('beans', 'Beans')
 
       const graphBtn = page.getByRole('button', {name: 'Dependency graph'})
+      const listBtn = page.getByRole('button', {name: 'List view'})
       await expect(graphBtn).toBeVisible()
+      await expect(graphBtn).toHaveText(/Graph/)
+      await expect(listBtn).toHaveText(/List/)
       await expect(graphBtn).toHaveAttribute('aria-pressed', 'true')
       await expect(page.locator('table')).not.toBeVisible()
       await expect(page.getByPlaceholder(/Search for a bean/)).toBeVisible()
