@@ -222,19 +222,22 @@ describe('Beans — graph mode toggle', () => {
     expect(wrapper.find('select.form-select option[value="BOOTUI"]').exists()).toBe(true)
   })
 
-  it('focuses the conventional main application bean on first open', async () => {
+  it('focuses the most connected application bean on first open', async () => {
     stubFetch(
       beanList([
-        bean('orderService'),
-        {...bean('demoApplication', ['orderService']), type: 'com.example.DemoApplication'}
+        bean('orderController', ['orderService']),
+        bean('orderService', ['orderRepository', 'auditService']),
+        bean('orderRepository'),
+        bean('auditService'),
+        {...bean('demoApplication'), type: 'com.example.DemoApplication'}
       ])
     )
     const wrapper = mountBeans()
     await vi.dynamicImportSettled()
     await flushPromises()
 
-    expect(wrapper.find('input[placeholder*="Search for a bean"]').element.value).toBe('demoApplication')
-    expect(wrapper.find('[aria-label*="demoApplication"][aria-pressed="true"]').exists()).toBe(true)
+    expect(wrapper.find('input[placeholder*="Search for a bean"]').element.value).toBe('orderService')
+    expect(wrapper.find('[aria-label*="orderService"][aria-pressed="true"]').exists()).toBe(true)
   })
 
   it('loads the unfiltered list only after list mode is selected', async () => {
@@ -396,7 +399,7 @@ describe('Beans — graph loading state', () => {
             ok: true,
             status: 200,
             json: () =>
-              Promise.resolve(beanList([{...bean('recoveredApplication'), type: 'com.example.RecoveredApplication'}]))
+              Promise.resolve(beanList([bean('recoveredController', ['recoveredService']), bean('recoveredService')]))
           })
         }
         return Promise.resolve({ok: true, status: 200, json: () => Promise.resolve(beanList([bean('listBean')]))})
@@ -412,7 +415,7 @@ describe('Beans — graph loading state', () => {
     await flushPromises()
 
     expect(graphAttempts).toBe(2)
-    expect(wrapper.find('input[placeholder*="Search for a bean"]').element.value).toBe('recoveredApplication')
+    expect(wrapper.find('input[placeholder*="Search for a bean"]').element.value).toBe('recoveredController')
   })
 
   it('shows exact positive Conditions evidence for the focused bean resource', async () => {

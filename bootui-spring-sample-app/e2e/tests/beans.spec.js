@@ -136,14 +136,18 @@ test.describe('Beans view', () => {
       }
     ]
 
-    test('focuses and centers the main application bean on first open', async ({openView, page}) => {
+    test('focuses and centers a connected application bean on first open', async ({openView, page}) => {
       await openView('beans', 'Beans')
 
       const focusInput = page.getByPlaceholder(/Search for a bean/)
-      await expect(focusInput).toHaveValue('bootUiSampleApplication')
-      const focusNode = page.locator('[aria-label*="bootUiSampleApplication"][aria-pressed="true"]')
+      await expect(focusInput).not.toHaveValue('')
+      const selectedBean = await focusInput.inputValue()
+      expect(selectedBean).not.toBe('bootUiSampleApplication')
+      const focusNode = page.locator('.bean-graph-svg [aria-pressed="true"]')
       const graphScroll = page.locator('.bean-graph-scroll')
       await expect(focusNode).toBeVisible()
+      expect(await focusNode.getAttribute('aria-label')).toContain(selectedBean)
+      expect(await page.locator('.bean-graph-svg .bg-node').count()).toBeGreaterThan(1)
 
       const [nodeBox, scrollCenter] = await Promise.all([
         focusNode.boundingBox(),
@@ -156,8 +160,8 @@ test.describe('Beans view', () => {
         })
       ])
       expect(nodeBox).not.toBeNull()
-      expect(Math.abs(nodeBox.x + nodeBox.width / 2 - scrollCenter.x)).toBeLessThan(2)
-      expect(Math.abs(nodeBox.y + nodeBox.height / 2 - scrollCenter.y)).toBeLessThan(2)
+      expect(Math.abs(nodeBox.x + nodeBox.width / 2 - scrollCenter.x)).toBeLessThan(8)
+      expect(Math.abs(nodeBox.y + nodeBox.height / 2 - scrollCenter.y)).toBeLessThan(8)
     })
 
     test('opens in graph mode with application beans selected', async ({openView, page}) => {

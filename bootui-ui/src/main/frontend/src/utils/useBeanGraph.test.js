@@ -3,10 +3,10 @@ import {
   buildGraphIndex,
   conditionClassFromResource,
   GRAPH_LOAD_PAGE_SIZE,
-  mainApplicationBeanName,
   matchingPositiveConditions,
   MAX_GRAPH_DEPTH,
   MAX_GRAPH_NODES,
+  mostConnectedApplicationBeanName,
   traverseNeighborhood,
   useBeanGraph
 } from '../utils/useBeanGraph.js'
@@ -42,27 +42,56 @@ function edgePairs(edges) {
 }
 
 describe('default graph focus', () => {
-  it('selects the conventional application entry-point bean', () => {
+  it('selects the Application bean with the most direct relationships', () => {
     expect(
-      mainApplicationBeanName([
-        bean('orderService'),
-        bean('demoApplication', [], 'com.example.DemoApplication'),
-        bean('aCustomEntryPoint', [], 'com.example.OtherApplication')
+      mostConnectedApplicationBeanName([
+        bean('demoApplication'),
+        bean('orderController', ['orderService']),
+        bean('orderService', ['orderRepository', 'auditService']),
+        bean('orderRepository'),
+        bean('auditService')
       ])
-    ).toBe('demoApplication')
+    ).toBe('orderService')
   })
 
-  it('recognizes an enhanced application type and ignores non-application classifications', () => {
+  it('counts incoming relationships', () => {
     expect(
-      mainApplicationBeanName([
-        {...bean('frameworkApplication', [], 'org.example.FrameworkApplication'), classification: 'FRAMEWORK'},
-        bean('sampleApplication', [], 'com.example.SampleApplication$$SpringCGLIB$$0')
+      mostConnectedApplicationBeanName([
+        bean('zetaController', ['service']),
+        bean('alphaController', ['service']),
+        bean('service')
       ])
-    ).toBe('sampleApplication')
+    ).toBe('service')
   })
 
-  it('leaves the graph unfocused when no conventional application bean is present', () => {
-    expect(mainApplicationBeanName([bean('orderService')])).toBeNull()
+  it('breaks equal relationship counts alphabetically', () => {
+    expect(
+      mostConnectedApplicationBeanName([
+        bean('zetaService', ['zetaRepository']),
+        bean('zetaRepository'),
+        bean('alphaService', ['alphaRepository']),
+        bean('alphaRepository')
+      ])
+    ).toBe('alphaRepository')
+  })
+
+  it('ignores non-Application relationships and leaves isolated inventories unfocused', () => {
+    expect(
+      mostConnectedApplicationBeanName([
+        bean('orderService', ['frameworkBean']),
+        {...bean('frameworkBean', ['orderService']), classification: 'FRAMEWORK'}
+      ])
+    ).toBeNull()
+  })
+
+  it('uses every definition when duplicate bean names span classifications', () => {
+    expect(
+      mostConnectedApplicationBeanName([
+        {...bean('sharedBean', ['peer']), classification: 'FRAMEWORK'},
+        bean('sharedBean', ['peer']),
+        bean('peer')
+      ])
+    ).toBe('peer')
   })
 })
 

@@ -18,25 +18,34 @@ function compareCodeUnits(a, b) {
   return a < b ? -1 : 1
 }
 
-/** Selects the conventional main application bean when it is present in the inventory. */
-export function mainApplicationBeanName(beans) {
-  const candidates = (beans || [])
-    .filter((bean) => bean?.classification === 'APPLICATION' && typeof bean.type === 'string')
-    .map((bean) => {
-      const simpleName = bean.type.split('.').pop()?.split('$')[0] || ''
-      return {
-        bean,
-        conventionalName: simpleName ? simpleName.charAt(0).toLowerCase() + simpleName.slice(1) : '',
-        simpleName
-      }
-    })
-    .filter(({simpleName}) => simpleName.endsWith('Application'))
-    .sort(({bean: first}, {bean: second}) => compareCodeUnits(first.name || '', second.name || ''))
+/** Selects the Application bean with the most visible direct dependency relationships. */
+export function mostConnectedApplicationBeanName(beans) {
+  const {byName, definitionsByName, reverseIndex} = buildGraphIndex(beans || [])
+  const applicationNames = new Set(
+    [...definitionsByName]
+      .filter(([, definitions]) => definitions.some((bean) => bean.classification === 'APPLICATION'))
+      .map(([name]) => name)
+  )
 
   return (
-    candidates.find(({bean, conventionalName}) => bean.name === conventionalName)?.bean.name ||
-    candidates[0]?.bean.name ||
-    null
+    [...applicationNames]
+      .map((name) => {
+        const dependencies = new Set(
+          (byName.get(name)?.dependencies || []).filter(
+            (dependency) => dependency !== name && applicationNames.has(dependency)
+          )
+        )
+        const dependents = new Set(
+          [...(reverseIndex.get(name) || [])].filter(
+            (dependent) => dependent !== name && applicationNames.has(dependent)
+          )
+        )
+        return {name, relationships: dependencies.size + dependents.size}
+      })
+      .filter(({relationships}) => relationships > 0)
+      .sort(
+        (first, second) => second.relationships - first.relationships || compareCodeUnits(first.name, second.name)
+      )[0]?.name || null
   )
 }
 

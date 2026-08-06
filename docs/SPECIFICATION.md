@@ -299,8 +299,8 @@ Features:
 
 - Search by bean name, class name, package, scope, and resource.
 - Provide a clearly labeled Graph/List segmented control, with Graph selected by default.
-- On first open, select the conventional main application bean when present and center its graph node in the bounded
-  scroll viewport.
+- On first open, select the Application bean with the most direct dependencies and dependents, break ties alphabetically,
+  and center its graph node in the bounded scroll viewport. Leave isolated inventories unfocused.
 - Hide BootUI's own beans by default so the report focuses on the host application; `bootui.monitoring.exclude-self=false`
   includes them when debugging BootUI itself. Omit the BootUI classification option when the loaded inventory contains no
   BootUI beans.

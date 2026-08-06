@@ -3,9 +3,9 @@ import {computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch} from
 import {apiFetch} from '../api.js'
 import {
   conditionClassFromResource,
-  mainApplicationBeanName,
   matchingPositiveConditions,
   MAX_BEAN_CONDITIONS,
+  mostConnectedApplicationBeanName,
   useBeanGraph
 } from '../utils/useBeanGraph.js'
 import {describeLoadError} from '../utils/loadError.js'
@@ -90,7 +90,7 @@ onMounted(async () => {
 async function loadInventoryWithDefaultFocus() {
   await loadAll()
   if (props.focusRequest || focusName.value) return
-  const defaultFocus = mainApplicationBeanName(allBeans.value)
+  const defaultFocus = mostConnectedApplicationBeanName(allBeans.value)
   if (!defaultFocus || !focusBeanNameSet.value.has(defaultFocus)) return
   graphFocusInput.value = defaultFocus
   selectFocus(defaultFocus)
