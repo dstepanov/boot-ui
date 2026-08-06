@@ -53,6 +53,19 @@ class QuarkusPanelAvailabilityTest {
     }
 
     @Test
+    void jmsIsNotYetAvailableAndPointsUsersToSupportedMessagingPanels() {
+        PanelDto panel = manifestById().get(BootUiPanels.JMS);
+
+        assertThat(panel.available()).isFalse();
+        assertThat(panel.unavailableReason())
+                .contains("Not yet available on Quarkus")
+                .contains("Spring JMS")
+                .contains("Kafka")
+                .contains("RabbitMQ")
+                .doesNotContain("Not applicable");
+    }
+
+    @Test
     void springOnlyFinishersRedirectToTheirQuarkusEquivalents() {
         // Spring Data and Spring Security are NOT_APPLICABLE on Quarkus, but their reasons must point users at
         // the Quarkus-native panels that do cover the concern (Hibernate advisor / Security advisor).
@@ -152,6 +165,18 @@ class QuarkusPanelAvailabilityTest {
         StubConfig capabilityPresent =
                 new StubConfig(Map.of(QuarkusPanelAvailability.REST_CLIENT_TRACE_PRESENT_KEY, "true"));
         PanelDto available = manifestById(capabilityPresent).get(BootUiPanels.REST_CLIENT_TRACE);
+        assertThat(available.available()).isTrue();
+        assertThat(available.unavailableReason()).isNull();
+    }
+
+    @Test
+    void rabbitPanelAvailabilityTracksTheOptionalIntegration() {
+        PanelDto absent = manifestById().get(BootUiPanels.RABBITMQ);
+        assertThat(absent.available()).isFalse();
+        assertThat(absent.unavailableReason()).contains("quarkus-messaging-rabbitmq");
+
+        StubConfig integrationPresent = new StubConfig(Map.of(QuarkusPanelAvailability.RABBIT_PRESENT_KEY, "true"));
+        PanelDto available = manifestById(integrationPresent).get(BootUiPanels.RABBITMQ);
         assertThat(available.available()).isTrue();
         assertThat(available.unavailableReason()).isNull();
     }

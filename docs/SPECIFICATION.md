@@ -27,8 +27,9 @@ BootUI currently targets:
 Maturity is stated honestly: the **Spring Boot servlet adapter is complete** (all panels). The **Spring Boot WebFlux
 adapter** reuses the same engine and serves the large majority of panels unmodified or over a rebuilt reactive capture
 layer, including **Live Activity** (all nine signal types merge identically to the servlet adapter — see
-`docs/WEBFLUX-SUPPORT.md` §6.4), the raw Spring Security panel, and REST Client capture over instrumented
-`WebClient` instances; the Security advisor is not yet ported, and HTTP Sessions is not applicable to a reactive,
+`docs/WEBFLUX-SUPPORT.md` §6.4), plus the raw Spring Security panel and the WebFlux-native 25-rule Security advisor; the
+raw Spring Security panel, the WebFlux-native 25-rule Security advisor, and REST Client capture over instrumented
+`WebClient` instances; HTTP Sessions is not applicable to a reactive,
 container-session-free stack — see `docs/WEBFLUX-SUPPORT.md` for the current per-panel status. The **Quarkus adapter
 is being built out**, with panels lighting up as the shared engine grows; see `docs/QUARKUS-SUPPORT.md` for the
 current per-platform status.
@@ -39,7 +40,6 @@ Out of scope for the current 1.x line:
 - Spring Framework 6 / Boot 3 compatibility shims.
 - A dedicated BootUI Gradle plugin (the Spring starters and Quarkus extension are consumable from Maven or Gradle as
   ordinary dependencies).
-- On Spring Boot WebFlux: a reactive Security advisor ruleset (see `docs/WEBFLUX-SUPPORT.md` for the reason and plan).
 
 ## 2. Product goals
 
@@ -881,15 +881,48 @@ Features:
   `KafkaConsumerCaptureBeanPostProcessor` wrap application-owned `KafkaTemplate` and `@KafkaListener` container factory
   beans — composing with, never replacing, any `ProducerListener`/`RecordInterceptor` the application already
   configured, mirroring the HTTP Exchanges repository-wrapper precedent. On Quarkus, SmallRye Reactive Messaging Kafka
-  interceptors capture the same metadata. Each entry carries topic, partition, offset (consume only), a hash of the key,
-  direction, success/failure, and — for consumed records — consumer group id, listener id, and processing duration.
+  interceptors capture the same metadata their callback exposes. Each entry carries topic, partition, offset (consume
+  only), a hash of the key, direction, success/failure, and — for consumed records — listener id and processing
+  duration. Spring also captures the consumer group id; Quarkus leaves group id and producer duration unavailable.
+  Quarkus incoming deliveries carry connector metadata automatically, while an outgoing message is recorded only when
+  `OutgoingKafkaRecordMetadata` is attached before the interceptor; payload-only emissions that rely solely on channel
+  configuration are not captured.
   Only metadata is captured; the message value/payload is never captured or masked, since it is an arbitrary
-  application payload with no generic masking strategy. Kafka entries are always top-level by design — no
-  request-parent correlation is attempted, since a message has no single owning request.
+  application payload with no generic masking strategy. Raw exception messages are never retained; failed operations
+  use generic failure text. Kafka entries are always top-level by design — no request-parent correlation is attempted,
+  since a message has no single owning request.
   The listener-id field is intentionally honest about framework limits: on Spring it currently carries the listener
   container factory bean name (the resolved per-`@KafkaListener` id is not exposed at the factory-wide interception
   point), while on Quarkus it carries the channel name. Controlled by `bootui.kafka.enabled`,
   `bootui.kafka.capture-key`, `bootui.kafka.max-entries`, and `bootui.kafka.max-key-length`.
+- RabbitMQ producer/consumer capture: on Spring, post-processors compose with every application-owned `RabbitTemplate`
+  before-publish processor and listener-container-factory advice chain; on Quarkus, SmallRye Reactive Messaging
+  `OutgoingInterceptor`/`IncomingInterceptor` implementations are class-presence-gated on
+  `quarkus-messaging-rabbitmq`. Both feed the shared, framework-neutral `RabbitActivityRecorder`. Captured metadata is
+  bounded and payload-free: direction, routing metadata, outcome, consumer duration, and—when explicitly enabled—a
+  truncated SHA-256 correlation-ID hash. Quarkus leaves producer exchange, consumer queue, and producer duration
+  unavailable because its callbacks do not expose them, and records an outgoing message only when
+  `OutgoingRabbitMQMetadata` is already attached. Message bodies, arbitrary headers, raw correlation IDs, and exception
+  messages are never retained; failures use generic text. RabbitMQ entries are always top-level, like Kafka.
+  Controlled by `bootui.rabbitmq.enabled`, `bootui.rabbitmq.capture-correlation-id`,
+  `bootui.rabbitmq.max-entries`, and `bootui.rabbitmq.max-correlation-id-length`.
+- JMS producer/consumer capture: on Spring MVC and WebFlux only, classpath-gated post-processors wrap application-owned
+  `JmsTemplate` and `AbstractJmsListenerContainerFactory` beans without replacing converters, callbacks, listeners, or
+  error handlers. The producer proxy records each public send operation once even when `convertAndSend` delegates
+  internally; listener adapters preserve the original plain-vs-session-aware dispatch interface and propagate the same
+  failure exactly once. Direct `JMSContext`/`MessageProducer`/`MessageConsumer` calls are outside this Spring-integration
+  capture seam, consistent with the Kafka and RabbitMQ capture scope. A dedicated framework-neutral
+  `JmsActivityRecorder` and bounded buffer keep JMS retention,
+  counters, and configuration independent from the Kafka and RabbitMQ recorders. Destinations are sanitized and bounded
+  before storage; unknown provider destination `toString()` values, payloads, arbitrary headers/properties, raw message
+  IDs, and exception messages are never retained. Provider-assigned message IDs exposed through a
+  `MessageCreator`/`MessagePostProcessor` are stored only as hashes. Controlled by `bootui.jms.enabled`,
+  `bootui.jms.capture-message-id`, `bootui.jms.max-entries`, and `bootui.jms.max-message-id-length`; Quarkus reports no
+  JMS integration. A dedicated `GET /bootui/api/jms` panel report exposes the same retained metadata newest-first, and
+  confirmation-gated `DELETE /bootui/api/jms` clears that shared buffer. The panel supports destination, message-ID,
+  subscription, listener, failure-type, and direction filtering; it is available on Spring when a `JmsTemplate` bean is
+  present and reports not yet available on Quarkus. It reports unavailable in a Spring GraalVM native image because its
+  `JmsTemplate` and listener-factory interception requires runtime class proxies.
 - A KPI strip computed from the same buffers: requests/min, error rate, p50/p95 latency, slowest endpoint, active
   exception count, SQL/min, slowest query, outbound-call error
   rate/p95 latency deep-linked to the REST Client panel, health status, heap usage, (Spring only, `null` on
@@ -1127,11 +1160,14 @@ Data sources:
 Acceptance criteria:
 
 - Available whenever a `KafkaTemplate` bean is present on Spring, or the Quarkus `KAFKA` capability is present in a
-  non-production launch; otherwise the panel reports a clear unavailable reason instead of an empty list.
+  non-production launch; configured channels determine whether Quarkus records activity but do not gate panel
+  availability. Otherwise the panel reports a clear unavailable reason instead of an empty list.
 - Only metadata is ever captured — direction (`PRODUCE`/`CONSUME`), topic, partition, offset, duration,
-  success/failure, consumer group id, and listener/channel id. The message value/payload is never captured at all,
-  regardless of configuration, since it is an arbitrary, potentially large application payload with no generic
-  masking strategy (unlike a SQL statement or a config value).
+  success/failure, consumer group id when the adapter exposes it (Spring), and listener/channel id. The message
+  value/payload is never captured at all, regardless of configuration, since it is an arbitrary, potentially large
+  application payload with no generic masking strategy (unlike a SQL statement or a config value). Raw exception
+  messages are never retained; failure text
+  is generic.
 - The message key is never retained verbatim: when `bootui.kafka.capture-key=true` (the default), a SHA-256 hash of
   the key is captured and truncated to `bootui.kafka.max-key-length` hex characters; when disabled, the key is
   `null`.
@@ -1139,8 +1175,50 @@ Acceptance criteria:
   oldest evicted first).
 - Clearing the buffer is gated by `bootui.panels.kafka.read-only`, consistent with every other clearable capture
   panel; disabling capture entirely (`bootui.kafka.enabled=false`) stops both the panel and Live Activity's
-  `MESSAGING` entries, not just the dedicated view.
+  `MESSAGING` entries, not just the dedicated view. Disabling the Kafka panel also stops its underlying capture.
 - Ships on both Spring (servlet and WebFlux — the controller has no reactive-specific code) and Quarkus.
+
+### 5.14.7 RabbitMQ Panel
+
+Purpose: show payload-free RabbitMQ publish/consume activity over Spring AMQP or SmallRye Reactive Messaging, using the
+same bounded capture that feeds Live Activity's `MESSAGING` entries.
+
+Acceptance criteria:
+
+- Spring capture composes with existing `RabbitTemplate` before-publish processors and listener-factory advice; Quarkus
+  capture is registered only when `quarkus-messaging-rabbitmq` is present and excluded otherwise.
+- The message body and arbitrary headers are never captured. Exchange, routing key, and queue metadata are length-bounded;
+  raw exception messages are not retained.
+- Correlation IDs are omitted by default. With `bootui.rabbitmq.capture-correlation-id=true`, only a truncated SHA-256
+  hash is stored.
+- The in-memory buffer is capped by `bootui.rabbitmq.max-entries`, oldest-first eviction, and clear is gated by
+  `bootui.panels.rabbitmq.read-only`. Disabling the RabbitMQ panel also stops its underlying capture.
+- Spring panel availability requires a `RabbitTemplate` bean. Quarkus availability requires the RabbitMQ messaging
+  extension in a non-production launch. Dependency absence must not link optional RabbitMQ classes or advertise capture.
+- Quarkus preserves the shared wire contract but leaves producer exchange, consumer queue, and producer duration
+  unavailable because the SmallRye callbacks do not expose them.
+
+### 5.14.8 JMS Panel
+
+Purpose: show payload-free Spring JMS producer/consumer activity over the same independent bounded capture that feeds
+Live Activity's `MESSAGING` entries.
+
+Acceptance criteria:
+
+- Spring MVC and WebFlux wrap application-owned `JmsTemplate` and `AbstractJmsListenerContainerFactory` beans while
+  preserving converters, callbacks, listener dispatch interfaces, and error handlers. Direct lower-level
+  `JMSContext`/`MessageProducer`/`MessageConsumer` calls remain outside this Spring integration seam.
+- Only bounded metadata is captured: direction, sanitized destination, duration, success/failure type, subscription,
+  listener id, and—by default—a truncated hash of the provider-assigned message id (opt out with
+  `bootui.jms.capture-message-id=false`). Payloads, arbitrary headers/properties, raw message ids, provider-specific
+  destination strings, and exception messages are never retained.
+- The independent buffer is capped by `bootui.jms.max-entries`; disabling `bootui.jms.enabled` or the JMS panel stops
+  capture without affecting Kafka or RabbitMQ retention.
+- `GET /bootui/api/jms` lists entries newest-first and supports destination, message-id, subscription, listener,
+  failure-type, and direction filtering. Confirmation-gated `DELETE /bootui/api/jms` clears the shared panel/Live
+  Activity buffer and is blocked by `bootui.panels.jms.read-only`.
+- Spring availability requires a `JmsTemplate` bean and reports unavailable in a GraalVM native image because runtime
+  class proxies cannot be generated. Quarkus reports the panel not yet available and directs users to Kafka or RabbitMQ.
 
 ### 5.15 Profile Diff Panel
 
@@ -1939,7 +2017,6 @@ Future compatibility:
 
 - Spring Boot 3.5 if demand requires it.
 - Gradle examples.
-- Closing the remaining Spring Boot WebFlux gap: a reactive Security advisor (see `docs/WEBFLUX-SUPPORT.md`).
 
 ## 9. Testing strategy
 

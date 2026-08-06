@@ -38,6 +38,7 @@ import io.github.jdubois.bootui.engine.metrics.MetricsReportProvider;
 import io.github.jdubois.bootui.engine.pentesting.PentestingScanner;
 import io.github.jdubois.bootui.engine.quarkusapp.QuarkusAppScanner;
 import io.github.jdubois.bootui.engine.quarkussecurity.QuarkusSecurityScanner;
+import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
 import io.github.jdubois.bootui.engine.restapi.RestApiScanner;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.safety.ApiTokenAuthenticator;
@@ -766,24 +767,56 @@ public class BootUiEngineProducer {
      * Live Activity renders no {@code MESSAGING} entries, exactly as on Spring without {@code spring-kafka}.
      *
      * <p>The {@code bootui.kafka.*} keys and their defaults (enabled/capture-key {@code true},
-     * max-entries/max-key-length {@code 200}) are kept unified with the Spring adapter's
+     * max-entries {@code 200}, max-key-length {@code 16}) are kept unified with the Spring adapter's
      * {@code BootUiProperties.Kafka}, so the same values size and gate capture identically on both
-     * frameworks. Per-panel gating of the Live Activity panel itself is handled by
-     * {@code QuarkusPanelAccessFilter} on the read path (as for every other Quarkus source), so the
-     * recorder gates only on {@code bootui.kafka.enabled}.</p>
+     * frameworks. Disabling the dedicated Kafka panel also disables its underlying capture, while
+     * disabling Live Activity alone does not.</p>
      */
     @Produces
     @Singleton
     public KafkaActivityRecorder kafkaActivityRecorder(Config config) {
         boolean enabled =
-                config.getOptionalValue("bootui.kafka.enabled", Boolean.class).orElse(true);
+                config.getOptionalValue("bootui.kafka.enabled", Boolean.class).orElse(true)
+                        && config.getOptionalValue("bootui.panels.kafka.enabled", Boolean.class)
+                                .orElse(true);
         boolean captureKey = config.getOptionalValue("bootui.kafka.capture-key", Boolean.class)
                 .orElse(true);
         int maxEntries = config.getOptionalValue("bootui.kafka.max-entries", Integer.class)
                 .orElse(200);
         int maxKeyLength = config.getOptionalValue("bootui.kafka.max-key-length", Integer.class)
-                .orElse(200);
+                .orElse(16);
         return new KafkaActivityRecorder(enabled, captureKey, maxEntries, maxKeyLength);
+    }
+
+    /**
+     * The Live Activity RabbitMQ capture buffer. Produced <em>unconditionally</em> because
+     * {@link RabbitActivityRecorder} holds no RabbitMQ-client or messaging type of its own (only JDK types):
+     * the {@code io.smallrye.reactive.messaging}-importing capture beans ({@code QuarkusRabbitProducerCapture}
+     * / {@code QuarkusRabbitConsumerCapture}) that feed it live behind the {@code RABBITMQ} capability gate
+     * (R2), and {@code LiveActivityResource} reads it directly. When {@code quarkus-messaging-rabbitmq} is
+     * absent the capture beans are not wired, so nothing is ever recorded and the recorder simply stays empty
+     * — Live Activity renders no RabbitMQ {@code MESSAGING} entries, exactly as on Spring without
+     * {@code spring-rabbit}.
+     *
+     * <p>The {@code bootui.rabbitmq.*} keys and their defaults are kept unified with the Spring adapter's
+     * {@code BootUiProperties.Rabbitmq}, so the same values size and gate capture identically on both
+     * frameworks. Disabling the dedicated RabbitMQ panel also disables its underlying capture, while
+     * disabling Live Activity alone does not.</p>
+     */
+    @Produces
+    @Singleton
+    public RabbitActivityRecorder rabbitActivityRecorder(Config config) {
+        boolean enabled = config.getOptionalValue("bootui.rabbitmq.enabled", Boolean.class)
+                        .orElse(true)
+                && config.getOptionalValue("bootui.panels.rabbitmq.enabled", Boolean.class)
+                        .orElse(true);
+        boolean captureCorrelationId = config.getOptionalValue("bootui.rabbitmq.capture-correlation-id", Boolean.class)
+                .orElse(false);
+        int maxEntries = config.getOptionalValue("bootui.rabbitmq.max-entries", Integer.class)
+                .orElse(200);
+        int maxCorrelationIdLength = config.getOptionalValue("bootui.rabbitmq.max-correlation-id-length", Integer.class)
+                .orElse(16);
+        return new RabbitActivityRecorder(enabled, captureCorrelationId, maxEntries, maxCorrelationIdLength);
     }
 
     /**

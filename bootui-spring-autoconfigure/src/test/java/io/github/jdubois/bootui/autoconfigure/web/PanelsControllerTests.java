@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.boot.web.context.reactive.GenericReactiveWebApplicationContext;
 import org.springframework.context.support.GenericApplicationContext;
+import org.springframework.jms.core.JmsTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 class PanelsControllerTests {
@@ -131,7 +132,29 @@ class PanelsControllerTests {
                     .andExpect(jsonPath(panelPath(BootUiPanels.LIQUIBASE) + ".available")
                             .value(false))
                     .andExpect(jsonPath(panelPath(BootUiPanels.LIQUIBASE) + ".unavailableReason")
-                            .value("No Liquibase beans are available"));
+                            .value("No Liquibase beans are available"))
+                    .andExpect(
+                            jsonPath(panelPath(BootUiPanels.JMS) + ".available").value(false))
+                    .andExpect(jsonPath(panelPath(BootUiPanels.JMS) + ".unavailableReason")
+                            .value("No JmsTemplate bean is available"));
+        }
+    }
+
+    @Test
+    void panelsMarksJmsAvailableWhenAJmsTemplateBeanIsPresent() throws Exception {
+        try (GenericApplicationContext context = new GenericApplicationContext()) {
+            context.registerBean("jmsTemplate", JmsTemplate.class, () -> mock(JmsTemplate.class));
+            context.refresh();
+            MockMvc mvc = standaloneSetup(
+                            new PanelsController(context, context.getEnvironment(), new BootUiProperties()))
+                    .build();
+
+            mvc.perform(get("/bootui/api/panels"))
+                    .andExpect(status().isOk())
+                    .andExpect(
+                            jsonPath(panelPath(BootUiPanels.JMS) + ".available").value(true))
+                    .andExpect(jsonPath(panelPath(BootUiPanels.JMS) + ".unavailableReason")
+                            .doesNotExist());
         }
     }
 
@@ -257,6 +280,7 @@ class PanelsControllerTests {
     @Test
     void panelsMarksNativeImagePanelsUnavailableWhenRunningInNativeImage() throws Exception {
         try (GenericApplicationContext context = new GenericApplicationContext()) {
+            context.registerBean("jmsTemplate", JmsTemplate.class, () -> mock(JmsTemplate.class));
             context.refresh();
             PanelsController controller =
                     new PanelsController(context, context.getEnvironment(), new BootUiProperties()) {
@@ -290,7 +314,11 @@ class PanelsControllerTests {
                     .andExpect(jsonPath(panelPath(BootUiPanels.CRAC) + ".available")
                             .value(false))
                     .andExpect(jsonPath(panelPath(BootUiPanels.CRAC) + ".unavailableReason")
-                            .value("CRaC is not applicable when running as a GraalVM native image"));
+                            .value("CRaC is not applicable when running as a GraalVM native image"))
+                    .andExpect(
+                            jsonPath(panelPath(BootUiPanels.JMS) + ".available").value(false))
+                    .andExpect(jsonPath(panelPath(BootUiPanels.JMS) + ".unavailableReason")
+                            .value("JMS capture is not available when running as a GraalVM native image"));
         }
     }
 
@@ -512,16 +540,30 @@ class PanelsControllerTests {
     }
 
     @Test
-    void securityAdvisorStaysUnavailableUnderWebFluxEvenWithReactiveSpringSecurityConfigured() throws Exception {
-        // The SECURITY advisor panel (distinct from the SPRING_SECURITY raw-config panel) has no reactive
-        // ruleset and is not imported by BootUiReactiveAutoConfiguration.
+    void securityAdvisorIsAvailableOnWebFluxWhenApplicationChainPresent() throws Exception {
         try (GenericReactiveWebApplicationContext context = new GenericReactiveWebApplicationContext()) {
-            java.util.function.Supplier<org.springframework.security.web.server.WebFilterChainProxy> supplier =
-                    () -> new org.springframework.security.web.server.WebFilterChainProxy(List.of());
+            java.util.function.Supplier<org.springframework.security.web.server.SecurityWebFilterChain> supplier =
+                    () -> mock(org.springframework.security.web.server.SecurityWebFilterChain.class);
             context.registerBean(
-                    "springSecurityWebFilterChain",
-                    org.springframework.security.web.server.WebFilterChainProxy.class,
+                    "applicationSecurityWebFilterChain",
+                    org.springframework.security.web.server.SecurityWebFilterChain.class,
                     supplier);
+            context.refresh();
+            PanelsController controller =
+                    new PanelsController(context, context.getEnvironment(), new BootUiProperties());
+            MockMvc mvc = standaloneSetup(controller).build();
+
+            mvc.perform(get("/bootui/api/panels"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath(panelPath(BootUiPanels.SECURITY) + ".available")
+                            .value(true));
+        }
+    }
+
+    @Test
+    void securityAdvisorStaysUnavailableOnWebFluxWithoutSpringSecurityConfigured() throws Exception {
+        // Without a WebFilterChainProxy bean, the security panel must stay unavailable with a WebFlux reason.
+        try (GenericReactiveWebApplicationContext context = new GenericReactiveWebApplicationContext()) {
             context.refresh();
             PanelsController controller =
                     new PanelsController(context, context.getEnvironment(), new BootUiProperties());
@@ -532,7 +574,7 @@ class PanelsControllerTests {
                     .andExpect(jsonPath(panelPath(BootUiPanels.SECURITY) + ".available")
                             .value(false))
                     .andExpect(jsonPath(panelPath(BootUiPanels.SECURITY) + ".unavailableReason")
-                            .value("Security Advisor is only available on the Spring MVC (servlet) adapter"));
+                            .value("No application SecurityWebFilterChain beans are available"));
         }
     }
 }

@@ -16,6 +16,8 @@ import io.github.jdubois.bootui.autoconfigure.health.SpringHealthProvider;
 import io.github.jdubois.bootui.autoconfigure.hibernate.SpringHibernateDiscovery;
 import io.github.jdubois.bootui.autoconfigure.hibernate.SpringHibernatePropertyLookup;
 import io.github.jdubois.bootui.autoconfigure.idle.IdleReclaimable;
+import io.github.jdubois.bootui.autoconfigure.jms.JmsListenerCaptureBeanPostProcessor;
+import io.github.jdubois.bootui.autoconfigure.jms.JmsProducerCaptureBeanPostProcessor;
 import io.github.jdubois.bootui.autoconfigure.kafka.KafkaConsumerCaptureBeanPostProcessor;
 import io.github.jdubois.bootui.autoconfigure.kafka.KafkaProducerCaptureBeanPostProcessor;
 import io.github.jdubois.bootui.autoconfigure.liquibase.SpringLiquibaseProvider;
@@ -23,6 +25,8 @@ import io.github.jdubois.bootui.autoconfigure.logging.SpringLoggerProvider;
 import io.github.jdubois.bootui.autoconfigure.mappings.SpringMappingProvider;
 import io.github.jdubois.bootui.autoconfigure.monitoring.BootUiSelfDataFilter;
 import io.github.jdubois.bootui.autoconfigure.pentesting.SpringPentestingObservationCollector;
+import io.github.jdubois.bootui.autoconfigure.rabbit.RabbitConsumerCaptureBeanPostProcessor;
+import io.github.jdubois.bootui.autoconfigure.rabbit.RabbitProducerCaptureBeanPostProcessor;
 import io.github.jdubois.bootui.autoconfigure.restclienttrace.RestClientTraceExchangeFilter;
 import io.github.jdubois.bootui.autoconfigure.restclienttrace.RestClientTraceInterceptor;
 import io.github.jdubois.bootui.autoconfigure.scheduled.BootUiSchedulingConfigurer;
@@ -50,6 +54,7 @@ import io.github.jdubois.bootui.engine.health.HealthService;
 import io.github.jdubois.bootui.engine.heapdump.HeapDumpService;
 import io.github.jdubois.bootui.engine.heapdump.HeapDumpSettings;
 import io.github.jdubois.bootui.engine.hibernate.HibernateScanner;
+import io.github.jdubois.bootui.engine.jms.JmsActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.liquibase.LiquibaseService;
 import io.github.jdubois.bootui.engine.loggers.LoggersService;
@@ -59,6 +64,7 @@ import io.github.jdubois.bootui.engine.memory.MemoryScanner;
 import io.github.jdubois.bootui.engine.metrics.MetricsReportProvider;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.pentesting.PentestingScanner;
+import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
 import io.github.jdubois.bootui.engine.restapi.RestApiScanner;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
@@ -731,12 +737,12 @@ public class BootUiEngineConfiguration {
      * The Live Activity Kafka capture backend is framework-neutral (a bounded in-memory recorder plus two
      * Spring-specific post-processors) and is needed by both servlet and reactive stacks, so it is wired
      * here in the shared engine configuration rather than under the servlet-only auto-configuration. The
-     * two {@code BeanPostProcessor}s keep their method-level
-     * {@code @ConditionalOnClass(KafkaTemplate)} guards so a Spring-Kafka-absent application never links
-     * those types. The recorder feeds both the Live Activity {@code MESSAGING} entries and the dedicated
-     * Kafka panel from the same buffer (see {@code bootUiKafkaActivityRecorder}'s Javadoc for why it is
-     * gated on the Kafka panel rather than Live Activity's, mirroring {@code bootUiCacheActivityRecorder}
-     * above).
+     * recorder and two {@code BeanPostProcessor}s keep method-level
+     * {@code @ConditionalOnClass(KafkaTemplate)} guards so a Spring-Kafka-absent application neither
+     * exposes an inactive source nor links those types. The recorder feeds both the Live Activity
+     * {@code MESSAGING} entries and the dedicated Kafka panel from the same buffer (see {@code
+     * bootUiKafkaActivityRecorder}'s Javadoc for why it is gated on the Kafka panel rather than Live
+     * Activity's, mirroring {@code bootUiCacheActivityRecorder} above).
      */
     @Configuration(proxyBeanMethods = false)
     static class KafkaBackendConfiguration {
@@ -751,6 +757,7 @@ public class BootUiEngineConfiguration {
         @Bean
         @Lazy
         @ConditionalOnMissingBean
+        @ConditionalOnClass(name = "org.springframework.kafka.core.KafkaTemplate")
         KafkaActivityRecorder bootUiKafkaActivityRecorder(BootUiProperties properties) {
             BootUiProperties.Kafka kafka = properties.getKafka();
             boolean enabled = kafka.isEnabled() && properties.isPanelEnabled(BootUiPanels.KAFKA);
@@ -770,6 +777,94 @@ public class BootUiEngineConfiguration {
         static KafkaConsumerCaptureBeanPostProcessor bootUiKafkaConsumerCaptureBeanPostProcessor(
                 ObjectProvider<KafkaActivityRecorder> recorderProvider) {
             return new KafkaConsumerCaptureBeanPostProcessor(recorderProvider);
+        }
+    }
+
+    /**
+     * The JMS panel and Live Activity share two Spring-specific post-processors across the servlet
+     * and reactive stacks, so the backend lives here rather than under the servlet-only
+     * auto-configuration. The post-processors are method-level
+     * {@code @ConditionalOnClass}-guarded so a JMS-absent application never links
+     * {@code spring-jms} types.
+     *
+     * <p>JMS has its own framework-neutral recorder and settings, so its traffic cannot evict Kafka
+     * or RabbitMQ history and each transport can be configured independently.</p>
+     */
+    @Configuration(proxyBeanMethods = false)
+    static class JmsBackendConfiguration {
+
+        @Bean
+        @Lazy
+        @ConditionalOnMissingBean
+        @ConditionalOnClass(name = {"org.springframework.jms.core.JmsTemplate", "jakarta.jms.Message"})
+        JmsActivityRecorder bootUiJmsActivityRecorder(BootUiProperties properties) {
+            BootUiProperties.Jms jms = properties.getJms();
+            boolean enabled = jms.isEnabled() && properties.isPanelEnabled(BootUiPanels.JMS);
+            return new JmsActivityRecorder(
+                    enabled, jms.isCaptureMessageId(), jms.getMaxEntries(), jms.getMaxMessageIdLength());
+        }
+
+        @Bean
+        @ConditionalOnClass(name = {"org.springframework.jms.core.JmsTemplate", "jakarta.jms.Message"})
+        static JmsProducerCaptureBeanPostProcessor bootUiJmsProducerCaptureBeanPostProcessor(
+                ObjectProvider<JmsActivityRecorder> recorderProvider) {
+            return new JmsProducerCaptureBeanPostProcessor(recorderProvider);
+        }
+
+        @Bean
+        @ConditionalOnClass(name = {"org.springframework.jms.core.JmsTemplate", "jakarta.jms.Message"})
+        static JmsListenerCaptureBeanPostProcessor bootUiJmsListenerCaptureBeanPostProcessor(
+                ObjectProvider<JmsActivityRecorder> recorderProvider) {
+            return new JmsListenerCaptureBeanPostProcessor(recorderProvider);
+        }
+    }
+
+    /**
+     * The Live Activity RabbitMQ capture backend is framework-neutral (a bounded in-memory recorder
+     * plus two Spring-specific post-processors) and is needed by both servlet and reactive stacks,
+     * so it is wired here in the shared engine configuration rather than under the servlet-only
+     * auto-configuration. The recorder and two {@code BeanPostProcessor}s keep method-level
+     * {@code @ConditionalOnClass(RabbitTemplate)} guards so a Spring-AMQP-absent application neither
+     * exposes an inactive source nor links those types. The recorder feeds both the Live Activity
+     * {@code MESSAGING} entries and the dedicated RabbitMQ panel from the same buffer — exactly the
+     * same dual-consumer model as the Kafka backend above.
+     */
+    @Configuration(proxyBeanMethods = false)
+    static class RabbitBackendConfiguration {
+
+        /**
+         * Gated on the dedicated RabbitMQ panel ({@link BootUiPanels#RABBITMQ}), not Live
+         * Activity's — exactly like {@code bootUiKafkaActivityRecorder} above — because this
+         * single recorder now backs two consumers (Live Activity's {@code MESSAGING} entries and the
+         * RabbitMQ panel's own report), and disabling the RabbitMQ panel should stop the underlying
+         * capture entirely rather than merely hide it from one of the two views.
+         */
+        @Bean
+        @Lazy
+        @ConditionalOnMissingBean
+        @ConditionalOnClass(name = "org.springframework.amqp.rabbit.core.RabbitTemplate")
+        RabbitActivityRecorder bootUiRabbitActivityRecorder(BootUiProperties properties) {
+            BootUiProperties.Rabbitmq rabbit = properties.getRabbitmq();
+            boolean enabled = rabbit.isEnabled() && properties.isPanelEnabled(BootUiPanels.RABBITMQ);
+            return new RabbitActivityRecorder(
+                    enabled,
+                    rabbit.isCaptureCorrelationId(),
+                    rabbit.getMaxEntries(),
+                    rabbit.getMaxCorrelationIdLength());
+        }
+
+        @Bean
+        @ConditionalOnClass(name = "org.springframework.amqp.rabbit.core.RabbitTemplate")
+        static RabbitProducerCaptureBeanPostProcessor bootUiRabbitProducerCaptureBeanPostProcessor(
+                ObjectProvider<RabbitActivityRecorder> recorderProvider) {
+            return new RabbitProducerCaptureBeanPostProcessor(recorderProvider);
+        }
+
+        @Bean
+        @ConditionalOnClass(name = "org.springframework.amqp.rabbit.core.RabbitTemplate")
+        static RabbitConsumerCaptureBeanPostProcessor bootUiRabbitConsumerCaptureBeanPostProcessor(
+                ObjectProvider<RabbitActivityRecorder> recorderProvider) {
+            return new RabbitConsumerCaptureBeanPostProcessor(recorderProvider);
         }
     }
 

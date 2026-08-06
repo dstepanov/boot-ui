@@ -17,6 +17,7 @@ import io.github.jdubois.bootui.autoconfigure.hibernate.HibernateController;
 import io.github.jdubois.bootui.autoconfigure.idle.ConsoleActivityFilter;
 import io.github.jdubois.bootui.autoconfigure.idle.ConsoleActivityTracker;
 import io.github.jdubois.bootui.autoconfigure.idle.IdleReclaimable;
+import io.github.jdubois.bootui.autoconfigure.jms.JmsController;
 import io.github.jdubois.bootui.autoconfigure.kafka.KafkaController;
 import io.github.jdubois.bootui.autoconfigure.mail.BootUiMailSenderBeanPostProcessor;
 import io.github.jdubois.bootui.autoconfigure.mail.EmailController;
@@ -30,6 +31,7 @@ import io.github.jdubois.bootui.autoconfigure.monitoring.BootUiSelfDataFilter;
 import io.github.jdubois.bootui.autoconfigure.otlp.OtlpSpanDecoder;
 import io.github.jdubois.bootui.autoconfigure.otlp.SpringTelemetrySettings;
 import io.github.jdubois.bootui.autoconfigure.pentesting.*;
+import io.github.jdubois.bootui.autoconfigure.rabbit.RabbitController;
 import io.github.jdubois.bootui.autoconfigure.restapi.RestApiController;
 import io.github.jdubois.bootui.autoconfigure.restclienttrace.RestClientTraceController;
 import io.github.jdubois.bootui.autoconfigure.safety.ApiAuthenticationFilter;
@@ -160,6 +162,8 @@ import tools.jackson.databind.ObjectMapper;
     LiveActivityController.class,
     EmailController.class,
     KafkaController.class,
+    RabbitController.class,
+    JmsController.class,
     SqlTraceController.class,
     RestClientTraceController.class,
     ThreadDumpController.class,
@@ -196,6 +200,8 @@ public class BootUiAutoConfiguration {
             LiveActivityController.class.getName(),
             EmailController.class.getName(),
             KafkaController.class.getName(),
+            RabbitController.class.getName(),
+            JmsController.class.getName(),
             SqlTraceController.class.getName(),
             RestClientTraceController.class.getName(),
             HealthController.class.getName(),

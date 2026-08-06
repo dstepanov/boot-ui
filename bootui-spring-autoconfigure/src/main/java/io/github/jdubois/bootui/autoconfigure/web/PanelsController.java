@@ -190,6 +190,8 @@ public class PanelsController {
             case BootUiPanels.LIQUIBASE -> availability(liquibaseAvailable(), liquibaseUnavailableReason());
             case BootUiPanels.EMAIL -> availability(emailAvailable(), "No JavaMailSender bean is available");
             case BootUiPanels.KAFKA -> availability(kafkaAvailable(), "No KafkaTemplate bean is available");
+            case BootUiPanels.RABBITMQ -> availability(rabbitAvailable(), "No RabbitTemplate bean is available");
+            case BootUiPanels.JMS -> availability(jmsAvailable(), jmsUnavailableReason());
             case BootUiPanels.SECURITY -> availability(securityAvailable(), securityUnavailableReason());
             case BootUiPanels.AI -> availability(aiAvailable(), aiUnavailableReason());
             case BootUiPanels.COPILOT ->
@@ -404,6 +406,25 @@ public class PanelsController {
                 && beanPresent("org.springframework.kafka.core.KafkaTemplate");
     }
 
+    private boolean rabbitAvailable() {
+        return classPresent("org.springframework.amqp.rabbit.core.RabbitTemplate")
+                && beanPresent("org.springframework.amqp.rabbit.core.RabbitTemplate");
+    }
+
+    private boolean jmsAvailable() {
+        return !nativeImageDetected()
+                && classPresent("org.springframework.jms.core.JmsTemplate")
+                && classPresent("jakarta.jms.Message")
+                && beanPresent("org.springframework.jms.core.JmsTemplate");
+    }
+
+    private String jmsUnavailableReason() {
+        if (nativeImageDetected()) {
+            return "JMS capture is not available when running as a GraalVM native image";
+        }
+        return "No JmsTemplate bean is available";
+    }
+
     private boolean beanPresent(String className) {
         try {
             Class<?> type = ClassUtils.forName(className, getClass().getClassLoader());
@@ -440,14 +461,22 @@ public class PanelsController {
     }
 
     private boolean securityAvailable() {
-        return !isReactive()
-                && classPresent("org.springframework.security.web.FilterChainProxy")
+        if (isReactive()) {
+            return classPresent("org.springframework.security.web.server.SecurityWebFilterChain")
+                    && beanPresentExcluding(
+                            "org.springframework.security.web.server.SecurityWebFilterChain",
+                            "bootUiReactiveSecurityWebFilterChain");
+        }
+        return classPresent("org.springframework.security.web.FilterChainProxy")
                 && beanPresent("org.springframework.security.web.FilterChainProxy");
     }
 
     private String securityUnavailableReason() {
         if (isReactive()) {
-            return "Security Advisor is only available on the Spring MVC (servlet) adapter";
+            if (!classPresent("org.springframework.security.web.server.SecurityWebFilterChain")) {
+                return "Spring Security is not on the classpath";
+            }
+            return "No application SecurityWebFilterChain beans are available";
         }
         if (!classPresent("org.springframework.security.web.FilterChainProxy")) {
             return "Spring Security not on the classpath";

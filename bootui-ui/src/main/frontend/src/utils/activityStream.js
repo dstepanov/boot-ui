@@ -169,6 +169,16 @@ export function deepLink(entry) {
     case 'MAIL':
       return entry.id ? {path: '/email', query: {id: entry.id}, label: 'Open in Email'} : null
     case 'MESSAGING': {
+      if ((entry.id || '').startsWith('jms-')) {
+        const needle = jmsNeedle(entry.summary)
+        return needle ? {path: '/jms', query: {q: needle}, label: 'Open in JMS'} : {path: '/jms', label: 'Open in JMS'}
+      }
+      if ((entry.id || '').startsWith('rabbit-')) {
+        const needle = rabbitNeedle(entry)
+        return needle
+          ? {path: '/rabbitmq', query: {q: needle}, label: 'Open in RabbitMQ'}
+          : {path: '/rabbitmq', label: 'Open in RabbitMQ'}
+      }
       const needle = kafkaNeedle(entry.summary)
       return needle
         ? {path: '/kafka', query: {q: needle}, label: 'Open in Kafka'}
@@ -191,10 +201,41 @@ function exceptionNeedle(summary) {
 }
 
 function kafkaNeedle(summary) {
-  return (summary || '')
-    .replace(/^[→←]\s*/, '')
+  return messagingNeedle(summary)
     .replace(/\s*\[\d+]$/, '')
     .trim()
+}
+
+function rabbitNeedle(entry) {
+  const value = messagingNeedle(entry.summary)
+  if (value === '(unknown queue)' || value === '(default)') {
+    return rabbitDetailValue(entry.detail, 'routingKey') || rabbitDetailValue(entry.detail, 'exchange')
+  }
+  const separator = value.lastIndexOf('/')
+  if (separator < 0) return value
+  return value.slice(separator + 1).trim() || value.slice(0, separator).trim()
+}
+
+function rabbitDetailValue(detail, key) {
+  const value = (detail || '').trim()
+  const marker = `${key}=`
+  const start = value.indexOf(marker)
+  if (start < 0) return ''
+  const tail = value.slice(start + marker.length)
+  const boundaries = [' exchange=', ' routingKey=', ' correlationId=', ' Message processing failed']
+    .map((boundary) => tail.indexOf(boundary))
+    .filter((index) => index >= 0)
+  const end = boundaries.length ? Math.min(...boundaries) : tail.length
+  return tail.slice(0, end).trim()
+}
+
+function jmsNeedle(summary) {
+  const value = messagingNeedle(summary)
+  return value === '(unknown destination)' ? '' : value
+}
+
+function messagingNeedle(summary) {
+  return (summary || '').replace(/^[→←]\s*/, '').trim()
 }
 
 /**

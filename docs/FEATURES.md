@@ -67,11 +67,11 @@ accesses, is captured by a small dedicated recorder (Spring servlet and WebFlux 
 ever stores a hashed cache key, never a raw key or value. The eighth signal, scheduled-task runs, captures each
 `@Scheduled` method *execution* (start, success, failure, duration) on both adapters: Spring taps its own scheduling
 observability hook (no extra proxying), Quarkus observes the CDI `SuccessfulExecution`/`FailedExecution` events its
-scheduler always fires — feeding a bounded in-memory buffer the same way the other sources do. The ninth signal, Kafka
-producer/consumer activity, is described below.
+scheduler always fires — feeding a bounded in-memory buffer the same way the other sources do. The ninth signal,
+messaging activity (Kafka and RabbitMQ on both adapters, plus JMS on Spring), is described below.
 
 The stream merges nine signal types into one feed: requests (`REQUEST`), SQL statements (`SQL`), exceptions
-(`EXCEPTION`), security events (`SECURITY`), scheduled-task runs (`SCHEDULED`), Kafka producer/consumer activity
+(`EXCEPTION`), security events (`SECURITY`), scheduled-task runs (`SCHEDULED`), messaging producer/consumer activity
 (`MESSAGING`), and captured emails (`MAIL`) on both adapters, plus — on the Spring servlet and WebFlux adapters only —
 outbound REST client calls (`REST_CLIENT`) and cache accesses (`CACHE`). Each row carries a timestamp, a type icon, a
 color-coded severity
@@ -99,7 +99,7 @@ active-exceptions, health, heap-usage, cache-hit-ratio, and scheduled-failures c
 respectively. Because the merged feed is genuinely event-driven, it refreshes over **Server-Sent Events** instead of
 fixed-interval polling: the browser subscribes to
 `/bootui/api/activity/stream` and re-fetches whenever any source signals a change (a new request, SQL statement, REST
-client call, exception, security event, cache access, scheduled-task run, Kafka message, or captured email), and the
+client call, exception, security event, cache access, scheduled-task run, messaging event, or captured email), and the
 feed can be paused and resumed so a row you are inspecting does not scroll away.
 When the feed is unfiltered, correlated signals are **nested chronologically under the request that produced them**: the
 SQL statements, REST client calls, exceptions, security events, cache accesses, and emails that BootUI can pin precisely
@@ -165,10 +165,27 @@ processing duration (a producer send's duration is not exposed by either framewo
 That listener identifier is intentionally framework-specific: on Spring it is currently the **listener container
 factory bean name** (the per-`@KafkaListener` id is not exposed at the factory-wide interception point), while on
 Quarkus it is the channel name. **The message value/payload is never captured** — only metadata — since a Kafka payload
-is an arbitrary, potentially large and sensitive application object with no generic masking strategy. Kafka entries are
-top-level in the feed today (not yet nested under a correlated request). Capture is on by default whenever the relevant
-Kafka integration is present and the panel is enabled, and can be tuned or disabled entirely via `bootui.kafka.enabled`,
+is an arbitrary, potentially large and sensitive application object with no generic masking strategy. Raw exception
+messages are not retained either; failed operations carry only generic failure text. Kafka entries are top-level in the
+feed today (not yet nested under a correlated request). Capture is on by default whenever the relevant Kafka integration
+is present and the panel is enabled, and can be tuned or disabled entirely via `bootui.kafka.enabled`,
 `bootui.kafka.capture-key`, `bootui.kafka.max-entries`, and `bootui.kafka.max-key-length` — see `docs/PROPERTIES.md`.
+
+When Spring JMS support is present (`spring-jms` and `jakarta.jms` on the classpath), BootUI also captures JMS producer and consumer
+activity into the same `MESSAGING` stream. Every `JmsTemplate` bean is wrapped via a CGLIB proxy that intercepts
+`send`/`convertAndSend` calls; every `AbstractJmsListenerContainerFactory` bean is similarly proxied so that each
+container it creates has its message listener wrapped by a matching plain or session-aware capture adapter. Both the
+proxy and adapters compose with the application's existing converters, callbacks, and error handlers without replacing
+them or changing the listener dispatch interface. Direct `JMSContext`, `MessageProducer`, or `MessageConsumer` usage is
+outside this capture seam, matching Kafka and RabbitMQ's framework-integration-level instrumentation.
+Each entry records a sanitized JMS destination name (only explicit names and standard `Queue`/`Topic` accessors are
+trusted), direction, success/failure, and duration. When a `MessageCreator` or `MessagePostProcessor` exposes the
+provider-assigned JMS message ID, BootUI retains only its one-way hash. **The message payload, arbitrary
+headers/properties, raw message ID, and exception message are never captured.** JMS uses its own framework-neutral
+`JmsActivityRecorder`, bounded buffer, and `MESSAGING` mapper, so JMS traffic cannot evict Kafka panel history and either
+transport can be disabled independently. Tune it with `bootui.jms.enabled`, `bootui.jms.capture-message-id`,
+`bootui.jms.max-entries`, and `bootui.jms.max-message-id-length`. JMS capture is available on Spring MVC and WebFlux;
+no Quarkus JMS equivalent is claimed.
 
 By default the stream is in-memory only, so history is lost on a restart and the feed can only show as far back as the
 small buffers behind it reach. Setting `bootui.activity.persistence.enabled=true` additionally buffers
@@ -200,7 +217,7 @@ in configuration. If no `DataSource` is present, the button instead links straig
 configuring one (a dedicated one, just for Live Activity, or reusing an existing one).
 
 On Quarkus the panel merges eight signals: HTTP requests (from the same Vert.x-fed ring buffer as HTTP Exchanges), SQL
-trace, exceptions, security events, scheduled-task runs, Kafka producer/consumer activity, captured emails, and outbound
+trace, exceptions, security events, scheduled-task runs, messaging activity, captured emails, and outbound
 REST Client Reactive calls, alongside JVM heap KPIs. Cache accesses remain Spring-servlet/WebFlux-only today (see their
 own section above), so only that slot stays empty/unavailable on Quarkus. SQL trace
 contributes only when a JDBC datasource is
@@ -209,7 +226,7 @@ note. Signal-to-request correlation works by **trace id**: Spring's thread-per-r
 event loop (a thread does not map to a single request), so when `quarkus-opentelemetry` is present the adapter stamps the
 active server span's trace id at each capture point — the HTTP filter, REST Client recorder, SQL recorder, exception store,
 and CDI security-event observer — and the engine nests REST Client, SQL, exception, security, and email entries under the
-request sharing that trace id, exactly as on Spring (scheduled-task runs and Kafka activity always stay top-level); the
+request sharing that trace id, exactly as on Spring (scheduled-task runs and messaging activity always stay top-level); the
 OpenTelemetry context propagates across the event-loop→worker hop, so the same trace id is available even for
 blocking JDBC on a worker thread or a security event fired from a CDI observer. A request whose trace id uniquely matches
 a correlated security event is flagged **authenticated** exactly like Spring, naming the audit event's principal; Quarkus's
@@ -238,7 +255,7 @@ so the tip, button, and confirmation flow behave the same regardless of adapter.
 
 On Spring Boot WebFlux the panel is available too, merging all nine signals like the servlet adapter does. Seven of
 them needed no new *capture* pipeline at all: HTTP requests, SQL trace, exceptions, security events, scheduled-task
-runs, Kafka producer/consumer activity, and captured emails are each already reactive-safe — their engine beans live
+runs, messaging activity, and captured emails are each already reactive-safe — their engine beans live
 in the shared `BootUiEngineConfiguration` both the servlet and reactive auto-configurations import — so the WebFlux
 port is purely a merge over those existing sources (see their own sections below). The remaining two needed one each.
 Cache accesses reuse the exact same `CacheActivityRecorder`/`CacheActivityCacheManagerBeanPostProcessor` pair the
@@ -502,7 +519,7 @@ resource-server validation, and configuration hygiene. The report is framed as a
 intercepts live traffic, exposes credentials, keys, or session identifiers, or modifies the security configuration. See
 [SECURITY-CHECKS.md](SECURITY-CHECKS.md) for the full rule catalogue and remediation links.
 
-The Security advisor supports **both** framework security stacks from the same panel, menu slot, and
+The Security advisor supports **all three** runtime security stacks from the same panel, menu slot, and
 `/bootui/api/security` report contract. On **Spring Boot** it analyses Spring Security — the `SecurityFilterChain` beans
 and security beans described above.
 
@@ -517,11 +534,10 @@ relabels the metrics ("Permission policies" in place of "Filter chains") — the
 
 ![BootUI Security panel — Quarkus Security](./images/bootui-quarkus-security.webp)
 
-This advisor is **not yet ported for Spring Boot WebFlux**: it analyzes the servlet `SecurityFilterChain` beans
-described above, while a reactive Spring Security setup registers unrelated `SecurityWebFilterChain` beans behind a
-`WebFilterChainProxy` instead — so the panel reports unavailable with its existing "no filter chains available" reason
-rather than a bespoke WebFlux message. A `ServerHttpSecurity`/`SecurityWebFilterChain` ruleset is planned as follow-up work. See
-[docs/WEBFLUX-SUPPORT.md](WEBFLUX-SUPPORT.md) for the current status.
+On **Spring Boot WebFlux** it evaluates a dedicated 25-rule `SEC-RXF-*` catalogue over a framework-neutral observation
+of the application's `SecurityWebFilterChain` beans, reactive CORS/OAuth2 beans, and security-relevant configuration.
+The Spring adapter owns collection and excludes BootUI's own permit-all chain; the shared engine owns deterministic
+rule evaluation and never receives Spring types or secret values. See [WEBFLUX-SUPPORT.md](WEBFLUX-SUPPORT.md).
 
 ### Pentesting
 
@@ -1284,26 +1300,81 @@ entries into Live Activity (see above): every application-owned `KafkaTemplate` 
 recorded into a bounded ring buffer, newest-first, without altering delivery. Each row shows the timestamp, direction
 (produced/consumed, with an icon), topic, partition, offset (consumed records only — a produced record's offset isn't
 known at send time), a short hash of the key, processing duration (consume only; a producer send's duration is not
-exposed by either framework's callback), success/failure with the underlying error available on hover, and — for
-consumed records — the consumer group id and listener identifier. As with Live Activity, **the message value/payload is
-never captured, only metadata**, since a Kafka payload is an arbitrary, potentially large and sensitive application
-object with no generic masking strategy. A text filter matches topic, key, group, and listener, a direction filter
-isolates produced or consumed records, and the whole buffer can be cleared.
+exposed by either framework's callback), success/failure with privacy-safe generic failure text on hover, and — for
+consumed records — the consumer group id and listener identifier. As with Live Activity, **the message value/payload and
+raw exception messages are never captured, only bounded metadata**, since a Kafka payload is an arbitrary, potentially
+large and sensitive application object with no generic masking strategy. A text filter matches topic, key, group, and
+listener, a direction filter isolates produced or consumed records, and the whole buffer can be cleared.
 
 Capture is on by default whenever a Kafka integration is present and the panel is enabled, and is tuned through the same
 `bootui.kafka.*` properties Live Activity uses (`enabled`, `capture-key`, `max-entries`, `max-key-length`) — see
 `docs/PROPERTIES.md`. Turning off key capture (`bootui.kafka.capture-key=false`) is reflected in the panel with a notice
 instead of blank hashes, and turning off capture entirely (`bootui.kafka.enabled=false`) leaves already-captured
 messages visible with a similar notice. The panel is available only when a `KafkaTemplate` bean is present (e.g.
-`spring-kafka`); otherwise it reports a clear unavailable reason.
+Spring Boot's `spring-boot-starter-kafka`); otherwise it reports a clear unavailable reason.
 
-On Quarkus the panel is identical, running over the same shared engine `KafkaActivityRecorder` and the same
-`/bootui/api/kafka` contract (list/clear); the same difference already documented for Live Activity applies here too —
-the listener identifier is the channel name rather than a listener container factory bean name. The panel is available
-when `quarkus-messaging-kafka` is on the classpath with at least one `@Incoming`/`@Outgoing` channel configured (and
-dark in production); otherwise it reports a clear unavailable reason.
+On Quarkus the same UI and `/bootui/api/kafka` contract (list/clear) run over the shared engine
+`KafkaActivityRecorder`, with the reduced metadata exposed by SmallRye Reactive Messaging: the listener identifier is
+the channel name, while consumer group id and producer duration are unavailable. The panel is available when
+`quarkus-messaging-kafka` is on the classpath in a non-production launch; configured `@Incoming`/`@Outgoing` channels
+determine whether it receives any activity. Incoming deliveries carry connector metadata automatically; outgoing
+messages are captured only when they already carry `OutgoingKafkaRecordMetadata`, so a payload-only emission that relies
+entirely on channel configuration is not recorded. Without the extension the panel reports a clear unavailable reason.
 
 ![BootUI Kafka panel](./images/bootui-kafka.webp)
+
+### RabbitMQ
+
+The RabbitMQ panel is a dedicated, filterable view over AMQP publish/consume capture that also feeds `MESSAGING` entries
+into Live Activity. On Spring, BootUI installs a `MessagePostProcessor` on every `RabbitTemplate` bean via the public
+`addBeforePublishPostProcessors` API and prepends a `MethodInterceptor` to every
+`AbstractRabbitListenerContainerFactory`'s advice chain — composing with, not replacing, any existing post-processors or
+advice. On Quarkus, it hooks SmallRye Reactive Messaging's `OutgoingInterceptor`/`IncomingInterceptor` SPI, so the same
+`RabbitActivityRecorder` is fed from either framework. Each row shows timestamp, direction (PUBLISH/CONSUME, with an
+icon), exchange, routing key, queue (consume side), processing duration (consume only — a publish's duration is not
+exposed without publisher confirms), and success/failure. Spring publishes are captured at the supported before-publish
+hook and therefore represent a publish attempt; Quarkus publish ack/nack and both consumer paths represent terminal
+outcomes. When `capture-correlation-id` is
+enabled (opt-in, default `false`), a truncated SHA-256 hash of the correlation ID is shown. **The message body/payload
+and arbitrary headers are never captured** — only bounded routing metadata, timing, and success/failure are retained;
+failure text is generic so framework exception messages cannot leak payload or credential data.
+
+Capture is on by default whenever a RabbitMQ integration is present and the panel is enabled, and is tuned via
+`bootui.rabbitmq.enabled`, `bootui.rabbitmq.capture-correlation-id`, `bootui.rabbitmq.max-entries`, and
+`bootui.rabbitmq.max-correlation-id-length` — see `docs/PROPERTIES.md`. The panel is available when a `RabbitTemplate`
+bean is present (e.g. `spring-rabbit` / `spring-boot-starter-amqp`); otherwise it reports a clear unavailable reason.
+
+On Quarkus the same UI and `/bootui/api/rabbitmq` contract (list/clear) run over the shared engine
+`RabbitActivityRecorder`. SmallRye does not expose a producer exchange, consumer queue, or producer duration at these
+callbacks, so those per-message fields render as unavailable; routing key, outcome, and opt-in correlation-ID hash
+remain available. The panel is available when `quarkus-messaging-rabbitmq` is on the classpath in a non-production
+launch. Incoming deliveries carry connector metadata automatically; outgoing messages are captured only when they
+already carry `OutgoingRabbitMQMetadata`, so a payload-only emission that relies entirely on channel configuration is
+not recorded. Without the extension the panel reports a clear unavailable reason.
+
+![BootUI RabbitMQ panel](./images/bootui-rabbitmq.webp)
+
+### JMS
+
+The JMS panel is the dedicated, filterable view over the Spring JMS producer/consumer capture that also feeds
+`MESSAGING` entries into Live Activity. It lists retained messages newest-first with their direction, sanitized queue or
+topic destination, processing duration, success/failure, subscription and listener identifiers, and—when enabled—a short
+SHA-256 hash of the provider-assigned message ID. The message payload, arbitrary headers/properties, raw message ID, and
+exception message are never captured.
+
+Capture uses the same `JmsActivityRecorder` as Live Activity, so both surfaces stay synchronized and clearing the panel
+also clears retained JMS entries from the merged feed. Filter by destination, message-ID hash, subscription, listener, or
+failure type; narrow the table to produced or consumed messages; and use the confirmation-gated clear action to reset the
+bounded buffer. `bootui.jms.enabled`, `bootui.jms.capture-message-id`, `bootui.jms.max-entries`, and
+`bootui.jms.max-message-id-length` configure both surfaces. The panel is available when a `JmsTemplate` bean is present
+(for example through Spring Boot's Artemis starter); otherwise it remains visible with a clear unavailable reason.
+
+JMS capture is currently Spring-only. On Quarkus the shared route remains visible but reports the panel not yet available;
+BootUI directs Quarkus applications to the Kafka and RabbitMQ panels backed by Reactive Messaging instead. The Spring
+interception uses runtime class proxies, so the JMS panel reports unavailable in a GraalVM native image rather than
+claiming capture is active when those proxies cannot be generated.
+
+![BootUI JMS panel](./images/bootui-jms.webp)
 
 ### AI Usage
 
@@ -1548,9 +1619,9 @@ live on Quarkus: `graalvm_scan` and `crac_scan` (both deliberately not applicabl
 
 On Spring Boot WebFlux the panel is available too. A reactive tool catalog binds the WebFlux-specific Live Activity,
 Exceptions, Security Logs, SQL Trace, and Log Tail controllers while reusing the shared controllers for the rest of the
-surface. It advertises the same tools as the servlet adapter except `security_scan`, because the Security advisor itself
-is not yet available on WebFlux. The JSON-RPC transport, runtime toggle, panel/read-only gating, payload/concurrency
-limits, and response envelopes are otherwise identical across all three adapters.
+surface, including `security_scan` through the shared reactive advisor service. The JSON-RPC transport, runtime toggle,
+panel/read-only gating, payload/concurrency limits, and response envelopes are otherwise identical across all three
+adapters.
 
 ### DevTools
 
