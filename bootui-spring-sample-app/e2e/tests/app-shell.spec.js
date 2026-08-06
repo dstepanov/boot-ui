@@ -126,6 +126,9 @@ test.describe('BootUI app shell', () => {
     await expect(drawer).not.toHaveAttribute('aria-hidden', 'true')
     await expect(drawer).toHaveAttribute('aria-modal', 'true')
     await expect(page.locator('.bootui-workspace')).toHaveAttribute('inert', '')
+    await page.keyboard.press('Control+K')
+    await expect(page.getByRole('dialog', {name: 'Command palette'})).toHaveCount(0)
+    await expect(drawer).toHaveAttribute('aria-modal', 'true')
 
     const firstDrawerLink = drawer.locator('.brand-card')
     const lastDrawerLink = drawer.locator('.contribute-card')
@@ -156,6 +159,69 @@ test.describe('BootUI app shell', () => {
     await expect(page.locator('main.content-stage')).toBeFocused()
     await expect(drawer).toHaveAttribute('aria-hidden', 'true')
     expect(await drawer.evaluate((element) => element.contains(document.activeElement))).toBe(false)
+  })
+
+  test('command palette contains focus, tracks its active option, and hands route focus to content', async ({page}) => {
+    await page.setViewportSize({width: 1280, height: 800})
+    await page.goto('/bootui/')
+
+    const trigger = page.getByRole('button', {name: /Go to panel/})
+    await trigger.focus()
+    await page.keyboard.press('Enter')
+
+    const palette = page.getByRole('dialog', {name: 'Command palette'})
+    const input = palette.getByRole('combobox', {name: 'Search panels'})
+    const listbox = palette.getByRole('listbox', {name: 'Panel results'})
+    await expect(input).toBeFocused()
+    await expect(input).toHaveAttribute('aria-controls', await listbox.getAttribute('id'))
+    await expect(page.locator('.bootui-workspace')).toHaveAttribute('inert', '')
+    await expect(page.locator('#bootui-mobile-navigation')).toHaveAttribute('inert', '')
+
+    const firstActiveId = await input.getAttribute('aria-activedescendant')
+    await page.keyboard.press('ArrowDown')
+    await expect(input).not.toHaveAttribute('aria-activedescendant', firstActiveId)
+    const secondActiveId = await input.getAttribute('aria-activedescendant')
+    await expect(page.locator(`#${secondActiveId}`)).toHaveAttribute('aria-selected', 'true')
+
+    await page.keyboard.press('Tab')
+    await expect(input).toBeFocused()
+    await page.keyboard.press('Shift+Tab')
+    await expect(input).toBeFocused()
+
+    await input.fill('no-panel-has-this-name')
+    await expect(input).not.toHaveAttribute('aria-activedescendant', /.+/)
+
+    await page.keyboard.press('Escape')
+    await expect(palette).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+
+    await page.keyboard.press('Control+K')
+    await expect(input).toBeFocused()
+    await input.fill('Architecture')
+    await page.keyboard.press('Enter')
+
+    await expect(page).toHaveURL(/#\/architecture$/)
+    await expect(palette).toHaveCount(0)
+    await expect(page.locator('main.content-stage')).toBeFocused()
+  })
+
+  test('mobile command palette restores shortcut focus on cancel', async ({page}) => {
+    await page.setViewportSize({width: 390, height: 844})
+    await page.goto('/bootui/')
+
+    const themeToggle = page.locator('.theme-toggle')
+    await themeToggle.focus()
+    await page.keyboard.press('Control+K')
+
+    const palette = page.getByRole('dialog', {name: 'Command palette'})
+    const input = palette.getByRole('combobox', {name: 'Search panels'})
+    await expect(input).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(input).toBeFocused()
+    await page.keyboard.press('Escape')
+
+    await expect(palette).toHaveCount(0)
+    await expect(themeToggle).toBeFocused()
   })
 
   test('main content scrolls while the sidebar stays fixed', async ({page}) => {

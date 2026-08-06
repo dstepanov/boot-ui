@@ -1,21 +1,22 @@
 import {flushPromises, mount} from '@vue/test-utils'
 import {createMemoryHistory, createRouter} from 'vue-router'
-import {describe, expect, it, vi} from 'vitest'
+import {afterEach, describe, expect, it, vi} from 'vitest'
 
 import {routes} from '../../routes.js'
 import CommandPalette from './CommandPalette.vue'
 
 const namedRoutes = routes.filter((route) => route.name && route.meta?.title)
 
-async function mountPalette() {
+async function mountPalette(options = {}) {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes
+    routes: routes.map((route) => (route.redirect ? route : {...route, component: {template: '<section />'}}))
   })
   await router.push('/overview')
   await router.isReady()
 
   const wrapper = mount(CommandPalette, {
+    attachTo: options.attachTo,
     global: {
       plugins: [router]
     }
@@ -31,6 +32,10 @@ async function setQuery(wrapper, value) {
 }
 
 describe('CommandPalette', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
   it('lists every navigable panel before filtering', async () => {
     const {wrapper} = await mountPalette()
     const items = wrapper.findAll('.cp-item')
@@ -111,5 +116,67 @@ describe('CommandPalette', () => {
 
     expect(push).not.toHaveBeenCalled()
     expect(wrapper.emitted('close')).toBeUndefined()
+  })
+
+  it('connects the combobox to its listbox and selected option', async () => {
+    const {wrapper} = await mountPalette()
+    const input = wrapper.find('.cp-input')
+    const listbox = wrapper.find('[role="listbox"]')
+    const options = wrapper.findAll('[role="option"]')
+
+    expect(input.attributes('role')).toBe('combobox')
+    expect(input.attributes('aria-expanded')).toBe('true')
+    expect(input.attributes('aria-controls')).toBe(listbox.attributes('id'))
+    expect(input.attributes('aria-activedescendant')).toBe(options[0].attributes('id'))
+    expect(options[0].attributes('aria-selected')).toBe('true')
+
+    await input.trigger('keydown', {key: 'ArrowDown'})
+
+    expect(input.attributes('aria-activedescendant')).toBe(options[1].attributes('id'))
+    expect(options[0].attributes('aria-selected')).toBe('false')
+    expect(options[1].attributes('aria-selected')).toBe('true')
+
+    await input.trigger('keydown', {key: 'End'})
+    expect(input.attributes('aria-activedescendant')).toBe(options.at(-1).attributes('id'))
+
+    await input.trigger('keydown', {key: 'Home'})
+    expect(input.attributes('aria-activedescendant')).toBe(options[0].attributes('id'))
+  })
+
+  it('clears the active descendant when filtering has no results', async () => {
+    const {wrapper} = await mountPalette()
+    const input = await setQuery(wrapper, 'no-panel-has-this-name')
+
+    expect(wrapper.findAll('[role="option"]')).toHaveLength(0)
+    expect(wrapper.find('[role="listbox"]').exists()).toBe(true)
+    expect(input.attributes('aria-activedescendant')).toBeUndefined()
+  })
+
+  it('contains focus and handles Escape once from anywhere inside the dialog', async () => {
+    const {wrapper} = await mountPalette({attachTo: document.body})
+    const input = wrapper.find('.cp-input')
+    wrapper.vm.focusInput()
+
+    expect(document.activeElement).toBe(input.element)
+
+    await input.trigger('keydown', {key: 'Tab'})
+    expect(document.activeElement).toBe(input.element)
+
+    await input.trigger('keydown', {key: 'Tab', shiftKey: true})
+    expect(document.activeElement).toBe(input.element)
+
+    await input.trigger('keydown', {key: 'Escape'})
+    expect(wrapper.emitted('close')).toEqual([['invoker']])
+  })
+
+  it('closes for a content-focus handoff after activating a result', async () => {
+    const {wrapper, router} = await mountPalette()
+    const input = await setQuery(wrapper, 'Architecture')
+
+    await input.trigger('keydown', {key: 'Enter'})
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('architecture')
+    expect(wrapper.emitted('close')).toEqual([['content']])
   })
 })
