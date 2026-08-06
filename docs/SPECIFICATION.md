@@ -299,7 +299,8 @@ Features:
 
 - Search by bean name, class name, package, scope, and resource.
 - Hide BootUI's own beans by default so the report focuses on the host application; `bootui.monitoring.exclude-self=false`
-  includes them when debugging BootUI itself.
+  includes them when debugging BootUI itself. Omit the BootUI classification option when the loaded inventory contains no
+  BootUI beans.
 - Filter by current classification:
   - application beans.
   - BootUI beans, when self-data filtering is disabled.

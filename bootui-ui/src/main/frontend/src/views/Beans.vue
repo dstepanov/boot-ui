@@ -1,5 +1,7 @@
 <script setup>
-import {defineAsyncComponent, ref, watch} from 'vue'
+import {defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {apiFetch} from '../api.js'
+import {isAbortError} from '../utils/loadError.js'
 import PanelHeader from './components/PanelHeader.vue'
 import {useServerPagedList} from '../utils/useServerPagedList.js'
 import ServerListFooter from './components/ServerListFooter.vue'
@@ -40,7 +42,32 @@ watch([filter, classification], scheduleReload)
 const graphMode = ref(true)
 const listActivated = ref(false)
 const graphFocusRequest = ref(null)
+const bootUiClassificationAvailable = ref(false)
 let graphFocusRequestId = 0
+let classificationProbe = null
+
+onMounted(loadClassificationAvailability)
+onBeforeUnmount(() => classificationProbe?.abort())
+
+async function loadClassificationAvailability() {
+  const ac = new AbortController()
+  classificationProbe = ac
+  try {
+    const response = await apiFetch('api/beans?classification=BOOTUI&offset=0&limit=1', {signal: ac.signal})
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const report = await response.json()
+    if (classificationProbe === ac) {
+      bootUiClassificationAvailable.value = (report.page?.matched ?? report.beans?.length ?? 0) > 0
+    }
+  } catch (error) {
+    if (!isAbortError(error)) {
+      console.warn('Could not determine whether BootUI beans are available', error)
+      bootUiClassificationAvailable.value = true
+    }
+  } finally {
+    if (classificationProbe === ac) classificationProbe = null
+  }
+}
 
 function activateGraphMode() {
   graphMode.value = true
@@ -107,7 +134,7 @@ function showBeanGraph(bean) {
             <option value="">All classifications</option>
             <option value="APPLICATION">Application</option>
             <option value="FRAMEWORK">Framework</option>
-            <option value="BOOTUI">BootUI</option>
+            <option v-if="bootUiClassificationAvailable" value="BOOTUI">BootUI</option>
             <option value="PLATFORM">Platform</option>
             <option value="OTHER">Other</option>
           </select>
@@ -177,7 +204,11 @@ function showBeanGraph(bean) {
     </template>
 
     <KeepAlive>
-      <BeansGraphMode v-if="graphMode" :focus-request="graphFocusRequest" />
+      <BeansGraphMode
+        v-if="graphMode"
+        :focus-request="graphFocusRequest"
+        :boot-ui-classification-available="bootUiClassificationAvailable"
+      />
     </KeepAlive>
   </div>
 </template>

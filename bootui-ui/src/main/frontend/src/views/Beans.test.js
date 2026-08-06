@@ -58,7 +58,20 @@ function stubFetch(listResponse, graphResponse = null, conditionsResponse = null
             )
         })
       }
-      const body = url.includes('limit=1000') ? graphBody : listResponse
+      let body = url.includes('limit=1000') ? graphBody : listResponse
+      if (url.includes('classification=BOOTUI')) {
+        const bootUiBeans = (graphBody.beans || []).filter((item) => item.classification === 'BOOTUI')
+        body = {
+          ...graphBody,
+          beans: bootUiBeans.slice(0, 1),
+          page: {
+            ...graphBody.page,
+            matched: bootUiBeans.length,
+            returned: Math.min(bootUiBeans.length, 1),
+            limit: 1
+          }
+        }
+      }
       return Promise.resolve({
         ok: true,
         status: 200,
@@ -160,6 +173,7 @@ describe('Beans — graph mode toggle', () => {
     await vi.dynamicImportSettled()
     await flushPromises()
     expect(wrapper.find('input[placeholder*="Search for a bean"]').exists()).toBe(true)
+    expect(wrapper.find('#beans-graph-classification option[value="BOOTUI"]').exists()).toBe(false)
   })
 
   it('keeps list mode available without selecting it by default', async () => {
@@ -177,6 +191,7 @@ describe('Beans — graph mode toggle', () => {
     await flushPromises()
 
     expect(wrapper.find('#beans-graph-classification').element.value).toBe('APPLICATION')
+    expect(wrapper.find('#beans-graph-classification option[value="BOOTUI"]').exists()).toBe(true)
     expect(wrapper.findAll('datalist option').map((option) => option.element.value)).toEqual(['applicationBean'])
     expect(wrapper.text()).toContain('1 application')
 
@@ -196,6 +211,9 @@ describe('Beans — graph mode toggle', () => {
     ])
     expect(wrapper.find('[aria-label*="bootUiBean"]').exists()).toBe(true)
     expect(dependencyFact.find('dd').text()).toBe('1')
+
+    await openList(wrapper)
+    expect(wrapper.find('select.form-select option[value="BOOTUI"]').exists()).toBe(true)
   })
 
   it('loads the unfiltered list only after list mode is selected', async () => {
@@ -204,10 +222,16 @@ describe('Beans — graph mode toggle', () => {
     await vi.dynamicImportSettled()
     await flushPromises()
 
-    expect(fetch.mock.calls.map(([input]) => String(input))).toEqual([expect.stringContaining('offset=0&limit=1000')])
+    expect(fetch.mock.calls.map(([input]) => String(input))).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('classification=BOOTUI&offset=0&limit=1'),
+        expect.stringContaining('offset=0&limit=1000')
+      ])
+    )
+    expect(fetch).toHaveBeenCalledTimes(2)
 
     await openList(wrapper)
-    const listRequest = fetch.mock.calls.map(([input]) => String(input)).find((url) => !url.includes('limit=1000'))
+    const listRequest = fetch.mock.calls.map(([input]) => String(input)).find((url) => url.includes('limit=200'))
     expect(new URL(listRequest, 'http://localhost').searchParams.has('classification')).toBe(false)
   })
 

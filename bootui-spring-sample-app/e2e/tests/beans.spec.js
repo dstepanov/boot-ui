@@ -50,6 +50,7 @@ test.describe('Beans view', () => {
         return values.length > 0 && values.every((c) => c === 'FRAMEWORK')
       })
       .toBeTruthy()
+    await expect(page.locator('select.form-select option[value="BOOTUI"]')).toHaveCount(0)
   })
 
   test('keeps large bean lists responsive while filters search the full set', async ({openView, page}) => {

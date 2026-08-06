@@ -14,6 +14,10 @@ const props = defineProps({
   focusRequest: {
     type: Object,
     default: null
+  },
+  bootUiClassificationAvailable: {
+    type: Boolean,
+    default: true
   }
 })
 
@@ -303,7 +307,7 @@ async function loadConditionEvidence() {
             <option value="">All classifications</option>
             <option value="APPLICATION">Application</option>
             <option value="FRAMEWORK">Framework</option>
-            <option value="BOOTUI">BootUI</option>
+            <option v-if="props.bootUiClassificationAvailable" value="BOOTUI">BootUI</option>
             <option value="PLATFORM">Platform</option>
             <option value="OTHER">Other</option>
           </select>
