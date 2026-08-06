@@ -376,7 +376,7 @@ hide newer ones. Keep API, UI,
 - **Configuration**: Configuration, Profile Diff, Loggers, Beans, Conditions, Mappings
 - **Database**: Database Connection Pools, SQL Trace, Spring Data, Flyway, Liquibase
 - **Security**: Spring Security, Security Logs
-- **Services**: Scheduled Tasks, REST Client, AI Framework, Cache, Email, Kafka, RabbitMQ
+- **Services**: Scheduled Tasks, REST Client, AI Framework, Cache, Email, Kafka, RabbitMQ, JMS
 - **Diagnostics**: Traces, Log Tail, Exceptions, HTTP Exchanges, HTTP Probe
 - **Developer Tools**: MCP Server, DevTools, Dev Services, Copilot, Claude Code
 
@@ -412,9 +412,9 @@ hide newer ones. Keep API, UI,
   `LocalhostGuard` write floor: the advisor scans (Architecture, the Quarkus app advisor, Pentesting, Hibernate,
   Security, Memory, REST API, and Vulnerabilities/OSV), Heap Dump (capture/analyze/delete/download), Threads (download),
   Loggers (set level), HTTP Probe, Cache (clear), Kafka (clear), RabbitMQ (clear), Email (clear), Flyway (migrate/clean), Liquibase
-  (update), Traces (clear), REST Client (clear/recording), and the MCP Server toggle. Only GraalVM, CRaC, Conditions,
-  Startup Timeline, HTTP Sessions, Spring Data, Spring Security, and DevTools
-  stay unavailable, most with a panel-specific not-applicable reason. The
+  (update), Traces (clear), REST Client (clear/recording), and the MCP Server toggle. GraalVM, CRaC, Conditions,
+  Startup Timeline, HTTP Sessions, Spring Data, Spring Security, and DevTools are intentionally not applicable; JMS is
+  separately not yet available on Quarkus. The
   **Memory** advisor is the cleanest port: every scanner/rule/context class was already framework-neutral (JMX +
   `java.lang.management` only), so it relocated wholesale into the engine `MemoryScanner` (built via
   `MemoryScanner.create(ThreadDumpService, Clock)`) with the Spring `MemoryController` reduced to thin wiring and a

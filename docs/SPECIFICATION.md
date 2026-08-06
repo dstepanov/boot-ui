@@ -1890,6 +1890,7 @@ Top-level navigation:
 
 - Overview:
   - Overview.
+  - Live Activity.
   - GitHub.
 - Advisors:
   - Architecture.
@@ -1910,6 +1911,7 @@ Top-level navigation:
   - Threads.
   - Startup Timeline.
   - GraalVM.
+  - CRaC.
 - Configuration:
   - Configuration.
   - Profile Diff.
@@ -1919,6 +1921,7 @@ Top-level navigation:
   - Mappings.
 - Database:
   - Database Connection Pools.
+  - SQL Trace.
   - Spring Data.
   - Flyway.
   - Liquibase.
@@ -1930,14 +1933,18 @@ Top-level navigation:
   - REST Client.
   - AI Framework.
   - Cache.
+  - Email.
+  - Kafka.
+  - RabbitMQ.
+  - JMS.
 - Diagnostics:
   - Traces.
   - Log Tail.
   - Exceptions.
   - HTTP Exchanges.
   - HTTP Probe.
-  - Email.
 - Developer tools:
+  - MCP Server.
   - DevTools.
   - Dev Services.
   - Copilot.
@@ -2030,15 +2037,8 @@ Future compatibility:
 BootUI's 1.0 release surface is complete when:
 
 - A sample Spring Boot app can add the starter and open `/bootui`.
-- The UI shows Overview, Advisors, Runtime, Configuration, Database, Security, Services, Diagnostics, Developer tools, and
-  Disabled / unavailable navigation groups covering Health, HTTP Sessions, Metrics, Live Memory, JVM Tuning, Heap Dump,
-  Threads, Startup Timeline, GraalVM, Configuration, Profile Diff, Loggers, Beans, Conditions, Mappings, Database
-  Connection Pools, Spring Data, Hibernate, Flyway, Liquibase, Spring Security, Security Logs, Security, Pentesting,
-  Vulnerabilities, Scheduled Tasks, REST Client, AI Framework, Cache, Traces, Log Tail, HTTP Exchanges, HTTP Probe,
-  Architecture,
-  REST API, Spring, Memory,
-  DevTools,
-  Dev Services, Copilot, Claude Code, and GitHub.
+- The UI shows the complete grouped panel inventory defined in §7.1, plus the Disabled / unavailable navigation group for
+  panels whose backing infrastructure is unavailable.
 - Secret-like values are masked.
 - BootUI is disabled by default outside local/dev contexts.
 - Tests verify activation and safety behavior.
