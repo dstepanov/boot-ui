@@ -189,9 +189,15 @@ jobs:
             bootui-ui/src/main/frontend/package-lock.json
             bootui-spring-sample-app/e2e/package-lock.json
 
-      # See the `build` job comment above: shares the same cache across all jobs that build bootui-ui.
-      - name: Cache frontend build tools
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # Restore-only: the `build` job is the sole writer of this key (see its comment above). With three
+      # matrix entries here plus `quarkus-e2e` also reading it, using the read+write `actions/cache` action
+      # in every job would race all of them to save the same key on a cache miss (e.g. right after the key
+      # changes) — actions/cache tolerates that (only the first save wins, the rest just warn), but it is
+      # wasted upload time on every job that loses the race. Restore-only avoids that entirely; a miss here
+      # simply falls through to frontend-maven-plugin's normal download, exactly as it would without any
+      # cache at all.
+      - name: Restore frontend build tools cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: bootui-ui/node
           key: frontend-tools-${{ runner.os }}-${{ hashFiles('pom.xml') }}
@@ -212,9 +218,19 @@ jobs:
       # Cache the downloaded browser binaries by the pinned @playwright/test version, so a run only
       # re-downloads chromium when the package-lock.json version actually changes. --with-deps still runs
       # every time to keep the runner's OS-level dependencies current, but it is fast when the browser
-      # binary itself is already cached.
+      # binary itself is already cached. All three matrix entries share this key (same e2e package-lock.json),
+      # so only the `mvc` entry does the read+write save; `webflux`/`custom-path` restore-only to avoid
+      # racing `mvc` (and each other) to save the identical key on a cache miss.
       - name: Cache Playwright browsers
+        if: matrix.suite.name == 'mvc'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-spring-${{ runner.os }}-${{ hashFiles('bootui-spring-sample-app/e2e/package-lock.json') }}
+
+      - name: Restore Playwright browsers cache
+        if: matrix.suite.name != 'mvc'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-spring-${{ runner.os }}-${{ hashFiles('bootui-spring-sample-app/e2e/package-lock.json') }}
@@ -283,9 +299,10 @@ jobs:
             bootui-ui/src/main/frontend/package-lock.json
             bootui-quarkus-sample-app/e2e/package-lock.json
 
-      # See the `build` job comment above: shares the same cache across all jobs that build bootui-ui.
-      - name: Cache frontend build tools
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # Restore-only: see the same-named step's comment in the `e2e` job above — the `build` job is the
+      # sole writer of this key, so every other reader here avoids racing to save it.
+      - name: Restore frontend build tools cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: bootui-ui/node
           key: frontend-tools-${{ runner.os }}-${{ hashFiles('pom.xml') }}
