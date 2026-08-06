@@ -6,6 +6,7 @@ import {routes} from './routes.js'
 
 const TestPanel = {template: '<section />'}
 const namedRoutes = routes.filter((route) => route.name && route.meta?.title)
+const NARROW_QUERY = '(max-width: 991.98px)'
 
 function shellRoutes() {
   return routes.map((route) => (route.redirect ? route : {...route, component: TestPanel}))
@@ -83,7 +84,25 @@ function restoreLocalStorage() {
   }
 }
 
+function stubMatchMedia(narrow = false) {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query) => ({
+      matches: query === NARROW_QUERY ? narrow : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn()
+    }))
+  )
+}
+
 async function mountApp(initialPath = '/overview') {
+  if (typeof window.matchMedia !== 'function') stubMatchMedia()
+  vi.resetModules()
   const {default: App} = await import('./App.vue')
   const router = createRouter({
     history: createMemoryHistory(),
@@ -162,6 +181,93 @@ describe('App sidebar navigation', () => {
 
     expect(securityToggle.attributes('aria-expanded')).toBe('true')
     expect(document.activeElement).toBe(securityToggle.element)
+  })
+
+  it('hides and disables only the closed mobile drawer', async () => {
+    stubMatchMedia(true)
+    const {wrapper} = await mountApp()
+    const drawer = wrapper.find('#bootui-mobile-navigation')
+    const toggle = wrapper.find('.nav-hamburger')
+
+    expect(drawer.attributes('aria-hidden')).toBe('true')
+    expect(drawer.attributes()).toHaveProperty('inert')
+    expect(drawer.attributes('role')).toBe('dialog')
+    expect(toggle.attributes('aria-controls')).toBe('bootui-mobile-navigation')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(toggle.attributes('aria-label')).toBe('Open navigation menu')
+    expect(wrapper.find('.bootui-workspace').attributes()).not.toHaveProperty('inert')
+  })
+
+  it('leaves the desktop sidebar exposed without mobile modal restrictions', async () => {
+    const {wrapper} = await mountApp()
+    const sidebar = wrapper.find('#bootui-mobile-navigation')
+
+    expect(sidebar.attributes('aria-hidden')).toBeUndefined()
+    expect(sidebar.attributes('aria-modal')).toBeUndefined()
+    expect(sidebar.attributes('role')).toBeUndefined()
+    expect(sidebar.attributes()).not.toHaveProperty('inert')
+    expect(wrapper.find('.bootui-workspace').attributes()).not.toHaveProperty('inert')
+  })
+
+  it('contains mobile drawer focus and restores it to the toggle on Escape', async () => {
+    stubMatchMedia(true)
+    const {wrapper} = await mountApp()
+    const drawer = wrapper.find('#bootui-mobile-navigation')
+    const toggle = wrapper.find('.nav-hamburger')
+
+    toggle.element.focus()
+    await toggle.trigger('click')
+    await flushPromises()
+
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(toggle.attributes('aria-label')).toBe('Close navigation menu')
+    expect(drawer.attributes('aria-hidden')).toBeUndefined()
+    expect(drawer.attributes('aria-modal')).toBe('true')
+    expect(drawer.attributes()).not.toHaveProperty('inert')
+    expect(wrapper.find('.bootui-workspace').attributes()).toHaveProperty('inert')
+    expect(document.activeElement).toBe(wrapper.find('.sidebar-toggle').element)
+
+    const first = wrapper.find('.brand-card')
+    const last = wrapper.find('.contribute-card')
+    first.element.focus()
+    await drawer.trigger('keydown', {key: 'Tab', shiftKey: true})
+    expect(document.activeElement).toBe(last.element)
+
+    last.element.focus()
+    await drawer.trigger('keydown', {key: 'Tab'})
+    expect(document.activeElement).toBe(first.element)
+
+    await drawer.trigger('keydown', {key: 'Escape'})
+    await flushPromises()
+
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(drawer.attributes('aria-hidden')).toBe('true')
+    expect(document.activeElement).toBe(toggle.element)
+  })
+
+  it('moves focus out of the drawer after route and backdrop closure', async () => {
+    stubMatchMedia(true)
+    const {router, wrapper} = await mountApp()
+    const toggle = wrapper.find('.nav-hamburger')
+
+    toggle.element.focus()
+    await toggle.trigger('click')
+    await flushPromises()
+    await wrapper.find('.bootui-nav-backdrop').trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(toggle.element)
+
+    await toggle.trigger('click')
+    await flushPromises()
+    const architectureLink = wrapper.find('a[href="/architecture"]')
+    architectureLink.element.focus()
+    await architectureLink.trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('architecture')
+    expect(wrapper.find('#bootui-mobile-navigation').attributes('aria-hidden')).toBe('true')
+    expect(document.activeElement).toBe(wrapper.find('main').element)
+    expect(wrapper.find('#bootui-mobile-navigation').element.contains(document.activeElement)).toBe(false)
   })
 })
 

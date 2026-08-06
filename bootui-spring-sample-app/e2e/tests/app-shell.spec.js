@@ -104,6 +104,60 @@ test.describe('BootUI app shell', () => {
     await expect(contributeLink.locator('.bi-github')).toBeVisible()
   })
 
+  test('mobile navigation contains focus and closes without stranding it', async ({page}) => {
+    await page.setViewportSize({width: 390, height: 844})
+    await page.goto('/bootui/')
+
+    const drawer = page.locator('#bootui-mobile-navigation')
+    const toggle = page.locator('.nav-hamburger')
+    await expect(drawer).toHaveAttribute('aria-hidden', 'true')
+    await expect(drawer).toHaveAttribute('inert', '')
+    await expect(toggle).toHaveAttribute('aria-controls', 'bootui-mobile-navigation')
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(toggle).toHaveAccessibleName('Open navigation menu')
+
+    await page.keyboard.press('Tab')
+    await expect(toggle).toBeFocused()
+
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('button', {name: 'Close navigation menu'}).first()).toBeFocused()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(toggle).toHaveAttribute('aria-label', 'Close navigation menu')
+    await expect(drawer).not.toHaveAttribute('aria-hidden', 'true')
+    await expect(drawer).toHaveAttribute('aria-modal', 'true')
+    await expect(page.locator('.bootui-workspace')).toHaveAttribute('inert', '')
+
+    const firstDrawerLink = drawer.locator('.brand-card')
+    const lastDrawerLink = drawer.locator('.contribute-card')
+    await firstDrawerLink.focus()
+    await page.keyboard.press('Shift+Tab')
+    await expect(lastDrawerLink).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(firstDrawerLink).toBeFocused()
+
+    await page.keyboard.press('Escape')
+    await expect(toggle).toBeFocused()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(drawer).toHaveAttribute('aria-hidden', 'true')
+
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('button', {name: 'Close navigation menu'}).first()).toBeFocused()
+    const backdropBounds = await page.locator('.bootui-nav-backdrop').boundingBox()
+    if (!backdropBounds) throw new Error('Navigation backdrop is not visible')
+    await page.mouse.click(backdropBounds.x + backdropBounds.width - 4, backdropBounds.y + backdropBounds.height / 2)
+    await expect(toggle).toBeFocused()
+    await expect(drawer).toHaveAttribute('aria-hidden', 'true')
+
+    await page.keyboard.press('Enter')
+    const architectureLink = drawer.getByRole('link', {name: 'Architecture'})
+    await architectureLink.focus()
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/#\/architecture$/)
+    await expect(page.locator('main.content-stage')).toBeFocused()
+    await expect(drawer).toHaveAttribute('aria-hidden', 'true')
+    expect(await drawer.evaluate((element) => element.contains(document.activeElement))).toBe(false)
+  })
+
   test('main content scrolls while the sidebar stays fixed', async ({page}) => {
     // A short viewport guarantees the main content overflows the window.
     await page.setViewportSize({width: 1280, height: 400})
