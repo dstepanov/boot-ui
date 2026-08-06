@@ -108,6 +108,7 @@ jobs:
       # keyed uniquely per run so it is always a fresh write with no cross-run staleness or restore-key
       # ambiguity.
       - name: Save shared Maven artifacts for downstream jobs
+        if: success()
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.m2/repository/com/julien-dubois
@@ -177,6 +178,7 @@ jobs:
       # Shares the now-installed Spring adapter artifacts with the `e2e` job below, so it can build only
       # the sample-app module(s) it needs instead of the whole upstream Spring reactor again.
       - name: Save Spring Maven artifacts for downstream jobs
+        if: success()
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.m2/repository/com/julien-dubois
@@ -248,6 +250,7 @@ jobs:
       # Shares the now-installed Quarkus adapter artifacts with the `quarkus-e2e` job below, so it can
       # build only the sample-app module instead of the whole upstream Quarkus reactor again.
       - name: Save Quarkus Maven artifacts for downstream jobs
+        if: success()
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.m2/repository/com/julien-dubois
