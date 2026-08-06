@@ -936,19 +936,17 @@ Keyboard navigation uses one graph tab stop, arrow/Home/End movement between nod
 nodes carry visible focus rings and `aria-label` attributes with the full bean name. The static layout introduces no
 motion, and its role colours meet contrast requirements in both light and dark themes.
 
-**Reduced fidelity on Quarkus.** The Quarkus Arc/CDI adapter does not expose inter-bean `dependencies` at runtime (Arc
-resolves injection points at build time and does not make the wiring graph available programmatically), so the
-`dependencies` array in each `BeanSummary` is empty. Graph mode renders a Quarkus-specific reduced-fidelity explanation
-before selection; when a bean is focused, the panel shows a clear "no recorded dependencies or dependents" notice rather
-than an empty graph. The details area also explains that Spring Boot Conditions evidence is unavailable on Quarkus.
-Users on Quarkus can still browse the full bean inventory in list mode.
+**Quarkus dependency capture.** Arc resolves injection points during augmentation rather than exposing its wiring model
+at runtime, so the Quarkus deployment adapter captures the retained beans' resolved injection edges after Arc validation
+and emits them as a generated classpath resource. The runtime adapter overlays those edges on the live CDI inventory,
+giving graph mode the same `BeanSummary.dependencies` contract as Spring. The details area still explains that Spring Boot
+Conditions evidence and defining resources are unavailable on Quarkus.
 
 On Quarkus the panel is identical from the UI's point of view, running over the same framework-neutral engine
 `BeansService` and the same `/bootui/api/beans` contract. The Quarkus adapter enumerates beans from the live Arc/CDI
 container (in place of the Spring adapter's Actuator beans endpoint), filters out BootUI's own beans, and classifies them
 with Quarkus-aware framework prefixes (`io.quarkus.`, `io.vertx.`, `org.jboss.`, …). A few fields have reduced fidelity
-because Arc does not expose them at runtime the way Actuator does: the defining `resource` and inter-bean `dependencies`
-are empty, the `scope` uses the CDI vocabulary (`ApplicationScoped`, `Singleton`, …) rather than Spring's
+because Arc does not expose them at runtime the way Actuator does: the defining `resource` is empty, the `scope` uses the CDI vocabulary (`ApplicationScoped`, `Singleton`, …) rather than Spring's
 `singleton`/`prototype`, and unnamed beans get a synthetic decapitalized class name. The inventory also reflects only the
 beans Arc retains, since Arc removes unused beans at build time.
 

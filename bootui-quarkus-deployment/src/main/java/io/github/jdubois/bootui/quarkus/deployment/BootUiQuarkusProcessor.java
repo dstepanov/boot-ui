@@ -18,6 +18,7 @@ import io.github.jdubois.bootui.quarkus.QuarkusServerPortSupplier;
 import io.github.jdubois.bootui.quarkus.QuarkusTelemetrySettings;
 import io.github.jdubois.bootui.quarkus.activity.QuarkusActivityCapture;
 import io.github.jdubois.bootui.quarkus.agent.AgentSessionProducer;
+import io.github.jdubois.bootui.quarkus.beans.QuarkusBeanDependencies;
 import io.github.jdubois.bootui.quarkus.config.QuarkusConfigProvider;
 import io.github.jdubois.bootui.quarkus.devservices.DevServicesRecorder;
 import io.github.jdubois.bootui.quarkus.devservices.QuarkusDevServices;
@@ -53,6 +54,9 @@ import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.ExcludedTypeBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
+import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
+import io.quarkus.arc.processor.BeanInfo;
+import io.quarkus.arc.processor.InjectionPointInfo;
 import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 import io.quarkus.builder.Version;
 import io.quarkus.deployment.Capabilities;
@@ -64,6 +68,7 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.DevServicesResultBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.GeneratedServiceProviderBuildItem;
 import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
@@ -79,7 +84,10 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
@@ -1192,6 +1200,55 @@ class BootUiQuarkusProcessor {
                 .runtimeValue(recorder.create(mappings))
                 .unremovable()
                 .done());
+    }
+
+    /**
+     * Captures Arc's resolved injection graph after validation and exposes it to the runtime adapter as a
+     * generated classpath resource. Arc intentionally keeps this model at build time; a generated resource
+     * avoids a late synthetic-bean cycle and is loaded into Quarkus' dev/test runtime classloader.
+     */
+    @BuildStep
+    void captureBeanDependencies(
+            LaunchModeBuildItem launchMode,
+            ValidationPhaseBuildItem validationPhase,
+            BuildProducer<GeneratedResourceBuildItem> generatedResources) {
+        if (launchMode.getLaunchMode() == LaunchMode.NORMAL) {
+            return;
+        }
+        // BeanSummary and the shared graph intentionally aggregate duplicate definitions by display name.
+        Map<String, Set<String>> graph = new TreeMap<>();
+        for (BeanInfo bean : validationPhase.getContext().beans()) {
+            String source = arcBeanName(bean);
+            if (source == null) {
+                continue;
+            }
+            for (InjectionPointInfo injectionPoint : bean.getAllInjectionPoints()) {
+                BeanInfo resolved = injectionPoint.getResolvedBean();
+                String dependency = resolved == null ? null : arcBeanName(resolved);
+                if (dependency != null && !dependency.equals(source)) {
+                    graph.computeIfAbsent(source, ignored -> new LinkedHashSet<>())
+                            .add(dependency);
+                }
+            }
+        }
+        generatedResources.produce(new GeneratedResourceBuildItem(
+                QuarkusBeanDependencies.RESOURCE_NAME, QuarkusBeanDependencies.encode(graph)));
+    }
+
+    private static String arcBeanName(BeanInfo bean) {
+        if (bean.getName() != null && !bean.getName().isBlank()) {
+            return bean.getName();
+        }
+        if (bean.getBeanClass() == null) {
+            return null;
+        }
+        String className = bean.getBeanClass().toString();
+        int separator = Math.max(className.lastIndexOf('.'), className.lastIndexOf('$'));
+        String simpleName = className.substring(separator + 1);
+        if (simpleName.isEmpty()) {
+            return null;
+        }
+        return simpleName.substring(0, 1).toLowerCase(Locale.ROOT) + simpleName.substring(1);
     }
 
     /**

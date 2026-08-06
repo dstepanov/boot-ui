@@ -366,13 +366,14 @@ describe('Beans — graph loading state', () => {
     await flushPromises()
   })
 
-  it('shows the Quarkus reduced-fidelity explanation only on Quarkus', async () => {
-    stubFetch(beanList([bean('a')]))
+  it('uses Quarkus dependency edges without requesting Spring Conditions', async () => {
+    stubFetch(beanList([bean('service', ['repository']), bean('repository')]))
     const wrapper = mountBeans('quarkus')
     await flushPromises()
     await openGraph(wrapper)
 
-    expect(wrapper.text()).toContain('Quarkus Arc does not expose inter-bean dependency relationships')
+    expect(wrapper.text()).not.toContain('Quarkus Arc does not expose inter-bean dependency relationships')
+    expect(wrapper.findAll('.bg-node')).toHaveLength(2)
     expect(fetch).not.toHaveBeenCalledWith(expect.stringContaining('api/conditions?'), expect.anything())
   })
 

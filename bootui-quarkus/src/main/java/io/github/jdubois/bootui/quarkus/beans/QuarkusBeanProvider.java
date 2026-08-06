@@ -7,8 +7,11 @@ import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Quarkus {@link BeanProvider} backed by the Arc/CDI container.
@@ -20,16 +23,18 @@ import java.util.Locale;
  * the Quarkus-flavored classification. The engine {@code BeansService} then sorts, classification/free-text
  * filters and pages on top.</p>
  *
- * <p><strong>Reduced fidelity vs Spring (documented honestly).</strong> Arc does not expose, at runtime,
- * the bean's defining resource nor its inter-bean injection edges the way Actuator's {@code BeansEndpoint}
- * does, so {@code resource} and {@code dependencies} are always empty here. The {@code scope} is the CDI
+ * <p><strong>Reduced fidelity vs Spring (documented honestly).</strong> Arc does not expose the bean's
+ * defining resource at runtime, so {@code resource} remains empty. Injection edges are captured during
+ * Quarkus augmentation and overlaid on the live inventory. The {@code scope} is the CDI
  * scope vocabulary ({@code ApplicationScoped}, {@code Singleton}, {@code RequestScoped}, {@code Dependent},
  * …) rather than Spring's {@code singleton}/{@code prototype}. {@code name} is the bean's EL name when it
  * is {@code @Named}, otherwise a synthetic decapitalized simple class name (most CDI beans are unnamed).
  * CDI qualifiers have no {@link BeanSummary} field — the DTO is the frozen UI contract — so they are not
  * surfaced. {@code aliases} is therefore always empty. For producer (<code>@Produces</code>) beans Arc reports
  * the declaring class as {@link Bean#getBeanClass()}, so such beans show their producer's class as the type;
- * this also makes the BootUI self-filter robust, since BootUI's own engine services are produced from
+ * definitions that share a display name intentionally share their captured edges too, matching the graph
+ * contract's existing name-based aggregation of duplicate definitions. This also makes the BootUI self-filter
+ * robust, since BootUI's own engine services are produced from
  * producer classes under {@code io.github.jdubois.bootui.quarkus}. The self-filter reuses the shared engine
  * {@link InternalPackageMatcher} scoped to {@code io.github.jdubois.bootui.quarkus}/{@code .core} (the same
  * prefixes {@code QuarkusScheduledTaskProvider} and the Log Tail/Exceptions captures use) rather than the
@@ -50,9 +55,15 @@ public final class QuarkusBeanProvider implements BeanProvider {
             List.of("io.quarkus.", "io.vertx.", "org.jboss.", "io.smallrye.", "org.eclipse.microprofile.", "io.netty.");
 
     private final BeanManager beanManager;
+    private final Map<String, List<String>> dependencies;
 
     public QuarkusBeanProvider(BeanManager beanManager) {
+        this(beanManager, QuarkusBeanDependencies.load());
+    }
+
+    QuarkusBeanProvider(BeanManager beanManager, Map<String, List<String>> dependencies) {
         this.beanManager = beanManager;
+        this.dependencies = dependencies;
     }
 
     @Override
@@ -75,11 +86,30 @@ public final class QuarkusBeanProvider implements BeanProvider {
             }
             summaries.add(toSummary(bean, beanClass, type));
         }
-        return summaries;
+        Set<String> visibleNames =
+                summaries.stream().map(BeanSummary::name).collect(java.util.stream.Collectors.toSet());
+        return summaries.stream()
+                .map(summary -> withDependencies(summary, visibleNames))
+                .toList();
     }
 
     private BeanSummary toSummary(Bean<?> bean, Class<?> beanClass, String type) {
         return new BeanSummary(name(bean, beanClass), type, scope(bean), null, List.of(), List.of(), classify(type));
+    }
+
+    private BeanSummary withDependencies(BeanSummary summary, Set<String> visibleNames) {
+        List<String> visibleDependencies =
+                new ArrayList<>(new LinkedHashSet<>(dependencies.getOrDefault(summary.name(), List.of())));
+        visibleDependencies.removeIf(name -> name.equals(summary.name()) || !visibleNames.contains(name));
+        visibleDependencies.sort(String::compareTo);
+        return new BeanSummary(
+                summary.name(),
+                summary.type(),
+                summary.scope(),
+                summary.resource(),
+                List.copyOf(visibleDependencies),
+                summary.aliases(),
+                summary.classification());
     }
 
     private String name(Bean<?> bean, Class<?> beanClass) {

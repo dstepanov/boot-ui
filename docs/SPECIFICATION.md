@@ -341,10 +341,9 @@ Features:
   - Keyboard-navigable: one graph tab stop, arrow/Home/End movement between SVG nodes, Enter/Space to focus, visible
     focus rings, and an `aria-label` with the full bean name.
   - Reduced-motion safe: the graph uses a deterministic static layout with no motion or transition.
-  - **Reduced fidelity on Quarkus:** Arc does not expose inter-bean `dependencies` at
-    runtime; graph mode renders a platform-specific explanation before selection and a clear "no recorded dependencies
-    or dependents" notice for each focused bean rather than an empty or misleading graph. Spring Boot Conditions
-    evidence is also explicitly unavailable.
+  - **Quarkus capture:** capture Arc's resolved injection edges during augmentation and overlay them on the live CDI
+    inventory through the same `BeanSummary.dependencies` contract. Defining resources and Spring Boot Conditions
+    evidence remain explicitly unavailable.
 
 Acceptance criteria:
 

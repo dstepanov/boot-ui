@@ -201,9 +201,9 @@ discovered via `LiquibaseFactoryUtil.getActiveLiquibaseFactories()`, the shared 
 action behind the same DTO contract) · `Scheduled Tasks`
 (→ `quarkus-scheduler`) · `Architecture` advisor (ArchUnit engine + rules run unmodified; Spring-stereotype rules
 simply match no classes and degrade to a no-op pass, while a few rules are already dual-framework via the shared
-`jakarta.*` annotations) · `Beans` (**Implemented** — → Arc/CDI `BeanManager.getBeans(...)`, build-time-retained beans
-only, so a few fields are reduced fidelity; graph mode supports bean search but shows no runtime edges or Spring Conditions
-evidence — see §5 appendix) · `Overview` (panel available; the scoring dashboard
+`jakarta.*` annotations) · `Beans` (**Implemented** — → Arc/CDI `BeanManager.getBeans(...)`, with resolved injection edges
+captured after Arc build-time validation and overlaid on the retained runtime inventory; defining resources and Spring
+Conditions evidence remain unavailable) · `Overview` (panel available; the scoring dashboard
 aggregates the advisor endpoints client-side, and `GET /bootui/api/overview` reports the Quarkus version + shell chrome).
 
 ### 5.3 Kept, with a rebuilt capture layer or reduced fidelity (12)

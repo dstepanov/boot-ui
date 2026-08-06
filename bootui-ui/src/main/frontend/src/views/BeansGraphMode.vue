@@ -258,11 +258,6 @@ async function loadConditionEvidence() {
 
 <template>
   <div class="beans-graph-mode">
-    <div v-if="isQuarkus" class="alert alert-info py-2 small" role="note">
-      <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
-      Quarkus Arc does not expose inter-bean dependency relationships at runtime. Bean search remains available, but
-      wiring and Spring Conditions evidence are not.
-    </div>
     <div v-if="inventoryTruncated" class="alert alert-info py-2 small" role="status">
       <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
       Loaded the first {{ allBeans.length }} of {{ inventoryTotal }} beans. Search and graph results are limited to this
