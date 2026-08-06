@@ -29,7 +29,8 @@ public class BootUiMcpProducer {
 
     @Produces
     @Singleton
-    public McpDispatcher mcpDispatcher(QuarkusMcpTools tools, Config config) {
+    public McpDispatcher mcpDispatcher(
+            QuarkusMcpTools tools, Config config, QuarkusMcpFailureReporter failureReporter) {
         int maxResults =
                 config.getOptionalValue("bootui.mcp.max-results", Integer.class).orElse(200);
         int maxConcurrentCalls = maxConcurrentCalls(config);
@@ -41,7 +42,8 @@ public class BootUiMcpProducer {
                 serverVersion(),
                 INSTRUCTIONS,
                 maxResults,
-                maxConcurrentCalls);
+                maxConcurrentCalls,
+                failureReporter);
     }
 
     public static int maxConcurrentCalls(Config config) {

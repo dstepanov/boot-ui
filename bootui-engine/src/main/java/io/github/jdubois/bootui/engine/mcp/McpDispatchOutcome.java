@@ -78,7 +78,8 @@ public sealed interface McpDispatchOutcome
      * A JSON-RPC protocol error (an {@code error} envelope).
      *
      * @param code the JSON-RPC error code (see {@link McpProtocol})
-     * @param message the human-readable error message
+     * @param message the human-readable error message; unexpected failures use the detail-free {@link
+     *     McpProtocol#INTERNAL_ERROR_MESSAGE}
      */
     record ProtocolError(int code, String message) implements McpDispatchOutcome {}
 }

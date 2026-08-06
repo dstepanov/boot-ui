@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -55,6 +56,7 @@ class McpDispatcherTests {
             args -> Map.of("id", args.id()));
 
     private final FakePolicy policy = new FakePolicy();
+    private final RecordingFailureReporter diagnostics = new RecordingFailureReporter();
 
     private McpDispatcher dispatcher() {
         return new McpDispatcher(
@@ -64,7 +66,8 @@ class McpDispatcherTests {
                 "1.2.3",
                 "instructions text",
                 50,
-                20);
+                20,
+                diagnostics);
     }
 
     @Test
@@ -232,15 +235,73 @@ class McpDispatcherTests {
     }
 
     @Test
-    void toolHandlerRuntimeExceptionBecomesProtocolError() {
+    void toolHandlerRuntimeExceptionBecomesDetailFreeInternalErrorAndIsReportedOnce() {
+        IllegalStateException failure = new IllegalStateException(
+                "password=hunter2 jdbc:postgresql://localhost/private /Users/admin/.ssh/id_rsa");
         McpTool boom = new McpTool("boom", "Boom.", McpToolSchema.NONE, "overview", false, args -> {
-            throw new IllegalStateException("kaboom");
+            throw failure;
         });
-        McpDispatcher dispatcher = new McpDispatcher(List.of(boom), policy, "1.0", "x", 50, 20);
+        McpDispatcher dispatcher = new McpDispatcher(List.of(boom), List.of(), policy, "1.0", "x", 50, 20, diagnostics);
 
         McpDispatchOutcome outcome = dispatcher.dispatch(call("boom"));
 
-        assertThat(outcome).isEqualTo(new ProtocolError(McpProtocol.INTERNAL_ERROR, "kaboom"));
+        assertThat(outcome)
+                .isEqualTo(new ProtocolError(McpProtocol.INTERNAL_ERROR, McpProtocol.INTERNAL_ERROR_MESSAGE));
+        assertThat(outcome.toString())
+                .doesNotContain("hunter2", "jdbc:postgresql", "/Users/admin", "IllegalStateException");
+        assertThat(diagnostics.count()).isEqualTo(1);
+        assertThat(diagnostics.failure()).isSameAs(failure);
+        assertThat(diagnostics.operation()).isEqualTo("dispatching a request");
+    }
+
+    @Test
+    void toolHandlerRuntimeExceptionForNotificationProducesNoResponseAndIsReportedOnce() {
+        IllegalStateException failure =
+                new IllegalStateException("SENSITIVE_NOTIFICATION_SENTINEL /private/runtime/path");
+        McpTool boom = new McpTool("boom", "Boom.", McpToolSchema.NONE, "overview", false, args -> {
+            throw failure;
+        });
+        McpDispatcher dispatcher = new McpDispatcher(List.of(boom), List.of(), policy, "1.0", "x", 50, 20, diagnostics);
+        McpRequest notification = new McpRequest(JSONRPC, "tools/call", true, null, "boom", null, null, null);
+
+        McpDispatchOutcome outcome = dispatcher.dispatch(notification);
+
+        assertThat(outcome).isInstanceOf(NoResponse.class);
+        assertThat(outcome.toString()).doesNotContain("SENSITIVE_NOTIFICATION_SENTINEL", "/private/runtime/path");
+        assertThat(diagnostics.count()).isEqualTo(1);
+        assertThat(diagnostics.failure()).isSameAs(failure);
+        assertThat(diagnostics.operation()).isEqualTo("dispatching a request");
+    }
+
+    @Test
+    void panelPolicyRuntimeExceptionBecomesDetailFreeInternalErrorAndIsReportedOnce() {
+        IllegalStateException failure = new IllegalStateException("token=ghp_sensitive_policy_token");
+        policy.failure = failure;
+
+        McpDispatchOutcome outcome = dispatcher().dispatch(call("get_overview"));
+
+        assertThat(outcome)
+                .isEqualTo(new ProtocolError(McpProtocol.INTERNAL_ERROR, McpProtocol.INTERNAL_ERROR_MESSAGE));
+        assertThat(outcome.toString()).doesNotContain("ghp_sensitive_policy_token");
+        assertThat(diagnostics.count()).isEqualTo(1);
+        assertThat(diagnostics.failure()).isSameAs(failure);
+    }
+
+    @Test
+    void toolHandlerErrorBecomesDetailFreeInternalErrorAndIsReportedOnce() {
+        AssertionError failure = new AssertionError("SELECT secret FROM credentials");
+        McpTool boom = new McpTool("boom", "Boom.", McpToolSchema.NONE, "overview", false, args -> {
+            throw failure;
+        });
+        McpDispatcher dispatcher = new McpDispatcher(List.of(boom), List.of(), policy, "1.0", "x", 50, 20, diagnostics);
+
+        McpDispatchOutcome outcome = dispatcher.dispatch(call("boom"));
+
+        assertThat(outcome)
+                .isEqualTo(new ProtocolError(McpProtocol.INTERNAL_ERROR, McpProtocol.INTERNAL_ERROR_MESSAGE));
+        assertThat(outcome.toString()).doesNotContain("SELECT", "credentials", "AssertionError");
+        assertThat(diagnostics.count()).isEqualTo(1);
+        assertThat(diagnostics.failure()).isSameAs(failure);
     }
 
     @Test
@@ -326,9 +387,13 @@ class McpDispatcherTests {
     private static final class FakePolicy implements McpPanelPolicy {
         private final Set<String> disabled = new HashSet<>();
         private final Set<String> readOnly = new HashSet<>();
+        private RuntimeException failure;
 
         @Override
         public boolean isEnabled(String panelId) {
+            if (failure != null) {
+                throw failure;
+            }
             return !disabled.contains(panelId);
         }
 
@@ -345,6 +410,31 @@ class McpDispatcherTests {
         @Override
         public String readOnlyReason(String panelId) {
             return "read-only:" + panelId;
+        }
+    }
+
+    private static final class RecordingFailureReporter implements McpFailureReporter {
+        private final AtomicInteger count = new AtomicInteger();
+        private final AtomicReference<String> operation = new AtomicReference<>();
+        private final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        @Override
+        public void report(String operation, Throwable failure) {
+            count.incrementAndGet();
+            this.operation.set(operation);
+            this.failure.set(failure);
+        }
+
+        private int count() {
+            return count.get();
+        }
+
+        private String operation() {
+            return operation.get();
+        }
+
+        private Throwable failure() {
+            return failure.get();
         }
     }
 }

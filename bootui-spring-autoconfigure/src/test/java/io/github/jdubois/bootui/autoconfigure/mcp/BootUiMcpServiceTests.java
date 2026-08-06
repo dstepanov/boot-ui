@@ -3,10 +3,13 @@ package io.github.jdubois.bootui.autoconfigure.mcp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.jdubois.bootui.autoconfigure.BootUiProperties;
+import io.github.jdubois.bootui.engine.mcp.McpFailureReporter;
 import io.github.jdubois.bootui.engine.mcp.McpTool;
 import io.github.jdubois.bootui.engine.mcp.McpToolSchema;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -164,21 +167,53 @@ class BootUiMcpServiceTests {
     }
 
     @Test
-    void toolHandlerExceptionWithoutMessageReportsGenericErrorMessage() {
+    void toolHandlerExceptionReturnsCanonicalInternalErrorWithoutSensitiveDetails() {
+        IllegalStateException failure =
+                new IllegalStateException("token=ghp_secret jdbc:mysql://localhost/private /home/admin/key.pem");
         List<McpTool> tools = List.of(new McpTool(
                 "get_overview", "Read the overview.", McpToolSchema.NONE, BootUiPanels.OVERVIEW, false, args -> {
-                    throw new IllegalStateException();
+                    throw failure;
                 }));
-        BootUiMcpService failing = new BootUiMcpService(new BootUiMcpTools(tools), properties, objectMapper, "1.2.3");
+        RecordingFailureReporter diagnostics = new RecordingFailureReporter();
+        BootUiMcpService failing = new BootUiMcpService(tools, properties, objectMapper, "1.2.3", diagnostics);
 
         JsonNode response = failing.handle(callRequest("get_overview", 9));
 
+        assertThat(response.toString())
+                .isEqualTo("{\"jsonrpc\":\"2.0\",\"id\":9,\"error\":{\"code\":-32603,\"message\":\"Internal error\"}}");
         assertThat(response.path("error").path("code").asInt()).isEqualTo(-32603);
-        assertThat(response.path("error").path("message").asString()).isEqualTo("Error");
+        assertThat(response.path("error").path("message").asString()).isEqualTo("Internal error");
+        assertThat(response.toString())
+                .doesNotContain("ghp_secret", "jdbc:mysql", "/home/admin", "IllegalStateException");
+        assertThat(diagnostics.count()).isEqualTo(1);
+        assertThat(diagnostics.failure()).isSameAs(failure);
+        assertThat(diagnostics.operation()).isEqualTo("dispatching a request");
     }
 
     @Test
-    void toolResultSerializationFailureReturnsInternalError() {
+    void toolHandlerExceptionForNotificationProducesNoBodyAndIsReportedOnce() {
+        IllegalStateException failure =
+                new IllegalStateException("SENSITIVE_NOTIFICATION_SENTINEL /private/spring/runtime/path");
+        List<McpTool> tools = List.of(new McpTool(
+                "get_overview", "Read the overview.", McpToolSchema.NONE, BootUiPanels.OVERVIEW, false, args -> {
+                    throw failure;
+                }));
+        RecordingFailureReporter diagnostics = new RecordingFailureReporter();
+        BootUiMcpService failing = new BootUiMcpService(tools, properties, objectMapper, "1.2.3", diagnostics);
+
+        JsonNode response = failing.handle(callNotification("get_overview"));
+
+        assertThat(response).isNull();
+        assertThat(diagnostics.count()).isEqualTo(1);
+        assertThat(diagnostics.failure()).isSameAs(failure);
+        assertThat(diagnostics.failure().getMessage())
+                .as("the original detail remains available only to server diagnostics")
+                .contains("SENSITIVE_NOTIFICATION_SENTINEL");
+        assertThat(diagnostics.operation()).isEqualTo("dispatching a request");
+    }
+
+    @Test
+    void toolResultSerializationFailureReturnsCanonicalInternalErrorAndIsReportedOnce() {
         List<McpTool> tools = List.of(new McpTool(
                 "get_overview",
                 "Read the overview.",
@@ -188,14 +223,21 @@ class BootUiMcpServiceTests {
                 args -> new Object() {
                     @SuppressWarnings("unused")
                     public String getValue() {
-                        throw new IllegalStateException("cannot serialize");
+                        throw new IllegalStateException(
+                                "password=hunter2 SELECT * FROM secrets /Users/admin/private.txt");
                     }
                 }));
-        BootUiMcpService failing = new BootUiMcpService(new BootUiMcpTools(tools), properties, objectMapper, "1.2.3");
+        RecordingFailureReporter diagnostics = new RecordingFailureReporter();
+        BootUiMcpService failing = new BootUiMcpService(tools, properties, objectMapper, "1.2.3", diagnostics);
 
         JsonNode response = failing.handle(callRequest("get_overview", 10));
 
         assertThat(response.path("error").path("code").asInt()).isEqualTo(-32603);
+        assertThat(response.path("error").path("message").asString()).isEqualTo("Internal error");
+        assertThat(response.toString()).doesNotContain("hunter2", "SELECT", "/Users/admin", "IllegalStateException");
+        assertThat(diagnostics.count()).isEqualTo(1);
+        assertThat(diagnostics.failure()).isNotNull();
+        assertThat(diagnostics.operation()).isEqualTo("serializing a tool result");
     }
 
     private static McpToolSchema schema() {
@@ -207,6 +249,13 @@ class BootUiMcpServiceTests {
         params.put("name", toolName);
         params.set("arguments", JsonNodeFactory.instance.objectNode());
         return request("tools/call", id, params);
+    }
+
+    private ObjectNode callNotification(String toolName) {
+        ObjectNode params = JsonNodeFactory.instance.objectNode();
+        params.put("name", toolName);
+        params.set("arguments", JsonNodeFactory.instance.objectNode());
+        return request("tools/call", null, params);
     }
 
     private ObjectNode params(String key, String value) {
@@ -226,5 +275,30 @@ class BootUiMcpServiceTests {
             request.set("params", params);
         }
         return request;
+    }
+
+    private static final class RecordingFailureReporter implements McpFailureReporter {
+        private final AtomicInteger count = new AtomicInteger();
+        private final AtomicReference<String> operation = new AtomicReference<>();
+        private final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        @Override
+        public void report(String operation, Throwable failure) {
+            count.incrementAndGet();
+            this.operation.set(operation);
+            this.failure.set(failure);
+        }
+
+        private int count() {
+            return count.get();
+        }
+
+        private String operation() {
+            return operation.get();
+        }
+
+        private Throwable failure() {
+            return failure.get();
+        }
     }
 }

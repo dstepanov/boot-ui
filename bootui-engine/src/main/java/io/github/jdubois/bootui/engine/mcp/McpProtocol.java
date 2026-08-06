@@ -65,6 +65,8 @@ public final class McpProtocol {
     public static final String MISSING_ID_ARGUMENT_MESSAGE = "Missing required argument: id";
     /** Fallback in-band tool-error text when a tool fails without a message. */
     public static final String TOOL_CALL_FAILED_MESSAGE = "Tool call failed";
+    /** Standard JSON-RPC message for an unexpected server-side failure. */
+    public static final String INTERNAL_ERROR_MESSAGE = "Internal error";
     /** Reported when the server refuses another concurrent {@code tools/call}. */
     public static final String RATE_LIMITED_MESSAGE = "MCP server is at capacity; try again shortly.";
 

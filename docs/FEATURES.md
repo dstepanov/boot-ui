@@ -1556,6 +1556,9 @@ absent) are simply not advertised. The server inherits BootUI's full safety mode
   read-only or `bootui.read-only=true`, returning a clear tool error instead of running.
 - Values pass through the same secret masking and `bootui.expose-values` mode as the REST API, and paginated reads are
   capped by `bootui.mcp.max-results`.
+- Unexpected server failures return only JSON-RPC `-32603` with the message `Internal error`; exception messages, stack
+  traces, paths, queries, and credentials are never included. BootUI logs the original throwable once on the server,
+  while expected protocol, disabled-server, and panel-policy errors keep their actionable messages.
 
 Connection details (transport, protocol revision, and the `bootui.mcp.max-results` cap) are shown alongside a
 ready-to-use, copyable MCP client configuration JSON pointing at this running app — the `servers` block a GitHub Copilot
