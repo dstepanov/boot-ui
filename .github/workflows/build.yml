@@ -62,32 +62,6 @@ jobs:
         working-directory: bootui-ui/src/main/frontend
         run: npm run format:check
 
-      - name: Install Playwright dependencies
-        working-directory: bootui-spring-sample-app/e2e
-        run: npm ci --ignore-scripts
-
-      - name: Check Playwright formatting
-        working-directory: bootui-spring-sample-app/e2e
-        run: npm run format:check
-
-      - name: Install Playwright browsers
-        working-directory: bootui-spring-sample-app/e2e
-        run: ./node_modules/.bin/playwright install --with-deps chromium
-
-      - name: Run Playwright end-to-end tests
-        working-directory: bootui-spring-sample-app/e2e
-        run: npm test
-
-      - name: Run WebFlux Playwright end-to-end tests
-        if: ${{ !cancelled() }}
-        working-directory: bootui-spring-sample-app/e2e
-        run: npm run test:webflux
-
-      - name: Run custom-path Playwright end-to-end tests
-        if: ${{ !cancelled() }}
-        working-directory: bootui-spring-sample-app/e2e
-        run: npm run test:custom-path
-
       - name: Publish Java test report
         if: ${{ !cancelled() }}
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
@@ -108,69 +82,6 @@ jobs:
           fail-on-error: false
           fail-on-empty: false
 
-      - name: Publish end-to-end test report
-        if: ${{ !cancelled() }}
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
-        with:
-          name: End-to-end tests (Playwright)
-          path: bootui-spring-sample-app/e2e/test-results/junit/results.xml
-          reporter: jest-junit
-          fail-on-error: false
-          fail-on-empty: false
-
-      - name: Publish WebFlux end-to-end test report
-        if: ${{ !cancelled() }}
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
-        with:
-          name: WebFlux end-to-end tests (Playwright)
-          path: bootui-spring-sample-app/e2e/test-results-webflux/junit/results.xml
-          reporter: jest-junit
-          fail-on-error: false
-          fail-on-empty: false
-
-      - name: Publish custom-path end-to-end test report
-        if: ${{ !cancelled() }}
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
-        with:
-          name: Custom-path end-to-end tests (Playwright)
-          path: bootui-spring-sample-app/e2e/test-results-custom-path/junit/results.xml
-          reporter: jest-junit
-          fail-on-error: false
-          fail-on-empty: false
-
-      - name: Upload Playwright report
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report
-          path: |
-            bootui-spring-sample-app/e2e/playwright-report/
-            bootui-spring-sample-app/e2e/test-results/
-          if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Upload WebFlux Playwright report
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report-webflux
-          path: |
-            bootui-spring-sample-app/e2e/playwright-report-webflux/
-            bootui-spring-sample-app/e2e/test-results-webflux/
-          if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Upload custom-path Playwright report
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report-custom-path
-          path: |
-            bootui-spring-sample-app/e2e/playwright-report-custom-path/
-            bootui-spring-sample-app/e2e/test-results-custom-path/
-          if-no-files-found: ignore
-          retention-days: 7
-
       - name: Upload JUnit test reports
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
@@ -179,9 +90,6 @@ jobs:
           path: |
             **/target/surefire-reports/TEST-*.xml
             bootui-ui/src/main/frontend/test-results/vitest-junit.xml
-            bootui-spring-sample-app/e2e/test-results/junit/results.xml
-            bootui-spring-sample-app/e2e/test-results-webflux/junit/results.xml
-            bootui-spring-sample-app/e2e/test-results-custom-path/junit/results.xml
           if-no-files-found: ignore
           retention-days: 7
 
@@ -192,6 +100,116 @@ jobs:
           name: bootui-spring-sample-app
           path: bootui-spring-sample-app/target/*.jar
           if-no-files-found: warn
+          retention-days: 7
+
+  # The three Spring Playwright suites (main MVC, WebFlux, custom-path) used to run sequentially in the
+  # `build` job, only after the full reactor `clean install` finished. Each suite only needs its own
+  # sample-app module(s) built (mirroring the `quarkus-e2e` job's `-pl ... -am -DskipTests install`
+  # pattern below), so they run here as an independent parallel matrix, decoupled from the `build` job
+  # entirely: they can start as soon as a runner is available instead of waiting on the whole reactor.
+  e2e:
+    name: Spring end-to-end (${{ matrix.suite.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - name: mvc
+            modules: bootui-spring-sample-app
+            npm_script: test
+            report_dir: playwright-report
+            results_dir: test-results
+            format_check: true
+          - name: webflux
+            modules: bootui-spring-webflux-sample-app
+            npm_script: test:webflux
+            report_dir: playwright-report-webflux
+            results_dir: test-results-webflux
+            format_check: false
+          - name: custom-path
+            modules: bootui-spring-sample-app,bootui-spring-webflux-sample-app
+            npm_script: test:custom-path
+            report_dir: playwright-report-custom-path
+            results_dir: test-results-custom-path
+            format_check: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: |
+            bootui-spring-sample-app/e2e/package-lock.json
+
+      # Only builds the module(s) this suite's webServer(s) actually boot, not the whole reactor.
+      - name: Build sample app module(s) for this suite
+        run: ./mvnw -T 1C -B -ntp -pl ${{ matrix.suite.modules }} -am -DskipTests install
+
+      - name: Install Playwright dependencies
+        working-directory: bootui-spring-sample-app/e2e
+        run: npm ci --ignore-scripts
+
+      - name: Check Playwright formatting
+        if: matrix.suite.format_check
+        working-directory: bootui-spring-sample-app/e2e
+        run: npm run format:check
+
+      # Cache the downloaded browser binaries by the pinned @playwright/test version, so a run only
+      # re-downloads chromium when the package-lock.json version actually changes. --with-deps still runs
+      # every time to keep the runner's OS-level dependencies current, but it is fast when the browser
+      # binary itself is already cached.
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bootui-spring-sample-app/e2e/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        working-directory: bootui-spring-sample-app/e2e
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Run Playwright end-to-end tests
+        working-directory: bootui-spring-sample-app/e2e
+        run: npm run ${{ matrix.suite.npm_script }}
+
+      - name: Publish end-to-end test report
+        if: ${{ !cancelled() }}
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        with:
+          name: End-to-end tests (Playwright, ${{ matrix.suite.name }})
+          path: bootui-spring-sample-app/e2e/${{ matrix.suite.results_dir }}/junit/results.xml
+          reporter: jest-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ matrix.suite.name }}
+          path: |
+            bootui-spring-sample-app/e2e/${{ matrix.suite.report_dir }}/
+            bootui-spring-sample-app/e2e/${{ matrix.suite.results_dir }}/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload JUnit test report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-test-reports-e2e-${{ matrix.suite.name }}
+          path: bootui-spring-sample-app/e2e/${{ matrix.suite.results_dir }}/junit/results.xml
+          if-no-files-found: ignore
           retention-days: 7
 
   quarkus-e2e:
@@ -239,6 +257,16 @@ jobs:
       - name: Check Playwright formatting
         working-directory: bootui-quarkus-sample-app/e2e
         run: npm run format:check
+
+      # Cache the downloaded browser binaries by the pinned @playwright/test version, so a run only
+      # re-downloads chromium when the package-lock.json version actually changes. --with-deps still runs
+      # every time to keep the runner's OS-level dependencies current, but it is fast when the browser
+      # binary itself is already cached.
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bootui-quarkus-sample-app/e2e/package-lock.json') }}
 
       - name: Install Playwright browsers
         working-directory: bootui-quarkus-sample-app/e2e
