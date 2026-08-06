@@ -1275,7 +1275,8 @@ function onGlobalKeydown(e) {
 .bootui-nav-group__toggle:focus-visible,
 .nav-hamburger:focus-visible,
 .cp-trigger:focus-visible,
-.theme-toggle:focus-visible {
+.theme-toggle:focus-visible,
+:global(.bootui-keyboard-target:focus-visible) {
   outline: 2px solid var(--bootui-blue);
   outline-offset: 2px;
 }

@@ -158,6 +158,37 @@ describe('LiveActivity', () => {
     expect(row.text()).not.toContain('N+1')
   })
 
+  it('keeps row pointer activation and nested keyboard actions independent', async () => {
+    const child = requestEntry({
+      id: 'sql-1',
+      parentId: 'req-1',
+      profileable: false,
+      type: 'SQL',
+      summary: 'select from todo'
+    })
+    const fetchMock = stubFetch(activityReport({entries: [requestEntry(), child]}), requestProfile())
+    vi.stubGlobal('fetch', fetchMock)
+
+    wrapper = mount(LiveActivity)
+    await flushPromises()
+
+    const row = wrapper.get('tr.activity-row-clickable')
+    expect(row.attributes('role')).toBeUndefined()
+    expect(row.attributes('tabindex')).toBeUndefined()
+
+    const disclosure = row.get('button.activity-disclosure')
+    await disclosure.trigger('keydown', {key: 'Enter'})
+    await disclosure.trigger('click')
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('api/activity/request/'))).toHaveLength(0)
+
+    await row.trigger('click')
+    await flushPromises()
+
+    await row.get('button.btn-outline-primary').trigger('click')
+    await flushPromises()
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('api/activity/request/'))).toHaveLength(2)
+  })
+
   it('renders a scheduled-task-run entry with its own icon and links the KPI card to the Scheduled Tasks panel', async () => {
     const scheduledEntry = {
       id: 'sched-1',
