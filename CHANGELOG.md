@@ -5,10 +5,18 @@ All notable changes to BootUI are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.13.0] - 2026-08-06
+
+Feature release headlined by a **dependency graph mode for the Beans panel** on both Spring and Quarkus, alongside the
+Spring WebFlux security/REST Client/messaging work, configurable BootUI mounts, and another accessibility hardening pass.
 
 ### Added
 
+- **Beans panel dependency graph.** The panel now opens on an interactive SVG neighbourhood graph — bounded, cycle-safe
+  breadth-first traversal (depth 3, 60 nodes) with role-colour-coded nodes, keyboard navigation, zoom controls, and
+  classification filters — defaulting to the application bean with the most direct dependencies/dependents. A header
+  toggle switches to the existing server-paged list, which now links back into the graph. Ships on both Spring and
+  Quarkus, with Quarkus reporting reduced-fidelity dependency data (#656).
 - **Spring WebFlux security coverage.** A dedicated 25-rule reactive Security advisor now evaluates
   `SecurityWebFilterChain` configuration across authorization, CSRF, CORS, headers, Actuator exposure, OAuth2/JWT,
   configuration, and session policy. The raw Spring Security panel also maps reactive chains, filters, endpoint
@@ -25,6 +33,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The Build workflow now runs shared/Spring/Quarkus jobs in parallel with cached Playwright browsers and frontend
+  tooling**, cutting CI turnaround without changing what is verified (#708, #710, #711, #712).
 - **Custom UI and API mounts now work end to end on Spring MVC, Spring WebFlux, and Quarkus.** `bootui.path` moves the
   shell, assets, APIs, streams, downloads, authentication cookies, and access guards together, while `bootui.api-path`
   can override the derived `<bootui.path>/api` mount. Both compose once with the host framework's application root,
@@ -72,6 +82,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
+- **MCP tool-call failures no longer leak internal exception details.** An unexpected server-side error during a
+  `tools/call` now returns the standard, detail-free JSON-RPC internal error to the caller, while the original
+  exception and stack trace are still logged server-side for diagnostics (#705).
 - **Patched vulnerable documentation and frontend build/test dependencies** by updating `immutable` to 5.1.9,
   `linkify-it` to 5.0.2, `fast-uri` to 3.1.5, and every affected `brace-expansion` line: the documentation toolchain to
   1.1.18 and the frontend line through the 2.1.4 backport to its final 5.0.9 release. These packages are not part of
