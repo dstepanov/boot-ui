@@ -485,4 +485,63 @@ describe('Beans — graph loading state', () => {
     expect(missing.attributes('tabindex')).toBe('-1')
     expect(missing.attributes('aria-label')).toContain('not present in the loaded bean inventory')
   })
+
+  it('zooms the graph in, out, and back to its default scale', async () => {
+    const focus = bean('orderService', ['orderRepository'])
+    const dependency = bean('orderRepository')
+    const wrapper = mount(BeanGraph, {
+      props: {
+        graph: {
+          nodes: [
+            {name: 'orderService', depth: 0, role: 'focus'},
+            {name: 'orderRepository', depth: 1, role: 'dep'}
+          ],
+          edges: [{from: 'orderService', to: 'orderRepository'}],
+          truncated: false
+        },
+        byName: new Map([
+          ['orderService', focus],
+          ['orderRepository', dependency]
+        ]),
+        definitionsByName: new Map([
+          ['orderService', [focus]],
+          ['orderRepository', [dependency]]
+        ]),
+        focusName: 'orderService'
+      }
+    })
+    const svg = wrapper.find('svg')
+    const defaultWidth = Number(svg.attributes('width'))
+
+    await wrapper.find('[aria-label="Zoom in"]').trigger('click')
+    expect(Number(svg.attributes('width'))).toBeGreaterThan(defaultWidth)
+    expect(wrapper.find('[aria-label="Reset zoom"]').text()).toBe('120%')
+
+    await wrapper.find('[aria-label="Zoom out"]').trigger('click')
+    expect(Number(svg.attributes('width'))).toBe(defaultWidth)
+
+    await wrapper.find('[aria-label="Zoom out"]').trigger('click')
+    expect(Number(svg.attributes('width'))).toBeLessThan(defaultWidth)
+    expect(wrapper.find('[aria-label="Reset zoom"]').text()).toBe('80%')
+
+    await wrapper.find('[aria-label="Reset zoom"]').trigger('click')
+    expect(Number(svg.attributes('width'))).toBe(defaultWidth)
+    expect(wrapper.find('[aria-label="Reset zoom"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.find('[aria-label="Zoom out"]').trigger('click')
+    await wrapper.find('[aria-label="Zoom out"]').trigger('click')
+    expect(wrapper.find('[aria-label="Zoom out"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[aria-label="Reset zoom"]').text()).toBe('60%')
+
+    await wrapper.find('[aria-label="Reset zoom"]').trigger('click')
+    for (let step = 0; step < 5; step += 1) {
+      await wrapper.find('[aria-label="Zoom in"]').trigger('click')
+    }
+    expect(wrapper.find('[aria-label="Zoom in"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[aria-label="Reset zoom"]').text()).toBe('200%')
+
+    await wrapper.setProps({focusName: 'orderRepository'})
+    expect(Number(svg.attributes('width'))).toBe(defaultWidth)
+    expect(wrapper.find('[aria-label="Reset zoom"]').text()).toBe('100%')
+  })
 })

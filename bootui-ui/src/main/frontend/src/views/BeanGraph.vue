@@ -1,5 +1,5 @@
 <script setup>
-import {computed, nextTick, ref} from 'vue'
+import {computed, nextTick, ref, watch} from 'vue'
 import {MAX_GRAPH_DEPTH, MAX_GRAPH_NODES} from '../utils/useBeanGraph.js'
 
 const props = defineProps({
@@ -15,6 +15,18 @@ const props = defineProps({
 
 const emit = defineEmits(['focus'])
 const graphElement = ref(null)
+const zoom = ref(1)
+const MIN_ZOOM = 0.6
+const MAX_ZOOM = 2
+const ZOOM_STEP = 0.2
+const zoomPercent = computed(() => Math.round(zoom.value * 100))
+
+watch(
+  () => props.focusName,
+  () => {
+    zoom.value = 1
+  }
+)
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 const NODE_W = 148
@@ -170,6 +182,14 @@ function onKeydown(event, name) {
     nodes[targetIndex]?.focus()
   }
 }
+
+function zoomBy(delta) {
+  zoom.value = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number((zoom.value + delta).toFixed(1))))
+}
+
+function resetZoom() {
+  zoom.value = 1
+}
 </script>
 
 <template>
@@ -202,6 +222,39 @@ function onKeydown(event, name) {
       <strong>{{ focusName }}</strong> has no recorded dependencies or dependents.
     </div>
 
+    <div v-if="graph.nodes.length > 1" class="bean-graph-toolbar" role="group" aria-label="Graph zoom">
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-secondary"
+        aria-label="Zoom out"
+        title="Zoom out"
+        :disabled="zoom <= MIN_ZOOM"
+        @click="zoomBy(-ZOOM_STEP)"
+      >
+        <i class="bi bi-dash-lg" aria-hidden="true"></i>
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-secondary bean-graph-zoom-reset"
+        aria-label="Reset zoom"
+        title="Reset zoom"
+        :disabled="zoom === 1"
+        @click="resetZoom"
+      >
+        {{ zoomPercent }}%
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-secondary"
+        aria-label="Zoom in"
+        title="Zoom in"
+        :disabled="zoom >= MAX_ZOOM"
+        @click="zoomBy(ZOOM_STEP)"
+      >
+        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+      </button>
+    </div>
+
     <div
       v-if="graph.nodes.length > 1"
       class="bean-graph-scroll"
@@ -210,8 +263,8 @@ function onKeydown(event, name) {
     >
       <svg
         ref="graphElement"
-        :width="layout.svgW"
-        :height="layout.svgH"
+        :width="Math.round(layout.svgW * zoom)"
+        :height="Math.round(layout.svgH * zoom)"
         :viewBox="`0 0 ${layout.svgW} ${layout.svgH}`"
         class="bean-graph-svg"
         role="group"
@@ -321,12 +374,40 @@ function onKeydown(event, name) {
   background: var(--bootui-surface-alt);
   border: 1px solid var(--bootui-border);
   border-radius: var(--bootui-radius-md);
-  min-height: 200px;
+  height: clamp(20rem, 55vh, 36rem);
+}
+
+.bean-graph-toolbar {
+  align-self: flex-end;
+  display: flex;
+}
+
+.bean-graph-toolbar .btn {
+  border-radius: 0;
+  min-width: 2.25rem;
+}
+
+.bean-graph-toolbar .btn:first-child {
+  border-radius: var(--bootui-radius-sm) 0 0 var(--bootui-radius-sm);
+}
+
+.bean-graph-toolbar .btn:last-child {
+  border-radius: 0 var(--bootui-radius-sm) var(--bootui-radius-sm) 0;
+}
+
+.bean-graph-toolbar .btn + .btn {
+  margin-left: -1px;
+}
+
+.bean-graph-zoom-reset {
+  font-family: var(--bs-font-monospace);
+  min-width: 4.25rem !important;
 }
 
 /* ── SVG base ───────────────────────────────────────────────────────────────── */
 .bean-graph-svg {
   display: block;
+  margin: 0 auto;
 }
 
 /* ── Arrowhead ──────────────────────────────────────────────────────────────── */

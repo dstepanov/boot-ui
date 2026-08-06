@@ -903,6 +903,7 @@ contains only host-application beans. A search field accepts a bean name, alias,
 concentric-ring SVG showing the focused bean at the centre, its direct
 dependencies (beans it depends on, coloured blue), its direct dependents (beans that depend on it, coloured green),
 mutual / cycle nodes (coloured amber), and deeper-hop nodes (grey) up to three hops away and sixty nodes in total.
+Zoom-out, reset, and zoom-in controls scale the graph from 60% to 200% while its scroll region keeps large layouts bounded.
 Clicking any node re-focuses the graph on that bean so you can navigate the neighbourhood iteratively. When the
 sixty-node or three-hop limit is hit, a notice identifies the bound and invites you to re-focus. Duplicate bean names are
 combined deterministically and explained instead of silently dropping one definition. A focused-bean details area shows

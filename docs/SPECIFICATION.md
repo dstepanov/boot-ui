@@ -319,6 +319,8 @@ Features:
   - Renders a concentric-ring SVG neighbourhood centred on the focus bean: direct
     dependencies (focus → node), direct dependents (node → focus), mutual/cycle nodes, and
     deeper-hop nodes up to depth 3 and 60 nodes total.
+  - Provides keyboard-accessible zoom-out, reset, and zoom-in controls from 60% to 200%; the bounded graph region scrolls
+    when the scaled SVG exceeds its viewport.
   - Nodes are colour-coded by role (focus, dependency, dependent, mutual, deep) in both
     light and dark themes at WCAG 2.1 AA contrast.
   - Clicking any node navigates the graph to that bean's neighbourhood.

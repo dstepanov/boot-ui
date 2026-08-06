@@ -178,7 +178,21 @@ test.describe('Beans view', () => {
 
       // The SVG graph should appear
       const graphSvg = page.locator('svg.bean-graph-svg')
+      const graphScroll = page.locator('.bean-graph-scroll')
       await expect(graphSvg).toBeVisible()
+      const defaultWidth = Number(await graphSvg.getAttribute('width'))
+      const defaultViewportHeight = await graphScroll.evaluate((element) => element.clientHeight)
+      const defaultScrollHeight = await graphScroll.evaluate((element) => element.scrollHeight)
+
+      await page.getByRole('button', {name: 'Zoom in'}).click()
+      await expect(page.getByRole('button', {name: 'Reset zoom'})).toHaveText('120%')
+      await expect.poll(async () => Number(await graphSvg.getAttribute('width'))).toBeGreaterThan(defaultWidth)
+      await expect.poll(async () => graphScroll.evaluate((element) => element.clientHeight)).toBe(defaultViewportHeight)
+      await expect
+        .poll(async () => graphScroll.evaluate((element) => element.scrollHeight))
+        .toBeGreaterThan(defaultScrollHeight)
+      await page.getByRole('button', {name: 'Reset zoom'}).click()
+      await expect.poll(async () => Number(await graphSvg.getAttribute('width'))).toBe(defaultWidth)
 
       // The focused bean node should be present with aria label
       const focusNode = page.locator('[aria-label*="orderService"][aria-pressed="true"]')
