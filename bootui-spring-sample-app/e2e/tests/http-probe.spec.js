@@ -25,6 +25,25 @@ test.describe('HTTP Probe view', () => {
     await expect(page.locator('.form-text', {hasText: 'Content-Type:'})).toBeVisible()
   })
 
+  test('Enter requires confirmation before sending an unsafe request', async ({openView, page}) => {
+    const probeRequests = []
+    page.on('request', (request) => {
+      if (request.url().endsWith('/bootui/api/http-probe')) probeRequests.push(request)
+    })
+    await openView('http-probe', 'HTTP Probe')
+    await page.locator('select.form-select').selectOption('DELETE')
+    const path = page.getByPlaceholder('/api/sample/hello')
+    await path.fill('/api/hello')
+
+    await path.press('Enter')
+
+    await expect(page.getByRole('heading', {name: 'Send DELETE request?'})).toBeVisible()
+    expect(probeRequests).toHaveLength(0)
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('heading', {name: 'Send DELETE request?'})).toBeHidden()
+    expect(probeRequests).toHaveLength(0)
+  })
+
   test('clear resets the form back to defaults', async ({openView, page}) => {
     await openView('http-probe', 'HTTP Probe')
 

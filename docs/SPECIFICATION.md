@@ -367,6 +367,7 @@ Features:
 - Add a runtime-only override for a new property key.
 - Edit a runtime override.
 - Remove a runtime override.
+- Require explicit confirmation before creating, updating, or removing an override file entry.
 - Show whether a displayed value comes from a BootUI runtime override.
 - Clearly label modified values as local, runtime-only, and not persisted to `application.properties`, environment
   variables, or config server.
@@ -384,6 +385,8 @@ Acceptance criteria:
 - BootUI never writes secrets or modified values back to source files by default.
 - Every property mutation is local-development-only and is persisted only to BootUI's override file,
   `.bootui/application-bootui.properties` by default.
+- The UI does not write the override file until the developer explicitly confirms the pending create, update, or remove
+  action.
 - Mutating a property returns a clear result that states whether the new value is visible in the Spring `Environment`
   and whether restart/rebind may be required.
 
@@ -692,11 +695,13 @@ Features:
 - Normalize method and path.
 - Restrict targets to localhost.
 - Support request bodies only for methods that can carry a body.
+- Require explicit confirmation before sending any method other than `GET` or `HEAD`.
 - Display status, selected response headers, body, timing, and errors.
 
 Acceptance criteria:
 
 - BootUI never proxies arbitrary external URLs.
+- `GET` and `HEAD` probes run directly; unsafe probes do not reach the backend until the developer confirms them.
 - Unsafe-body behavior is explicit and predictable.
 - Response headers are filtered to a small allow-list.
 
@@ -1468,6 +1473,7 @@ Acceptance criteria:
 - The panel fails closed, returning a stable empty report with an explained unavailable reason when thread information
   cannot be read.
 - The raw dump download is a `POST` and is blocked when the panel is read-only.
+- The UI does not issue the download `POST` until the developer explicitly confirms the capture.
 
 ## 6. Technical architecture
 

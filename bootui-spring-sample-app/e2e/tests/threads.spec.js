@@ -27,4 +27,20 @@ test.describe('Threads view', () => {
     await page.getByPlaceholder(/Filter by name, state, or stack frame/).fill('zzz-no-such-thread')
     await expect(page.locator('text=No threads match your filters.')).toBeVisible()
   })
+
+  test('requires confirmation before requesting a thread dump', async ({openView, page}) => {
+    const downloadRequests = []
+    page.on('request', (request) => {
+      if (request.url().includes('/bootui/api/threads/download')) downloadRequests.push(request)
+    })
+    await openView('threads', 'Threads')
+
+    await page.getByRole('button', {name: /Download dump/}).click()
+
+    await expect(page.getByRole('heading', {name: 'Download thread dump?'})).toBeVisible()
+    expect(downloadRequests).toHaveLength(0)
+    await page.getByRole('button', {name: 'Cancel'}).click()
+    await expect(page.getByRole('heading', {name: 'Download thread dump?'})).toBeHidden()
+    expect(downloadRequests).toHaveLength(0)
+  })
 })
