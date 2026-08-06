@@ -104,6 +104,30 @@ test.describe('BootUI app shell', () => {
     await expect(contributeLink.locator('.bi-github')).toBeVisible()
   })
 
+  test('shell and current-page controls work when browser storage is denied before startup', async ({page}) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        get() {
+          throw new DOMException('Storage denied by browser policy', 'SecurityError')
+        }
+      })
+    })
+    await page.goto('/bootui/')
+
+    await expect(page.locator('.bootui-shell')).toBeVisible()
+    const root = page.locator('html')
+    const themeToggle = page.locator('.theme-toggle')
+    const initialTheme = await root.getAttribute('data-bs-theme')
+    await themeToggle.click()
+    await expect(root).toHaveAttribute('data-bs-theme', initialTheme === 'dark' ? 'light' : 'dark')
+
+    const sidebar = page.locator('aside.bootui-sidebar')
+    await expect(sidebar).not.toHaveClass(/bootui-sidebar--collapsed/)
+    await page.locator('.sidebar-toggle').click()
+    await expect(sidebar).toHaveClass(/bootui-sidebar--collapsed/)
+  })
+
   test('mobile navigation contains focus and closes without stranding it', async ({page}) => {
     await page.setViewportSize({width: 390, height: 844})
     await page.goto('/bootui/')

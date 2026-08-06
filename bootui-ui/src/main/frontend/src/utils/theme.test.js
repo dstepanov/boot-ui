@@ -8,6 +8,7 @@ import {
   resolveTheme,
   THEME_STORAGE_KEY
 } from './theme.js'
+import {createSafeStorage} from './safeStorage.js'
 
 describe('theme utilities', () => {
   it('normalizes persisted theme values', () => {
@@ -23,11 +24,13 @@ describe('theme utilities', () => {
     expect(readThemePreference({getItem: (key) => storage.get(key)})).toBe('dark')
     expect(readThemePreference({getItem: () => 'unexpected'})).toBeNull()
     expect(
-      readThemePreference({
-        getItem: () => {
-          throw new Error('storage unavailable')
-        }
-      })
+      readThemePreference(
+        createSafeStorage(() => ({
+          getItem: () => {
+            throw new DOMException('storage unavailable', 'SecurityError')
+          }
+        }))
+      )
     ).toBeNull()
   })
 

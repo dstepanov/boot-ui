@@ -9,6 +9,7 @@ import SpinnerButton from './components/SpinnerButton.vue'
 import {formatBytes, formatClockTime, formatNumber} from '../utils/format.js'
 import {formatLoadError} from '../utils/loadError.js'
 import {panelProps, usePanelState} from '../utils/panelState.js'
+import {safeLocalStorage} from '../utils/safeStorage.js'
 import {useConfirm} from '../utils/useConfirm.js'
 import {useFlashMessage} from '../utils/useFlashMessage.js'
 import {useEventStreamRefresh} from '../utils/useEventStreamRefresh.js'
@@ -498,33 +499,21 @@ function renderProfileReport() {
 }
 
 function restoreFilters() {
-  try {
-    const raw = localStorage.getItem(FILTERS_STORAGE_KEY)
-    if (!raw) return
-    const saved = JSON.parse(raw)
-    if (typeof saved.type === 'string') typeFilter.value = saved.type
-    if (typeof saved.severity === 'string') severityFilter.value = saved.severity
-    if (typeof saved.text === 'string') textFilter.value = saved.text
-    if (typeof saved.errorsOnly === 'boolean') errorsOnly.value = saved.errorsOnly
-  } catch (_) {
-    // Corrupt or unavailable storage: fall back to defaults silently.
-  }
+  const saved = safeLocalStorage.getJson(FILTERS_STORAGE_KEY, null)
+  if (!saved || Array.isArray(saved) || typeof saved !== 'object') return
+  if (saved.type === '' || TYPES.includes(saved.type)) typeFilter.value = saved.type
+  if (saved.severity === '' || SEVERITIES.includes(saved.severity)) severityFilter.value = saved.severity
+  if (typeof saved.text === 'string') textFilter.value = saved.text
+  if (typeof saved.errorsOnly === 'boolean') errorsOnly.value = saved.errorsOnly
 }
 
 function persistFilters() {
-  try {
-    localStorage.setItem(
-      FILTERS_STORAGE_KEY,
-      JSON.stringify({
-        type: typeFilter.value,
-        severity: severityFilter.value,
-        text: textFilter.value,
-        errorsOnly: errorsOnly.value
-      })
-    )
-  } catch (_) {
-    // Ignore storage write failures (private mode, quota); filters still work in-session.
-  }
+  return safeLocalStorage.setJson(FILTERS_STORAGE_KEY, {
+    type: typeFilter.value,
+    severity: severityFilter.value,
+    text: textFilter.value,
+    errorsOnly: errorsOnly.value
+  })
 }
 
 // A filter change invalidates any accumulated "older" pages (they were queried under the old

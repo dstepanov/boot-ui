@@ -5,6 +5,7 @@ import {useRoute, useRouter} from 'vue-router'
 import {
   applyTheme,
   nextTheme,
+  normalizeThemePreference,
   readThemePreference,
   resolveTheme,
   THEME_QUERY,
@@ -12,6 +13,7 @@ import {
 } from './utils/theme.js'
 import {describeLoadError} from './utils/loadError.js'
 import {recordRecentPanel} from './utils/recentPanels.js'
+import {safeLocalStorage} from './utils/safeStorage.js'
 import CommandPalette from './views/components/CommandPalette.vue'
 import ConfirmDialog from './views/components/ConfirmDialog.vue'
 
@@ -25,8 +27,8 @@ const authenticationToken = ref('')
 const authenticationError = ref(null)
 const authenticating = ref(false)
 const bearerScheme = 'Bearer'
-const savedCollapsed = localStorage.getItem('bootui.sidebar.collapsed')
-const sidebarCollapsed = ref(savedCollapsed === 'true')
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'bootui.sidebar.collapsed'
+const sidebarCollapsed = ref(safeLocalStorage.getBoolean(SIDEBAR_COLLAPSED_STORAGE_KEY))
 
 const NARROW_QUERY = '(max-width: 991.98px)'
 const narrowMediaQuery =
@@ -65,7 +67,7 @@ const commandPaletteTriggerRef = ref(null)
 let commandPaletteInvoker = null
 const themeMediaQuery =
   typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(THEME_QUERY) : null
-const themePreference = ref(readThemePreference(typeof window === 'undefined' ? null : window.localStorage))
+const themePreference = ref(readThemePreference())
 const systemPrefersDark = ref(themeMediaQuery?.matches === true)
 const resolvedTheme = computed(() => resolveTheme(themePreference.value, systemPrefersDark.value))
 const darkTheme = computed(() => resolvedTheme.value === 'dark')
@@ -104,7 +106,7 @@ async function closeCommandPalette(focusTarget = 'invoker') {
   commandPaletteInvoker = null
 }
 
-watch(sidebarCollapsed, (v) => localStorage.setItem('bootui.sidebar.collapsed', String(v)))
+watch(sidebarCollapsed, (value) => safeLocalStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, value))
 
 watch(
   () => route.name,
@@ -202,11 +204,7 @@ function syncTheme(theme) {
 }
 
 function persistThemePreference(theme) {
-  try {
-    window.localStorage?.setItem(THEME_STORAGE_KEY, theme)
-  } catch {
-    // Ignore unavailable storage; the in-memory theme still applies for this session.
-  }
+  return safeLocalStorage.setItem(THEME_STORAGE_KEY, theme)
 }
 
 function toggleTheme() {
@@ -217,6 +215,12 @@ function toggleTheme() {
 
 function onSystemThemeChange(e) {
   systemPrefersDark.value = e.matches === true
+}
+
+function onStorageChange(event) {
+  if (event.key === THEME_STORAGE_KEY || event.key === null) {
+    themePreference.value = normalizeThemePreference(event.newValue)
+  }
 }
 
 const semanticNavigationGroups = [
@@ -239,18 +243,19 @@ const EXPANDED_GROUPS_STORAGE_KEY = 'bootui.expandedGroups'
 
 function loadExpandedGroups() {
   const defaults = {advisors: true}
-  try {
-    const stored = window.localStorage?.getItem(EXPANDED_GROUPS_STORAGE_KEY)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      if (parsed && typeof parsed === 'object') {
-        return {...defaults, ...parsed}
-      }
-    }
-  } catch {
-    // Ignore unavailable or malformed storage; fall back to defaults.
+  const stored = safeLocalStorage.getJson(EXPANDED_GROUPS_STORAGE_KEY, null)
+  if (!stored || Array.isArray(stored) || typeof stored !== 'object') {
+    if (stored !== null) safeLocalStorage.removeItem(EXPANDED_GROUPS_STORAGE_KEY)
+    return defaults
   }
-  return defaults
+  const validGroupKeys = new Set([
+    ...semanticNavigationGroups.map((group) => group.key),
+    unavailableNavigationGroup.key
+  ])
+  const expanded = Object.fromEntries(
+    Object.entries(stored).filter(([key, value]) => validGroupKeys.has(key) && typeof value === 'boolean')
+  )
+  return {...defaults, ...expanded}
 }
 
 const expandedGroups = reactive(loadExpandedGroups())
@@ -554,11 +559,7 @@ watch(
 watch(
   expandedGroups,
   (groups) => {
-    try {
-      window.localStorage?.setItem(EXPANDED_GROUPS_STORAGE_KEY, JSON.stringify(groups))
-    } catch {
-      // Ignore storage write failures (e.g. private mode / quota).
-    }
+    safeLocalStorage.setJson(EXPANDED_GROUPS_STORAGE_KEY, groups)
   },
   {deep: true}
 )
@@ -566,12 +567,14 @@ watch(
 onMounted(() => {
   loadShellData()
   window.addEventListener('keydown', onGlobalKeydown)
+  window.addEventListener('storage', onStorageChange)
   themeMediaQuery?.addEventListener?.('change', onSystemThemeChange)
   narrowMediaQuery?.addEventListener?.('change', onNarrowChange)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onGlobalKeydown)
+  window.removeEventListener('storage', onStorageChange)
   themeMediaQuery?.removeEventListener?.('change', onSystemThemeChange)
   narrowMediaQuery?.removeEventListener?.('change', onNarrowChange)
   clearFlyoutTimer()
