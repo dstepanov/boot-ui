@@ -235,6 +235,7 @@ jobs:
           # Missing any one artifact causes the release to fail with the coordinate in the error.
           ARTIFACTS=(
             "bootui-parent/${VERSION}/bootui-parent-${VERSION}.pom"
+            "bootui-quarkus-parent/${VERSION}/bootui-quarkus-parent-${VERSION}.pom"
             "bootui-core/${VERSION}/bootui-core-${VERSION}.jar"
             "bootui-engine/${VERSION}/bootui-engine-${VERSION}.jar"
             "bootui-spring-autoconfigure/${VERSION}/bootui-spring-autoconfigure-${VERSION}.jar"

@@ -6,9 +6,9 @@
 
     <parent>
         <groupId>com.julien-dubois.bootui</groupId>
-        <artifactId>bootui-parent</artifactId>
+        <artifactId>bootui-quarkus-integration-tests-aggregator</artifactId>
         <version>1.12.0</version>
-        <relativePath>../../pom.xml</relativePath>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>bootui-quarkus-prod-shell-guard-integration-tests</artifactId>
@@ -21,22 +21,6 @@
         QuarkusProdModeTest and a @QuarkusTest run in the same JUnit Platform launcher session (i.e. the same
         Surefire fork), so this test cannot live alongside base's (or any other submodule's) @QuarkusTest
         classes. Never published.</description>
-
-    <properties>
-        <maven.deploy.skip>true</maven.deploy.skip>
-    </properties>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>io.quarkus</groupId>
-                <artifactId>quarkus-bom</artifactId>
-                <version>${quarkus.platform.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 
     <dependencies>
         <!-- The extension under test. Brings bootui-engine, bootui-ui (the shared bundle), quarkus-rest and
@@ -86,7 +70,6 @@
             <plugin>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-maven-plugin</artifactId>
-                <version>${quarkus.platform.version}</version>
                 <extensions>true</extensions>
                 <executions>
                     <execution>

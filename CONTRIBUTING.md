@@ -48,8 +48,8 @@ Use the root Maven properties as the source of truth for the published adapters 
 
 When updating compatibility text in docs (README, `docs/SETUP.md`, `docs/FEATURES.md`,
 `.github/copilot-instructions.md`), reference those properties and refresh any explicit version strings in the same PR.
-The non-published Quarkus sample app keeps a separate platform pin aligned with its Quarkus LangChain4j dependency; do
-not treat that demo-specific pin as the public compatibility version.
+All Quarkus modules, including the non-published sample app, inherit the Quarkus platform through
+`bootui-quarkus-parent`; keep its LangChain4j BOM compatible with that shared LTS line.
 
 ## Build
 
