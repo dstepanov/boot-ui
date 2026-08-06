@@ -16,9 +16,10 @@
     <name>BootUI :: Quarkus Extension (Integration Tests)</name>
     <description>Aggregator for the Docker-free Quarkus integration-test apps. Each sub-module pins a different
         extension set on its classpath to prove BootUI panel light-up in isolation: the base module deliberately
-        has no optional extensions (everything fails closed), and each per-extension module adds exactly one
-        (otel, health, micrometer, scheduler, cache, flyway, liquibase, datasource). The Hibernate module also
-        lives here but is wired into the reactor only on a Hibernate-capable JDK (see the root pom profile).
+        has no optional extensions (everything fails closed), and each per-extension module adds a focused
+        capability fixture. The RabbitMQ module drives synthetic SmallRye metadata with Dev Services disabled,
+        so the default suite requires no broker or Docker. The Hibernate module also lives here but is wired into
+        the reactor only on a Hibernate-capable JDK (see the root pom profile).
         prod-shell-guard is different in kind, not in extension set: it holds the one test that boots a genuine
         LaunchMode.NORMAL artifact via QuarkusProdModeTest, kept out of every other module because Quarkus
         refuses to mix that mechanism with @QuarkusTest in the same Surefire fork.</description>
@@ -36,6 +37,7 @@
         <module>security</module>
         <module>cache</module>
         <module>email</module>
+        <module>rabbit</module>
         <module>flyway</module>
         <module>liquibase</module>
         <module>datasource</module>
