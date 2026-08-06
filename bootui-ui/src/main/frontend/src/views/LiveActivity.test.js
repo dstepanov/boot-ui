@@ -103,6 +103,17 @@ function stubFetch(activity, profile) {
   })
 }
 
+function mountLiveActivity(options = {}) {
+  const {global: globalOptions = {}, ...rest} = options
+  return mount(LiveActivity, {
+    ...rest,
+    global: {
+      stubs: {RouterLink: {template: '<a><slot /></a>'}},
+      ...globalOptions
+    }
+  })
+}
+
 describe('LiveActivity', () => {
   let wrapper
 
@@ -118,7 +129,7 @@ describe('LiveActivity', () => {
       stubFetch(activityReport({kpis: {...activityReport().kpis, cacheHitRatioPercent: 75}}), requestProfile())
     )
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     expect(wrapper.text()).toContain('Cache hit ratio')
@@ -128,7 +139,7 @@ describe('LiveActivity', () => {
   it('renders a dash for the cache hit ratio KPI tile when no cache events have been captured', async () => {
     vi.stubGlobal('fetch', stubFetch(activityReport(), requestProfile()))
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     expect(wrapper.text()).toContain('Cache hit ratio')
@@ -149,7 +160,7 @@ describe('LiveActivity', () => {
     })
     vi.stubGlobal('fetch', stubFetch(activityReport(), requestProfile()))
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
     const filter = wrapper.get('#activity-text-filter')
     await filter.setValue('/api/orders')
@@ -165,7 +176,7 @@ describe('LiveActivity', () => {
       stubFetch(activityReport({entries: [requestEntry({sqlNPlusOneSuspected: true})]}), requestProfile())
     )
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     const row = wrapper.get('tr.activity-row-clickable')
@@ -175,7 +186,7 @@ describe('LiveActivity', () => {
   it('does not render the N+1 badge for a request without a suspected pattern', async () => {
     vi.stubGlobal('fetch', stubFetch(activityReport(), requestProfile()))
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     const row = wrapper.get('tr.activity-row-clickable')
@@ -193,7 +204,7 @@ describe('LiveActivity', () => {
     const fetchMock = stubFetch(activityReport({entries: [requestEntry(), child]}), requestProfile())
     vi.stubGlobal('fetch', fetchMock)
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     const row = wrapper.get('tr.activity-row-clickable')
@@ -256,14 +267,14 @@ describe('LiveActivity', () => {
       )
     )
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     const row = wrapper.get('tbody tr')
     expect(row.text()).toContain('SCHEDULED')
     expect(row.find('i.bi-clock-history').exists()).toBe(true)
 
-    const scheduledLink = wrapper.findAll('router-link').find((a) => a.text().includes('Scheduled failures'))
+    const scheduledLink = wrapper.findAll('a').find((a) => a.text().includes('Scheduled failures'))
     expect(scheduledLink).toBeTruthy()
     expect(scheduledLink.text()).toContain('3')
   })
@@ -298,7 +309,7 @@ describe('LiveActivity', () => {
       )
     )
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     const row = wrapper.get('tbody tr')
@@ -315,7 +326,7 @@ describe('LiveActivity', () => {
       stubFetch(activityReport({entries: [requestEntry({sqlNPlusOneSuspected: true})]}), requestProfile())
     )
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     await wrapper.get('tr.activity-row-clickable').trigger('click')
@@ -334,7 +345,7 @@ describe('LiveActivity', () => {
       stubFetch(activityReport({entries: [requestEntry({sqlNPlusOneSuspected: true})]}), requestProfile())
     )
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     await wrapper.get('tr.activity-row-clickable').trigger('click')
@@ -353,7 +364,7 @@ describe('LiveActivity', () => {
   it('renders the outbound REST KPI tile', async () => {
     vi.stubGlobal('fetch', stubFetch(activityReport(), requestProfile()))
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     expect(wrapper.text()).toContain('Outbound errors / p95')
@@ -363,7 +374,7 @@ describe('LiveActivity', () => {
   it('shows a tip with the current in-memory event count when persistence is not active', async () => {
     vi.stubGlobal('fetch', stubFetch(activityReport(), requestProfile()))
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     expect(wrapper.text()).toContain('Currently saving 1 event in memory')
@@ -381,7 +392,7 @@ describe('LiveActivity', () => {
       )
     )
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('Currently saving')
@@ -390,7 +401,7 @@ describe('LiveActivity', () => {
   it('shows the "Use a database" button when persistence is not active', async () => {
     vi.stubGlobal('fetch', stubFetch(activityReport(), requestProfile()))
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     expect(wrapper.findAll('button').find((b) => b.text().includes('Use a database'))).toBeTruthy()
@@ -408,7 +419,7 @@ describe('LiveActivity', () => {
       )
     )
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     expect(wrapper.findAll('button').find((b) => b.text().includes('Use a database'))).toBeFalsy()
@@ -423,7 +434,7 @@ describe('LiveActivity', () => {
       )
     )
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     await wrapper
@@ -448,7 +459,7 @@ describe('LiveActivity', () => {
       )
     )
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     await wrapper
@@ -488,7 +499,7 @@ describe('LiveActivity', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    wrapper = mount(LiveActivity)
+    wrapper = mountLiveActivity()
     await flushPromises()
 
     await wrapper
@@ -519,7 +530,7 @@ describe('LiveActivity', () => {
       )
     )
 
-    wrapper = mount(LiveActivity, {
+    wrapper = mountLiveActivity({
       props: {panel: {readOnly: true, readOnlyReason: 'BootUI is read-only'}}
     })
     await flushPromises()
