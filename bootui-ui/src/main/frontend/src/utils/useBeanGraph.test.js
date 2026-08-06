@@ -3,6 +3,7 @@ import {
   buildGraphIndex,
   conditionClassFromResource,
   GRAPH_LOAD_PAGE_SIZE,
+  mainApplicationBeanName,
   matchingPositiveConditions,
   MAX_GRAPH_DEPTH,
   MAX_GRAPH_NODES,
@@ -39,6 +40,31 @@ function nodeNames(nodes) {
 function edgePairs(edges) {
   return edges.map((e) => `${e.from}=>${e.to}`).sort()
 }
+
+describe('default graph focus', () => {
+  it('selects the conventional application entry-point bean', () => {
+    expect(
+      mainApplicationBeanName([
+        bean('orderService'),
+        bean('demoApplication', [], 'com.example.DemoApplication'),
+        bean('aCustomEntryPoint', [], 'com.example.OtherApplication')
+      ])
+    ).toBe('demoApplication')
+  })
+
+  it('recognizes an enhanced application type and ignores non-application classifications', () => {
+    expect(
+      mainApplicationBeanName([
+        {...bean('frameworkApplication', [], 'org.example.FrameworkApplication'), classification: 'FRAMEWORK'},
+        bean('sampleApplication', [], 'com.example.SampleApplication$$SpringCGLIB$$0')
+      ])
+    ).toBe('sampleApplication')
+  })
+
+  it('leaves the graph unfocused when no conventional application bean is present', () => {
+    expect(mainApplicationBeanName([bean('orderService')])).toBeNull()
+  })
+})
 
 describe('condition evidence helpers', () => {
   it('extracts an exact class name from a Spring classpath resource', () => {

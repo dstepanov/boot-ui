@@ -136,6 +136,30 @@ test.describe('Beans view', () => {
       }
     ]
 
+    test('focuses and centers the main application bean on first open', async ({openView, page}) => {
+      await openView('beans', 'Beans')
+
+      const focusInput = page.getByPlaceholder(/Search for a bean/)
+      await expect(focusInput).toHaveValue('bootUiSampleApplication')
+      const focusNode = page.locator('[aria-label*="bootUiSampleApplication"][aria-pressed="true"]')
+      const graphScroll = page.locator('.bean-graph-scroll')
+      await expect(focusNode).toBeVisible()
+
+      const [nodeBox, scrollCenter] = await Promise.all([
+        focusNode.boundingBox(),
+        graphScroll.evaluate((element) => {
+          const rect = element.getBoundingClientRect()
+          return {
+            x: rect.left + element.clientLeft + element.clientWidth / 2,
+            y: rect.top + element.clientTop + element.clientHeight / 2
+          }
+        })
+      ])
+      expect(nodeBox).not.toBeNull()
+      expect(Math.abs(nodeBox.x + nodeBox.width / 2 - scrollCenter.x)).toBeLessThan(2)
+      expect(Math.abs(nodeBox.y + nodeBox.height / 2 - scrollCenter.y)).toBeLessThan(2)
+    })
+
     test('opens in graph mode with application beans selected', async ({openView, page}) => {
       const requestedLimits = []
       await page.route('**/bootui/api/beans?*', (route) => {
@@ -183,6 +207,7 @@ test.describe('Beans view', () => {
       // The SVG graph should appear
       const graphSvg = page.locator('svg.bean-graph-svg')
       const graphScroll = page.locator('.bean-graph-scroll')
+      const focusNode = page.locator('[aria-label*="orderService"][aria-pressed="true"]')
       await expect(graphSvg).toBeVisible()
       const defaultWidth = Number(await graphSvg.getAttribute('width'))
       const defaultViewportHeight = await graphScroll.evaluate((element) => element.clientHeight)
@@ -198,8 +223,28 @@ test.describe('Beans view', () => {
       await page.getByRole('button', {name: 'Reset zoom'}).click()
       await expect.poll(async () => Number(await graphSvg.getAttribute('width'))).toBe(defaultWidth)
 
+      await page.getByRole('button', {name: 'Zoom out'}).click()
+      await page.getByRole('button', {name: 'Zoom out'}).click()
+      await expect(page.getByRole('button', {name: 'Reset zoom'})).toHaveText('60%')
+      const centerDelta = await page.evaluate(() => {
+        const scroll = document.querySelector('.bean-graph-scroll')
+        const focus = document.querySelector('.bean-graph-svg [aria-pressed="true"]')
+        const scrollRect = scroll.getBoundingClientRect()
+        const focusRect = focus.getBoundingClientRect()
+        return {
+          x: Math.abs(
+            focusRect.left + focusRect.width / 2 - (scrollRect.left + scroll.clientLeft + scroll.clientWidth / 2)
+          ),
+          y: Math.abs(
+            focusRect.top + focusRect.height / 2 - (scrollRect.top + scroll.clientTop + scroll.clientHeight / 2)
+          )
+        }
+      })
+      expect(centerDelta.x).toBeLessThan(2)
+      expect(centerDelta.y).toBeLessThan(2)
+      await page.getByRole('button', {name: 'Reset zoom'}).click()
+
       // The focused bean node should be present with aria label
-      const focusNode = page.locator('[aria-label*="orderService"][aria-pressed="true"]')
       await expect(focusNode).toBeVisible()
 
       // The dependency node should also be visible
@@ -389,9 +434,10 @@ test.describe('Beans view', () => {
       const focusInput = page.getByPlaceholder(/Search for a bean/)
       await focusInput.fill('isolatedBean')
       await focusInput.dispatchEvent('change')
-      await expect(page.locator('svg.bean-graph-svg')).not.toBeVisible()
+      await expect(page.locator('svg.bean-graph-svg')).toBeVisible()
+      await expect(page.locator('[aria-label*="isolatedBean"][aria-pressed="true"]')).toBeVisible()
 
-      // The no-neighbours message should appear
+      // Keep the selected bean visible while explaining why no edges can be drawn.
       await expect(page.getByText(/has no recorded dependencies/)).toBeVisible()
     })
   })

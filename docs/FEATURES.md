@@ -909,6 +909,8 @@ bean names and types, plus classifications such as application, Spring framework
 own beans are hidden by default, and the empty BootUI classification option is omitted; when self-data filtering is
 disabled they are classified separately as BootUI beans and the option appears. A labeled Graph/List segmented control
 switches between the dependency visualization and the server-paged bean inventory.
+When a conventional application entry-point bean is present (for example a Spring Boot `@SpringBootApplication` class),
+the graph selects it on first open and centers its node in the scroll viewport.
 Large bean lists load in bounded pages so the initial payload stays small while filters still apply to the full bean set.
 
 **Dependency graph mode.** The panel opens on the dependency neighbourhood graph; a header toggle switches to the

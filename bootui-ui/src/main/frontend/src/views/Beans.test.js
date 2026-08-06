@@ -222,6 +222,21 @@ describe('Beans — graph mode toggle', () => {
     expect(wrapper.find('select.form-select option[value="BOOTUI"]').exists()).toBe(true)
   })
 
+  it('focuses the conventional main application bean on first open', async () => {
+    stubFetch(
+      beanList([
+        bean('orderService'),
+        {...bean('demoApplication', ['orderService']), type: 'com.example.DemoApplication'}
+      ])
+    )
+    const wrapper = mountBeans()
+    await vi.dynamicImportSettled()
+    await flushPromises()
+
+    expect(wrapper.find('input[placeholder*="Search for a bean"]').element.value).toBe('demoApplication')
+    expect(wrapper.find('[aria-label*="demoApplication"][aria-pressed="true"]').exists()).toBe(true)
+  })
+
   it('loads the unfiltered list only after list mode is selected', async () => {
     stubFetch(beanList([bean('applicationBean')]))
     const wrapper = mountBeans()
@@ -380,7 +395,8 @@ describe('Beans — graph loading state', () => {
           return Promise.resolve({
             ok: true,
             status: 200,
-            json: () => Promise.resolve(beanList([bean('recoveredBean')]))
+            json: () =>
+              Promise.resolve(beanList([{...bean('recoveredApplication'), type: 'com.example.RecoveredApplication'}]))
           })
         }
         return Promise.resolve({ok: true, status: 200, json: () => Promise.resolve(beanList([bean('listBean')]))})
@@ -396,7 +412,7 @@ describe('Beans — graph loading state', () => {
     await flushPromises()
 
     expect(graphAttempts).toBe(2)
-    expect(wrapper.find('input[placeholder*="Search for a bean"]').exists()).toBe(true)
+    expect(wrapper.find('input[placeholder*="Search for a bean"]').element.value).toBe('recoveredApplication')
   })
 
   it('shows exact positive Conditions evidence for the focused bean resource', async () => {
@@ -543,6 +559,9 @@ describe('Beans — graph loading state', () => {
     const svg = wrapper.find('svg')
     const defaultWidth = Number(svg.attributes('width'))
 
+    await wrapper.find('[aria-pressed="true"]').trigger('click')
+    expect(wrapper.emitted('focus')).toContainEqual(['orderService'])
+
     await wrapper.find('[aria-label="Zoom in"]').trigger('click')
     expect(Number(svg.attributes('width'))).toBeGreaterThan(defaultWidth)
     expect(wrapper.find('[aria-label="Reset zoom"]').text()).toBe('120%')
@@ -571,6 +590,11 @@ describe('Beans — graph loading state', () => {
     expect(wrapper.find('[aria-label="Reset zoom"]').text()).toBe('200%')
 
     await wrapper.setProps({focusName: 'orderRepository'})
+    expect(Number(svg.attributes('width'))).toBe(defaultWidth)
+    expect(wrapper.find('[aria-label="Reset zoom"]').text()).toBe('100%')
+
+    await wrapper.find('[aria-label="Zoom in"]').trigger('click')
+    await wrapper.setProps({centerRequest: 1})
     expect(Number(svg.attributes('width'))).toBe(defaultWidth)
     expect(wrapper.find('[aria-label="Reset zoom"]').text()).toBe('100%')
   })

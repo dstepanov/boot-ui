@@ -1,5 +1,5 @@
 <script setup>
-import {computed, nextTick, ref, watch} from 'vue'
+import {computed, nextTick, onActivated, onMounted, ref, watch} from 'vue'
 import {MAX_GRAPH_DEPTH, MAX_GRAPH_NODES} from '../utils/useBeanGraph.js'
 
 const props = defineProps({
@@ -10,11 +10,14 @@ const props = defineProps({
   /** Map<name, BeanSummary[]> retaining duplicate definitions merged into a graph node. */
   definitionsByName: {type: Object, required: true},
   /** Name of the currently focused bean. */
-  focusName: {type: String, required: true}
+  focusName: {type: String, required: true},
+  /** Incremented whenever the current bean is explicitly selected, including repeated selections. */
+  centerRequest: {type: Number, default: 0}
 })
 
 const emit = defineEmits(['focus'])
 const graphElement = ref(null)
+const graphScrollElement = ref(null)
 const zoom = ref(1)
 const MIN_ZOOM = 0.6
 const MAX_ZOOM = 2
@@ -23,10 +26,29 @@ const zoomPercent = computed(() => Math.round(zoom.value * 100))
 
 watch(
   () => props.focusName,
-  () => {
+  async () => {
     zoom.value = 1
+    await nextTick()
+    centerFocusedNode()
   }
 )
+watch(
+  () => props.centerRequest,
+  async () => {
+    zoom.value = 1
+    await nextTick()
+    centerFocusedNode()
+  }
+)
+watch(zoom, async () => {
+  await nextTick()
+  centerFocusedNode()
+})
+onMounted(centerFocusedNode)
+onActivated(async () => {
+  await nextTick()
+  centerFocusedNode()
+})
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 const NODE_W = 148
@@ -155,7 +177,7 @@ function roleDescription(node) {
 
 // ── Event handlers ────────────────────────────────────────────────────────────
 async function refocus(name) {
-  if (name === props.focusName || !props.byName.has(name)) return
+  if (!props.byName.has(name)) return
   emit('focus', name)
   await nextTick()
   graphElement.value?.querySelector('[aria-pressed="true"]')?.focus()
@@ -189,6 +211,17 @@ function zoomBy(delta) {
 
 function resetZoom() {
   zoom.value = 1
+}
+
+function centerFocusedNode() {
+  const scrollElement = graphScrollElement.value
+  const focusElement = graphElement.value?.querySelector('[aria-pressed="true"]')
+  if (!scrollElement || !focusElement) return
+
+  const scrollRect = scrollElement.getBoundingClientRect()
+  const focusRect = focusElement.getBoundingClientRect()
+  scrollElement.scrollLeft += focusRect.left + focusRect.width / 2 - (scrollRect.left + scrollElement.clientWidth / 2)
+  scrollElement.scrollTop += focusRect.top + focusRect.height / 2 - (scrollRect.top + scrollElement.clientHeight / 2)
 }
 </script>
 
@@ -256,73 +289,82 @@ function resetZoom() {
     </div>
 
     <div
-      v-if="graph.nodes.length > 1"
+      v-if="graph.nodes.length > 0"
+      ref="graphScrollElement"
       class="bean-graph-scroll"
       role="region"
       aria-label="Bean dependency neighbourhood graph"
     >
-      <svg
-        ref="graphElement"
-        :width="Math.round(layout.svgW * zoom)"
-        :height="Math.round(layout.svgH * zoom)"
-        :viewBox="`0 0 ${layout.svgW} ${layout.svgH}`"
-        class="bean-graph-svg"
-        role="group"
-        :aria-label="`Dependency neighbourhood for ${focusName}: ${graph.nodes.length} nodes, ${graph.edges.length} edges`"
-      >
-        <!-- Arrowhead marker (dependency direction) -->
-        <defs>
-          <marker
-            id="bg-arrow"
-            markerWidth="8"
-            markerHeight="6"
-            refX="7"
-            refY="3"
-            orient="auto"
-            markerUnits="userSpaceOnUse"
-          >
-            <polygon class="bg-arrow-poly" points="0 0, 8 3, 0 6" />
-          </marker>
-        </defs>
-
-        <!-- Edges -->
-        <g aria-hidden="true">
-          <line
-            v-for="edge in layout.trimmedEdges"
-            :key="edge.key"
-            :x1="edge.x1"
-            :y1="edge.y1"
-            :x2="edge.x2"
-            :y2="edge.y2"
-            class="bg-edge"
-            marker-end="url(#bg-arrow)"
-          />
-        </g>
-
-        <!-- Nodes -->
-        <g
-          v-for="node in layout.nodes"
-          :key="node.name"
-          :transform="`translate(${(layout.pos.get(node.name)?.x ?? 0) - NODE_W / 2},${(layout.pos.get(node.name)?.y ?? 0) - NODE_H / 2})`"
-          :class="['bg-node', `bg-node--${node.role}`]"
-          :tabindex="byName.has(node.name) && node.role === 'focus' ? 0 : -1"
-          :role="byName.has(node.name) ? 'button' : 'img'"
-          :aria-label="`${node.name}. ${roleDescription(node)}.${
-            byName.has(node.name) ? ' Use arrow keys to move between nodes; press Enter to focus.' : ''
-          }`"
-          :aria-pressed="node.role === 'focus'"
-          @click="refocus(node.name)"
-          @keydown="onKeydown($event, node.name)"
+      <div class="bean-graph-stage">
+        <svg
+          ref="graphElement"
+          :width="Math.round(layout.svgW * zoom)"
+          :height="Math.round(layout.svgH * zoom)"
+          :viewBox="`0 0 ${layout.svgW} ${layout.svgH}`"
+          class="bean-graph-svg"
+          role="group"
+          :aria-label="`Dependency neighbourhood for ${focusName}: ${graph.nodes.length} nodes, ${graph.edges.length} edges`"
         >
-          <title>{{ nodeTitle(node.name) }}</title>
-          <rect class="bg-focus-ring bg-focus-ring--outer" x="-5" y="-5" :width="NODE_W + 10" :height="NODE_H + 10" />
-          <rect class="bg-focus-ring bg-focus-ring--inner" x="-2" y="-2" :width="NODE_W + 4" :height="NODE_H + 4" />
-          <rect class="bg-node-shape" :width="NODE_W" :height="NODE_H" :rx="NODE_RX" />
-          <text :x="NODE_W / 2" :y="NODE_H / 2" text-anchor="middle" dominant-baseline="central" :font-size="FONT_SIZE">
-            {{ shortName(node.name) }}
-          </text>
-        </g>
-      </svg>
+          <!-- Arrowhead marker (dependency direction) -->
+          <defs>
+            <marker
+              id="bg-arrow"
+              markerWidth="8"
+              markerHeight="6"
+              refX="7"
+              refY="3"
+              orient="auto"
+              markerUnits="userSpaceOnUse"
+            >
+              <polygon class="bg-arrow-poly" points="0 0, 8 3, 0 6" />
+            </marker>
+          </defs>
+
+          <!-- Edges -->
+          <g aria-hidden="true">
+            <line
+              v-for="edge in layout.trimmedEdges"
+              :key="edge.key"
+              :x1="edge.x1"
+              :y1="edge.y1"
+              :x2="edge.x2"
+              :y2="edge.y2"
+              class="bg-edge"
+              marker-end="url(#bg-arrow)"
+            />
+          </g>
+
+          <!-- Nodes -->
+          <g
+            v-for="node in layout.nodes"
+            :key="node.name"
+            :transform="`translate(${(layout.pos.get(node.name)?.x ?? 0) - NODE_W / 2},${(layout.pos.get(node.name)?.y ?? 0) - NODE_H / 2})`"
+            :class="['bg-node', `bg-node--${node.role}`]"
+            :tabindex="byName.has(node.name) && node.role === 'focus' ? 0 : -1"
+            :role="byName.has(node.name) ? 'button' : 'img'"
+            :aria-label="`${node.name}. ${roleDescription(node)}.${
+              byName.has(node.name) ? ' Use arrow keys to move between nodes; press Enter to focus.' : ''
+            }`"
+            :aria-pressed="node.role === 'focus'"
+            @click="refocus(node.name)"
+            @keydown="onKeydown($event, node.name)"
+          >
+            <title>{{ nodeTitle(node.name) }}</title>
+            <rect class="bg-focus-ring bg-focus-ring--outer" x="-5" y="-5" :width="NODE_W + 10" :height="NODE_H + 10" />
+            <rect class="bg-focus-ring bg-focus-ring--inner" x="-2" y="-2" :width="NODE_W + 4" :height="NODE_H + 4" />
+            <rect class="bg-node-shape" :width="NODE_W" :height="NODE_H" :rx="NODE_RX" />
+            <text
+              :x="NODE_W / 2"
+              :y="NODE_H / 2"
+              text-anchor="middle"
+              dominant-baseline="central"
+              :font-size="FONT_SIZE"
+            >
+              {{ shortName(node.name) }}
+            </text>
+          </g>
+        </svg>
+      </div>
     </div>
 
     <ul v-if="graph.nodes.length > 1" class="visually-hidden" aria-label="Bean dependency relationships">
@@ -377,6 +419,16 @@ function resetZoom() {
   height: clamp(20rem, 55vh, 36rem);
 }
 
+.bean-graph-stage {
+  align-items: center;
+  display: flex;
+  height: max-content;
+  justify-content: center;
+  min-height: 100%;
+  min-width: 100%;
+  width: max-content;
+}
+
 .bean-graph-toolbar {
   align-self: flex-end;
   display: flex;
@@ -407,7 +459,6 @@ function resetZoom() {
 /* ── SVG base ───────────────────────────────────────────────────────────────── */
 .bean-graph-svg {
   display: block;
-  margin: 0 auto;
 }
 
 /* ── Arrowhead ──────────────────────────────────────────────────────────────── */

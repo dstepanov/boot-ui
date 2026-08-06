@@ -3,6 +3,7 @@ import {computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch} from
 import {apiFetch} from '../api.js'
 import {
   conditionClassFromResource,
+  mainApplicationBeanName,
   matchingPositiveConditions,
   MAX_BEAN_CONDITIONS,
   useBeanGraph
@@ -27,6 +28,7 @@ const CONDITION_LOOKUP_LIMIT = 1000
 const graphFocusInput = ref('')
 const graphFocusInputElement = ref(null)
 const graphSearchMessage = ref('')
+const graphCenterRequest = ref(0)
 const graphDatalistId = 'beans-graph-datalist'
 const graphClassification = ref('APPLICATION')
 const panels = inject('panels', ref(null))
@@ -82,7 +84,17 @@ const inventoryLabel = computed(() => {
   return `${focusBeanNames.value.length} ${focusClassificationLabel.value} · ${loadedLabel}`
 })
 
-onMounted(loadAll)
+onMounted(async () => {
+  await loadInventoryWithDefaultFocus()
+})
+async function loadInventoryWithDefaultFocus() {
+  await loadAll()
+  if (props.focusRequest || focusName.value) return
+  const defaultFocus = mainApplicationBeanName(allBeans.value)
+  if (!defaultFocus || !focusBeanNameSet.value.has(defaultFocus)) return
+  graphFocusInput.value = defaultFocus
+  selectFocus(defaultFocus)
+}
 watch(focusName, loadConditionEvidence)
 watch(graphClassification, () => {
   graphSearchMessage.value = ''
@@ -99,7 +111,7 @@ watch(
     graphClassification.value = request.classification || ''
     graphFocusInput.value = request.name
     if (byName.value.has(request.name)) {
-      setFocus(request.name)
+      selectFocus(request.name)
       graphSearchMessage.value = ''
     } else {
       setFocus(null)
@@ -116,7 +128,7 @@ onBeforeUnmount(() => {
 function onFocusInputChange() {
   const trimmed = graphFocusInput.value.trim()
   if (focusBeanNameSet.value.has(trimmed)) {
-    setFocus(trimmed)
+    selectFocus(trimmed)
     graphSearchMessage.value = ''
   } else if (!trimmed) {
     setFocus(null)
@@ -132,7 +144,7 @@ function submitGraphSearch() {
     return
   }
   if (focusBeanNameSet.value.has(graphFocusInput.value.trim())) {
-    setFocus(graphFocusInput.value.trim())
+    selectFocus(graphFocusInput.value.trim())
     graphSearchMessage.value = ''
     return
   }
@@ -150,7 +162,7 @@ function submitGraphSearch() {
     .map(([name]) => byName.value.get(name))
   if (matches.length === 1) {
     graphFocusInput.value = matches[0].name
-    setFocus(matches[0].name)
+    selectFocus(matches[0].name)
     graphSearchMessage.value = ''
   } else {
     graphSearchMessage.value =
@@ -162,12 +174,17 @@ function submitGraphSearch() {
 
 function onNodeFocus(name) {
   graphFocusInput.value = name
-  setFocus(name)
+  selectFocus(name)
   graphSearchMessage.value = ''
 }
 
+function selectFocus(name) {
+  setFocus(name)
+  graphCenterRequest.value += 1
+}
+
 async function retryInventory() {
-  await loadAll()
+  await loadInventoryWithDefaultFocus()
 }
 
 async function loadConditionEvidence() {
@@ -335,6 +352,7 @@ async function loadConditionEvidence() {
             :by-name="byName"
             :definitions-by-name="definitionsByName"
             :focus-name="focusName"
+            :center-request="graphCenterRequest"
             @focus="onNodeFocus"
           />
         </section>

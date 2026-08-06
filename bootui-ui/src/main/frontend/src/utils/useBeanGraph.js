@@ -18,6 +18,28 @@ function compareCodeUnits(a, b) {
   return a < b ? -1 : 1
 }
 
+/** Selects the conventional main application bean when it is present in the inventory. */
+export function mainApplicationBeanName(beans) {
+  const candidates = (beans || [])
+    .filter((bean) => bean?.classification === 'APPLICATION' && typeof bean.type === 'string')
+    .map((bean) => {
+      const simpleName = bean.type.split('.').pop()?.split('$')[0] || ''
+      return {
+        bean,
+        conventionalName: simpleName ? simpleName.charAt(0).toLowerCase() + simpleName.slice(1) : '',
+        simpleName
+      }
+    })
+    .filter(({simpleName}) => simpleName.endsWith('Application'))
+    .sort(({bean: first}, {bean: second}) => compareCodeUnits(first.name || '', second.name || ''))
+
+  return (
+    candidates.find(({bean, conventionalName}) => bean.name === conventionalName)?.bean.name ||
+    candidates[0]?.bean.name ||
+    null
+  )
+}
+
 /**
  * Extracts a fully-qualified configuration class from the classpath resource
  * format exposed by Spring Boot's Beans endpoint.
