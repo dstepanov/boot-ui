@@ -198,15 +198,64 @@ describe('deepLink', () => {
   })
 
   it('links a messaging entry to the Kafka panel filtered by topic', () => {
-    expect(deepLink({type: 'MESSAGING', summary: '→ orders.created [0]'})).toEqual({
+    expect(deepLink({type: 'MESSAGING', id: 'kafka-1', summary: '→ orders.created [0]'})).toEqual({
       path: '/kafka',
       query: {q: 'orders.created'},
       label: 'Open in Kafka'
     })
+
     expect(deepLink({type: 'MESSAGING', summary: '← orders.created'})).toEqual({
       path: '/kafka',
       query: {q: 'orders.created'},
       label: 'Open in Kafka'
+    })
+  })
+
+  it('links JMS activity to the JMS panel filtered by destination', () => {
+    expect(deepLink({type: 'MESSAGING', id: 'jms-2', summary: '→ orders'})).toEqual({
+      path: '/jms',
+      query: {q: 'orders'},
+      label: 'Open in JMS'
+    })
+  })
+
+  it('links unknown-destination JMS activity without a filter that would hide the record', () => {
+    expect(deepLink({type: 'MESSAGING', id: 'jms-3', summary: '← (unknown destination)'})).toEqual({
+      path: '/jms',
+      label: 'Open in JMS'
+    })
+  })
+
+  it('links RabbitMQ activity to the RabbitMQ panel filtered by routing key or queue', () => {
+    expect(deepLink({type: 'MESSAGING', id: 'rabbit-2', summary: '→ orders/order.created'})).toEqual({
+      path: '/rabbitmq',
+      query: {q: 'order.created'},
+      label: 'Open in RabbitMQ'
+    })
+    expect(deepLink({type: 'MESSAGING', id: 'rabbit-3', summary: '← fulfillment'})).toEqual({
+      path: '/rabbitmq',
+      query: {q: 'fulfillment'},
+      label: 'Open in RabbitMQ'
+    })
+  })
+
+  it('uses RabbitMQ routing metadata when the consumer queue is unknown', () => {
+    expect(
+      deepLink({
+        type: 'MESSAGING',
+        id: 'rabbit-4',
+        summary: '← (unknown queue)',
+        detail: 'exchange=orders routingKey=order.created correlationId=a1b2c3'
+      })
+    ).toEqual({
+      path: '/rabbitmq',
+      query: {q: 'order.created'},
+      label: 'Open in RabbitMQ'
+    })
+
+    expect(deepLink({type: 'MESSAGING', id: 'rabbit-5', summary: '← (unknown queue)'})).toEqual({
+      path: '/rabbitmq',
+      label: 'Open in RabbitMQ'
     })
   })
 

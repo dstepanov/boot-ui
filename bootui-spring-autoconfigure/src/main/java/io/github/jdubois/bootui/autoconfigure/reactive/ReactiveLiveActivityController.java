@@ -40,6 +40,7 @@ import io.github.jdubois.bootui.engine.cache.CacheActivityRecorder;
 import io.github.jdubois.bootui.engine.email.EmailCaptureService;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionsService;
+import io.github.jdubois.bootui.engine.jms.JmsActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.CapturedMessage;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
@@ -86,7 +87,8 @@ import reactor.core.publisher.Flux;
  * (outbound REST/WebClient calls), {@link ExceptionStore} (exceptions),
  * {@code ReactiveSecurityLogsController} (security/audit events), {@link ScheduledTaskRunStore}
  * ({@code @Scheduled} executions), {@link CacheActivityRecorder} (cache hit/miss/eviction events),
- * {@link KafkaActivityRecorder} (captured producer/consumer metadata), and {@link EmailController}
+ * {@link KafkaActivityRecorder}, {@link JmsActivityRecorder}, and {@link RabbitActivityRecorder}
+ * (captured producer/consumer metadata), and {@link EmailController}
  * (captured outgoing emails, via the shared {@code EmailCaptureService}) — so this controller adds no new
  * capture instrumentation of its own, only the merge. Because those beans are reached directly (bypassing
  * the HTTP layer, and with it
@@ -103,7 +105,8 @@ import reactor.core.publisher.Flux;
  * WebFlux equivalent of the servlet {@code ServletRequestHandledEvent} used to trigger a tick,
  * {@link ReactiveActivitySignalFilter} calls {@link #signalRequestHandled()} after every non-BootUI request
  * completes, and the SQL trace recorder / exception store / scheduled-task-store / cache recorder / Kafka
- * recorder / email capture service subscriptions signal directly, same as servlet.
+ * / JMS recorder / RabbitMQ recorder / email capture service subscriptions signal directly, same
+ * as servlet.
  */
 @RestController
 @RequestMapping("${bootui.api-path:${bootui.path:/bootui}/api}/activity")
@@ -122,6 +125,7 @@ public class ReactiveLiveActivityController {
     private final ObjectProvider<EmailCaptureService> emailCaptureService;
     private final ObjectProvider<CacheActivityRecorder> cacheActivity;
     private final ObjectProvider<KafkaActivityRecorder> kafkaActivity;
+    private final ObjectProvider<JmsActivityRecorder> jmsActivity;
     private final ObjectProvider<RabbitActivityRecorder> rabbitActivity;
     private final BootUiProperties properties;
     private final BootUiExposure exposure;
@@ -147,6 +151,7 @@ public class ReactiveLiveActivityController {
             ObjectProvider<EmailCaptureService> emailCaptureService,
             ObjectProvider<CacheActivityRecorder> cacheActivity,
             ObjectProvider<KafkaActivityRecorder> kafkaActivity,
+            ObjectProvider<JmsActivityRecorder> jmsActivity,
             ObjectProvider<RabbitActivityRecorder> rabbitActivity,
             SwitchableActivityStore activityStore,
             ActivityPersistenceSettings persistenceSettings,
@@ -165,6 +170,7 @@ public class ReactiveLiveActivityController {
         this.emailCaptureService = emailCaptureService;
         this.cacheActivity = cacheActivity;
         this.kafkaActivity = kafkaActivity;
+        this.jmsActivity = jmsActivity;
         this.rabbitActivity = rabbitActivity;
         this.activityStore = activityStore;
         this.persistenceSettings = persistenceSettings;
@@ -195,6 +201,10 @@ public class ReactiveLiveActivityController {
         KafkaActivityRecorder kafkaRecorder = kafkaActivity.getIfAvailable();
         if (kafkaRecorder != null) {
             unsubscribers.add(kafkaRecorder.subscribe(changeStream::signal));
+        }
+        JmsActivityRecorder jmsRecorder = jmsActivity.getIfAvailable();
+        if (jmsRecorder != null) {
+            unsubscribers.add(jmsRecorder.subscribe(changeStream::signal));
         }
         RabbitActivityRecorder rabbitRecorder = rabbitActivity.getIfAvailable();
         if (rabbitRecorder != null) {
@@ -353,8 +363,10 @@ public class ReactiveLiveActivityController {
         boolean cacheAvailable = cacheEvents != null;
         List<CapturedMessage> kafkaMessages = kafkaMessages();
         boolean kafkaAvailable = kafkaMessages != null;
+        List<JmsActivityRecorder.CapturedMessage> jmsMessages = jmsMessages();
+        boolean jmsAvailable = jmsMessages != null;
         List<RabbitActivityRecorder.CapturedMessage> rabbitMessages = rabbitMessages();
-        boolean rabbitAvailable = rabbitMessages != null && !rabbitMessages.isEmpty();
+        boolean rabbitAvailable = rabbitMessages != null;
         EmailsReport emailReport = emailReport();
         boolean emailAvailable = emailReport != null && emailReport.available();
 
@@ -373,6 +385,8 @@ public class ReactiveLiveActivityController {
                 limit,
                 kafkaMessages,
                 kafkaAvailable,
+                jmsMessages,
+                jmsAvailable,
                 rabbitMessages,
                 rabbitAvailable,
                 emailAvailable ? emailReport.messages() : List.<EmailMessageDto>of(),
@@ -508,6 +522,18 @@ public class ReactiveLiveActivityController {
             return null;
         }
         KafkaActivityRecorder recorder = kafkaActivity.getIfAvailable();
+        if (recorder == null || !recorder.isEnabled()) {
+            return null;
+        }
+        return recorder.recent();
+    }
+
+    /** Recent JMS messages from the independent JMS bounded buffer. */
+    private List<JmsActivityRecorder.CapturedMessage> jmsMessages() {
+        if (!properties.isPanelEnabled(BootUiPanels.JMS)) {
+            return null;
+        }
+        JmsActivityRecorder recorder = jmsActivity.getIfAvailable();
         if (recorder == null || !recorder.isEnabled()) {
             return null;
         }

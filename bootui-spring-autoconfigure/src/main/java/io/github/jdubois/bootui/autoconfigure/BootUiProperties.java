@@ -147,6 +147,8 @@ public class BootUiProperties {
      * Kafka message capture settings, feeding the Live Activity stream's {@code MESSAGING} entries.
      */
     private Kafka kafka = new Kafka();
+    /** JMS message capture settings for its independent Live Activity {@code MESSAGING} buffer. */
+    private Jms jms = new Jms();
     /**
      * RabbitMQ (AMQP) message capture settings, feeding the Live Activity stream's
      * {@code MESSAGING} entries.
@@ -444,6 +446,14 @@ public class BootUiProperties {
 
     public void setKafka(Kafka kafka) {
         this.kafka = kafka == null ? new Kafka() : kafka;
+    }
+
+    public Jms getJms() {
+        return jms;
+    }
+
+    public void setJms(Jms jms) {
+        this.jms = jms == null ? new Jms() : jms;
     }
 
     public Rabbitmq getRabbitmq() {
@@ -1297,12 +1307,11 @@ public class BootUiProperties {
         private boolean enabled = true;
 
         /**
-         * Whether the message key is retained alongside each captured entry (truncated to {@link
-         * #maxKeyLength}). On by default since a Kafka key is typically a correlation/partitioning id
-         * rather than a secret, but this lets an application disable it when its keys do carry sensitive
-         * data. The message value/payload is never captured at all, regardless of this setting: unlike a
-         * SQL statement or a config value, it is an arbitrary, potentially large application payload
-         * with no generic masking strategy.
+         * Whether a SHA-256 hash of the message key is retained alongside each captured entry (truncated
+         * to {@link #maxKeyLength}). The raw key is never retained. On by default since a Kafka key is
+         * typically a correlation/partitioning id rather than a secret, but this lets an application
+         * disable even the hash when its keys carry sensitive data. The message value/payload is never
+         * captured at all.
          */
         private boolean captureKey = true;
 
@@ -1312,9 +1321,9 @@ public class BootUiProperties {
         private int maxEntries = 200;
 
         /**
-         * Maximum retained length of a captured message key; longer keys are truncated.
+         * Maximum retained length of the message key's hex-encoded SHA-256 hash.
          */
-        private int maxKeyLength = 200;
+        private int maxKeyLength = 16;
 
         public boolean isEnabled() {
             return enabled;
@@ -1346,6 +1355,64 @@ public class BootUiProperties {
 
         public void setMaxKeyLength(int maxKeyLength) {
             this.maxKeyLength = maxKeyLength;
+        }
+    }
+
+    /**
+     * JMS message capture settings for the Live Activity stream's {@code MESSAGING} entries.
+     */
+    public static class Jms {
+
+        /**
+         * Whether BootUI captures {@link org.springframework.jms.core.JmsTemplate} sends and
+         * {@code @JmsListener} deliveries into the Live Activity stream as {@code MESSAGING}
+         * entries. When {@code false}, no JMS bean is post-processed. Only takes effect when
+         * {@code spring-jms} is on the classpath.
+         */
+        private boolean enabled = true;
+
+        /**
+         * Whether a provider-assigned JMS message ID is retained as a truncated SHA-256 hash. The
+         * raw message ID is never stored.
+         */
+        private boolean captureMessageId = true;
+
+        /** Maximum number of JMS messages retained in the in-memory ring buffer. */
+        private int maxEntries = 200;
+
+        /** Maximum retained length of the JMS message ID's hex-encoded SHA-256 hash. */
+        private int maxMessageIdLength = 16;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public boolean isCaptureMessageId() {
+            return captureMessageId;
+        }
+
+        public void setCaptureMessageId(boolean captureMessageId) {
+            this.captureMessageId = captureMessageId;
+        }
+
+        public int getMaxEntries() {
+            return maxEntries;
+        }
+
+        public void setMaxEntries(int maxEntries) {
+            this.maxEntries = maxEntries;
+        }
+
+        public int getMaxMessageIdLength() {
+            return maxMessageIdLength;
+        }
+
+        public void setMaxMessageIdLength(int maxMessageIdLength) {
+            this.maxMessageIdLength = maxMessageIdLength;
         }
     }
 

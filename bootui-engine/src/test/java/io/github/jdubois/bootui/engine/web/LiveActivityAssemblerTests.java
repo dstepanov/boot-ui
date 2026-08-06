@@ -14,6 +14,7 @@ import io.github.jdubois.bootui.core.dto.SecurityLogEventDto;
 import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
 import io.github.jdubois.bootui.engine.cache.CacheActivityEvent;
 import io.github.jdubois.bootui.engine.cache.CacheActivityOperation;
+import io.github.jdubois.bootui.engine.jms.JmsActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.CapturedMessage;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.Direction;
@@ -779,7 +780,7 @@ class LiveActivityAssemblerTests {
 
     @Test
     void renderedKafkaEntryNeverExposesTheRawKey() {
-        KafkaActivityRecorder recorder = new KafkaActivityRecorder(true, true, 10, 50);
+        KafkaActivityRecorder recorder = new KafkaActivityRecorder(true, true, 10, 16);
         recorder.recordProduce("orders", 0, "super-secret-key", null, true, null);
 
         LiveActivityReport report = assembler.report(
@@ -807,6 +808,46 @@ class LiveActivityAssemblerTests {
         assertThat(entry(report, "kafka-1").detail())
                 .contains(hashedKey("super-secret-key"))
                 .doesNotContain("super-secret-key");
+    }
+
+    @Test
+    void mergesJmsMessagesThroughTheSpringCapableOverload() {
+        JmsActivityRecorder recorder = new JmsActivityRecorder(true, true, 10, 16);
+        recorder.recordConsume("orders", "ID:secret", 4L, true, null, null, "listener");
+
+        LiveActivityReport report = assembler.report(
+                requests(),
+                List.of(),
+                false,
+                null,
+                exceptions(),
+                List.of(),
+                false,
+                List.of(),
+                false,
+                List.of(),
+                "UP",
+                0,
+                List.of(),
+                false,
+                recorder.recent(),
+                true,
+                List.of(),
+                false,
+                List.of(),
+                false,
+                List.of(),
+                false);
+
+        assertThat(report.sources()).contains("jms");
+        assertThat(entry(report, "jms-1")).satisfies(message -> {
+            assertThat(message.summary()).isEqualTo("← orders");
+            assertThat(message.detail())
+                    .contains("messageId=")
+                    .doesNotContain("ID:secret")
+                    .doesNotContain("key=");
+            assertThat(message.durationMs()).isEqualTo(4L);
+        });
     }
 
     @Test
@@ -1188,7 +1229,7 @@ class LiveActivityAssemblerTests {
     }
 
     private static String hashedKey(String key) {
-        KafkaActivityRecorder recorder = new KafkaActivityRecorder(true, true, 1, 50);
+        KafkaActivityRecorder recorder = new KafkaActivityRecorder(true, true, 1, 16);
         recorder.recordProduce("orders", 0, key, 0L, true, null);
         return recorder.recent().get(0).key();
     }
