@@ -74,4 +74,16 @@ test.describe('Overview view', () => {
       'https://github.com/jdubois/boot-ui'
     )
   })
+
+  test('returns to the host application homepage', async ({openView, page}) => {
+    await openView('overview', 'Overview')
+
+    await expect(page.locator('meta[name="bootui-application-path"]')).toHaveAttribute('content', '/')
+    const home = page.getByRole('link', {name: 'Application homepage'})
+    await expect(home).toHaveAttribute('href', '/')
+    await home.click()
+
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByRole('heading', {name: 'Welcome to the BootUI sample app'})).toBeVisible()
+  })
 })

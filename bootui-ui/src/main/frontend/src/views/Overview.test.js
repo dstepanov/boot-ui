@@ -79,6 +79,7 @@ const allPanels = {
 
 describe('Overview', () => {
   afterEach(() => {
+    document.head.innerHTML = ''
     vi.unstubAllGlobals()
   })
 
@@ -90,6 +91,16 @@ describe('Overview', () => {
     expect(wrapper.text()).toContain('Overall score')
     // The marketing hero is gone; the host-app link is demoted to a small header action.
     expect(wrapper.find('a[href="/"]').text()).toContain('Application homepage')
+  })
+
+  it('links to the injected application root instead of the origin root', async () => {
+    document.head.innerHTML = '<meta content="/host/" name="bootui-application-path" />'
+    stubFetch({})
+
+    const wrapper = mountOverview(allPanels)
+    await flushPromises()
+
+    expect(wrapper.get('a[href="/host/"]').text()).toContain('Application homepage')
   })
 
   it('renders a card per available scanner and hides unavailable ones', async () => {

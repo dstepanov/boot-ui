@@ -48,6 +48,9 @@ public class BootUiIndexController {
     private static final Pattern EXISTING_API_PATH =
             Pattern.compile("(?i)<meta\\b[^>]*\\bname=[\"']bootui-api-path[\"']");
 
+    private static final Pattern EXISTING_APPLICATION_PATH =
+            Pattern.compile("(?i)<meta\\b[^>]*\\bname=[\"']bootui-application-path[\"']");
+
     private final BootUiProperties properties;
 
     private final Resource indexResource;
@@ -71,7 +74,8 @@ public class BootUiIndexController {
         String contextPath = request.getContextPath();
         String baseHref = contextPath + properties.getPath() + "/";
         String apiPath = contextPath + properties.getApiPath();
-        String html = injectRuntimePaths(template(), baseHref, apiPath);
+        String applicationPath = contextPath.isEmpty() ? "/" : contextPath + "/";
+        String html = injectRuntimePaths(template(), baseHref, apiPath, applicationPath);
         response.setContentType(MediaType.TEXT_HTML_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.getWriter().write(html);
@@ -116,20 +120,38 @@ public class BootUiIndexController {
     }
 
     /**
-     * Injects the document base plus the application-root-aware API path consumed by the shared SPA.
+     * Injects the document base plus the application-root-aware API and host-application paths consumed
+     * by the shared SPA.
      */
+    public static String injectRuntimePaths(String html, String baseHref, String apiPath, String applicationPath) {
+        String rewritten = injectRuntimePaths(html, baseHref, apiPath);
+        return injectRuntimePath(rewritten, EXISTING_APPLICATION_PATH, "bootui-application-path", applicationPath);
+    }
+
+    /**
+     * Preserves the original shell-rewriting contract for callers that do not supply the host
+     * application path.
+     *
+     * @deprecated use {@link #injectRuntimePaths(String, String, String, String)} so the shared SPA can
+     *     link back to the host application root
+     */
+    @Deprecated(since = "1.12.0", forRemoval = false)
     public static String injectRuntimePaths(String html, String baseHref, String apiPath) {
         String rewritten = injectBaseHref(html, baseHref);
-        if (EXISTING_API_PATH.matcher(rewritten).find()) {
-            return rewritten;
+        return injectRuntimePath(rewritten, EXISTING_API_PATH, "bootui-api-path", apiPath);
+    }
+
+    private static String injectRuntimePath(String html, Pattern existingPath, String name, String path) {
+        if (existingPath.matcher(html).find()) {
+            return html;
         }
-        Matcher matcher = HEAD_OPEN.matcher(rewritten);
+        Matcher matcher = HEAD_OPEN.matcher(html);
         if (!matcher.find()) {
-            return rewritten;
+            return html;
         }
         int insertAt = matcher.end();
-        String meta = "\n    <meta content=\"" + escapeAttribute(apiPath) + "\" name=\"bootui-api-path\" />";
-        return rewritten.substring(0, insertAt) + meta + rewritten.substring(insertAt);
+        String meta = "\n    <meta content=\"" + escapeAttribute(path) + "\" name=\"" + name + "\" />";
+        return html.substring(0, insertAt) + meta + html.substring(insertAt);
     }
 
     private static String escapeAttribute(String value) {

@@ -4,7 +4,7 @@ import {defineConfig} from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import checker from 'vite-plugin-checker'
 import {generateBootstrapIconsSubset} from './scripts/generate-icon-subset.mjs'
-import {normalizeBootUiApiPath, normalizeBootUiPath} from './src/utils/bootUiPath.js'
+import {normalizeBootUiApiPath, normalizeBootUiApplicationPath, normalizeBootUiPath} from './src/utils/bootUiPath.js'
 
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url))
 
@@ -34,13 +34,15 @@ function bootstrapIconsSubsetPlugin() {
 // is served from a trailing-slash shell URL, those relative URLs resolve correctly
 // under the configured BootUI path and the host application's root. An absolute
 // build base would ignore those runtime paths and 404. The dev server uses the
-// configured dev base and API path so its proxy matches the runtime metadata.
+// configured dev base, application path, and API path so its runtime metadata
+// matches the packaged shell contract.
 //
 // Override the dev-server base and proxy path with BOOTUI_DEV_PATH (e.g.
 // BOOTUI_DEV_PATH=/my-console) when developing against an app that uses a
 // non-default bootui.path. The path must start with '/' and must not be '/'.
 const devBasePath = normalizeBootUiPath(process.env.BOOTUI_DEV_PATH || '/bootui')
 const devApiPath = normalizeBootUiApiPath(process.env.BOOTUI_DEV_API_PATH || devBasePath + '/api')
+const devApplicationPath = normalizeBootUiApplicationPath(process.env.BOOTUI_DEV_APPLICATION_PATH || '/')
 
 function devRuntimePathPlugin() {
   return {
@@ -50,7 +52,12 @@ function devRuntimePathPlugin() {
       order: 'pre',
       handler(html, context) {
         if (!context.server) return html
-        return html.replace(/<head([^>]*)>/i, `<head$1>\n    <meta content="${devApiPath}" name="bootui-api-path" />`)
+        return html.replace(
+          /<head([^>]*)>/i,
+          `<head$1>
+    <meta content="${devApplicationPath}" name="bootui-application-path" />
+    <meta content="${devApiPath}" name="bootui-api-path" />`
+        )
       }
     }
   }

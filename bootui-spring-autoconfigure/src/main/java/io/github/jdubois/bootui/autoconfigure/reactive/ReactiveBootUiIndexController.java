@@ -52,7 +52,8 @@ public class ReactiveBootUiIndexController {
         String contextPath = exchange.getRequest().getPath().contextPath().value();
         String baseHref = contextPath + properties.getPath() + "/";
         String apiPath = contextPath + properties.getApiPath();
-        String html = BootUiIndexController.injectRuntimePaths(template(), baseHref, apiPath);
+        String applicationPath = contextPath.isEmpty() ? "/" : contextPath + "/";
+        String html = BootUiIndexController.injectRuntimePaths(template(), baseHref, apiPath, applicationPath);
         byte[] bytes = html.getBytes(StandardCharsets.UTF_8);
         ServerHttpResponse response = exchange.getResponse();
         response.getHeaders().setContentType(MediaType.TEXT_HTML);

@@ -24,6 +24,7 @@ class QuarkusBootUiPathsTest {
         assertThat(QuarkusBootUiPaths.apiPath(configured)).isEqualTo("/internal/bootui-api");
         assertThat(QuarkusBootUiPaths.applicationPath(configured, QuarkusBootUiPaths.uiPath(configured)))
                 .isEqualTo("/host/dev-console");
+        assertThat(QuarkusBootUiPaths.applicationPath(configured, "/")).isEqualTo("/host/");
     }
 
     @Test

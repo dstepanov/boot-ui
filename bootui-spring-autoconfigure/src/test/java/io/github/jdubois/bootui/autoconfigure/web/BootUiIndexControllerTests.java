@@ -47,6 +47,7 @@ class BootUiIndexControllerTests {
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
                 .andExpect(content().string(containsString("<base href=\"/bootui/\" />")))
+                .andExpect(content().string(containsString("content=\"/\" name=\"bootui-application-path\"")))
                 .andExpect(content().string(containsString("content=\"/bootui/api\" name=\"bootui-api-path\"")));
     }
 
@@ -69,18 +70,20 @@ class BootUiIndexControllerTests {
         mvc.perform(get("/api/bootui").contextPath("/api"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("<base href=\"/api/bootui/\" />")))
+                .andExpect(content().string(containsString("content=\"/api/\" name=\"bootui-application-path\"")))
                 .andExpect(content().string(containsString("content=\"/api/bootui/api\" name=\"bootui-api-path\"")));
     }
 
     @Test
     void baseHrefHonorsCustomPathProperty() throws Exception {
         BootUiProperties properties = new BootUiProperties();
-        properties.setPath("/devtools");
+        properties.setPath("/tools/devtools");
         MockMvc mvc = buildMvc(properties);
 
-        mvc.perform(get("/devtools"))
+        mvc.perform(get("/host/tools/devtools").contextPath("/host"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("<base href=\"/devtools/\" />")));
+                .andExpect(content().string(containsString("<base href=\"/host/tools/devtools/\" />")))
+                .andExpect(content().string(containsString("content=\"/host/\" name=\"bootui-application-path\"")));
     }
 
     @Test
@@ -134,10 +137,23 @@ class BootUiIndexControllerTests {
     void injectsApiPathMetadataWithoutDuplicatingIt() {
         String html = "<html><head></head><body></body></html>";
 
-        String once = BootUiIndexController.injectRuntimePaths(html, "/console/", "/console/api");
-        String twice = BootUiIndexController.injectRuntimePaths(once, "/ignored/", "/ignored/api");
+        String once = BootUiIndexController.injectRuntimePaths(html, "/console/", "/console/api", "/");
+        String twice = BootUiIndexController.injectRuntimePaths(once, "/ignored/", "/ignored/api", "/ignored/");
 
         assertThat(twice).contains("content=\"/console/api\" name=\"bootui-api-path\"");
+        assertThat(twice).contains("content=\"/\" name=\"bootui-application-path\"");
         assertThat(twice).doesNotContain("/ignored/api");
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    void originalRuntimePathOverloadRemainsCompatible() {
+        String result =
+                BootUiIndexController.injectRuntimePaths("<html><head></head></html>", "/console/", "/console/api");
+
+        assertThat(result)
+                .contains("<base href=\"/console/\" />")
+                .contains("content=\"/console/api\" name=\"bootui-api-path\"")
+                .doesNotContain("bootui-application-path");
     }
 }
