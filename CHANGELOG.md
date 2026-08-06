@@ -7,10 +7,75 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Spring WebFlux security coverage.** A dedicated 25-rule reactive Security advisor now evaluates
+  `SecurityWebFilterChain` configuration across authorization, CSRF, CORS, headers, Actuator exposure, OAuth2/JWT,
+  configuration, and session policy. The raw Spring Security panel also maps reactive chains, filters, endpoint
+  authorization, and best-effort request explanations; both panels exclude BootUI's own permit-all chain (#654, #657).
+- **REST Client diagnostics on Spring WebFlux and Quarkus.** The standalone panel now streams calls captured from
+  instrumented WebFlux `WebClient` builders, while Quarkus captures metadata-only calls from `@RegisterRestClient`
+  REST Client Reactive proxies. Both feed the shared panel and Live Activity, fail open if capture itself fails, and
+  preserve the existing clear/recording controls; Quarkus intentionally never captures payloads or arbitrary headers
+  (#658, #663).
+- **RabbitMQ and JMS messaging diagnostics.** RabbitMQ publish/consume metadata now appears in a dedicated panel and Live
+  Activity on Spring MVC, Spring WebFlux, and Quarkus, without retaining message payloads or arbitrary headers. A matching
+  JMS panel and Live Activity source cover Spring-managed producers and listeners on Spring MVC and WebFlux; JMS remains
+  unavailable on Quarkus and in GraalVM native images (#655, #660).
+
 ### Changed
 
+- **Custom UI and API mounts now work end to end on Spring MVC, Spring WebFlux, and Quarkus.** `bootui.path` moves the
+  shell, assets, APIs, streams, downloads, authentication cookies, and access guards together, while `bootui.api-path`
+  can override the derived `<bootui.path>/api` mount. Both compose once with the host framework's application root,
+  invalid or reserved paths fail startup clearly, and the legacy `/bootui` surface is not left exposed after a move
+  (#662).
+- **SSE-backed panels now report connection health and recover more predictably.** Live Activity, Exceptions, SQL Trace,
+  Security Logs, and REST Client show calm reconnecting/unavailable states with an explicit retry action, avoid duplicate
+  `EventSource` instances and refresh storms, and reconnect correctly after visibility or network changes (#661).
+- **State-changing UI actions now consistently require confirmation.** Thread-dump downloads, unsafe HTTP Probe methods,
+  and configuration override creates, updates, and deletes use the branded confirmation flow, default focus to Cancel,
+  and block duplicate submissions while a decision is pending (#692).
 - Renamed the AI Usage panel to AI Framework and placed it directly after REST Client in the Services group. The existing
-  `ai` route, `/bootui/api/ai/**` contract, and `bootui.ai.*` / `bootui.panels.ai.*` property keys remain stable.
+  `ai` route, `/bootui/api/ai/**` contract, and `bootui.ai.*` / `bootui.panels.ai.*` property keys remain stable (#691).
+- **All Quarkus modules now align on Quarkus 3.33.3.1 LTS** through the shared, published
+  `bootui-quarkus-parent`, preventing runtime/deployment/sample-app BOM drift and keeping the Quarkus LangChain4j BOM on
+  its compatible platform line (#701).
+- **Dependencies and build tooling updated**, including Vue 3.5.40, Vite 8.2.0, the Quarkus LangChain4j BOM 1.12.1,
+  GraalVM Native Build Tools 1.1.6, and frontend-maven-plugin 2.0.2.
+- **Copilot app Maven scripts now isolate parallel worktrees** by preserving existing `MAVEN_OPTS` while setting
+  `maven.repo.local=.m2` for setup and subsequent Maven-backed server invocations, preventing same-version local artifacts
+  from colliding through the shared `~/.m2` repository (#702).
+
+### Fixed
+
+- **Accessibility defects across the shared UI** are corrected: native form controls now have programmatic labels; the
+  mobile navigation and command palette contain and restore focus with complete dialog/combobox semantics; pointer-driven
+  rows, cards, and sort controls are keyboard-operable; and muted/placeholder text meets WCAG 2.1 AA contrast in both
+  themes (#694–#698).
+- **Rapid filtering, refreshes, pagination, and navigation no longer let stale frontend requests overwrite newer data.**
+  Paged views now cancel superseded work, guard against fetch implementations that ignore abort signals, and keep loading
+  ownership with the current request (#659).
+- **A slow or disconnected Log Tail browser can no longer block Spring MVC application logging threads.** SSE delivery
+  now uses ordered, bounded per-subscriber queues and capped daemon workers; overload disconnects only the affected
+  subscriber (#693).
+- **Custom mounts now link back to the real host application root** instead of always navigating to `/`, including when
+  Spring context paths, WebFlux base paths, or Quarkus root paths are configured (#699).
+- **The UI no longer fails when browser storage is unavailable or denied.** Theme, sidebar, expanded navigation groups,
+  recent panels, and Live Activity filters use a safe adapter with an in-memory fallback and recover from malformed stored
+  values (#700).
+- **Native and container sample builds are reliable again.** GraalVM native-image builds work with Maven 3.9.16, and the
+  standalone Quarkus sample image starts without requiring the Docker-backed Observability Dev Service while retaining
+  BootUI's in-process trace capture (#641, #688).
+- **Documentation heading links remain visible below the fixed navbar** instead of scrolling their target underneath it
+  (#690).
+
+### Security
+
+- **Patched vulnerable documentation and frontend build/test dependencies** by updating `immutable` to 5.1.9,
+  `linkify-it` to 5.0.2, `fast-uri` to 3.1.5, and every affected `brace-expansion` line: the documentation toolchain to
+  1.1.18 and the frontend line through the 2.1.4 backport to its final 5.0.9 release. These packages are not part of
+  BootUI's shipped Java or browser runtime (#625–#627, #676, #678–#679, 4c895203).
 
 ## [1.12.0] - 2026-07-12
 
@@ -1276,6 +1341,11 @@ First tagged BootUI alpha. Highlights of the harden-all-visible-panels scope:
   request history, distributed tracing, multi-service orchestration, and live
   Docker Compose lifecycle control are intentionally out of scope for the alpha.
 
+[Unreleased]: https://github.com/jdubois/boot-ui/compare/v1.12.0...HEAD
+[1.12.0]: https://github.com/jdubois/boot-ui/compare/v1.11.0...v1.12.0
+[1.11.0]: https://github.com/jdubois/boot-ui/compare/v1.10.0...v1.11.0
+[1.10.0]: https://github.com/jdubois/boot-ui/compare/v1.9.0...v1.10.0
+[1.9.0]: https://github.com/jdubois/boot-ui/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/jdubois/boot-ui/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/jdubois/boot-ui/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/jdubois/boot-ui/compare/v1.5.2...v1.6.0
@@ -1297,4 +1367,4 @@ First tagged BootUI alpha. Highlights of the harden-all-visible-panels scope:
 [0.1.0-alpha.4]: https://github.com/jdubois/boot-ui/releases/tag/v0.1.0-alpha.4
 [0.1.0-alpha.3]: https://github.com/jdubois/boot-ui/releases/tag/v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/jdubois/boot-ui/releases/tag/v0.1.0-alpha.2
-[0.1.0-alpha.1]: https://github.com/jdubois/boot-ui/releases/tag/v0.1.0-alpha.1
+[0.1.0-alpha.1]: https://github.com/jdubois/boot-ui/commit/6ad9e3371c1c92d82597400ffa9063b7746bafe7
