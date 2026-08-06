@@ -100,7 +100,7 @@ function stubMatchMedia(narrow = false) {
   )
 }
 
-async function mountApp(initialPath = '/overview') {
+async function mountApp(initialPath = '/overview', options = {}) {
   if (typeof window.matchMedia !== 'function') stubMatchMedia()
   vi.resetModules()
   const {default: App} = await import('./App.vue')
@@ -117,7 +117,7 @@ async function mountApp(initialPath = '/overview') {
     global: {
       plugins: [router],
       stubs: {
-        CommandPalette: true,
+        CommandPalette: options.stubCommandPalette === false ? false : true,
         RouterView: {template: '<div />'}
       }
     }
@@ -268,6 +268,82 @@ describe('App sidebar navigation', () => {
     expect(wrapper.find('#bootui-mobile-navigation').attributes('aria-hidden')).toBe('true')
     expect(document.activeElement).toBe(wrapper.find('main').element)
     expect(wrapper.find('#bootui-mobile-navigation').element.contains(document.activeElement)).toBe(false)
+  })
+
+  it('keeps the command palette closed while the mobile navigation modal is open', async () => {
+    stubMatchMedia(true)
+    const {wrapper} = await mountApp('/overview', {stubCommandPalette: false})
+    const toggle = wrapper.find('.nav-hamburger')
+
+    await toggle.trigger('click')
+    await flushPromises()
+    window.dispatchEvent(new KeyboardEvent('keydown', {key: 'k', ctrlKey: true}))
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="Command palette"]').exists()).toBe(false)
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('#bootui-mobile-navigation').attributes('aria-modal')).toBe('true')
+  })
+})
+
+describe('App command palette', () => {
+  beforeEach(() => {
+    stubLocalStorage()
+    mockShellFetch()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    restoreLocalStorage()
+    document.body.innerHTML = ''
+  })
+
+  it('awaits rendering, focuses the search input, makes the background inert, and restores the trigger', async () => {
+    const {wrapper} = await mountApp('/overview', {stubCommandPalette: false})
+    const trigger = wrapper.find('.cp-trigger')
+    trigger.element.focus()
+
+    await trigger.trigger('click')
+    await flushPromises()
+
+    const input = wrapper.find('.cp-input')
+    expect(document.activeElement).toBe(input.element)
+    expect(wrapper.find('.bootui-workspace').attributes()).toHaveProperty('inert')
+    expect(wrapper.find('#bootui-mobile-navigation').attributes()).toHaveProperty('inert')
+
+    await input.trigger('keydown', {key: 'Escape'})
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="Command palette"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger.element)
+  })
+
+  it('restores the invoking control after opening with the keyboard shortcut', async () => {
+    const {wrapper} = await mountApp('/overview', {stubCommandPalette: false})
+    const themeToggle = wrapper.find('.theme-toggle')
+    themeToggle.element.focus()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', {key: 'k', ctrlKey: true}))
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.find('.cp-input').element)
+
+    await wrapper.find('.cp-input').trigger('keydown', {key: 'Escape'})
+    await flushPromises()
+    expect(document.activeElement).toBe(themeToggle.element)
+  })
+
+  it('moves focus to main content after command-palette navigation', async () => {
+    const {router, wrapper} = await mountApp('/overview', {stubCommandPalette: false})
+    await wrapper.find('.cp-trigger').trigger('click')
+    await flushPromises()
+    const input = wrapper.find('.cp-input')
+    await input.setValue('Architecture')
+    await input.trigger('keydown', {key: 'Enter'})
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('architecture')
+    expect(wrapper.find('[aria-label="Command palette"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(wrapper.find('main').element)
   })
 })
 

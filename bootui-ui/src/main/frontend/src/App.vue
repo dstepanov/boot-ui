@@ -61,6 +61,8 @@ async function onNarrowChange(e) {
 
 const commandPaletteOpen = ref(false)
 const commandPaletteRef = ref(null)
+const commandPaletteTriggerRef = ref(null)
+let commandPaletteInvoker = null
 const themeMediaQuery =
   typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(THEME_QUERY) : null
 const themePreference = ref(readThemePreference(typeof window === 'undefined' ? null : window.localStorage))
@@ -73,9 +75,33 @@ const themeToggleText = computed(() => `${darkTheme.value ? 'Light' : 'Dark'} mo
 provide('overview', overview)
 provide('panels', panels)
 
-function openCommandPalette() {
+async function openCommandPalette(event) {
+  if (commandPaletteOpen.value || mobileDrawerOpen.value) return
+  const eventTarget = event?.currentTarget
+  const activeElement = typeof document === 'undefined' ? null : document.activeElement
+  commandPaletteInvoker =
+    eventTarget instanceof HTMLElement
+      ? eventTarget
+      : activeElement instanceof HTMLElement
+        ? activeElement
+        : commandPaletteTriggerRef.value
   commandPaletteOpen.value = true
+  await nextTick()
   commandPaletteRef.value?.focusInput()
+}
+
+async function closeCommandPalette(focusTarget = 'invoker') {
+  if (!commandPaletteOpen.value) return
+  commandPaletteOpen.value = false
+  await nextTick()
+  const target =
+    focusTarget === 'content'
+      ? mainContentRef.value
+      : commandPaletteInvoker?.isConnected
+        ? commandPaletteInvoker
+        : commandPaletteTriggerRef.value
+  target?.focus()
+  commandPaletteInvoker = null
 }
 
 watch(sidebarCollapsed, (v) => localStorage.setItem('bootui.sidebar.collapsed', String(v)))
@@ -559,11 +585,12 @@ function onGlobalKeydown(e) {
     }
     return
   }
-  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault()
-    commandPaletteOpen.value = !commandPaletteOpen.value
     if (commandPaletteOpen.value) {
-      commandPaletteRef.value?.focusInput()
+      closeCommandPalette()
+    } else {
+      openCommandPalette()
     }
   }
 }
@@ -571,14 +598,19 @@ function onGlobalKeydown(e) {
 
 <template>
   <div class="bootui-shell min-vh-100">
-    <CommandPalette v-if="commandPaletteOpen" ref="commandPaletteRef" @close="commandPaletteOpen = false" />
+    <CommandPalette v-if="commandPaletteOpen" ref="commandPaletteRef" @close="closeCommandPalette" />
     <ConfirmDialog />
     <div class="ambient-orb ambient-orb-one"></div>
     <div class="ambient-orb ambient-orb-two"></div>
 
     <div v-if="mobileDrawerOpen" aria-hidden="true" class="bootui-nav-backdrop" @click="dismissMobileNav"></div>
 
-    <section v-if="authenticationRequired" class="authentication-gate" aria-labelledby="authentication-title">
+    <section
+      v-if="authenticationRequired"
+      :inert="commandPaletteOpen ? true : undefined"
+      class="authentication-gate"
+      aria-labelledby="authentication-title"
+    >
       <div class="authentication-card">
         <span class="authentication-icon"><i class="bi bi-shield-lock"></i></span>
         <div>
@@ -619,7 +651,7 @@ function onGlobalKeydown(e) {
           'bootui-sidebar--drawer': isNarrow,
           'bootui-sidebar--open': mobileDrawerOpen
         }"
-        :inert="mobileDrawerClosed ? true : undefined"
+        :inert="commandPaletteOpen || mobileDrawerClosed ? true : undefined"
         :role="isNarrow ? 'dialog' : undefined"
         class="bootui-sidebar"
         @keydown="onMobileNavKeydown"
@@ -747,6 +779,7 @@ function onGlobalKeydown(e) {
       <transition name="flyout-fade">
         <div
           v-if="railFlyout"
+          :inert="commandPaletteOpen ? true : undefined"
           class="bootui-nav-flyout"
           :style="{top: railFlyout.top + 'px', left: railFlyout.left + 'px'}"
           role="group"
@@ -789,7 +822,7 @@ function onGlobalKeydown(e) {
         </div>
       </transition>
 
-      <div :inert="mobileDrawerOpen ? true : undefined" class="bootui-workspace">
+      <div :inert="commandPaletteOpen || mobileDrawerOpen ? true : undefined" class="bootui-workspace">
         <header class="topbar">
           <div class="topbar-lead">
             <button
@@ -810,7 +843,13 @@ function onGlobalKeydown(e) {
             </div>
           </div>
           <div class="topbar-actions">
-            <button class="cp-trigger" title="Open command palette (⌘K)" @click="openCommandPalette">
+            <button
+              ref="commandPaletteTriggerRef"
+              class="cp-trigger"
+              title="Open command palette (⌘K)"
+              type="button"
+              @click="openCommandPalette"
+            >
               <i class="bi bi-search me-1"></i>
               <span class="cp-trigger-label">Go to panel</span>
               <kbd class="cp-trigger-hint">⌘K</kbd>
