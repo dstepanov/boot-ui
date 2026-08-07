@@ -142,8 +142,8 @@ returns the source JSON for one event on demand. It is:
   (Copilot enables it by default; Claude Code disables it by default because its
   logs can contain prompts and outputs);
 - automatically disabled when `bootui.expose-values=METADATA_ONLY`;
-- subject to the standard loopback-only filter applied to every BootUI
-  endpoint.
+- subject to the standard `LocalhostGuard` and API authentication policy
+  applied to every BootUI endpoint.
 
 **BootUI must never be enabled in production.** Issues that require running
 BootUI in a production-like setting (publicly exposed, with security
