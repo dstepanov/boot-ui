@@ -36,7 +36,8 @@ const server = createServer(async (request, response) => {
 
     return json(response, 404, {error: 'Not found'})
   } catch (error) {
-    return json(response, 500, {error: error instanceof Error ? error.message : String(error)})
+    console.error('Deterministic OSV fixture request failed', error)
+    return json(response, 500, {error: 'Internal fixture error'})
   }
 })
 
