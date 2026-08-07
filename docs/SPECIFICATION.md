@@ -1526,121 +1526,75 @@ Acceptance criteria:
 
 ## 6. Technical architecture
 
-### 6.1 Proposed repository layout
+### 6.1 Current repository layout
 
 ```text
 BootUI/
-├── README.md
-├── docs/
-│   ├── SPECIFICATION.md
-│   └── PLAN.md
 ├── pom.xml
 ├── bootui-core/
+├── bootui-engine/
+├── bootui-conformance/
+├── bootui-ui/
 ├── bootui-spring-autoconfigure/
 ├── bootui-spring-boot-starter/
-├── bootui-ui/
-└── bootui-spring-sample-app/
+├── bootui-spring-boot-starter-reactive/
+├── bootui-spring-sample-app/
+├── bootui-spring-webflux-sample-app/
+├── bootui-quarkus-parent/
+├── bootui-quarkus/
+├── bootui-quarkus-deployment/
+├── bootui-quarkus-integration-tests/
+└── bootui-quarkus-sample-app/
 ```
 
 ### 6.2 Modules
 
-#### `bootui-core`
+Shared modules:
 
-Shared Java model and utilities.
+- `bootui-core`: immutable DTO records, secret masking, version metadata, and safe value rendering.
+- `bootui-engine`: framework-neutral services and advisor engines plus the neutral
+  `io.github.jdubois.bootui.spi` ports.
+- `bootui-conformance`: the shared HTTP contract suite and golden panel manifests run against every adapter.
+- `bootui-ui`: the Vue 3 / Composition API / Vite / Bootstrap 5.3 SPA, built once into
+  `META-INF/resources/bootui/` and served unchanged by every adapter.
 
-Responsibilities:
+Spring Boot modules:
 
-- DTOs returned by BootUI internal API.
-- Secret masking helpers.
-- Version metadata.
-- Safe value rendering.
-- Common error model.
+- `bootui-spring-autoconfigure`: shared Spring MVC/WebFlux auto-configuration, thin endpoint bindings, Spring SPI
+  implementations, safety filters, and Spring bootstrap integrations.
+- `bootui-spring-boot-starter`: drop-in Spring MVC/servlet starter.
+- `bootui-spring-boot-starter-reactive`: drop-in Spring WebFlux/reactive starter.
+- `bootui-spring-sample-app`: Spring MVC reference app and Playwright end-to-end suite.
+- `bootui-spring-webflux-sample-app`: Spring WebFlux reference app and conformance target.
 
-#### `bootui-spring-autoconfigure`
+Quarkus modules:
 
-Spring Boot 4 auto-configuration module.
+- `bootui-quarkus-parent`: shared Quarkus LTS BOM and plugin management.
+- `bootui-quarkus`: runtime JAX-RS/Vert.x resources, Quarkus SPI implementations, producers, and safety filters.
+- `bootui-quarkus-deployment`: build-time wiring, capability gates, bean registration, and production-dark activation.
+- `bootui-quarkus-integration-tests`: Docker-free `@QuarkusTest` conformance and smoke tests.
+- `bootui-quarkus-sample-app`: Quarkus reference app.
 
-Responsibilities:
+Dependency direction is one-way: `bootui-engine` depends on `bootui-core`, and each framework adapter depends on both.
+The shared `core`, `engine`, `conformance`, and UI modules never depend on Spring or Quarkus. JSON parsing and
+serialization stay in the adapters because Spring Boot and Quarkus use incompatible Jackson major versions.
 
-- Auto-configure BootUI when activation rules match.
-- Register internal BootUI API endpoints.
-- Serve static UI assets.
-- Bridge to Actuator endpoints or endpoint invokers.
-- Enforce local/dev safety checks.
-
-#### `bootui-spring-boot-starter`
-
-Spring Boot 4 starter dependency for users.
-
-Responsibilities:
-
-- Pull `bootui-spring-autoconfigure`.
-- Pull `bootui-ui`, `spring-boot-starter-web`, and `spring-boot-starter-actuator`.
-- Avoid bringing production-heavy dependencies.
-
-#### `bootui-ui`
-
-Vue.js frontend application.
-
-Required stack:
-
-- Vue 3.
-- Plain JavaScript with Vue Composition API.
-- Vite.
-- Bootstrap 5.3.
-
-Responsibilities:
-
-- Build static assets automatically during the Maven build.
-- Provide browser UI.
-- Consume BootUI internal API.
-- Avoid needing Node.js at runtime.
-- Package the compiled assets into the BootUI Java artifact so applications using the starter do not need a separate
-  frontend build or dev server.
-
-Build requirements:
-
-- The Maven build must install/use the configured Node.js and npm versions for reproducible frontend builds.
-- The frontend build must run before Java resources are packaged.
-- The generated Vue assets must be copied into a classpath location served by `bootui-spring-autoconfigure`, such as
-  `META-INF/resources/bootui/`.
-- `./mvnw clean package` from the repository root must produce BootUI artifacts that already contain the compiled Vue
-  UI.
-- Consumer Spring Boot 4 applications should only need the `bootui-spring-boot-starter` dependency; they must not run
-  `npm install` or `npm run build` themselves.
-
-#### `bootui-spring-sample-app`
-
-Sample Spring Boot app used for demos and integration tests.
-
-Responsibilities:
-
-- Demonstrate common Spring Boot features.
-- Include Actuator, DevTools, web, JPA/PostgreSQL through Docker Compose, Redis-backed Cache, scheduling, and
-  Spring Security.
-- Provide enough beans, mappings, config, health, repositories, scheduled tasks, security chains, and logs to test
-  BootUI.
-- Host Playwright end-to-end tests for every visible BootUI route and the sample REST API.
+The Maven build installs the configured Node.js and npm versions, builds the frontend before Java resources are
+packaged, and produces adapter artifacts that already contain the compiled UI. Consumers only add the matching Spring
+starter or Quarkus extension; they do not run a frontend build.
 
 ### 6.3 Runtime architecture
 
 ```mermaid
 flowchart TD
-    A[Spring Boot app] --> B[BootUI auto-configuration]
-    B --> C[BootUI local UI at /bootui]
-    B --> D[BootUI internal API]
-    D --> E[Actuator endpoint bridge]
-    E --> F[beans]
-    E --> G[conditions]
-    E --> H[env]
-    E --> I[mappings]
-    E --> J[health]
-    E --> K[loggers]
-    E --> L[startup]
-    D --> M[Spring-managed metadata]
-    D --> N[Configuration metadata reader]
-    D --> O[Safety and masking layer]
-    C --> D
+    S[Spring Boot MVC or WebFlux app] --> SA[Spring adapter]
+    Q[Quarkus dev app] --> QA[Quarkus runtime and deployment adapter]
+    SA --> E[Framework-neutral engine and SPI]
+    QA --> E
+    E --> C[Core DTOs and masking]
+    SA --> API[Stable BootUI REST API]
+    QA --> API
+    UI[Shared Vue UI] --> API
 ```
 
 ### 6.4 API design
@@ -2031,19 +1985,14 @@ Examples:
 
 ## 8. Compatibility
 
-Initial target:
+Current compatibility:
 
 - Java 17 or later.
 - Spring Boot 4.x.
+- Quarkus 3.x.
 - Maven first.
-- Servlet web applications first, with a WebFlux (reactive) adapter now shipping alongside it — see
-  `docs/WEBFLUX-SUPPORT.md`.
+- Spring MVC, Spring WebFlux, and Quarkus web applications.
 - macOS/Linux/Windows compatible.
-
-Future compatibility:
-
-- Spring Boot 3.5 if demand requires it.
-- Gradle examples.
 
 ## 9. Testing strategy
 
