@@ -32,6 +32,16 @@ test('loads the SPA and assets only from the configured path', async ({page, req
   await expect(page).toHaveURL(/\/host\/$/)
 })
 
+test('recovers from an unknown hash without losing the configured mount', async ({page}) => {
+  await page.goto(`${UI_PATH}/#/missing-panel`)
+
+  await expect(page.getByRole('heading', {name: 'Page not found'})).toBeVisible()
+  await expect(page).toHaveURL(new RegExp(`${UI_PATH}/#/missing-panel$`))
+
+  await page.getByRole('link', {name: 'Go to Overview'}).click()
+  await expect(page).toHaveURL(new RegExp(`${UI_PATH}/#/overview$`))
+})
+
 test('uses the configured API path for queries, SSE, and security', async ({page, request}) => {
   const threads = await request.get(`${API_PATH}/threads?offset=0&limit=1`)
   expect(threads.ok()).toBeTruthy()
