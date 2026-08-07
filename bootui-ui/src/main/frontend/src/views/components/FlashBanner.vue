@@ -5,7 +5,9 @@ const props = defineProps({
   // Transient message: {text, type}. When null the banner renders nothing.
   message: {type: Object, default: null},
   // When true, prefix the text with a contextual icon chosen from the message type.
-  withIcon: {type: Boolean, default: false}
+  withIcon: {type: Boolean, default: false},
+  // Persistent status messages such as stale or partial data should not be dismissible.
+  dismissible: {type: Boolean, default: true}
 })
 
 defineEmits(['dismiss'])
@@ -39,7 +41,13 @@ const liveRole = computed(() => (['danger', 'warning'].includes(props.message?.t
         <i v-if="iconClass" :class="['bi', iconClass]" aria-hidden="true"></i>
         <span :class="{'ms-2': iconClass}">{{ message.text }}</span>
       </div>
-      <button class="btn-close" type="button" aria-label="Dismiss" @click="$emit('dismiss')"></button>
+      <button
+        v-if="dismissible"
+        class="btn-close"
+        type="button"
+        aria-label="Dismiss"
+        @click="$emit('dismiss')"
+      ></button>
     </template>
   </div>
 </template>

@@ -5,7 +5,9 @@ import {formatDuration, formatNumber, formatRelative, formatTime} from '../utils
 import {describeLoadError, formatLoadError} from '../utils/loadError.js'
 import {useCopyToClipboard} from '../utils/useCopyToClipboard'
 import {useAutoRefresh} from '../utils/useAutoRefresh.js'
+import {useDataState} from '../utils/panelState.js'
 import AiSetupChecklist from './components/AiSetupChecklist.vue'
+import FlashBanner from './components/FlashBanner.vue'
 import PanelHeader from './components/PanelHeader.vue'
 import PanelSkeleton from './components/PanelSkeleton.vue'
 import ProgressBar from './components/ProgressBar.vue'
@@ -17,6 +19,9 @@ const error = ref(null)
 const selectedSpanId = ref(null)
 const detailLoading = ref(false)
 const lastUpdated = ref(null)
+const partialWarning = ref(null)
+let tokenSeriesRequest = 0
+let detailRequest = 0
 
 const panels = inject('panels', ref(null))
 const platform = computed(() => panels.value?.platform ?? 'spring-boot')
@@ -29,14 +34,33 @@ const isStale = computed(() => {
 async function fetchAiUsage() {
   error.value = null
   try {
-    const [ovRes, tsRes] = await Promise.all([
+    const requestedWindow = windowMinutes.value
+    const requestId = ++tokenSeriesRequest
+    const [overviewResult, tokenResult] = await Promise.allSettled([
       apiFetch('api/ai/overview'),
-      apiFetch(`api/ai/tokens?minutes=${windowMinutes.value}`)
+      apiFetch(`api/ai/tokens?minutes=${requestedWindow}`)
     ])
+    if (overviewResult.status === 'rejected') throw overviewResult.reason
+    const ovRes = overviewResult.value
     if (!ovRes.ok) throw new Error(`HTTP ${ovRes.status}`)
     overview.value = await ovRes.json()
-    if (tsRes.ok) {
-      series.value = await tsRes.json()
+
+    if (requestId === tokenSeriesRequest) {
+      if (tokenResult.status === 'rejected') {
+        setTokenPartialWarning()
+      } else if (!tokenResult.value.ok) {
+        setTokenPartialWarning(`HTTP ${tokenResult.value.status}`)
+      } else {
+        try {
+          const nextSeries = await tokenResult.value.json()
+          if (requestId === tokenSeriesRequest && requestedWindow === windowMinutes.value) {
+            series.value = nextSeries
+            partialWarning.value = null
+          }
+        } catch {
+          if (requestId === tokenSeriesRequest) setTokenPartialWarning('invalid response')
+        }
+      }
     }
     lastUpdated.value = Date.now()
   } catch (e) {
@@ -44,7 +68,26 @@ async function fetchAiUsage() {
   }
 }
 
-const {autoRefresh, loading, initialLoading, load} = useAutoRefresh(fetchAiUsage)
+const {autoRefresh, loading, hasLoaded, initialLoading, load} = useAutoRefresh(fetchAiUsage)
+const panelState = useDataState({
+  loading,
+  loaded: hasLoaded,
+  error,
+  hasData: computed(() => overview.value !== null),
+  partial: computed(() => partialWarning.value !== null)
+})
+const dataStatusMessage = computed(() => {
+  if (panelState.stale.value) {
+    return {text: 'AI usage could not be refreshed. Showing the last successful snapshot.', type: 'warning'}
+  }
+  if (panelState.partialSuccess.value) {
+    return {text: `Partial AI usage data. ${partialWarning.value}`, type: 'warning'}
+  }
+  if (isStale.value) {
+    return {text: 'Auto-refresh is off. This AI usage snapshot may be stale.', type: 'warning'}
+  }
+  return null
+})
 
 function exportCsv() {
   const rows = filteredChats.value
@@ -91,15 +134,21 @@ function exportCsv() {
 }
 
 async function openChat(spanId) {
+  const requestId = ++detailRequest
   selectedSpanId.value = spanId
   detail.value = null
   detailLoading.value = true
   try {
-    detail.value = await getJson(`api/ai/chats/${spanId}`)
+    const nextDetail = await getJson(`api/ai/chats/${spanId}`)
+    if (requestId === detailRequest && selectedSpanId.value === spanId) {
+      detail.value = nextDetail
+    }
   } catch (e) {
-    detail.value = {error: formatLoadError(e, 'Unable to load AI chat details')}
+    if (requestId === detailRequest && selectedSpanId.value === spanId) {
+      detail.value = {error: formatLoadError(e, 'Unable to load AI chat details')}
+    }
   } finally {
-    detailLoading.value = false
+    if (requestId === detailRequest) detailLoading.value = false
   }
 }
 
@@ -112,8 +161,10 @@ function toggleChat(spanId) {
 }
 
 function closeDrawer() {
+  detailRequest += 1
   selectedSpanId.value = null
   detail.value = null
+  detailLoading.value = false
 }
 
 const tableSearch = ref('')
@@ -288,9 +339,27 @@ const windowMinutes = ref(60)
 const tooltipData = ref(null)
 const chartContainerRef = ref(null)
 
+function setTokenPartialWarning(reason = 'request failed') {
+  partialWarning.value =
+    `Token history could not be refreshed (${reason}). ` +
+    'Overview data remains available; any token chart shown is from the previous successful refresh.'
+}
+
 async function loadTokenSeries() {
-  const res = await apiFetch(`api/ai/tokens?minutes=${windowMinutes.value}`)
-  if (res.ok) series.value = await res.json()
+  const requestedWindow = windowMinutes.value
+  const requestId = ++tokenSeriesRequest
+  try {
+    const res = await apiFetch(`api/ai/tokens?minutes=${requestedWindow}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const nextSeries = await res.json()
+    if (requestId !== tokenSeriesRequest || requestedWindow !== windowMinutes.value) return
+    series.value = nextSeries
+    partialWarning.value = null
+  } catch (e) {
+    if (requestId !== tokenSeriesRequest) return
+    windowMinutes.value = series.value?.minutes ?? requestedWindow
+    setTokenPartialWarning(e instanceof Error ? e.message : 'request failed')
+  }
 }
 
 async function onWindowChange() {
@@ -418,7 +487,7 @@ const detectedFrameworkLabel = computed(() => {
       title="AI Framework"
       :subtitle="overview ? detectedFrameworkLabel : null"
       :loading="loading"
-      :error="error"
+      :error="panelState.retryableError.value ? error : null"
       :last-fetched="lastUpdated"
       v-model:auto-refresh="autoRefresh"
       @refresh="load"
@@ -432,7 +501,6 @@ const detectedFrameworkLabel = computed(() => {
         >
           <i class="bi bi-robot me-1"></i>{{ fw }}
         </span>
-        <span v-if="isStale" class="badge text-bg-warning">Data may be stale</span>
         <button v-if="overview && hasAnyData" class="btn btn-sm btn-outline-secondary" @click="exportCsv">
           <i class="bi bi-download"></i> Export CSV
         </button>
@@ -441,6 +509,7 @@ const detectedFrameworkLabel = computed(() => {
 
     <PanelSkeleton v-if="initialLoading" />
     <template v-else-if="overview">
+      <FlashBanner v-if="dataStatusMessage" :dismissible="false" :message="dataStatusMessage" with-icon />
       <div v-if="overview.contentBanner && hasAnyData" class="alert alert-info small">
         <i class="bi bi-info-circle me-1"></i>{{ overview.contentBanner }}
       </div>
@@ -551,7 +620,7 @@ const detectedFrameworkLabel = computed(() => {
               @mousemove="onChartMousemove"
             >
               <svg
-                :aria-label="'Token usage over the last ' + windowMinutes + ' minutes'"
+                :aria-label="'Token usage over the last ' + series.minutes + ' minutes'"
                 :viewBox="'0 0 ' + chart.width + ' ' + chart.height"
                 class="w-100"
                 role="img"
