@@ -68,7 +68,8 @@ describe('Mappings', () => {
   })
 
   it('uses the panel manifest to distinguish unavailable from true empty', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(report([], 0, 0))))
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
 
     wrapper = mount(Mappings, {
       props: {
@@ -87,6 +88,8 @@ describe('Mappings', () => {
     expect(wrapper.text()).not.toContain('No HTTP mappings were reported')
     expect(wrapper.find('input').exists()).toBe(false)
     expect(wrapper.find('table').exists()).toBe(false)
+    expect(wrapper.find('button[title="Refresh"]').exists()).toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('preserves successful results and marks them stale when refresh fails', async () => {

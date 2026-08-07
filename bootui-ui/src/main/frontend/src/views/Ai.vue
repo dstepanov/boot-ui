@@ -21,6 +21,7 @@ const detailLoading = ref(false)
 const lastUpdated = ref(null)
 const partialWarning = ref(null)
 let tokenSeriesRequest = 0
+let detailRequest = 0
 
 const panels = inject('panels', ref(null))
 const platform = computed(() => panels.value?.platform ?? 'spring-boot')
@@ -51,10 +52,13 @@ async function fetchAiUsage() {
         setTokenPartialWarning(`HTTP ${tokenResult.value.status}`)
       } else {
         try {
-          series.value = await tokenResult.value.json()
-          partialWarning.value = null
+          const nextSeries = await tokenResult.value.json()
+          if (requestId === tokenSeriesRequest && requestedWindow === windowMinutes.value) {
+            series.value = nextSeries
+            partialWarning.value = null
+          }
         } catch {
-          setTokenPartialWarning('invalid response')
+          if (requestId === tokenSeriesRequest) setTokenPartialWarning('invalid response')
         }
       }
     }
@@ -130,15 +134,21 @@ function exportCsv() {
 }
 
 async function openChat(spanId) {
+  const requestId = ++detailRequest
   selectedSpanId.value = spanId
   detail.value = null
   detailLoading.value = true
   try {
-    detail.value = await getJson(`api/ai/chats/${spanId}`)
+    const nextDetail = await getJson(`api/ai/chats/${spanId}`)
+    if (requestId === detailRequest && selectedSpanId.value === spanId) {
+      detail.value = nextDetail
+    }
   } catch (e) {
-    detail.value = {error: formatLoadError(e, 'Unable to load AI chat details')}
+    if (requestId === detailRequest && selectedSpanId.value === spanId) {
+      detail.value = {error: formatLoadError(e, 'Unable to load AI chat details')}
+    }
   } finally {
-    detailLoading.value = false
+    if (requestId === detailRequest) detailLoading.value = false
   }
 }
 
@@ -151,8 +161,10 @@ function toggleChat(spanId) {
 }
 
 function closeDrawer() {
+  detailRequest += 1
   selectedSpanId.value = null
   detail.value = null
+  detailLoading.value = false
 }
 
 const tableSearch = ref('')

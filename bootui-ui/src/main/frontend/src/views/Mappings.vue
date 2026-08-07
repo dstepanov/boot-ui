@@ -65,8 +65,16 @@ function clearFilter() {
   filter.value = ''
 }
 
-onMounted(load)
-watch(filter, scheduleReload)
+function refreshMappings() {
+  if (manifestAvailable.value) return load()
+}
+
+function scheduleMappingsReload() {
+  if (manifestAvailable.value) scheduleReload()
+}
+
+onMounted(refreshMappings)
+watch(filter, scheduleMappingsReload)
 </script>
 
 <template>
@@ -76,7 +84,8 @@ watch(filter, scheduleReload)
       title="HTTP mappings"
       :error="manifestAvailable && panelState.retryableError.value ? error : null"
       :loading="loading"
-      @refresh="load"
+      :refreshable="manifestAvailable"
+      @refresh="refreshMappings"
     />
     <UnavailableState
       v-if="!manifestAvailable"

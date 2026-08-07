@@ -40,4 +40,10 @@ defineProps({
   height: 1.4rem;
   width: 40%;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line {
+    animation: none;
+  }
+}
 </style>
