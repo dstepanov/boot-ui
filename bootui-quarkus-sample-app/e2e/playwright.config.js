@@ -12,16 +12,31 @@ import {defineConfig, devices} from '@playwright/test'
  * By default Playwright boots the sample app for you via `./mvnw quarkus:dev` (requires a prior
  * `./mvnw install` so the `bootui-quarkus` extension is in the local Maven repository, plus a
  * supported JDK — the sample is wired into the reactor only on JDK 17/21). Quarkus Dev Services
- * starts a throwaway PostgreSQL container, so **Docker (or Podman) must be running**. If you already
- * have the app running on port 8082 it is reused automatically.
+ * starts a throwaway PostgreSQL container, so **Docker (or Podman) must be running**. Fixture-backed
+ * runs always start their own app process so the deterministic OSV configuration cannot be bypassed.
  */
 const PORT = Number(process.env.BOOTUI_SAMPLE_PORT || 8082)
 const BASE_URL = process.env.BOOTUI_BASE_URL || `http://localhost:${PORT}`
+const OSV_FIXTURE_PORT = Number(process.env.BOOTUI_OSV_FIXTURE_PORT || 18080)
+const OSV_FIXTURE_BASE_URL = `http://127.0.0.1:${OSV_FIXTURE_PORT}`
+const USE_LIVE_OSV = process.env.BOOTUI_OSV_LIVE === '1'
 
 // Quarkus dev mode has to augment the application and let Dev Services pull/start the PostgreSQL
 // container, which on a cold CI runner is much slower than a Spring Boot start, so allow the
 // web-server startup timeout to be raised from the environment.
 const WEBSERVER_TIMEOUT = Number(process.env.BOOTUI_WEBSERVER_TIMEOUT || 300_000)
+const QUARKUS_COMMAND =
+  `../../mvnw -f ../pom.xml quarkus:dev -Dquarkus.http.port=${PORT}` +
+  ' -Dquarkus.test.continuous-testing=disabled -Dquarkus.analytics.disabled=true' +
+  ' -Dbootui.vulnerabilities.epss-enabled=false' +
+  (USE_LIVE_OSV
+    ? ' -Dbootui.vulnerabilities.request-timeout=10s' +
+      ' -Dbootui.vulnerabilities.max-packages=5' +
+      ' -Dbootui.vulnerabilities.max-advisories=10'
+    : ` -Dbootui.vulnerabilities.osv-base-uri=${OSV_FIXTURE_BASE_URL}` +
+      ' -Dbootui.vulnerabilities.request-timeout=2s' +
+      ' -Dbootui.vulnerabilities.max-packages=3' +
+      ' -Dbootui.vulnerabilities.max-advisories=2')
 
 export default defineConfig({
   testDir: './tests',
@@ -55,17 +70,30 @@ export default defineConfig({
   // running the tests against an already-deployed instance, listing tests, etc.
   webServer: process.env.BOOTUI_SKIP_WEBSERVER
     ? undefined
-    : {
-        // Run the Quarkus sample in dev mode through the root Maven Wrapper. BootUI activates
-        // automatically under `quarkus:dev`. Continuous testing is disabled so the dev server only
-        // serves HTTP, and analytics prompts are suppressed for non-interactive CI.
-        command:
-          `../../mvnw -f ../pom.xml quarkus:dev -Dquarkus.http.port=${PORT}` +
-          ' -Dquarkus.test.continuous-testing=disabled -Dquarkus.analytics.disabled=true',
-        url: `${BASE_URL}/bootui/api/overview`,
-        reuseExistingServer: !process.env.CI,
-        stdout: 'pipe',
-        stderr: 'pipe',
-        timeout: WEBSERVER_TIMEOUT
-      }
+    : [
+        ...(!USE_LIVE_OSV
+          ? [
+              {
+                command: 'node fixtures/osv-server.js',
+                url: `${OSV_FIXTURE_BASE_URL}/health`,
+                reuseExistingServer: false,
+                stdout: 'pipe',
+                stderr: 'pipe',
+                timeout: 10_000
+              }
+            ]
+          : []),
+        {
+          // Run the Quarkus sample in dev mode through the root Maven Wrapper. BootUI activates
+          // automatically under `quarkus:dev`. Continuous testing is disabled so the dev server only
+          // serves HTTP, and analytics prompts are suppressed for non-interactive CI.
+          command: QUARKUS_COMMAND,
+          url: `${BASE_URL}/bootui/api/overview`,
+          // A fixture-backed run must own the Quarkus process so its deterministic scanner settings apply.
+          reuseExistingServer: USE_LIVE_OSV && !process.env.CI,
+          stdout: 'pipe',
+          stderr: 'pipe',
+          timeout: WEBSERVER_TIMEOUT
+        }
+      ]
 })
