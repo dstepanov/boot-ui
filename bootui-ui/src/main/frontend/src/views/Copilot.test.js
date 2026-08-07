@@ -200,4 +200,72 @@ describe('Copilot', () => {
     await flushPromises()
     expect(wrapper.get('[role="tab"].active').text()).toContain('Activity')
   })
+
+  it('links tabs to panels and supports roving keyboard navigation', async () => {
+    const session = {
+      id: 'session-one',
+      updatedAtEpochMillis: Date.now(),
+      eventCount: 2,
+      errorCount: 1,
+      inputTokens: 123,
+      outputTokens: 45
+    }
+    const detail = {
+      summary: {...session, turnCount: 1},
+      counts: {total: 2, byCategory: {}, errors: 1},
+      turns: [{index: 0, summary: 'A turn', eventCount: 1}],
+      recentEvents: [],
+      failureEvents: [{id: 'failure', category: 'SHELL', summary: 'Failed', success: false}],
+      warnings: []
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url) => {
+        if (url === 'api/copilot/dashboard') {
+          return Promise.resolve(jsonResponse(dashboard({recentSessions: [session]})))
+        }
+        if (url === 'api/copilot/sessions') {
+          return Promise.resolve(jsonResponse(sessionList({total: 1, returned: 1, sessions: [session]})))
+        }
+        if (url === 'api/copilot/sessions/session-one') return Promise.resolve(jsonResponse(detail))
+        return Promise.resolve(jsonResponse({}, false, 404))
+      })
+    )
+
+    wrapper = mount(Copilot, {attachTo: document.body})
+    await flushPromises()
+    await wrapper.get('button.session-row-target').trigger('click')
+    await flushPromises()
+
+    const tabs = wrapper.findAll('[role="tab"]')
+    expect(tabs.map((tab) => tab.attributes('tabindex'))).toEqual(['0', '-1', '-1'])
+    expect(tabs[0].attributes()).toMatchObject({
+      id: 'session-detail-activity-tab',
+      'aria-controls': 'session-detail-activity-panel',
+      'aria-selected': 'true'
+    })
+    expect(wrapper.get('#session-detail-activity-panel').attributes('aria-labelledby')).toBe(
+      'session-detail-activity-tab'
+    )
+    for (const tab of tabs) {
+      expect(wrapper.find(`#${tab.attributes('aria-controls')}`).exists()).toBe(true)
+    }
+
+    tabs[0].element.focus()
+    await tabs[0].trigger('keydown', {key: 'ArrowLeft'})
+    expect(document.activeElement).toBe(wrapper.get('#session-detail-failures-tab').element)
+    expect(wrapper.get('#session-detail-failures-tab').attributes('tabindex')).toBe('0')
+    expect(wrapper.get('#session-detail-failures-panel').attributes('aria-labelledby')).toBe(
+      'session-detail-failures-tab'
+    )
+
+    await wrapper.get('#session-detail-failures-tab').trigger('keydown', {key: 'Home'})
+    expect(document.activeElement).toBe(wrapper.get('#session-detail-activity-tab').element)
+
+    await wrapper.get('#session-detail-activity-tab').trigger('keydown', {key: 'End'})
+    expect(document.activeElement).toBe(wrapper.get('#session-detail-failures-tab').element)
+
+    await wrapper.get('#session-detail-failures-tab').trigger('keydown', {key: 'ArrowRight'})
+    expect(document.activeElement).toBe(wrapper.get('#session-detail-activity-tab').element)
+  })
 })

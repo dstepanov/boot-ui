@@ -528,6 +528,11 @@ public class BootUiAutoConfiguration {
     }
 
     @Bean
+    public BootUiJsonWebMvcConfigurer bootUiJsonWebMvcConfigurer(BootUiProperties properties) {
+        return new BootUiJsonWebMvcConfigurer(properties);
+    }
+
+    @Bean
     public PanelAccessFilter bootUiPanelAccessFilter(BootUiProperties properties) {
         return new PanelAccessFilter(properties);
     }

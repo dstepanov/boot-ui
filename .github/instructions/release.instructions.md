@@ -1,5 +1,5 @@
 ---
-applyTo: ".github/workflows/release.yml,pom.xml,**/pom.xml,README.md,docs/SETUP.md,package.json,package-lock.json,**/package.json,**/package-lock.json"
+applyTo: ".github/workflows/release.yml,.github/workflows/build.yml,.github/scripts/check-release-integrity.sh,pom.xml,**/pom.xml,README.md,docs/SETUP.md,package.json,package-lock.json,**/package.json,**/package-lock.json"
 ---
 
 # Release and publishing
@@ -13,11 +13,14 @@ applyTo: ".github/workflows/release.yml,pom.xml,**/pom.xml,README.md,docs/SETUP.
 - The source-less published modules (`bootui-ui`, `bootui-spring-boot-starter`, and
   `bootui-spring-boot-starter-reactive`) must attach their empty `javadoc.jar` during `package`, before release-profile
   signing at `verify`.
-- Preserve the current workflow sequence: prepare and verify the versioned working tree; publish, wait for Central, and
-  smoke-test all three distributions; then commit and push the release. If the branch advanced during publication,
-  rebase the version-only release commit and retry. Create the annotated tag only after the push succeeds so it points to
-  the commit that landed. A genuine rebase conflict fails loudly.
+- Preserve the immutable source-first workflow sequence: prepare and verify the versioned working tree; commit the exact
+  release contents; refuse to continue if the source branch advanced; create and verify a GPG-signed annotated tag; then
+  atomically push the release commit and tag before any publication. Publish, verify, smoke-test, and deploy documentation
+  only from the commit peeled from that signed tag. Never rebase release contents, move or recreate a release tag, or
+  publish from an untagged branch state.
 - Maven Central requires the matching public signing key to be available by fingerprint. Never expose signing secrets in
   command arguments or logs. If macOS `gpg --send-keys` fails through dirmngr, use the HTTPS upload APIs for
   `keys.openpgp.org` and `keyserver.ubuntu.com`.
-- A failed Central deployment may consume the coordinate. Do not retry the same version until the failed deployment is dropped.
+- A failed Central deployment may consume the coordinate. Drop the failed deployment before rerunning the existing
+  signed tag. If publication succeeded but polling, smoke tests, or documentation failed, resume from that tag with
+  `resume_after_publish=true` so Maven Central deployment is not repeated.
