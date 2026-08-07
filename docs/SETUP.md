@@ -25,7 +25,7 @@ it force-disables itself in `prod` / `production`.
 <dependency>
   <groupId>com.julien-dubois.bootui</groupId>
   <artifactId>bootui-spring-boot-starter</artifactId>
-  <version>1.13.0</version>
+  <version>1.13.1</version>
 </dependency>
 ```
 
@@ -33,12 +33,12 @@ it force-disables itself in `prod` / `production`.
 
 ```groovy
 // Groovy DSL (build.gradle)
-runtimeOnly 'com.julien-dubois.bootui:bootui-spring-boot-starter:1.13.0'
+runtimeOnly 'com.julien-dubois.bootui:bootui-spring-boot-starter:1.13.1'
 ```
 
 ```kotlin
 // Kotlin DSL (build.gradle.kts)
-runtimeOnly("com.julien-dubois.bootui:bootui-spring-boot-starter:1.13.0")
+runtimeOnly("com.julien-dubois.bootui:bootui-spring-boot-starter:1.13.1")
 ```
 
 :::
@@ -137,7 +137,7 @@ Spring Boot profile:
       <dependency>
         <groupId>com.julien-dubois.bootui</groupId>
         <artifactId>bootui-spring-boot-starter</artifactId>
-        <version>1.13.0</version>
+        <version>1.13.1</version>
       </dependency>
     </dependencies>
     <build>
@@ -166,7 +166,7 @@ sets the `dev` Spring Boot profile on `bootRun`:
 // Groovy DSL (build.gradle)
 if (project.hasProperty('dev')) {
     dependencies {
-        runtimeOnly 'com.julien-dubois.bootui:bootui-spring-boot-starter:1.13.0'
+        runtimeOnly 'com.julien-dubois.bootui:bootui-spring-boot-starter:1.13.1'
     }
     tasks.named('bootRun') {
         systemProperty 'spring.profiles.active', 'dev'
@@ -178,7 +178,7 @@ if (project.hasProperty('dev')) {
 // Kotlin DSL (build.gradle.kts)
 if (project.hasProperty("dev")) {
     dependencies {
-        "runtimeOnly"("com.julien-dubois.bootui:bootui-spring-boot-starter:1.13.0")
+        "runtimeOnly"("com.julien-dubois.bootui:bootui-spring-boot-starter:1.13.1")
     }
     tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
         systemProperty("spring.profiles.active", "dev")
@@ -233,7 +233,7 @@ same activation rule applies: BootUI ships dormant and only wakes up in local de
 <dependency>
   <groupId>com.julien-dubois.bootui</groupId>
   <artifactId>bootui-spring-boot-starter-reactive</artifactId>
-  <version>1.13.0</version>
+  <version>1.13.1</version>
 </dependency>
 ```
 
@@ -241,12 +241,12 @@ same activation rule applies: BootUI ships dormant and only wakes up in local de
 
 ```groovy
 // Groovy DSL (build.gradle)
-runtimeOnly 'com.julien-dubois.bootui:bootui-spring-boot-starter-reactive:1.13.0'
+runtimeOnly 'com.julien-dubois.bootui:bootui-spring-boot-starter-reactive:1.13.1'
 ```
 
 ```kotlin
 // Kotlin DSL (build.gradle.kts)
-runtimeOnly("com.julien-dubois.bootui:bootui-spring-boot-starter-reactive:1.13.0")
+runtimeOnly("com.julien-dubois.bootui:bootui-spring-boot-starter-reactive:1.13.1")
 ```
 
 :::
@@ -307,6 +307,9 @@ bootui.trust-container-gateway=AUTO     # auto-trust the container gateway in de
 
 The [Running inside a Docker container](#running-inside-a-docker-container) guidance below applies unchanged. Per-panel
 `bootui.panels.*` enable / read-only toggles and the `bootui.read-only` master switch are enforced identically as well.
+Accepted BootUI API requests also cross a centralized bounded-elastic execution boundary after those checks, keeping
+blocking scans, diagnostics, downloads, filesystem operations, and bounded network calls off Reactor Netty event-loop
+threads. This applies automatically at custom `bootui.api-path` mounts and does not affect application routes.
 
 ### Which panels are available on Spring WebFlux
 
@@ -350,7 +353,7 @@ Add the BootUI Quarkus extension to your build — nothing else is required. Boo
 <dependency>
   <groupId>com.julien-dubois.bootui</groupId>
   <artifactId>bootui-quarkus</artifactId>
-  <version>1.13.0</version>
+  <version>1.13.1</version>
 </dependency>
 ```
 
@@ -358,12 +361,12 @@ Add the BootUI Quarkus extension to your build — nothing else is required. Boo
 
 ```groovy
 // Groovy DSL (build.gradle)
-implementation 'com.julien-dubois.bootui:bootui-quarkus:1.13.0'
+implementation 'com.julien-dubois.bootui:bootui-quarkus:1.13.1'
 ```
 
 ```kotlin
 // Kotlin DSL (build.gradle.kts)
-implementation("com.julien-dubois.bootui:bootui-quarkus:1.13.0")
+implementation("com.julien-dubois.bootui:bootui-quarkus:1.13.1")
 ```
 
 :::

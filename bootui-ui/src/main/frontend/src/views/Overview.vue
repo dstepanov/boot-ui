@@ -4,7 +4,13 @@ import {getBootUiApplicationPath} from '../utils/bootUiPath.js'
 import {computed, inject, onActivated, onMounted, reactive, ref} from 'vue'
 import {describeLoadError} from '../utils/loadError.js'
 import {hasScanResult, scanStatusBadgeClass, scanStatusLabel} from '../utils/scanStatus.js'
-import {overallScore, scoreBandLabel, scoreBandTone, scoreFromSeverityCounts} from '../utils/scannerScore.js'
+import {
+  isKnownSeverity,
+  overallScore,
+  scoreBandLabel,
+  scoreBandTone,
+  scoreFromSeverityCounts
+} from '../utils/scannerScore.js'
 import PanelHeader from './components/PanelHeader.vue'
 import ScannerScoreCard from './components/ScannerScoreCard.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
@@ -138,7 +144,23 @@ function nextToken(id) {
 }
 
 function applyReport(state, report) {
-  state.severityCounts = report.severityCounts ?? []
+  const severityCounts = report?.severityCounts
+  if (
+    !Array.isArray(severityCounts) ||
+    severityCounts.some(
+      (entry) =>
+        !entry ||
+        typeof entry !== 'object' ||
+        Array.isArray(entry) ||
+        !isKnownSeverity(entry.severity) ||
+        typeof entry.count !== 'number' ||
+        !Number.isFinite(entry.count) ||
+        entry.count < 0
+    )
+  ) {
+    throw new Error('Scanner returned an invalid severity summary')
+  }
+  state.severityCounts = severityCounts
   state.score = scoreFromSeverityCounts(state.severityCounts)
   const status = report.scan?.status
   state.statusLabel = scanStatusLabel(status)

@@ -21,14 +21,25 @@ const iconClass = computed(() => {
   if (!props.withIcon || !props.message) return null
   return TYPE_ICONS[props.message.type] || 'bi-info-circle-fill'
 })
+
+const liveRole = computed(() => (['danger', 'warning'].includes(props.message?.type) ? 'alert' : 'status'))
 </script>
 
 <template>
-  <div v-if="message" :class="'alert-' + message.type" class="alert d-flex justify-content-between align-items-center">
-    <div>
-      <i v-if="iconClass" :class="['bi', iconClass]"></i>
-      <span :class="{'ms-2': iconClass}">{{ message.text }}</span>
-    </div>
-    <button class="btn-close" type="button" aria-label="Dismiss" @click="$emit('dismiss')"></button>
+  <div
+    :aria-live="liveRole === 'status' ? 'polite' : undefined"
+    :class="
+      message ? ['alert', 'alert-' + message.type, 'd-flex', 'justify-content-between', 'align-items-center'] : []
+    "
+    :role="liveRole"
+    aria-atomic="true"
+  >
+    <template v-if="message">
+      <div>
+        <i v-if="iconClass" :class="['bi', iconClass]" aria-hidden="true"></i>
+        <span :class="{'ms-2': iconClass}">{{ message.text }}</span>
+      </div>
+      <button class="btn-close" type="button" aria-label="Dismiss" @click="$emit('dismiss')"></button>
+    </template>
   </div>
 </template>

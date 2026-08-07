@@ -165,7 +165,8 @@ test.describe('Live Activity view', () => {
     await openView('activity', 'Live Activity')
     const productsRow = page.locator('.activity-table tbody tr', {hasText: '/api/sample/products'}).first()
     await expect(productsRow).toBeVisible({timeout: 15_000})
-    await productsRow.getByRole('button', {name: /Profile/}).click()
+    const profileButton = productsRow.getByRole('button', {name: /Profile/})
+    await profileButton.click()
 
     const drawer = page.locator('.activity-drawer')
     await expect(drawer).toBeVisible()
@@ -173,6 +174,7 @@ test.describe('Live Activity view', () => {
 
     await page.keyboard.press('Escape')
     await expect(drawer).toHaveCount(0)
+    await expect(profileButton).toBeFocused()
   })
 
   test('links KPI cards to their dedicated panels', async ({openView, page}) => {
