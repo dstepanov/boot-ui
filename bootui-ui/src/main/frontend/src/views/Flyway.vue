@@ -148,11 +148,11 @@ onMounted(load)
       </div>
 
       <div v-for="db in databases" :key="db.name" class="card mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
           <span>
-            <i class="bi bi-database me-1"></i><code>{{ db.name }}</code>
+            <i class="bi bi-database me-1"></i><code class="bootui-break-anywhere">{{ db.name }}</code>
           </span>
-          <span class="small">
+          <span class="small d-flex flex-wrap align-items-center gap-1">
             <span class="me-2"
               >Current: <strong>{{ db.currentVersion || '—' }}</strong></span
             >
@@ -187,39 +187,47 @@ onMounted(load)
           </div>
         </div>
         <div class="card-body p-0">
-          <table class="table table-sm table-hover mb-0">
-            <thead>
-              <tr>
-                <th style="width: 110px">Version</th>
-                <th>Description</th>
-                <th>Type</th>
-                <th>State</th>
-                <th>Installed on</th>
-                <th class="text-end">Exec (ms)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="m in db.migrations" :key="(m.version || '') + m.script">
-                <td>
-                  <code>{{ m.version || '—' }}</code>
-                </td>
-                <td>
-                  {{ m.description }}
-                  <div class="small text-muted">
-                    <code>{{ m.script }}</code>
-                  </div>
-                </td>
-                <td>{{ m.type }}</td>
-                <td>
-                  <span :class="stateClass(m.state)" class="badge">{{ m.state }}</span>
-                </td>
-                <td class="small">{{ m.installedOn || '—' }}</td>
-                <td class="text-end small">{{ m.executionTime != null ? m.executionTime : '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-responsive bootui-table-scroll">
+            <table class="table table-sm table-hover mb-0 bootui-data-table flyway-migrations-table">
+              <thead>
+                <tr>
+                  <th style="width: 110px">Version</th>
+                  <th>Description</th>
+                  <th>Type</th>
+                  <th>State</th>
+                  <th>Installed on</th>
+                  <th class="text-end">Exec (ms)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="m in db.migrations" :key="(m.version || '') + m.script">
+                  <td>
+                    <code>{{ m.version || '—' }}</code>
+                  </td>
+                  <td>
+                    {{ m.description }}
+                    <div class="small text-muted">
+                      <code class="bootui-break-anywhere">{{ m.script }}</code>
+                    </div>
+                  </td>
+                  <td>{{ m.type }}</td>
+                  <td>
+                    <span :class="stateClass(m.state)" class="badge">{{ m.state }}</span>
+                  </td>
+                  <td class="small">{{ m.installedOn || '—' }}</td>
+                  <td class="text-end small">{{ m.executionTime != null ? m.executionTime : '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </template>
   </div>
 </template>
+
+<style scoped>
+.flyway-migrations-table {
+  --bootui-table-min-width: 44rem;
+}
+</style>

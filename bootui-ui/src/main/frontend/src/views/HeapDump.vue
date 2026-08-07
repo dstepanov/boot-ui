@@ -339,35 +339,37 @@ onBeforeUnmount(() => {
                 <div class="fw-semibold text-body">No classes match the current filter</div>
                 <div>Clear the class prefix filter or turn off the smart filter to show matching classes.</div>
               </div>
-              <table v-else class="table table-sm align-middle mb-0">
-                <thead>
-                  <tr>
-                    <th scope="col" class="text-end">#</th>
-                    <th scope="col">Class</th>
-                    <th scope="col" class="text-end">Instances</th>
-                    <th scope="col" class="w-25">{{ smartFilter === 'big-objects' ? 'Per object' : 'Retained' }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="entry in report.topClasses" :key="entry.rank">
-                    <td class="text-end text-muted">{{ entry.rank }}</td>
-                    <td class="font-monospace text-break">{{ entry.className }}</td>
-                    <td class="text-end">{{ formatNumber(entry.instances) }}</td>
-                    <td>
-                      <div class="d-flex align-items-center gap-2">
-                        <div
-                          class="progress flex-grow-1"
-                          role="img"
-                          :aria-label="`${entry.className}: ${barLabel(entry)}`"
-                        >
-                          <div class="progress-bar text-bg-primary" :style="{width: classWidth(entry)}"></div>
+              <div v-else class="table-responsive bootui-table-scroll">
+                <table class="table table-sm align-middle mb-0 bootui-data-table heap-histogram-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" class="text-end">#</th>
+                      <th scope="col">Class</th>
+                      <th scope="col" class="text-end">Instances</th>
+                      <th scope="col" class="w-25">{{ smartFilter === 'big-objects' ? 'Per object' : 'Retained' }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="entry in report.topClasses" :key="entry.rank">
+                      <td class="text-end text-muted">{{ entry.rank }}</td>
+                      <td class="font-monospace text-break">{{ entry.className }}</td>
+                      <td class="text-end">{{ formatNumber(entry.instances) }}</td>
+                      <td>
+                        <div class="d-flex align-items-center gap-2">
+                          <div
+                            class="progress flex-grow-1"
+                            role="img"
+                            :aria-label="`${entry.className}: ${barLabel(entry)}`"
+                          >
+                            <div class="progress-bar text-bg-primary" :style="{width: classWidth(entry)}"></div>
+                          </div>
+                          <span class="small text-muted text-nowrap">{{ barLabel(entry) }}</span>
                         </div>
-                        <span class="small text-muted text-nowrap">{{ barLabel(entry) }}</span>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -450,3 +452,9 @@ onBeforeUnmount(() => {
     </template>
   </div>
 </template>
+
+<style scoped>
+.heap-histogram-table {
+  --bootui-table-min-width: 38rem;
+}
+</style>

@@ -1339,6 +1339,22 @@ function onGlobalKeydown(e) {
   transition: width 500ms ease;
 }
 
+:global(.bootui-table-scroll) {
+  max-width: 100%;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+:global(.bootui-data-table) {
+  min-width: var(--bootui-table-min-width, 42rem);
+}
+
+:global(.bootui-break-anywhere) {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
+}
+
 .bootui-shell {
   color: var(--bootui-text);
   display: flex;
@@ -1803,6 +1819,7 @@ function onGlobalKeydown(e) {
   flex-direction: column;
   height: 100vh;
   min-width: 0;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -2000,8 +2017,19 @@ function onGlobalKeydown(e) {
 
 @media (max-width: 575.98px) {
   .topbar {
+    align-items: stretch;
+    flex-direction: column;
     padding-left: 1rem;
     padding-right: 1rem;
+  }
+
+  .topbar-actions {
+    justify-content: flex-start;
+  }
+
+  .topbar-title,
+  .topbar-subtitle {
+    overflow-wrap: anywhere;
   }
 
   .content-stage,
@@ -2009,16 +2037,67 @@ function onGlobalKeydown(e) {
     padding-left: 1rem;
     padding-right: 1rem;
   }
+
+  :global(button),
+  :global(a.btn),
+  :global(summary),
+  :global(.form-control-sm),
+  :global(.form-select-sm) {
+    min-block-size: 44px;
+    min-inline-size: 44px;
+  }
+
+  :global(.form-check-input) {
+    min-block-size: 44px;
+    min-inline-size: 44px;
+    margin-top: 0;
+  }
+
+  :global(.form-check) {
+    min-block-size: 44px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
+  :global(html) {
     scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
+  }
+
+  .bootui-sidebar,
+  .bootui-sidebar--drawer,
+  .bootui-nav-backdrop,
+  .flyout-fade-enter-active,
+  .flyout-fade-leave-active,
+  .page-slide-enter-active,
+  .page-slide-leave-active,
+  .brand-card,
+  .contribute-card,
+  .bootui-nav-link,
+  .bootui-nav-group__toggle,
+  .sidebar-toggle,
+  .nav-hamburger,
+  .cp-trigger,
+  .theme-toggle,
+  :global(.card),
+  :global(.btn),
+  :global(.progress-bar),
+  :global(.spinner-border),
+  :global(.spinner-grow),
+  :global(.spin) {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .page-slide-enter-from,
+  .page-slide-leave-to,
+  .flyout-fade-enter-from,
+  .flyout-fade-leave-to,
+  .brand-card:hover,
+  .contribute-card:hover,
+  .bootui-nav-link:hover,
+  .bootui-nav-group__toggle:hover,
+  .bootui-nav-group__toggle.active {
+    transform: none;
   }
 }
 
