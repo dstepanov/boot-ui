@@ -20,6 +20,7 @@ import io.github.jdubois.bootui.autoconfigure.otlp.OtlpSpanDecoder;
 import io.github.jdubois.bootui.autoconfigure.otlp.SpringTelemetrySettings;
 import io.github.jdubois.bootui.autoconfigure.pentesting.PentestingController;
 import io.github.jdubois.bootui.autoconfigure.rabbit.RabbitController;
+import io.github.jdubois.bootui.autoconfigure.reactive.BootUiJsonWebFluxConfigurer;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveActivitySignalFilter;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveAgentSessionController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveApiAuthenticationFilter;
@@ -526,6 +527,11 @@ public class BootUiReactiveAutoConfiguration {
     public ReactiveBootUiStaticResourceConfigurer bootUiReactiveStaticResourceConfigurer(
             Environment environment, BootUiProperties properties) {
         return new ReactiveBootUiStaticResourceConfigurer(environment, properties);
+    }
+
+    @Bean
+    public BootUiJsonWebFluxConfigurer bootUiJsonWebFluxConfigurer(BootUiProperties properties) {
+        return new BootUiJsonWebFluxConfigurer(properties);
     }
 
     /**
