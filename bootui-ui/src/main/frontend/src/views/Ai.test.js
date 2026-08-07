@@ -56,5 +56,8 @@ describe('Ai', () => {
     await sortButton.trigger('click')
     expect(modelHeader.attributes('aria-sort')).toBe('ascending')
     expect(wrapper.get('table tbody tr code').text()).toBe('alpha')
+    expect(wrapper.get('[role="progressbar"][aria-label="alpha token share"]').attributes('aria-valuetext')).toBe(
+      '50% of tokens'
+    )
   })
 })

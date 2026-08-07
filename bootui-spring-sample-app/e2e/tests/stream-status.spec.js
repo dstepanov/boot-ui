@@ -205,6 +205,9 @@ test.describe('stream connection status', () => {
 
     await emitLatestStreamEvent(page, 'open')
     await expect(page.locator('.stream-status-indicator')).toBeHidden()
-    await expect(page.locator('[role="status"][aria-live="polite"]')).toHaveText('Stream connected.')
+    const streamAnnouncement = page.locator('.stream-status-announcement')
+    await expect(streamAnnouncement).toHaveAttribute('role', 'status')
+    await expect(streamAnnouncement).toHaveAttribute('aria-live', 'polite')
+    await expect(streamAnnouncement).toHaveText('Stream connected.')
   })
 })

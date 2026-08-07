@@ -8,6 +8,7 @@ import {useAutoRefresh} from '../utils/useAutoRefresh.js'
 import AiSetupChecklist from './components/AiSetupChecklist.vue'
 import PanelHeader from './components/PanelHeader.vue'
 import PanelSkeleton from './components/PanelSkeleton.vue'
+import ProgressBar from './components/ProgressBar.vue'
 
 const overview = ref(null)
 const series = ref(null)
@@ -690,9 +691,12 @@ const detectedFrameworkLabel = computed(() => {
                     <td class="text-end">{{ formatNumber(row.totalTokens) }}</td>
                     <td class="text-end">{{ formatNumber(row.avgTokens) }}</td>
                     <td style="width: 30%">
-                      <div class="progress" style="height: 6px">
-                        <div :style="{width: row.pct + '%'}" class="progress-bar" role="progressbar"></div>
-                      </div>
+                      <ProgressBar
+                        :label="`${row.model} token share`"
+                        :value="row.pct"
+                        :value-text="`${row.pct}% of tokens`"
+                        style="height: 6px"
+                      />
                     </td>
                   </tr>
                 </tbody>

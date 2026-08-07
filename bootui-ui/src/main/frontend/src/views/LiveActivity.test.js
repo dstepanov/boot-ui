@@ -337,6 +337,34 @@ describe('LiveActivity', () => {
     expect(drawer.text()).toContain('at com.example.TodoRepository.findById(TodoRepository.java:42)')
   })
 
+  it('restores focus to the drawer opener after close button, Escape, and backdrop closes', async () => {
+    vi.stubGlobal('requestAnimationFrame', (callback) => callback())
+    vi.stubGlobal('fetch', stubFetch(activityReport(), requestProfile()))
+
+    wrapper = mountLiveActivity({attachTo: document.body})
+    await flushPromises()
+    const opener = wrapper.get('button.bootui-keyboard-target')
+
+    for (const close of ['button', 'escape', 'backdrop']) {
+      opener.element.focus()
+      await opener.trigger('click')
+      await flushPromises()
+      expect(wrapper.get('.activity-drawer').element).toBe(document.activeElement)
+
+      if (close === 'button') {
+        await wrapper.get('.activity-drawer .btn-close').trigger('click')
+      } else if (close === 'escape') {
+        window.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))
+      } else {
+        await wrapper.get('.activity-drawer-backdrop').trigger('click')
+      }
+
+      await flushPromises()
+      expect(wrapper.find('.activity-drawer').exists()).toBe(false)
+      expect(document.activeElement).toBe(opener.element)
+    }
+  })
+
   it('includes N+1 call sites when copying the plain-text profile report', async () => {
     const writeText = vi.fn().mockResolvedValue()
     vi.stubGlobal('navigator', {clipboard: {writeText}})
