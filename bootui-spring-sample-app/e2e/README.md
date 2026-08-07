@@ -24,7 +24,7 @@ flow) exposed by the sample app:
 | `config.spec.js`          | Property search, add an override (`sample.greeting`), confirm + delete it                                                                     |
 | `profile-diff.spec.js`    | Profile sources & properties render with filtering                                                                                            |
 | `loggers.spec.js`         | Logger search, change `io.github.jdubois.bootui.sample` to `WARN`, reset                                                                      |
-| `beans.spec.js`           | Bean list rendering, name filter, classification filter                                                                                       |
+| `beans.spec.js`           | Dependency graph navigation, bean list rendering, name filter, and classification filter                                                      |
 | `conditions.spec.js`      | Positive / negative auto-config tabs, filtering                                                                                               |
 | `mappings.spec.js`        | HTTP mappings include the sample app routes, filter narrows the list                                                                          |
 | `scheduled.spec.js`       | Scheduled tasks view lists the sample echo scheduler                                                                                          |
