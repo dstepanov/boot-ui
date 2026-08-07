@@ -14,6 +14,8 @@ import io.github.jdubois.bootui.conformance.BootUiHttpProbe.Response;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -207,6 +209,64 @@ public abstract class AbstractBootUiApiConformanceTest {
 
         if (!failures.isEmpty()) {
             fail("Available panel DTO contracts regressed: " + failures);
+        }
+    }
+
+    @Test
+    void metricsContractIsBoundedAndValidatesQueriesCanonically() {
+        Response bounded = probe().get("/bootui/api/metrics?offset=0&limit=1");
+        assertThat(bounded.status()).as("bounded metrics list status").isEqualTo(200);
+        assertThat(bounded.isJson()).as("bounded metrics list content type").isTrue();
+
+        JsonNode report = bounded.json();
+        assertThat(report.path("meters").isArray()).as("$.meters").isTrue();
+        assertThat(report.path("meters").size()).as("bounded meter count").isLessThanOrEqualTo(1);
+        assertThat(report.path("availableTypes").isArray())
+                .as("$.availableTypes")
+                .isTrue();
+        assertThat(report.path("page").path("limit").asInt()).as("$.page.limit").isEqualTo(1);
+        assertThat(report.path("page").path("returned").asInt())
+                .as("$.page.returned")
+                .isEqualTo(report.path("meters").size());
+        assertThat(report.path("page").path("total").asInt())
+                .as("$.page.total preserves the visible meter total")
+                .isEqualTo(report.path("total").asInt());
+
+        Response invalid = probe().get("/bootui/api/metrics?limit=1001");
+        assertThat(invalid.status()).as("invalid metrics limit status").isEqualTo(400);
+        assertThat(invalid.isJson()).as("invalid metrics limit content type").isTrue();
+        assertThat(invalid.json().path("error").asText())
+                .as("canonical metrics validation error")
+                .isEqualTo("Metric limit must be between 1 and 1000");
+
+        Response missingName = probe().get("/bootui/api/metrics/detail");
+        assertThat(missingName.status()).as("missing metric name status").isEqualTo(400);
+        assertThat(missingName.json().path("error").asText())
+                .as("canonical missing metric name error")
+                .isEqualTo("Metric name must not be blank");
+
+        if (!report.path("meters").isEmpty()) {
+            String name = report.path("meters").get(0).path("name").asText();
+            Response detail = probe().get("/bootui/api/metrics/detail?name="
+                    + URLEncoder.encode(name, StandardCharsets.UTF_8)
+                    + "&offset=0&limit=1");
+            assertThat(detail.status()).as("bounded metric detail status").isEqualTo(200);
+            assertThat(detail.isJson()).as("bounded metric detail content type").isTrue();
+            assertThat(detail.json().path("samples").size())
+                    .as("bounded metric sample count")
+                    .isLessThanOrEqualTo(1);
+            assertThat(detail.json().path("samplePage").path("limit").asInt())
+                    .as("$.samplePage.limit")
+                    .isEqualTo(1);
+            assertThat(detail.json().path("samplePage").path("returned").asInt())
+                    .as("$.samplePage.returned")
+                    .isEqualTo(detail.json().path("samples").size());
+            assertThat(detail.json().path("totalSamples").isInt())
+                    .as("$.totalSamples")
+                    .isTrue();
+            assertThat(detail.json().path("samplesTruncated").isBoolean())
+                    .as("$.samplesTruncated")
+                    .isTrue();
         }
     }
 

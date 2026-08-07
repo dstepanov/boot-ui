@@ -32,7 +32,7 @@ class MetricsControllerTests {
     @Test
     void metricsDelegatesToProvider() throws Exception {
         MetricsReportProvider provider = mock(MetricsReportProvider.class);
-        when(provider.metrics())
+        when(provider.metrics(eq("jvm"), eq("gauge"), eq("1"), eq("2")))
                 .thenReturn(new MetricsReport(
                         true,
                         1,
@@ -41,7 +41,11 @@ class MetricsControllerTests {
 
         MockMvc mvc = standaloneSetup(new MetricsController(provider)).build();
 
-        mvc.perform(get("/bootui/api/metrics"))
+        mvc.perform(get("/bootui/api/metrics")
+                        .param("q", "jvm")
+                        .param("type", "gauge")
+                        .param("offset", "1")
+                        .param("limit", "2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.metricsAvailable").value(true))
                 .andExpect(jsonPath("$.total").value(1))
@@ -51,7 +55,7 @@ class MetricsControllerTests {
     @Test
     void detailBindsNameAndTagParametersAndDelegates() throws Exception {
         MetricsReportProvider provider = mock(MetricsReportProvider.class);
-        when(provider.metric(eq("bootui.sample.requests"), eq(List.of("outcome:success"))))
+        when(provider.metric(eq("bootui.sample.requests"), eq(List.of("outcome:success")), eq("2"), eq("10")))
                 .thenReturn(new MetricDetailDto(
                         true, "bootui.sample.requests", null, null, "COUNTER", List.of(), List.of(), List.of()));
 
@@ -59,16 +63,20 @@ class MetricsControllerTests {
 
         mvc.perform(get("/bootui/api/metrics/detail")
                         .param("name", "bootui.sample.requests")
-                        .param("tag", "outcome:success"))
+                        .param("tag", "outcome:success")
+                        .param("offset", "2")
+                        .param("limit", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.metricsAvailable").value(true))
-                .andExpect(jsonPath("$.name").value("bootui.sample.requests"));
+                .andExpect(jsonPath("$.name").value("bootui.sample.requests"))
+                .andExpect(jsonPath("$.samplePage").exists())
+                .andExpect(jsonPath("$.samplesTruncated").value(false));
     }
 
     @Test
     void malformedTagFilterIsMappedToBadRequest() throws Exception {
         MetricsReportProvider provider = mock(MetricsReportProvider.class);
-        when(provider.metric(any(), any()))
+        when(provider.metric(any(), any(), any(), any()))
                 .thenThrow(new IllegalArgumentException("Metric tag filters must use key:value syntax"));
 
         MockMvc mvc = standaloneSetup(new MetricsController(provider)).build();
@@ -77,7 +85,27 @@ class MetricsControllerTests {
                         .param("name", "bootui.sample.requests")
                         .param("tag", "malformed"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").exists());
+                .andExpect(jsonPath("$.error").value("Metric tag filters must use key:value syntax"));
+    }
+
+    @Test
+    void invalidListLimitIsMappedToCanonicalBadRequest() throws Exception {
+        MetricsReportProvider provider = new MetricsReportProvider(() -> null, meter -> true);
+        MockMvc mvc = standaloneSetup(new MetricsController(provider)).build();
+
+        mvc.perform(get("/bootui/api/metrics").param("limit", "many"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Metric limit must be between 1 and 1000"));
+    }
+
+    @Test
+    void missingDetailNameIsMappedToCanonicalBadRequest() throws Exception {
+        MetricsReportProvider provider = new MetricsReportProvider(() -> null, meter -> true);
+        MockMvc mvc = standaloneSetup(new MetricsController(provider)).build();
+
+        mvc.perform(get("/bootui/api/metrics/detail"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Metric name must not be blank"));
     }
 
     @Test

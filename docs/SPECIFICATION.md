@@ -1706,8 +1706,8 @@ Initial endpoints:
 | `/bootui/api/startup`                        | GET    | Startup timeline                                                                       |
 | `/bootui/api/threads`                        | GET    | Stable, paged live thread snapshot with state counts and deadlock info                 |
 | `/bootui/api/threads/download`               | POST   | Confirmation-gated raw text thread dump download                                       |
-| `/bootui/api/metrics`                        | GET    | Browseable Micrometer meter list                                                       |
-| `/bootui/api/metrics/detail`                 | GET    | Micrometer meter detail and live measurements                                          |
+| `/bootui/api/metrics`                        | GET    | Searchable/type-filtered Micrometer meter list, paged at 200 by default (1,000 maximum) |
+| `/bootui/api/metrics/detail`                 | GET    | Meter detail with tag filters and samples paged at 100 by default (1,000 maximum)       |
 | `/bootui/api/database-connection-pools/pools` | GET    | JDBC connection pool metadata                                                          |
 | `/bootui/api/database-connection-pools/pools/{name}/snapshot` | GET | Live connection pool utilization snapshot                                   |
 | `/bootui/api/vulnerabilities`                   | GET    | Runtime Maven dependency inventory without external scanning                           |

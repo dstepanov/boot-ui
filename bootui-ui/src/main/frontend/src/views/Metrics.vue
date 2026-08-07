@@ -1,14 +1,30 @@
 <script setup>
+import {computed, inject, onBeforeUnmount, ref, watch} from 'vue'
 import {getJson} from '../api.js'
-import {computed, inject, ref} from 'vue'
-import PanelHeader from './components/PanelHeader.vue'
-import PanelSkeleton from './components/PanelSkeleton.vue'
 import {describeLoadError, formatLoadError} from '../utils/loadError.js'
 import {useAutoRefresh} from '../utils/useAutoRefresh.js'
+import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
+import ServerListFooter from './components/ServerListFooter.vue'
+
+const METER_PAGE_SIZE = 200
+const SAMPLE_PAGE_SIZE = 100
 
 const data = ref(null)
 const detail = ref(null)
 const error = ref(null)
+const detailError = ref(null)
+const search = ref('')
+const typeFilter = ref('')
+const selectedName = ref('')
+const selectedTags = ref([])
+const selectedStatistic = ref('')
+const sampleOffset = ref(0)
+const history = ref([])
+const lastUpdated = ref(null)
+const meterLoading = ref(false)
+const loadingMore = ref(false)
+const detailLoading = ref(false)
 
 const injectedPanels = inject('panels', null)
 const platform = computed(() => injectedPanels?.value?.platform ?? 'spring-boot')
@@ -18,31 +34,18 @@ const metricsUnavailableHelp = computed(() =>
     : 'Micrometer metrics are not available. Add Actuator or a MeterRegistry to browse live metrics.'
 )
 
-const detailError = ref(null)
-const search = ref('')
-const typeFilter = ref('')
-const selectedName = ref('')
-const selectedTags = ref([])
-const selectedStatistic = ref('')
-const history = ref([])
-const lastUpdated = ref(null)
-let loadingDetail = false
-
-const filteredMeters = computed(() => {
-  if (!data.value) return []
-  const q = search.value.trim().toLowerCase()
-  return data.value.meters.filter((meter) => {
-    const matchesSearch =
-      !q || meter.name.toLowerCase().includes(q) || (meter.description || '').toLowerCase().includes(q)
-    const matchesType = !typeFilter.value || meter.type === typeFilter.value
-    return matchesSearch && matchesType
-  })
-})
-
-const metricTypes = computed(() => {
-  if (!data.value) return []
-  return [...new Set(data.value.meters.map((meter) => meter.type).filter(Boolean))].sort()
-})
+const meters = computed(() => data.value?.meters ?? [])
+const meterPage = computed(() => data.value?.page ?? null)
+const meterTypes = computed(
+  () => data.value?.availableTypes ?? [...new Set(meters.value.map((meter) => meter.type).filter(Boolean))].sort()
+)
+const meterMatched = computed(() => meterPage.value?.matched ?? meters.value.length)
+const meterTotal = computed(() => meterPage.value?.total ?? data.value?.total ?? meters.value.length)
+const samplePage = computed(() => detail.value?.samplePage ?? null)
+const sampleStart = computed(() => (samplePage.value?.returned > 0 ? samplePage.value.offset + 1 : 0))
+const sampleEnd = computed(() =>
+  samplePage.value ? samplePage.value.offset + samplePage.value.returned : (detail.value?.samples?.length ?? 0)
+)
 
 const selectedMeasurement = computed(() => {
   if (!detail.value?.measurements?.length) return null
@@ -68,6 +71,10 @@ const chartPath = computed(() => {
     .join(' ')
 })
 
+let meterRequestId = 0
+let detailRequestId = 0
+let filterTimer = null
+
 function formatNumber(value) {
   if (value == null || Number.isNaN(value)) return 'N/A'
   if (Math.abs(value) >= 1000) return value.toLocaleString(undefined, {maximumFractionDigits: 1})
@@ -91,14 +98,16 @@ function resetSelection(name) {
   selectedName.value = name
   selectedTags.value = []
   selectedStatistic.value = ''
+  sampleOffset.value = 0
   detail.value = null
+  detailError.value = null
   resetHistory()
 }
 
 function selectMeter(name) {
   if (selectedName.value === name) return
   resetSelection(name)
-  loadDetail()
+  void loadDetail()
 }
 
 function toggleTag(key, value) {
@@ -107,8 +116,9 @@ function toggleTag(key, value) {
   selectedTags.value = exists
     ? selectedTags.value.filter((tag) => tag !== label)
     : [...selectedTags.value.filter((tag) => !tag.startsWith(`${key}:`)), label]
+  sampleOffset.value = 0
   resetHistory()
-  loadDetail()
+  void loadDetail()
 }
 
 function isTagSelected(key, value) {
@@ -117,8 +127,9 @@ function isTagSelected(key, value) {
 
 function clearTags() {
   selectedTags.value = []
+  sampleOffset.value = 0
   resetHistory()
-  loadDetail()
+  void loadDetail()
 }
 
 function changeStatistic(event) {
@@ -127,55 +138,149 @@ function changeStatistic(event) {
   appendHistoryPoint()
 }
 
-async function fetchMetrics() {
+function meterParams(offset, limit) {
+  const params = new URLSearchParams({offset: String(offset), limit: String(limit)})
+  const query = search.value.trim()
+  if (query) params.set('q', query)
+  if (typeFilter.value) params.set('type', typeFilter.value)
+  return params
+}
+
+async function fetchMetrics({append = false, reset = false} = {}) {
+  const requestId = ++meterRequestId
+  const offset = append ? meters.value.length : 0
+  const currentSize = reset ? 0 : meters.value.length
+  const limit = append ? METER_PAGE_SIZE : Math.max(METER_PAGE_SIZE, Math.min(currentSize, 1000))
+  const requestUrl = `api/metrics?${meterParams(offset, limit)}`
+
+  if (append) loadingMore.value = true
+  else meterLoading.value = true
+  error.value = null
+
   try {
-    data.value = await getJson('api/metrics')
-    error.value = null
-    if (!selectedName.value && data.value.meters.length) {
-      resetSelection(preferredInitialMeter(data.value.meters))
+    const response = await getJson(requestUrl)
+    if (requestId !== meterRequestId) return false
+
+    if (append) {
+      const combinedMeters = [...meters.value, ...(response.meters ?? [])]
+      data.value = {
+        ...response,
+        meters: combinedMeters,
+        page: response.page ? {...response.page, offset: 0, returned: combinedMeters.length} : response.page
+      }
+    } else {
+      data.value = response
     }
     return true
-  } catch (e) {
-    error.value = describeLoadError(e, 'Unable to load metrics')
+  } catch (exception) {
+    if (requestId === meterRequestId) {
+      error.value = describeLoadError(exception, 'Unable to load metrics')
+    }
     return false
+  } finally {
+    if (requestId === meterRequestId) {
+      meterLoading.value = false
+      loadingMore.value = false
+    }
   }
 }
 
-async function refreshMetrics() {
-  if (await fetchMetrics()) {
-    await loadDetail()
-  }
-}
-
-function preferredInitialMeter(meters) {
+function preferredInitialMeter(availableMeters) {
   return (
-    meters.find((meter) => meter.name === 'jvm.memory.used')?.name ||
-    meters.find((meter) => meter.name === 'process.uptime')?.name ||
-    meters[0].name
+    availableMeters.find((meter) => meter.name === 'jvm.memory.used')?.name ||
+    availableMeters.find((meter) => meter.name === 'process.uptime')?.name ||
+    availableMeters[0]?.name ||
+    ''
   )
 }
 
+function ensureSelection() {
+  if (!meters.value.length) {
+    if (selectedName.value) resetSelection('')
+    return
+  }
+  if (!meters.value.some((meter) => meter.name === selectedName.value)) {
+    resetSelection(preferredInitialMeter(meters.value))
+  }
+}
+
+async function refreshMetrics(options = {}) {
+  if (!(await fetchMetrics(options))) return
+  if (!data.value?.metricsAvailable) {
+    resetSelection('')
+    return
+  }
+  ensureSelection()
+  await loadDetail()
+}
+
+function scheduleFilterReload() {
+  meterRequestId++
+  detailRequestId++
+  if (filterTimer) clearTimeout(filterTimer)
+  meterLoading.value = true
+  filterTimer = setTimeout(() => {
+    filterTimer = null
+    void refreshMetrics({reset: true})
+  }, 250)
+}
+
+async function loadMoreMeters() {
+  await fetchMetrics({append: true})
+}
+
 async function loadDetail() {
-  if (!selectedName.value || loadingDetail) return
-  loadingDetail = true
+  if (!selectedName.value) return
+  const requestId = ++detailRequestId
+  detailLoading.value = true
+  detailError.value = null
+
   try {
-    const params = new URLSearchParams({name: selectedName.value})
+    const params = new URLSearchParams({
+      name: selectedName.value,
+      offset: String(sampleOffset.value),
+      limit: String(SAMPLE_PAGE_SIZE)
+    })
     for (const tag of selectedTags.value) {
       params.append('tag', tag)
     }
-    detail.value = await getJson(`api/metrics/detail?${params}`)
-    if (!detail.value.measurements.some((measurement) => measurement.statistic === selectedStatistic.value)) {
-      selectedStatistic.value = detail.value.measurements[0]?.statistic || ''
+    const response = await getJson(`api/metrics/detail?${params}`)
+    if (requestId !== detailRequestId) return
+
+    if (!response.samples?.length && response.totalSamples > 0 && sampleOffset.value > 0) {
+      sampleOffset.value = Math.floor((response.totalSamples - 1) / SAMPLE_PAGE_SIZE) * SAMPLE_PAGE_SIZE
+      return await loadDetail()
+    }
+
+    detail.value = response
+    sampleOffset.value = response.samplePage?.offset ?? 0
+    if (!response.measurements.some((measurement) => measurement.statistic === selectedStatistic.value)) {
+      selectedStatistic.value = response.measurements[0]?.statistic || ''
       resetHistory()
     }
     appendHistoryPoint()
     lastUpdated.value = new Date()
-    detailError.value = null
-  } catch (e) {
-    detailError.value = formatLoadError(e, 'Unable to load metric details')
+  } catch (exception) {
+    if (requestId === detailRequestId) {
+      detailError.value = formatLoadError(exception, 'Unable to load metric details')
+    }
   } finally {
-    loadingDetail = false
+    if (requestId === detailRequestId) {
+      detailLoading.value = false
+    }
   }
+}
+
+function previousSamples() {
+  if (!samplePage.value || samplePage.value.offset === 0 || detailLoading.value) return
+  sampleOffset.value = Math.max(0, samplePage.value.offset - samplePage.value.limit)
+  void loadDetail()
+}
+
+function nextSamples() {
+  if (!samplePage.value?.hasMore || detailLoading.value) return
+  sampleOffset.value = samplePage.value.offset + samplePage.value.limit
+  void loadDetail()
 }
 
 function appendHistoryPoint() {
@@ -183,7 +288,16 @@ function appendHistoryPoint() {
   history.value = [...history.value, {timestamp: Date.now(), value: selectedMeasurement.value.value}].slice(-60)
 }
 
+watch([search, typeFilter], scheduleFilterReload)
+
+onBeforeUnmount(() => {
+  meterRequestId++
+  detailRequestId++
+  if (filterTimer) clearTimeout(filterTimer)
+})
+
 const {autoRefresh, loading, initialLoading, load: loadMetrics} = useAutoRefresh(refreshMetrics)
+const panelLoading = computed(() => loading.value || meterLoading.value || loadingMore.value || detailLoading.value)
 </script>
 
 <template>
@@ -192,7 +306,7 @@ const {autoRefresh, loading, initialLoading, load: loadMetrics} = useAutoRefresh
       icon="bi-activity"
       title="Metrics"
       subtitle="Browse meters, filter tag sets, and watch live values update automatically."
-      :loading="loading"
+      :loading="panelLoading"
       :error="error"
       :last-fetched="lastUpdated ? lastUpdated.getTime() : null"
       v-model:auto-refresh="autoRefresh"
@@ -208,26 +322,28 @@ const {autoRefresh, loading, initialLoading, load: loadMetrics} = useAutoRefresh
     <template v-else-if="data">
       <div class="row g-3">
         <div class="col-lg-4">
-          <div class="card h-100">
+          <div class="card h-100" :aria-busy="meterLoading">
             <div class="card-header">
               <div class="fw-semibold">Meters</div>
-              <div class="text-muted small">{{ filteredMeters.length }} of {{ data.total }} meters</div>
+              <div class="text-muted small" aria-live="polite">
+                {{ meters.length }} shown · {{ meterMatched }} matched · {{ meterTotal }} total
+              </div>
             </div>
             <div class="card-body border-bottom">
               <input
                 v-model="search"
                 aria-label="Search meters"
                 class="form-control form-control-sm mb-2"
-                placeholder="Search meters"
+                placeholder="Search names and descriptions"
               />
               <select v-model="typeFilter" aria-label="Filter meters by type" class="form-select form-select-sm">
                 <option value="">All meter types</option>
-                <option v-for="type in metricTypes" :key="type" :value="type">{{ type }}</option>
+                <option v-for="type in meterTypes" :key="type" :value="type">{{ type }}</option>
               </select>
             </div>
             <div class="list-group list-group-flush meter-list">
               <button
-                v-for="meter in filteredMeters"
+                v-for="meter in meters"
                 :key="meter.name"
                 :class="{active: meter.name === selectedName}"
                 class="list-group-item list-group-item-action"
@@ -240,6 +356,24 @@ const {autoRefresh, loading, initialLoading, load: loadMetrics} = useAutoRefresh
                 </div>
                 <div v-if="meter.description" class="small text-muted mt-1">{{ meter.description }}</div>
               </button>
+              <div v-if="!meters.length && meterLoading" class="p-3 text-muted small" role="status">
+                Updating meter list…
+              </div>
+              <div v-else-if="!meters.length && (search.trim() || typeFilter)" class="p-3 text-muted small">
+                No meters match the current server-side filters.
+              </div>
+              <div v-else-if="!meters.length" class="p-3 text-muted small">No meters are registered yet.</div>
+            </div>
+            <div v-if="meterPage" class="card-footer">
+              <ServerListFooter
+                :shown="meters.length"
+                :matched="meterMatched"
+                :total="meterTotal"
+                :page-size="METER_PAGE_SIZE"
+                :loading="loadingMore"
+                item-label="meters"
+                @load-more="loadMoreMeters"
+              />
             </div>
           </div>
         </div>
@@ -302,7 +436,12 @@ const {autoRefresh, loading, initialLoading, load: loadMetrics} = useAutoRefresh
           <div v-if="detail" class="card mb-3">
             <div class="card-header d-flex justify-content-between align-items-center">
               <span>Tag filters</span>
-              <button v-if="selectedTags.length" class="btn btn-sm btn-outline-secondary" @click="clearTags">
+              <button
+                v-if="selectedTags.length"
+                class="btn btn-sm btn-outline-secondary"
+                type="button"
+                @click="clearTags"
+              >
                 Clear filters
               </button>
             </div>
@@ -330,8 +469,13 @@ const {autoRefresh, loading, initialLoading, load: loadMetrics} = useAutoRefresh
             </div>
           </div>
 
-          <div v-if="detail" class="card">
-            <div class="card-header">Samples</div>
+          <div v-if="detail" class="card" :aria-busy="detailLoading">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+              <span>Samples</span>
+              <span class="text-muted small" aria-live="polite">
+                Showing {{ sampleStart }}–{{ sampleEnd }} of {{ detail.totalSamples }}
+              </span>
+            </div>
             <div class="table-responsive">
               <table class="table table-sm table-hover mb-0">
                 <thead class="table-light">
@@ -361,9 +505,34 @@ const {autoRefresh, loading, initialLoading, load: loadMetrics} = useAutoRefresh
                 </tbody>
               </table>
             </div>
+            <div
+              v-if="samplePage"
+              class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2"
+            >
+              <span class="text-muted small"> Responses are bounded to {{ SAMPLE_PAGE_SIZE }} samples per page. </span>
+              <div class="btn-group btn-group-sm" aria-label="Sample pages">
+                <button
+                  class="btn btn-outline-secondary"
+                  type="button"
+                  :disabled="samplePage.offset === 0 || detailLoading"
+                  @click="previousSamples"
+                >
+                  Previous
+                </button>
+                <button
+                  class="btn btn-outline-secondary"
+                  type="button"
+                  :disabled="!samplePage.hasMore || detailLoading"
+                  @click="nextSamples"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div v-else class="text-muted">Select a meter to inspect live values.</div>
+          <div v-else-if="detailLoading" class="text-muted" role="status">Loading metric details…</div>
+          <div v-else-if="meters.length" class="text-muted">Select a meter to inspect live values.</div>
         </div>
       </div>
     </template>
@@ -413,7 +582,7 @@ const {autoRefresh, loading, initialLoading, load: loadMetrics} = useAutoRefresh
 }
 
 .chart-axis {
-  stroke: rgba(100, 116, 139, 0.35);
+  stroke: var(--bootui-border-alt);
   stroke-width: 0.5;
 }
 

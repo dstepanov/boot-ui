@@ -62,6 +62,48 @@ class MetricsReportProviderTests {
         assertThat(meter.availableTags()).hasSize(1);
         assertThat(meter.availableTags().get(0).key()).isEqualTo("outcome");
         assertThat(meter.availableTags().get(0).values()).containsExactly("failure", "success");
+        assertThat(report.availableTypes()).contains("COUNTER");
+        assertThat(report.page().total()).isEqualTo(report.total());
+        assertThat(report.page().returned()).isEqualTo(report.meters().size());
+    }
+
+    @Test
+    void metricsFiltersAndPagesInDeterministicNameOrder() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Counter.builder("zeta.requests").description("Target traffic").register(registry);
+        Counter.builder("alpha.requests").description("Target traffic").register(registry);
+        Gauge.builder("middle.gauge", new AtomicInteger(), AtomicInteger::get)
+                .description("Target traffic")
+                .register(registry);
+
+        MetricsReport report = provider(registry).metrics("target", "counter", "1", "1");
+
+        assertThat(report.total()).isEqualTo(3);
+        assertThat(report.availableTypes()).containsExactly("COUNTER", "GAUGE");
+        assertThat(report.meters()).extracting(MetricMeterDto::name).containsExactly("zeta.requests");
+        assertThat(report.page()).isEqualTo(new io.github.jdubois.bootui.core.dto.PageMetadata(3, 2, 1, 1, 1, false));
+    }
+
+    @Test
+    void metricsUsesBoundedDefaultsAndRejectsInvalidPaging() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        for (int index = 0; index < 205; index++) {
+            registry.counter("sample." + String.format("%03d", index));
+        }
+
+        MetricsReport report = provider(registry).metrics();
+
+        assertThat(report.meters()).hasSize(MetricsReportProvider.DEFAULT_METER_LIMIT);
+        assertThat(report.page().hasMore()).isTrue();
+        assertThatThrownBy(() -> provider(registry).metrics(null, null, "invalid", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Metric offset must be 0 or greater");
+        assertThatThrownBy(() -> provider(registry).metrics(null, null, null, "1001"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Metric limit must be between 1 and 1000");
+        assertThatThrownBy(() -> provider(registry).metrics(null, "not-a-type", null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageStartingWith("Metric type must be one of:");
     }
 
     @Test
@@ -84,6 +126,55 @@ class MetricsReportProviderTests {
         assertThat(detail.samples()).hasSize(1);
         assertThat(detail.samples().get(0).tags().get(0).key()).isEqualTo("outcome");
         assertThat(detail.samples().get(0).tags().get(0).value()).isEqualTo("success");
+    }
+
+    @Test
+    void detailPagesDeterministicallyAndAggregatesEveryMatchingSample() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Counter.builder("bootui.sample.requests")
+                .tag("node", "charlie")
+                .register(registry)
+                .increment(3);
+        Counter.builder("bootui.sample.requests")
+                .tag("node", "alpha")
+                .register(registry)
+                .increment();
+        Counter.builder("bootui.sample.requests")
+                .tag("node", "bravo")
+                .register(registry)
+                .increment(2);
+
+        MetricDetailDto detail = provider(registry).metric("bootui.sample.requests", null, "1", "1");
+
+        assertThat(detail.totalSamples()).isEqualTo(3);
+        assertThat(detail.samples()).hasSize(1);
+        assertThat(detail.samples().get(0).tags().get(0).value()).isEqualTo("bravo");
+        assertThat(detail.measurements()).contains(new MetricMeasurementDto("count", 6.0));
+        assertThat(detail.samplePage())
+                .isEqualTo(new io.github.jdubois.bootui.core.dto.PageMetadata(3, 3, 1, 1, 1, true));
+        assertThat(detail.samplesTruncated()).isTrue();
+    }
+
+    @Test
+    void detailBoundsTagValuesWhileRetainingDeterministicValues() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        for (int index = 104; index >= 0; index--) {
+            Counter.builder("bootui.cardinality")
+                    .tag("route", String.format("route-%03d", index))
+                    .register(registry);
+        }
+
+        MetricDetailDto detail = provider(registry).metric("bootui.cardinality", null, null, "1");
+
+        assertThat(detail.availableTags()).hasSize(1);
+        assertThat(detail.availableTags().get(0).values())
+                .hasSize(100)
+                .startsWith("route-000")
+                .endsWith("route-099");
+        assertThat(detail.availableTags().get(0).truncated()).isTrue();
+        assertThat(detail.totalSamples()).isEqualTo(105);
+        assertThat(detail.samples()).hasSize(1);
+        assertThat(detail.samplesTruncated()).isTrue();
     }
 
     @Test
@@ -156,12 +247,28 @@ class MetricsReportProviderTests {
     }
 
     @Test
+    void detailRejectsBlankNameAndInvalidPaging() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+
+        assertThatThrownBy(() -> provider(registry).metric(" ", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Metric name must not be blank");
+        assertThatThrownBy(() -> provider(registry).metric("sample", null, "-1", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Metric offset must be 0 or greater");
+        assertThatThrownBy(() -> provider(registry).metric("sample", null, null, "0"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Metric limit must be between 1 and 1000");
+    }
+
+    @Test
     void metricsReportUnavailableWhenNoRegistry() {
         MetricsReport report = provider(null).metrics();
 
         assertThat(report.metricsAvailable()).isFalse();
         assertThat(report.total()).isZero();
         assertThat(report.meters()).isEmpty();
+        assertThat(report.page().limit()).isEqualTo(MetricsReportProvider.DEFAULT_METER_LIMIT);
     }
 
     @Test
@@ -171,5 +278,7 @@ class MetricsReportProviderTests {
         assertThat(detail.metricsAvailable()).isFalse();
         assertThat(detail.name()).isEqualTo("anything");
         assertThat(detail.samples()).isEmpty();
+        assertThat(detail.samplePage().limit()).isEqualTo(MetricsReportProvider.DEFAULT_SAMPLE_LIMIT);
+        assertThat(detail.samplesTruncated()).isFalse();
     }
 }
