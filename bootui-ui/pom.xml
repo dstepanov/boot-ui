@@ -73,7 +73,7 @@
                         </goals>
                         <phase>test</phase>
                         <configuration>
-                            <arguments>run test</arguments>
+                            <arguments>${frontend.test.command}</arguments>
                             <skip>${skipTests}</skip>
                         </configuration>
                     </execution>

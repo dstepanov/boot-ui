@@ -100,6 +100,41 @@ npm install
 npm test
 ```
 
+### Coverage
+
+Run the same instrumented Maven/Vitest coverage build as CI with:
+
+```bash
+./mvnw -B -ntp -Pcoverage clean verify
+```
+
+The `coverage` profile leaves the normal and `release` profiles unchanged. It writes per-module JaCoCo HTML/XML/CSV
+reports under `*/target/site/jacoco/`, the cross-module report under
+`bootui-coverage/target/site/jacoco-aggregate/`, and Vitest HTML/Cobertura/LCOV/JSON reports under
+`bootui-ui/src/main/frontend/coverage/`. For a frontend-only run:
+
+```bash
+(cd bootui-ui/src/main/frontend && npm run test:coverage)
+```
+
+Coverage gates deliberately protect critical contracts rather than a repository-wide percentage:
+
+| Scope | Measured baseline | Initial gate |
+| --- | ---: | ---: |
+| `SecretMasker` | 75.0% lines | 70% lines |
+| `BootUiPathNormalizer` | 100% lines / 100% branches | 100% / 100% |
+| Engine safety package | 92.2% lines / 80.3% branches | 90% / 75% |
+| Spring exposure/MCP policy | 100% lines / 75.0% branches | 80% / 60% |
+| Quarkus exposure/MCP policy | 86.4% lines / 100% branches | 80% / 60% |
+| Frontend path utility | 84.5% statements / 82.4% branches / 100% functions / 89.6% lines | 80% / 75% / 95% / 85% |
+| Shared frontend state primitives | 97.2% statements / 88.2% branches / 100% functions / 100% lines | 95% / 85% / 95% / 95% |
+| Shared accessible UI components | 94.5% statements / 93.2% branches / 92.9% functions / 96.8% lines | 90% / 85% / 85% / 90% |
+
+The margins absorb harmless compiler/provider shifts while still rejecting meaningful regressions. DTO serialization is
+reported in the aggregate and protected behaviorally by the shared Spring/Quarkus conformance suites; generated record
+methods are not assigned a vanity percentage gate. CI publishes the human-readable reports, JaCoCo XML, Cobertura XML,
+LCOV, and the aggregate job summary for comparison across runs.
+
 ### Panel metadata workflow
 
 Backend panel metadata (`id`, manifest title/order, action capability, and guarded
