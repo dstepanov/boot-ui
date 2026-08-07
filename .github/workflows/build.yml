@@ -58,8 +58,12 @@ jobs:
       # forkCount to a value that does not race Quarkus's own test-bootstrap classloading (see the
       # maven-surefire-plugin comment in the root pom and the forkCount comment in
       # bootui-quarkus-integration-tests/base/pom.xml).
-      - name: Build all modules
-        run: ./mvnw -T 1C -B -ntp clean install
+      - name: Build all modules with coverage
+        run: ./mvnw -T 1C -B -ntp -Pcoverage clean install
+
+      - name: Publish coverage summary
+        if: ${{ !cancelled() }}
+        run: bash .github/scripts/coverage-summary.sh >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check frontend formatting
         working-directory: bootui-ui/src/main/frontend
@@ -187,6 +191,18 @@ jobs:
             bootui-spring-sample-app/e2e/test-results-custom-path/junit/results.xml
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Upload coverage reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-reports-java-${{ matrix.java }}
+          path: |
+            **/target/site/jacoco/
+            bootui-coverage/target/site/jacoco-aggregate/
+            bootui-ui/src/main/frontend/coverage/
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload sample-app jar
         if: success()

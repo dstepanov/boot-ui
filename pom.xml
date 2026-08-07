@@ -77,6 +77,7 @@
         <central-publishing-maven-plugin.version>0.11.0</central-publishing-maven-plugin.version>
         <native-build-tools-plugin.version>1.1.6</native-build-tools-plugin.version>
         <archunit.version>1.4.2</archunit.version>
+        <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
         <central.autoPublish>true</central.autoPublish>
         <!--
             central-publishing-maven-plugin does NOT honor maven.deploy.skip (it implements its own
@@ -96,6 +97,7 @@
         <spotless-maven-plugin.version>3.9.0</spotless-maven-plugin.version>
         <node.version>v24.18.0</node.version>
         <npm.version>11.17.0</npm.version>
+        <frontend.test.command>run test</frontend.test.command>
     </properties>
 
     <dependencyManagement>
@@ -230,6 +232,11 @@
                     <version>${spotless-maven-plugin.version}</version>
                 </plugin>
                 <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco-maven-plugin.version}</version>
+                </plugin>
+                <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-antrun-plugin</artifactId>
                     <version>${maven-antrun-plugin.version}</version>
@@ -337,6 +344,145 @@
     </build>
 
     <profiles>
+        <profile>
+            <id>coverage</id>
+            <modules>
+                <module>bootui-coverage</module>
+            </modules>
+            <properties>
+                <frontend.test.command>run test:coverage</frontend.test.command>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>prepare-coverage-agent</id>
+                                <phase>initialize</phase>
+                                <goals>
+                                    <goal>prepare-agent</goal>
+                                </goals>
+                                <configuration>
+                                    <!-- Keep the existing Surefire fork topology while isolating each fork's
+                                         execution data. The merge below produces the standard jacoco.exec consumed
+                                         by module checks/reports and the aggregate report. -->
+                                    <destFile>${project.build.directory}/jacoco-${surefire.forkNumber}.exec</destFile>
+                                    <append>true</append>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>merge-coverage-forks</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>merge</goal>
+                                </goals>
+                                <configuration>
+                                    <fileSets>
+                                        <fileSet>
+                                            <directory>${project.build.directory}</directory>
+                                            <includes>
+                                                <include>jacoco-*.exec</include>
+                                            </includes>
+                                        </fileSet>
+                                    </fileSets>
+                                    <destFile>${project.build.directory}/jacoco.exec</destFile>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>module-coverage-report</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>report</goal>
+                                </goals>
+                            </execution>
+                            <execution>
+                                <id>critical-coverage-check</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                                <configuration>
+                                    <rules>
+                                        <rule>
+                                            <element>CLASS</element>
+                                            <includes>
+                                                <include>io.github.jdubois.bootui.core.SecretMasker</include>
+                                            </includes>
+                                            <limits>
+                                                <limit>
+                                                    <counter>LINE</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>0.70</minimum>
+                                                </limit>
+                                            </limits>
+                                        </rule>
+                                        <rule>
+                                            <element>CLASS</element>
+                                            <includes>
+                                                <include>io.github.jdubois.bootui.core.BootUiPathNormalizer</include>
+                                            </includes>
+                                            <limits>
+                                                <limit>
+                                                    <counter>LINE</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>1.00</minimum>
+                                                </limit>
+                                                <limit>
+                                                    <counter>BRANCH</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>1.00</minimum>
+                                                </limit>
+                                            </limits>
+                                        </rule>
+                                        <rule>
+                                            <element>PACKAGE</element>
+                                            <includes>
+                                                <include>io.github.jdubois.bootui.engine.safety</include>
+                                            </includes>
+                                            <limits>
+                                                <limit>
+                                                    <counter>LINE</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>0.90</minimum>
+                                                </limit>
+                                                <limit>
+                                                    <counter>BRANCH</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>0.75</minimum>
+                                                </limit>
+                                            </limits>
+                                        </rule>
+                                        <rule>
+                                            <element>CLASS</element>
+                                            <includes>
+                                                <include>io.github.jdubois.bootui.autoconfigure.config.BootUiExposure</include>
+                                                <include>io.github.jdubois.bootui.autoconfigure.mcp.SpringMcpPanelPolicy</include>
+                                                <include>io.github.jdubois.bootui.quarkus.QuarkusExposurePolicy</include>
+                                                <include>io.github.jdubois.bootui.quarkus.mcp.QuarkusMcpPanelPolicy</include>
+                                            </includes>
+                                            <limits>
+                                                <limit>
+                                                    <counter>LINE</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>0.80</minimum>
+                                                </limit>
+                                                <limit>
+                                                    <counter>BRANCH</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>0.60</minimum>
+                                                </limit>
+                                            </limits>
+                                        </rule>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <!--
             The Hibernate Quarkus integration-test module depends on Hibernate ORM, whose build-time ByteBuddy
             enhancement (via the selected Quarkus platform) cannot read class files newer than the JDKs that platform

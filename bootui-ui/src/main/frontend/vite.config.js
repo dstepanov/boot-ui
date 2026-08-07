@@ -94,6 +94,34 @@ export default defineConfig(({command}) => ({
     clearMocks: true,
     restoreMocks: true,
     reporters: process.env.CI ? ['default', 'junit'] : 'default',
-    outputFile: {junit: './test-results/vitest-junit.xml'}
+    outputFile: {junit: './test-results/vitest-junit.xml'},
+    coverage: {
+      provider: 'v8',
+      reportsDirectory: './coverage',
+      reporter: ['text', 'html', 'json-summary', 'lcov', 'cobertura'],
+      include: ['src/**/*.{js,vue}', 'scripts/**/*.mjs'],
+      exclude: ['src/generated/**', 'src/main.js'],
+      thresholds: {
+        'src/utils/bootUiPath.js': {
+          statements: 80,
+          branches: 75,
+          functions: 95,
+          lines: 85
+        },
+        'src/utils/{panelState,safeStorage,theme,useConfirm,useFlashMessage,useRefreshState}.js': {
+          statements: 95,
+          branches: 85,
+          functions: 95,
+          lines: 95
+        },
+        'src/views/components/{ConfirmDialog,FlashBanner,PanelHeader,ReadOnlyNotice,SpinnerButton,StreamStatusIndicator,UnavailableState}.vue':
+          {
+            statements: 90,
+            branches: 85,
+            functions: 85,
+            lines: 90
+          }
+      }
+    }
   }
 }))

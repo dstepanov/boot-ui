@@ -617,6 +617,7 @@ class BootUiReactiveAutoConfigurationTests {
                 .run(context -> {
                     WebTestClient client = WebTestClient.bindToApplicationContext(context.getSourceApplicationContext())
                             .configureClient()
+                            .responseTimeout(Duration.ofSeconds(30))
                             .defaultHeader(
                                     "Authorization",
                                     "Bearer "
