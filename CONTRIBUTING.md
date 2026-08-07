@@ -284,14 +284,16 @@ to stage for manual publishing instead.
 
 To prepare and publish a release, run the **Release** GitHub Actions workflow
 from the branch you want to release, usually `main`, and enter the target version
-without the leading `v`, for example `1.0.0`. The workflow updates all Maven
-module versions and refreshes the documentation dependency examples in the working
-tree and optionally verifies with the `release` Maven profile. Before any Maven
-Central upload, it commits those exact contents, creates a GPG-signed annotated
-`v1.0.0` tag, and atomically pushes the source branch plus tag. If the source branch
-advanced during preparation, the workflow aborts; it never rebases released
-contents. The selected branch must allow `github-actions[bot]` to push the release
-commit and tag.
+without the leading `v`. The target must be exactly the next patch, minor, or major
+version after the latest stable release tag. For example, after `v1.13.1`, the
+workflow accepts only `1.13.2`, `1.14.0`, or `2.0.0`. The workflow updates all
+Maven module versions and refreshes the documentation dependency examples in the
+working tree and optionally verifies with the `release` Maven profile. Before any
+Maven Central upload, it commits those exact contents, creates a GPG-signed
+annotated version tag, and atomically pushes the source branch plus tag. If the
+source branch advanced during preparation, the workflow aborts; it never rebases
+released contents. The selected branch must allow
+`github-actions[bot]` to push the release commit and tag.
 
 The workflow then resolves the remote tag to its peeled commit SHA, checks out that
 SHA in detached state, rechecks the Maven/npm/tag identity, and publishes exactly
