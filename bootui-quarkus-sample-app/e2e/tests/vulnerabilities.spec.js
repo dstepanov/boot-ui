@@ -3,31 +3,46 @@ import {expect, test} from './fixtures.js'
 
 /**
  * The Vulnerabilities panel lists the local runtime JAR inventory (captured at Quarkus build time from
- * the application model) network-free, then only calls the real OSV.dev service when the user clicks
- * Scan. This test performs a real network round-trip - no page.route mocking - so it proves the Quarkus
- * backend's OsvVulnerabilityScanner actually reaches OSV.dev end-to-end. It deliberately avoids asserting
- * on specific CVE findings, since those change over time; it only asserts the scan completes and the
- * local dependency inventory is real.
+ * the application model) network-free, then only calls the deterministic loopback OSV fixture when the
+ * user clicks Scan. There is no page.route mocking: the browser calls the real Quarkus endpoint, whose
+ * OsvVulnerabilityScanner constructs and parses real OSV HTTP payloads. The fixture rejects malformed
+ * Maven queries and deliberately returns advisories out of severity order so aggregation and ordering are
+ * asserted without making normal CI depend on the public service.
  */
 test.describe('Vulnerabilities (Quarkus)', () => {
-  test('lists the local dependency inventory and scans it with OSV.dev', async ({openView, page}) => {
+  test('lists the local dependency inventory and scans it through the deterministic OSV fixture', async ({
+    openView,
+    page
+  }) => {
     await openView('vulnerabilities', 'Vulnerabilities')
 
     const dependenciesMetric = page.locator('.advisor-summary__metric', {hasText: 'Dependencies'})
     const totalBefore = Number((await dependenciesMetric.locator('dd').textContent())?.trim())
-    expect(totalBefore).toBeGreaterThan(0)
+    expect(totalBefore).toBeGreaterThan(3)
 
     await page.getByRole('button', {name: 'Scan with OSV.dev'}).click()
 
-    // Real network call to OSV.dev, so give it a generous timeout. The sample app ships 300+
-    // dependencies, comfortably over the default bootui.vulnerabilities.max-packages=250 limit, so a
-    // real scan reports "Partial scan" rather than "Scan complete" - accept either so the assertion
-    // doesn't break if the sample's dependency count ever drops below the limit.
-    await expect(page.locator('.badge', {hasText: /^(Scan complete|Partial scan)$/})).toBeVisible({
-      timeout: 45_000
-    })
+    // The fixture-backed server is configured with max-packages=3, below the real inventory size.
+    await expect(page.getByText('Partial scan', {exact: true})).toBeVisible()
 
     const scannerMetric = page.locator('.advisor-summary__metric', {hasText: 'Scanner'})
     await expect(scannerMetric.locator('dd')).toHaveText('OSV.dev')
+    await expect(page.locator('[aria-label="CRITICAL vulnerabilities: 1"]')).toBeVisible()
+    await expect(page.locator('[aria-label="LOW vulnerabilities: 1"]')).toBeVisible()
+
+    const vulnerableMetric = page.locator('.advisor-summary__metric', {hasText: 'Vulnerable'})
+    await expect(vulnerableMetric.locator('dd')).toHaveText('1')
+    await expect(page.locator('#vulnerableOnly')).toBeChecked()
+
+    const vulnerableRow = page.locator('tbody tr').filter({hasText: CRITICAL_ADVISORY_ID})
+    await expect(vulnerableRow).toBeVisible()
+    await expect(vulnerableRow.locator('.vulnerability-list a, .vulnerability-list span.fw-semibold')).toHaveText([
+      CRITICAL_ADVISORY_ID,
+      LOW_ADVISORY_ID
+    ])
+    await expect(vulnerableRow.getByText('fixed in 9999.0.0')).toHaveCount(2)
   })
 })
+
+const CRITICAL_ADVISORY_ID = 'GHSA-BOOTUI-CRITICAL'
+const LOW_ADVISORY_ID = 'GHSA-BOOTUI-LOW'

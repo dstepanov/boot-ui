@@ -38,8 +38,13 @@ rendering already covered by Spring's e2e suite — performs the action end to e
   with plausible values.
 - **`rest-api.spec.js`** — runs the REST API advisor and asserts real counts of the sample's own JAX-RS
   resources and endpoints.
-- **`vulnerabilities.spec.js`** — lists the real build-time dependency inventory, then scans it against the
-  live OSV.dev service and asserts the scan completes.
+- **`vulnerabilities.spec.js`** — lists the real build-time dependency inventory, then scans it through a
+  deterministic loopback OSV fixture. The fixture validates the real Maven query payload and returns stable
+  out-of-order advisories so parsing, aggregation, ordering, and configured limits are exercised without a
+  public-network dependency.
+- **`vulnerabilities-live.spec.js`** — a live OSV protocol smoke that runs only from the scheduled
+  `OSV live smoke` workflow. It is bounded to five packages, ten advisory details, and ten seconds per
+  request, and it never runs in normal PR CI.
 - **`loggers.spec.js`** — filters the live JBoss LogManager loggers, sets a sample logger to `DEBUG` through
   the real logging backend, and resets it.
 - **`heap-dump.spec.js`** — analyzes the live heap histogram, then captures and deletes a real heap dump
@@ -82,9 +87,9 @@ npx playwright install --with-deps chromium
 npm test
 ```
 
-Playwright boots the sample app for you with `./mvnw quarkus:dev` and waits for
-`http://localhost:8082/bootui/api/overview`. If you already have it running, the existing server is
-reused.
+Playwright boots both a deterministic loopback OSV fixture and the sample app with `./mvnw quarkus:dev`,
+then waits for `http://localhost:8082/bootui/api/overview`. Fixture-backed runs always own the Quarkus
+process so its test-only OSV base URI and limits are guaranteed to apply.
 
 ## Useful environment variables
 
@@ -94,9 +99,13 @@ reused.
 | `BOOTUI_BASE_URL`          | `http://localhost:<port>` | Base URL the browser hits.                                 |
 | `BOOTUI_SKIP_WEBSERVER`    | _(unset)_                 | Set to `1` to test an already-running server / list tests. |
 | `BOOTUI_WEBSERVER_TIMEOUT` | `300000`                  | Startup timeout (ms); raise it on slow Dev Services pulls. |
+| `BOOTUI_OSV_FIXTURE_PORT`  | `18080`                   | Port for the deterministic loopback OSV fixture.           |
+| `BOOTUI_OSV_LIVE`          | _(unset)_                 | Set to `1` only for the focused live OSV smoke.            |
 
 ## CI
 
 The `quarkus-e2e` job in [`.github/workflows/build.yml`](../../.github/workflows/build.yml) runs this
 suite on JDK 17 (Docker is available on the GitHub-hosted runner), after building the extension and the
-sample app.
+sample app. It always uses the deterministic fixture. [`.github/workflows/osv-live-smoke.yml`](../../.github/workflows/osv-live-smoke.yml)
+runs the separate live-only spec weekly and on manual dispatch; it is bounded and does not participate in
+pull-request status checks.
