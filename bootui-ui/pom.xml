@@ -32,12 +32,7 @@
                 <artifactId>frontend-maven-plugin</artifactId>
                 <configuration>
                     <workingDirectory>${frontend.dir}</workingDirectory>
-                    <!-- Installed outside target/ (not target/node) so a CI cache keyed on node.version/npm.version
-                         survives `mvn clean`, letting parallel jobs that each build this module (the main build job,
-                         the Spring e2e matrix, and the Quarkus e2e job; see .github/workflows/build.yml) skip
-                         re-downloading the Node.js/npm binaries. Already covered by the existing "node/" .gitignore
-                         entry. -->
-                    <installDirectory>${project.basedir}/node</installDirectory>
+                    <installDirectory>${project.build.directory}/node</installDirectory>
                 </configuration>
                 <executions>
                     <execution>
