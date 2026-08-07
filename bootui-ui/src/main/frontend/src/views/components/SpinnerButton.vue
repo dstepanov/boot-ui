@@ -14,7 +14,7 @@ defineProps({
 </script>
 
 <template>
-  <button type="button">
+  <button :aria-busy="loading || undefined" type="button">
     <span v-if="loading" aria-hidden="true" :class="['spinner-border spinner-border-sm', spinnerClass]"></span>
     <i v-else-if="icon" :class="['bi', icon, 'me-1']"></i>
     <slot>{{ loading && loadingLabel !== null ? loadingLabel : label }}</slot>

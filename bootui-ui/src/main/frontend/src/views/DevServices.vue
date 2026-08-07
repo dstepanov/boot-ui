@@ -364,16 +364,18 @@ async function responseMessage(res) {
               <div v-if="detailEntries(selected).length === 0" class="text-muted small">
                 No connection detail values exposed.
               </div>
-              <table v-else class="table table-sm">
-                <tbody>
-                  <tr v-for="[key, value] in detailEntries(selected)" :key="key">
-                    <th class="text-nowrap small">{{ key }}</th>
-                    <td>
-                      <code>{{ value ?? '—' }}</code>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <div v-else class="table-responsive bootui-table-scroll">
+                <table class="table table-sm">
+                  <tbody>
+                    <tr v-for="[key, value] in detailEntries(selected)" :key="key">
+                      <th class="text-nowrap small">{{ key }}</th>
+                      <td>
+                        <code>{{ value ?? '—' }}</code>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
               <template v-if="logs">
                 <div class="d-flex justify-content-between align-items-center mt-3">
