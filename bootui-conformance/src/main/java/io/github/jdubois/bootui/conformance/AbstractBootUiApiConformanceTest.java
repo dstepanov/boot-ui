@@ -214,7 +214,7 @@ public abstract class AbstractBootUiApiConformanceTest {
 
     @Test
     void metricsContractIsBoundedAndValidatesQueriesCanonically() {
-        Response bounded = probe().get("/bootui/api/metrics?offset=0&limit=1");
+        Response bounded = probe().get(api("/metrics?offset=0&limit=1"));
         assertThat(bounded.status()).as("bounded metrics list status").isEqualTo(200);
         assertThat(bounded.isJson()).as("bounded metrics list content type").isTrue();
 
@@ -232,14 +232,14 @@ public abstract class AbstractBootUiApiConformanceTest {
                 .as("$.page.total preserves the visible meter total")
                 .isEqualTo(report.path("total").asInt());
 
-        Response invalid = probe().get("/bootui/api/metrics?limit=1001");
+        Response invalid = probe().get(api("/metrics?limit=1001"));
         assertThat(invalid.status()).as("invalid metrics limit status").isEqualTo(400);
         assertThat(invalid.isJson()).as("invalid metrics limit content type").isTrue();
         assertThat(invalid.json().path("error").asText())
                 .as("canonical metrics validation error")
                 .isEqualTo("Metric limit must be between 1 and 1000");
 
-        Response missingName = probe().get("/bootui/api/metrics/detail");
+        Response missingName = probe().get(api("/metrics/detail"));
         assertThat(missingName.status()).as("missing metric name status").isEqualTo(400);
         assertThat(missingName.json().path("error").asText())
                 .as("canonical missing metric name error")
@@ -247,9 +247,8 @@ public abstract class AbstractBootUiApiConformanceTest {
 
         if (!report.path("meters").isEmpty()) {
             String name = report.path("meters").get(0).path("name").asText();
-            Response detail = probe().get("/bootui/api/metrics/detail?name="
-                    + URLEncoder.encode(name, StandardCharsets.UTF_8)
-                    + "&offset=0&limit=1");
+            Response detail = probe().get(api(
+                    "/metrics/detail?name=" + URLEncoder.encode(name, StandardCharsets.UTF_8) + "&offset=0&limit=1"));
             assertThat(detail.status()).as("bounded metric detail status").isEqualTo(200);
             assertThat(detail.isJson()).as("bounded metric detail content type").isTrue();
             assertThat(detail.json().path("samples").size())
