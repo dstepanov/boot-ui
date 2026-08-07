@@ -17,6 +17,10 @@ Spring WebFlux security/REST Client/messaging work, configurable BootUI mounts, 
   classification filters — defaulting to the application bean with the most direct dependencies/dependents. A header
   toggle switches to the existing server-paged list, which now links back into the graph. Ships on both Spring and
   Quarkus, with Quarkus reporting reduced-fidelity dependency data (#656).
+- **RabbitMQ and JMS messaging diagnostics.** RabbitMQ publish/consume metadata now appears in a dedicated panel and Live
+  Activity on Spring MVC, Spring WebFlux, and Quarkus, without retaining message payloads or arbitrary headers. A matching
+  JMS panel and Live Activity source cover Spring-managed producers and listeners on Spring MVC and WebFlux; JMS remains
+  unavailable on Quarkus and in GraalVM native images (#655, #660).
 - **Spring WebFlux security coverage.** A dedicated 25-rule reactive Security advisor now evaluates
   `SecurityWebFilterChain` configuration across authorization, CSRF, CORS, headers, Actuator exposure, OAuth2/JWT,
   configuration, and session policy. The raw Spring Security panel also maps reactive chains, filters, endpoint
@@ -26,15 +30,9 @@ Spring WebFlux security/REST Client/messaging work, configurable BootUI mounts, 
   REST Client Reactive proxies. Both feed the shared panel and Live Activity, fail open if capture itself fails, and
   preserve the existing clear/recording controls; Quarkus intentionally never captures payloads or arbitrary headers
   (#658, #663).
-- **RabbitMQ and JMS messaging diagnostics.** RabbitMQ publish/consume metadata now appears in a dedicated panel and Live
-  Activity on Spring MVC, Spring WebFlux, and Quarkus, without retaining message payloads or arbitrary headers. A matching
-  JMS panel and Live Activity source cover Spring-managed producers and listeners on Spring MVC and WebFlux; JMS remains
-  unavailable on Quarkus and in GraalVM native images (#655, #660).
 
 ### Changed
 
-- **The Build workflow now runs shared/Spring/Quarkus jobs in parallel with cached Playwright browsers and frontend
-  tooling**, cutting CI turnaround without changing what is verified (#708, #710, #711, #712).
 - **Custom UI and API mounts now work end to end on Spring MVC, Spring WebFlux, and Quarkus.** `bootui.path` moves the
   shell, assets, APIs, streams, downloads, authentication cookies, and access guards together, while `bootui.api-path`
   can override the derived `<bootui.path>/api` mount. Both compose once with the host framework's application root,
