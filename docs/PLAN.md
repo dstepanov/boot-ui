@@ -7,7 +7,8 @@ WebFlux starters) and Quarkus (an extension)** from one shared, framework-neutra
 the same `/bootui/api/**` contract on every runtime. The released surface covers 52 panels across runtime introspection,
 configuration, database migrations, services, diagnostics, project health, and developer tooling. The previous merged
 workstream — Live Activity correlation and event capture, the Beans dependency graph, and the Email panel — is complete.
-The next planned panel is a read-only **MongoDB** operational view, scoped in §3.5.
+The next planned panel is a read-only **MongoDB** operational view, scoped in §3.5. A **Local Service Map** is retained
+as a later roadmap candidate in §3.6; it is not part of the current implementation.
 
 The priorities for every item below remain unchanged:
 
@@ -80,6 +81,7 @@ will therefore be additive rather than an extension of the SQL-specific panels.
 | Priority | Feature                               | Group         | Primary data source                                      | Mutation?         | Status  |
 | -------- | ------------------------------------- | ------------- | -------------------------------------------------------- | ----------------- | ------- |
 | Next     | MongoDB operational view              | Database      | Spring/Quarkus MongoDB client adapters                   | No                | Planned |
+| Later    | Local Service Map                     | Overview      | Existing HTTP, JDBC, Kafka, and RabbitMQ evidence        | No                | Candidate |
 | Done     | Trace ↔ Log ↔ Request correlation     | Diagnostics   | Existing Traces, Log Tail, and HTTP Exchanges data       | No                | Shipped |
 | Done     | Bean / dependency graph visualization | Configuration | Existing Beans and Conditions data                       | No                | Shipped |
 | Done     | E-mail Viewer                         | Services      | Spring Mail / Quarkus Mailer capture adapters            | No (capture only) | Shipped |
@@ -413,6 +415,77 @@ Acceptance criteria:
 - The sample applications cover absent-client, unreachable-server, insufficient-permission, empty-database, and
   multi-client states without requiring MongoDB for the default Docker-free test path.
 
+### 3.6 Local Service Map — Overview 💡 Candidate
+
+The Local Service Map would answer: "What external systems does this running application depend on, and what evidence
+has BootUI recently observed for each relationship?" It would assemble a single, read-only topology from data BootUI
+already owns rather than introducing distributed tracing infrastructure, network discovery, or active health probes.
+
+User value:
+
+- Give developers an immediate mental model of the application's local integration surface without searching across
+  Connection Pools, REST Client, Kafka, RabbitMQ, traces, and configuration panels.
+- Distinguish **configured** dependencies from **observed** runtime relationships so absence of traffic is not mistaken
+  for absence of a dependency.
+- Highlight retained failures and last-seen activity as debugging evidence, while explicitly avoiding claims about the
+  current health of a remote system.
+- Provide an evidence trail and deep link from every node to its source panel, turning the map into a navigation surface
+  rather than a decorative diagram.
+
+Initial scope:
+
+- Center the running application and group outbound dependencies by safe identity: HTTP origin
+  (`scheme://host:port`), JDBC pool/target, Kafka topic, and RabbitMQ exchange/routing destination.
+- Show protocol, configured/observed state, retained interaction and failure counts, distinct operation count, and
+  last-seen time where the source supports them.
+- Reuse only existing bounded sources: REST-client trace capture, masked connection-pool reports, Kafka activity, and
+  RabbitMQ activity. Include producer/publisher evidence only; incoming consumer traffic is not an outbound edge.
+- Offer protocol and text filters, keyboard-selectable nodes, an accessible textual detail view, responsive layouts, and
+  links to the source evidence panels.
+- Respect every source panel's enablement setting. If a source panel is disabled or unavailable, its evidence must not be
+  included in the map.
+
+Safety and interpretation:
+
+- Opening the panel performs no network call, probe, DNS lookup, connection attempt, scan, or new interception.
+- JDBC labels and details must use the existing exposure/masking policy. HTTP identities must omit user-info, paths,
+  query values, and fragments. Messaging payloads remain completely out of scope.
+- A retained failure means only that an interaction in the bounded buffer failed; it must not be presented as live
+  dependency health. Unknown and stale evidence must remain visually distinct from healthy or failing states.
+- Cardinality must be bounded before rendering. High-cardinality destinations should be summarized or truncated with a
+  visible explanation rather than silently overwhelming the graph.
+
+Architecture and sequencing:
+
+- Phase 1 would be a Spring Boot MVC-only MVP to validate usefulness and interaction design, using a framework-neutral,
+  JSON-free aggregation service over existing DTOs/recorders and a thin servlet controller.
+- The MVP must not add instrumentation. If a relationship cannot be derived safely from existing evidence, it is absent
+  rather than guessed.
+- A later production phase would define the stable core DTO contract, add Spring WebFlux and Quarkus adapters, and run
+  the same availability-driven conformance tests on every runtime before the feature is considered shared.
+- Keep graph layout in the Vue client and report assembly, grouping, sorting, bounds, and interpretation in the engine.
+  Do not introduce a graph database or a new visualization dependency unless native SVG proves insufficient.
+
+Complexity and risks:
+
+- **Estimated complexity: medium for the MVC MVP; medium-high for a shared production feature.** Aggregation is
+  straightforward, but identity normalization, partial evidence, dense graph UX, optional source wiring, and equivalent
+  adapter semantics require careful contracts.
+- The largest product risk is false confidence: incomplete observation can look authoritative. Copy and visual states
+  must continuously communicate configured vs. observed vs. unknown.
+- The largest technical risks are leaking endpoint/configuration details, creating unbounded/high-cardinality graphs,
+  misclassifying incoming messaging as outbound, and coupling the engine to framework-specific recorder types.
+
+Acceptance criteria for an MVP:
+
+- A Spring MVC sample with JDBC configuration and a retained outbound HTTP failure renders both relationships without
+  making any request from the map itself.
+- Empty, source-disabled, unavailable, malformed-identity, and high-cardinality inputs render safely and clearly.
+- No secret, HTTP path/query value, message payload, or unmasked JDBC credential reaches the response.
+- The panel remains usable by keyboard and screen reader and at desktop and mobile widths.
+- The feature stays explicitly experimental until user testing demonstrates that the cross-panel synthesis is more
+  useful than navigating the source panels independently.
+
 ## 4. Cross-cutting work for every new panel
 
 For each feature above, the following must move together, consistent with the existing panel-registration process:
@@ -446,6 +519,8 @@ For each feature above, the following must move together, consistent with the ex
 | MongoDB optional drivers break applications without the extension | 3.5 | High | Keep driver types in adapter-only providers and use Spring classpath gates plus Quarkus capability/exclusion build steps. |
 | Large MongoDB catalog or partial permissions make inspection slow or misleading | 3.5 | Medium | Hard caps, paging, configurable timeouts, partial-result DTOs, and per-target permission errors. |
 | Scope creep beyond the planned MongoDB inventory/advisor surface | 3.5 | High | Keep document browsing, arbitrary commands, writes, tracing, and migrations out of the first release. |
+| Incomplete service-map evidence creates false confidence or false health claims | 3.6 | High | Label configured, observed, stale, and unknown states explicitly; retained failures are evidence, never a health check. |
+| Service-map identities expose secrets or create an unbounded topology | 3.6 | High | Reuse masking, sanitize HTTP origins, omit payloads, enforce hard cardinality limits, and make truncation visible. |
 
 ## 6. Validation checklist
 

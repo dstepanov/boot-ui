@@ -47,7 +47,8 @@ Use the root Maven properties as the source of truth for the published adapters 
 ```
 
 When updating compatibility text in docs (README, `docs/SETUP.md`, `docs/FEATURES.md`,
-`.github/copilot-instructions.md`), reference those properties and refresh any explicit version strings in the same PR.
+`.github/copilot-instructions.md`, and `.github/instructions/{spring-adapter,quarkus-adapter}.instructions.md`),
+reference those properties and refresh any explicit version strings in the same PR.
 All Quarkus modules, including the non-published sample app, inherit the Quarkus platform through
 `bootui-quarkus-parent`; keep its LangChain4j BOM compatible with that shared LTS line.
 
@@ -74,7 +75,7 @@ test-bootstrap cache (see the `maven-surefire-plugin` comments in the root `pom.
 `bootui-quarkus-integration-tests/base/pom.xml`). `-T` is a personal preference, not a project default, so it
 is not baked into `.mvn/maven.config` — add it to your own shell alias or a personal, git-ignored
 `.mvn/maven.config` if you want it every time (that file is also used for personal, per-worktree overrides such
-as `-Dmaven.repo.local`; see "Isolating parallel worktrees" in `.github/copilot-instructions.md`). CI always
+as `-Dmaven.repo.local`; see "Parallel worktrees" in `.github/copilot-instructions.md`). CI always
 builds with `-T 1C`.
 
 To rebuild only the backend (useful while iterating on Java code):
