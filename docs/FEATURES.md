@@ -701,8 +701,12 @@ GraalVM/CRaC get on Quarkus.
 
 ### Metrics
 
-The Metrics panel browses Micrometer meters exposed by Actuator. You can inspect meter descriptions, base units, tags,
-available measurements, and render a local live chart for a selected metric/tag combination.
+The Metrics panel browses Micrometer meters exposed by Actuator. You can search meter names/descriptions and filter by
+meter type on the server, inspect descriptions, base units, tags and available measurements, and render a local live chart
+for a selected metric/tag combination. Meter names are returned in deterministic 200-row pages (up to 1,000 per request),
+while a selected meter's concrete tagged samples use 100-row pages (also capped at 1,000). The UI reports the total,
+matching and displayed counts, provides load-more and sample Previous/Next controls, and keeps tag-value choices bounded to
+the first 100 sorted values per key with an explicit truncation badge.
 
 On Quarkus the panel is identical, served over Micrometer directly (Quarkus has no Actuator): it reads the live composite
 `MeterRegistry` when the application adds a `quarkus-micrometer` registry (for example

@@ -24,14 +24,21 @@ public class MetricsController {
     }
 
     @GetMapping
-    public MetricsReport metrics() {
-        return provider.metrics();
+    public MetricsReport metrics(
+            @RequestParam(name = "q", required = false) String query,
+            @RequestParam(name = "type", required = false) String type,
+            @RequestParam(name = "offset", required = false) String offset,
+            @RequestParam(name = "limit", required = false) String limit) {
+        return provider.metrics(query, type, offset, limit);
     }
 
     @GetMapping("/detail")
     public MetricDetailDto metric(
-            @RequestParam String name, @RequestParam(name = "tag", required = false) List<String> tagFilters) {
-        return provider.metric(name, tagFilters);
+            @RequestParam(required = false) String name,
+            @RequestParam(name = "tag", required = false) List<String> tagFilters,
+            @RequestParam(name = "offset", required = false) String offset,
+            @RequestParam(name = "limit", required = false) String limit) {
+        return provider.metric(name, tagFilters, offset, limit);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
