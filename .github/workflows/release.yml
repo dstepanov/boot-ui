@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release version to prepare, for example 1.0.0. Leave empty to publish the selected tagged ref.
+        description: Next major, minor, or patch version to prepare. Leave empty to publish the selected tagged ref.
         required: false
         type: string
         default: ''
@@ -82,13 +82,31 @@ jobs:
           SOURCE_BRANCH="$GITHUB_REF_NAME"
           SOURCE_SHA="$GITHUB_SHA"
 
-          if [[ -z "$VERSION" || "$VERSION" == *[[:space:]]* || "$VERSION" == */* ]]; then
-            echo "::error::Invalid release version: $RELEASE_VERSION"
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Invalid release version '$RELEASE_VERSION': expected a stable major.minor.patch version"
             exit 2
           fi
 
-          if [[ "$VERSION" == *-SNAPSHOT ]]; then
-            echo "::error::Refusing to prepare a snapshot release: $VERSION"
+          LATEST_TAG="$(
+            git tag --list 'v*' |
+              grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' |
+              sort -V |
+              tail -n 1 ||
+              true
+          )"
+          if [[ -z "$LATEST_TAG" ]]; then
+            echo "::error::Cannot determine the latest stable release tag"
+            exit 1
+          fi
+
+          LATEST_VERSION="${LATEST_TAG#v}"
+          IFS=. read -r LATEST_MAJOR LATEST_MINOR LATEST_PATCH <<< "$LATEST_VERSION"
+          NEXT_PATCH="$LATEST_MAJOR.$LATEST_MINOR.$((LATEST_PATCH + 1))"
+          NEXT_MINOR="$LATEST_MAJOR.$((LATEST_MINOR + 1)).0"
+          NEXT_MAJOR="$((LATEST_MAJOR + 1)).0.0"
+
+          if [[ "$VERSION" != "$NEXT_PATCH" && "$VERSION" != "$NEXT_MINOR" && "$VERSION" != "$NEXT_MAJOR" ]]; then
+            echo "::error::Invalid release version '$VERSION'. Latest release is $LATEST_TAG; expected $NEXT_PATCH (patch), $NEXT_MINOR (minor), or $NEXT_MAJOR (major)."
             exit 2
           fi
 

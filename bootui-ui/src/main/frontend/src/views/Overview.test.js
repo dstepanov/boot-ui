@@ -181,6 +181,38 @@ describe('Overview', () => {
     expect(wrapper.text()).toContain('1 high')
   })
 
+  it('accepts valid vulnerability findings when the summary includes its UNKNOWN bucket', async () => {
+    stubFetch({
+      'api/vulnerabilities/scan': severityReport([
+        {severity: 'HIGH', count: 1},
+        {severity: 'UNKNOWN', count: 0}
+      ])
+    })
+    const wrapper = mountOverview({
+      panels: [
+        {id: 'architecture', available: false},
+        {id: 'memory', available: false},
+        {id: 'rest-api', available: false},
+        {id: 'spring', available: false},
+        {id: 'hibernate', available: false},
+        {id: 'security', available: false},
+        {id: 'pentesting', available: false},
+        {id: 'vulnerabilities', available: true},
+        {id: 'github', available: false}
+      ]
+    })
+    await flushPromises()
+
+    const runButton = wrapper.findAll('button').find((button) => button.text().includes('Run scan'))
+    await runButton.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('90')
+    expect(wrapper.text()).toContain('1 high')
+    expect(wrapper.text()).toContain('1 of 1 scanners scored')
+    expect(wrapper.text()).not.toContain('Unable to run Vulnerabilities')
+  })
+
   it('preserves a scanner score and shows a warning when a re-run is already active', async () => {
     const busy = {
       error: 'BootUI action already in progress',
@@ -219,8 +251,8 @@ describe('Overview', () => {
 
     await runButton.trigger('click')
     await flushPromises()
-
     expect(architectureScore(wrapper)).toBe('90')
+    expect(wrapper.text()).toContain(busy.message)
     expect(wrapper.text()).toContain(busy.message)
   })
 
