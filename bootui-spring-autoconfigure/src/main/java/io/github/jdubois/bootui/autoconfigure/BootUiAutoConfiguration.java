@@ -1,6 +1,7 @@
 package io.github.jdubois.bootui.autoconfigure;
 
 import io.github.jdubois.bootui.autoconfigure.activity.LiveActivityController;
+import io.github.jdubois.bootui.autoconfigure.activity.LiveServiceMapController;
 import io.github.jdubois.bootui.autoconfigure.activity.RequestCorrelationFilter;
 import io.github.jdubois.bootui.autoconfigure.activity.RequestCorrelationRegistry;
 import io.github.jdubois.bootui.autoconfigure.activity.SecurityEventCorrelationRegistry;
@@ -161,6 +162,7 @@ import tools.jackson.databind.ObjectMapper;
     GraalVmController.class,
     CracController.class,
     LiveActivityController.class,
+    LiveServiceMapController.class,
     EmailController.class,
     KafkaController.class,
     RabbitController.class,
@@ -199,6 +201,7 @@ public class BootUiAutoConfiguration {
             GraalVmController.class.getName(),
             CracController.class.getName(),
             LiveActivityController.class.getName(),
+            LiveServiceMapController.class.getName(),
             EmailController.class.getName(),
             KafkaController.class.getName(),
             RabbitController.class.getName(),

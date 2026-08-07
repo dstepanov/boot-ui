@@ -1069,6 +1069,73 @@ Acceptance criteria:
   `SuccessfulExecution`/`FailedExecution` events the scheduler always fires, gated on the `SCHEDULER` capability
   (`quarkus-scheduler` is a `provided`-scope, R2-excluded dependency, mirroring `QuarkusSecurityEventCapture`).
 
+#### 5.14.2.1 Live Flow service map (Live Activity mode)
+
+Purpose: answer "what external systems does this running application depend on, and what evidence has BootUI recently
+observed for each relationship?" without introducing distributed tracing infrastructure, network discovery, or active
+health probes. Delivered as a second mode of the Live Activity panel, not as a separate panel, because it is a second
+reading of the same already-captured evidence.
+
+Contract: `GET {api}/activity/service-map` on Spring MVC, Spring WebFlux, and Quarkus, returning `ServiceMapReport`
+(`available`, `unavailableReason`, `generatedAt`, `application`, `nodes`, `edges`, `truncation`, `sources`, `warnings`).
+Because it lives under `/activity`, the Live Activity panel's own enable/read-only policy and the shared
+localhost/Host/cross-site-write guard already cover it with no extra registration.
+
+Data sources — reused only, never newly instrumented:
+
+- Completed inbound requests from the HTTP Exchanges buffer, folded into one generic `INBOUND` lane. Per-caller nodes
+  are deliberately not derived: a remote address is neither a stable identity nor safe to display here.
+- Outbound HTTP calls from the REST Client recorder, grouped to a `scheme://host[:port]` origin.
+- Configured JDBC pools from the Connection Pools service. The map independently strips JDBC authority
+  user-info, Oracle driver-style credentials, and driver parameter tails even when full value exposure is enabled.
+- Retained JDBC statements from the SQL Trace recorder, reduced to their coarse category.
+- Kafka **producer** records grouped by topic and RabbitMQ **publisher** records grouped by exchange/routing
+  destination. Consumed records and messages are inbound work and are never modelled as outbound dependencies.
+
+Assembly is framework- and JSON-free (`ServiceMapAssembler` in `bootui-engine`); each adapter only gathers evidence from
+beans it already owns and passes a neutral `ServiceMapSources` record, so all three runtimes serve a byte-identical
+contract.
+
+Interpretation rules:
+
+- `configured` and `observed` are reported separately on every node and are never collapsed, so absence of traffic is
+  never presented as absence of a dependency.
+- `outcome` is one of `NO_EVIDENCE`, `OBSERVED_OK`, or `RETAINED_FAILURES`, and describes retained evidence only. It is
+  never a health check of the remote system.
+- Statement evidence is attributed to a pool only when exactly one pool is configured and exactly one traced datasource
+  has a matching name. Otherwise statements are summarized on a separate aggregate node, the pools stay
+  configured-only, and the reason is surfaced as a warning. A statement-to-pool relationship is never fabricated.
+- `distinctOperations` is `null` where the source cannot report one honestly rather than defaulting to a meaningless
+  count.
+- Evidence whose identity cannot be reduced safely is omitted with a warning, never shown under a guessed identity.
+
+Bounds and motion:
+
+- Dependencies are capped at 28 and each edge carries at most 6 retained interactions. Configured dependencies rank
+  ahead of purely observed ones so a burst of one-off origins cannot push a declared database off the map. Any omission
+  is reported through `truncation` and a warning.
+- `ServiceMapInteractionDto.id` is derived from the originating buffer's monotonic sequence, so it is stable across
+  refreshes. The client animates a short particle only when a **stable** edge (present in both the previous and the next
+  snapshot) carries an interaction id the previous snapshot did not. A first load, a newly appearing dependency, and an
+  idle application therefore produce no motion at all. Bursts are coalesced to a small per-edge count and a hard
+  concurrent cap rather than queued.
+
+Acceptance criteria:
+
+- Rendering the map performs no network call, probe, DNS lookup, connection attempt, scan, or new interception, and adds
+  no instrumentation.
+- No secret, remote HTTP path/query value/user-info/fragment, message payload, message key, SQL text, bound parameter,
+  or unmasked JDBC credential reaches the response.
+- Dependencies are grouped by their complete sanitized identity. Public node ids are stable SHA-256-derived opaque
+  values, while only display labels are truncated, so long identities with a shared prefix remain separate.
+- Evidence from a source panel that is disabled or unavailable on the running adapter never reaches the map, and when no
+  source is available the report is `available: false` with a clear reason rather than an empty graph.
+- The rendered graph is bounded before serialization and every omission is visible.
+- The map is usable by keyboard and screen reader (focusable nodes, arrow-key traversal, an accessible detail view, and
+  a hidden textual list of every node and relationship) and honors `prefers-reduced-motion` by replacing motion with a
+  brief static edge highlight plus a polite live-region update.
+- Spring MVC, Spring WebFlux, and Quarkus serve the same shape, verified by the shared conformance suite.
+
 ### 5.14.3 Traces Panel
 
 Purpose: show distributed-trace waterfalls captured locally, so a request that fans out across cooperating local

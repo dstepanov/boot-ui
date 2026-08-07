@@ -192,6 +192,15 @@ not served start-to-finish on one dedicated worker thread.
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Live Activity | `ReactiveLiveActivityController`, merging `HttpExchangesController` (requests), `SqlTraceRecorder` (SQL), `ExceptionStore` (exceptions), `ReactiveSecurityLogsController` (security), `CacheActivityRecorder` (cache), `ScheduledTaskRunStore` (scheduled tasks), `KafkaActivityRecorder`/`RabbitActivityRecorder`/`JmsActivityRecorder` (messaging), `EmailCaptureService`/`EmailController` (mail), and `RestClientTraceRecorder` (REST/WebClient calls) via the shared engine `LiveActivityAssembler`/`RequestProfileAssembler` — the same classes the Quarkus adapter validated first; refreshed over `ReactiveBootUiChangeStream`, signaled by a new lightweight `ReactiveActivitySignalFilter` `WebFilter` after each non-BootUI request completes. |
 
+Live Activity's **Live flow** service map (`GET {api}/activity/service-map`) needed no reactive-specific work at all.
+`LiveServiceMapController` injects only beans both stacks register — the shared `HttpExchangesController` plus the
+engine's `ConnectionPoolService`, `SqlTraceRecorder`, `RestClientTraceRecorder`, `KafkaActivityRecorder`, and
+`RabbitActivityRecorder` — and returns a stable core DTO, so one class is registered in both `BootUiAutoConfiguration`
+and `BootUiReactiveAutoConfiguration` and Spring MVC and WebFlux serve a byte-identical map. All interpretation
+(identity normalization, configured-versus-observed state, conservative SQL attribution, and cardinality bounds) lives
+in the framework-neutral `ServiceMapAssembler`. The map refreshes off the same `ReactiveBootUiChangeStream` SSE tick the
+feed already uses; it performs no additional polling and contacts nothing.
+
 `ReactiveActivitySignalFilter` takes an `ObjectProvider<ReactiveLiveActivityController>` rather than a direct
 reference: `WebFilter` beans are eagerly resolved by WebFlux at startup to build the filter chain, so a direct
 constructor dependency would force-eager the controller and defeat its place in

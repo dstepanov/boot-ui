@@ -285,6 +285,56 @@ on WebFlux (see [docs/WEBFLUX-SUPPORT.md](WEBFLUX-SUPPORT.md) for the full detai
 pause/resume controls, retained-call table, and "Most frequent calls" grouping over `WebClient` calls captured via
 the reactive adapter.
 
+#### Live flow (service map)
+
+Live Activity has a second reading of the same evidence: a **Live flow** mode, reached from the Feed / Live flow switch
+next to the panel title. Where the feed answers "what just happened, in order?", the map answers "what does this
+application actually talk to?" — the running application at the centre, a single generic **Local HTTP clients** lane
+feeding into it, and one node per outbound dependency, grouped by safe identity. It is served by
+`GET /bootui/api/activity/service-map` on Spring MVC, Spring WebFlux, and Quarkus.
+
+Nothing new is instrumented and nothing is contacted. The map is assembled entirely from bounded buffers other panels
+already fill: completed inbound requests (HTTP Exchanges), outbound HTTP calls grouped to a `scheme://host[:port]`
+origin (REST Client), configured JDBC pools with a target that the map independently strips of JDBC user-info and
+driver parameters even under full value exposure, retained SQL
+statements (SQL Trace), Kafka **producer** topics, and RabbitMQ **publisher** exchange/routing destinations. Opening the
+map performs no network call, probe, DNS lookup, connection attempt, or scan. Consumed Kafka records and consumed AMQP
+messages are inbound work this application performs, so they are deliberately never drawn as outbound dependencies.
+
+The map separates what is **configured** from what has been **observed**, and never collapses the two: a declared
+datasource with no traffic is drawn with a dashed outline and reads "configured, no recent evidence" rather than
+disappearing, and an observed HTTP origin is never presented as a declared dependency. Selecting any node — by click or
+by keyboard — opens an evidence panel with the retained interaction and failure counts, the distinct-operation count
+where the source can report one honestly, when it was last seen, an explicit note about what that node does and does not
+prove, the small tail of recent interactions, and a deep link into the panel the evidence came from. A retained failure
+is reported as debugging evidence, never as a health check of the remote system, because BootUI has not contacted it.
+
+Statement evidence is only attributed to a pool when attribution is unambiguous — exactly one configured pool and
+exactly one traced datasource whose name matches that pool. With multiple or unmatched sources, or with no pool metadata
+at all, the statements are summarized on their own **SQL statements** node, the pools stay configured-only, and the
+reason is stated as a warning. BootUI does not invent a statement-to-pool relationship it cannot prove.
+
+Identity is deliberately subtractive. An HTTP dependency is only ever an origin: user-info credentials, paths, query
+strings, and fragments are dropped before anything is serialized, and a call that cannot be reduced to a safe origin is
+left off the map with a visible warning rather than shown under a guessed identity. JDBC targets reuse the existing
+masking and independently lose authority/Oracle credentials plus any driver parameter tail. Complete sanitized
+identities drive grouping and stable opaque ids; only display labels are truncated, so shared long prefixes do not
+collapse distinct dependencies. SQL text, bound parameters, message keys, payloads, and headers
+never reach this contract at all. Cardinality is capped before rendering (28 dependencies, with a small per-edge
+interaction tail); anything withheld is reported as a visible count, never dropped silently.
+
+Motion is evidence, not decoration. The map refreshes off the same Server-Sent Events tick as the feed, and animates a
+short particle only when a **stable** edge — one present both before and after the refresh — carries an interaction id
+the previous snapshot did not. A first load animates nothing, a brand-new dependency simply appears, and an idle
+application is completely still. Bursts are coalesced to a small per-edge count and a hard concurrent cap rather than
+queued, so motion can never lag behind reality. Slow interactions pulse amber and failures use a restrained red;
+everything the motion conveys is also readable statically from the counts, the edge styling, and the detail panel.
+Under `prefers-reduced-motion`, particles are replaced by a brief static edge highlight plus a polite live-region
+sentence naming what changed. The whole map is keyboard navigable (arrow keys move between nodes, Enter or Space
+selects), carries a hidden textual list of every node and relationship for screen readers, and supports protocol and
+free-text filters plus zoom for dense graphs. Evidence from a disabled or unavailable source panel never reaches the
+map.
+
 ![BootUI Live Activity panel](./images/bootui-activity.webp)
 
 ### GitHub
