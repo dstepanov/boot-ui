@@ -988,10 +988,19 @@ function onGlobalKeydown(e) {
   --bootui-nav-group-color: var(--bootui-text-muted);
   --bootui-nav-link-color: #334155;
 
-  /* Chart legend */
+  /* Data visualization */
+  --bootui-chart-grid: #dee2e6;
+  --bootui-chart-axis: #56667b;
   --bootui-chart-input: #0d6efd;
   --bootui-chart-output: #6610f2;
   --bootui-chart-calls: #198754;
+  --bootui-chart-selection: #64748b;
+  --bootui-chart-span: #dee2e6;
+  --bootui-chart-tool: #0d6efd;
+  --bootui-chart-vector: #fd7e14;
+  --bootui-chart-tooltip-bg: #ffffff;
+  --bootui-chart-tooltip-border: #cbd5e1;
+  --bootui-chart-tooltip-text: #152033;
 
   /* Skeleton loaders */
   --bootui-skeleton-base: #e2e8f0;
@@ -1101,10 +1110,19 @@ function onGlobalKeydown(e) {
   --bootui-nav-group-color: var(--bootui-text-muted);
   --bootui-nav-link-color: #cbd5e1;
 
-  /* Chart legend */
+  /* Data visualization */
+  --bootui-chart-grid: #475569;
+  --bootui-chart-axis: #a3b1c6;
   --bootui-chart-input: #6ea8fe;
   --bootui-chart-output: #c084fc;
   --bootui-chart-calls: #75b798;
+  --bootui-chart-selection: #94a3b8;
+  --bootui-chart-span: #475569;
+  --bootui-chart-tool: #6ea8fe;
+  --bootui-chart-vector: #fd9843;
+  --bootui-chart-tooltip-bg: #1e293b;
+  --bootui-chart-tooltip-border: #64748b;
+  --bootui-chart-tooltip-text: #e2e8f0;
 
   /* Skeleton loaders */
   --bootui-skeleton-base: #334155;
