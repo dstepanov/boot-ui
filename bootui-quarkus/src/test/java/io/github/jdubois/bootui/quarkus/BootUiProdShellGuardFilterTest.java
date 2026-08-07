@@ -20,8 +20,7 @@ import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.Test;
 
 /**
- * White-box binding tests for {@link BootUiProdShellGuardFilter} (hence the same package as the runtime
- * class, even though it lives in the integration-tests module). The filter's launch-mode decision is
+ * White-box binding tests for {@link BootUiProdShellGuardFilter}. The filter's launch-mode decision is
  * constructor-injected rather than read from the static {@link LaunchMode#current()}, so these tests can
  * exercise both the {@link LaunchMode#NORMAL} (production) branch and every other launch mode
  * deterministically, without touching any process-global state — see
