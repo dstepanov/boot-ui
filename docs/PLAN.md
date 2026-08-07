@@ -2,15 +2,12 @@
 
 ## 1. Strategy
 
-BootUI adds a safe, local-only developer console to a running application, shipping on **both Spring Boot 4 (a starter)
-and Quarkus (an extension)** from one shared, framework-neutral engine that serves the same Vue UI and the same
-`/bootui/api/**` contract on either runtime. The released surface already covers runtime introspection, configuration,
-database migrations, services, diagnostics, project health, and developer tooling, including the recently shipped
-Threads, HTTP Exchanges, Flyway, Liquibase, Hibernate Advisor, HTTP Sessions, GitHub, Security Advisor, and Overview
-scanner dashboard panels. This plan describes the **next merged feature workstream** after the `1.0.0` release: it keeps
-the remaining roadmap items and the one capture-oriented addition chosen to close the clearest gaps against comparable
-developer dashboards (Spring Boot Admin, Quarkus Dev UI, Laravel Pulse, Phoenix LiveDashboard, .NET Aspire,
-Symfony Web Profiler) while staying inside BootUI's read-mostly, fail-closed safety model.
+BootUI adds a safe, local-only developer console to a running application, shipping on **Spring Boot 4 (servlet and
+WebFlux starters) and Quarkus (an extension)** from one shared, framework-neutral engine that serves the same Vue UI and
+the same `/bootui/api/**` contract on every runtime. The released surface covers 52 panels across runtime introspection,
+configuration, database migrations, services, diagnostics, project health, and developer tooling. The previous merged
+workstream — Live Activity correlation and event capture, the Beans dependency graph, and the Email panel — is complete.
+The next planned panel is a read-only **MongoDB** operational view, scoped in §3.5.
 
 The priorities for every item below remain unchanged:
 
@@ -47,7 +44,7 @@ The priorities for every item below remain unchanged:
 - Shipped all five §3.4 Live Activity event-type extensions, bringing the stream to nine merged entry types —
   `REQUEST`, `SQL`, `EXCEPTION`, `SECURITY`, `CACHE`, `SCHEDULED`, `MESSAGING`, `MAIL`, and `REST_CLIENT`: Cache
   operations, Scheduled Task runs, messaging (Kafka and RabbitMQ on both adapters; JMS on Spring), Mail (backed by the
-  Email panel above), and outbound `RestClient`/`RestTemplate`/`WebClient` capture (Spring only). Each keeps
+  Email panel above), and outbound REST client capture on Spring servlet, Spring WebFlux, and Quarkus. Each keeps
   pass-through-by-default capture, nests under
   the originating request as a child event when a shared trace id/serving thread/time window is available, and reuses
   the same masking, bounded-buffer, and panel-toggle model as the original four entry types.
@@ -62,21 +59,32 @@ Each new panel must:
 - ship with backend slice/edge-case tests, `/bootui/api/panels` availability wiring, docs, router ordering, and sample-app
   Playwright coverage in sync.
 
-## 2. Scope of this workstream
+## 2. Roadmap status and next workstream
 
-This workstream is complete. The §3.1 correlation item has shipped as the **Live Activity** panel; the §3.3 e-mail viewer
-has shipped too, both as a standalone panel and as a `MAIL` entry type feeding the Live Activity stream; and all five
-§3.4 event-type extensions (Scheduled Task runs, Cache operations, messaging, Mail, and REST call capture) have
+The previous workstream is complete. The §3.1 correlation item has shipped as the **Live Activity** panel; the §3.3 e-mail
+viewer has shipped too, both as a standalone panel and as a `MAIL` entry type feeding the Live Activity stream; and all
+five §3.4 event-type extensions (Scheduled Task runs, Cache operations, messaging, Mail, and REST call capture) have
 shipped. The bean/dependency graph visualization (§3.2) has now also shipped as the **graph mode** of the existing Beans
-panel — all features in this workstream are complete.
+panel.
 
-| Priority | Feature                               | Group         | Primary data source                                | Mutation?         | Origin           |
-| -------- | ------------------------------------- | ------------- | -------------------------------------------------- | ----------------- | ---------------- |
-| Done     | Trace ↔ Log ↔ Request correlation     | Diagnostics   | Existing Traces, Log Tail, and HTTP Exchanges data | No                | Existing roadmap |
-| Done     | Bean / dependency graph visualization | Configuration | Existing Beans and Conditions data                 | No                | Existing roadmap |
-| Done     | E-mail Viewer                         | Services      | Intercepted `JavaMailSender`                       | No (capture only) | New addition     |
-| Done     | Live Activity — REST call capture     | Diagnostics   | Intercepted `RestClient`/`RestTemplate`/`WebClient` | No (capture only) | Shipped |
-| Done     | Live Activity — new event types       | Diagnostics   | Cache, scheduled-task, Kafka, RabbitMQ, JMS, and mail capture sources (see §3.4) | No (capture only) | Cache, Scheduled Tasks, Kafka, RabbitMQ, JMS (Spring), and Mail all shipped |
+The current cross-platform baseline is 52 shared routes. Spring Boot serves the full applicable surface. Quarkus serves
+43 panels; eight Spring-specific panels are intentionally not applicable there, and JMS is the only panel still awaiting
+a Quarkus-native implementation. `docs/QUARKUS-SUPPORT.md` remains authoritative for per-panel Quarkus fidelity and
+availability.
+
+MongoDB is the next bounded feature workstream. BootUI already recognizes Spring Data MongoDB repositories in the
+Spring Data panel, but it has no framework-neutral operational view of MongoDB clients, topology, databases,
+collections, or indexes, and the existing JDBC/Flyway/Liquibase panels cannot represent those concepts. The new panel
+will therefore be additive rather than an extension of the SQL-specific panels.
+
+| Priority | Feature                               | Group         | Primary data source                                      | Mutation?         | Status  |
+| -------- | ------------------------------------- | ------------- | -------------------------------------------------------- | ----------------- | ------- |
+| Next     | MongoDB operational view              | Database      | Spring/Quarkus MongoDB client adapters                   | No                | Planned |
+| Done     | Trace ↔ Log ↔ Request correlation     | Diagnostics   | Existing Traces, Log Tail, and HTTP Exchanges data       | No                | Shipped |
+| Done     | Bean / dependency graph visualization | Configuration | Existing Beans and Conditions data                       | No                | Shipped |
+| Done     | E-mail Viewer                         | Services      | Spring Mail / Quarkus Mailer capture adapters            | No (capture only) | Shipped |
+| Done     | Live Activity — REST call capture     | Diagnostics   | Spring HTTP clients / Quarkus MicroProfile REST clients  | No (capture only) | Shipped |
+| Done     | Live Activity — new event types       | Diagnostics   | Cache, scheduled-task, messaging, mail, and REST capture | No (capture only) | Shipped |
 
 The Trace ↔ Log ↔ Request correlation work in §3.1 has shipped as the **Live Activity** panel, building on the
 already-shipped HTTP Exchanges panel and the existing Traces and Log Tail panels. The E-mail Viewer (§3.3) has shipped as
@@ -350,23 +358,78 @@ Design constraints:
   later RabbitMQ and Spring JMS), then Mail, and finally REST call capture — all five event types now ship, each with
   `REQUEST`-nesting where a nesting relationship applies (`MESSAGING` is deliberately always top-level).
 
+### 3.5 MongoDB operational view — Database 📋 Planned
+
+BootUI already detects Spring Data MongoDB repository metadata under the existing Spring Data panel. This new panel
+addresses a different question: "Which MongoDB clients and data structures is this running application connected to, and
+which operational risks should I review?" It must not force document-database concepts into JDBC connection-pool, SQL
+Trace, Flyway, or Liquibase contracts.
+
+Scope:
+
+- Add one shared `mongodb` panel and `/bootui/api/mongodb/**` contract for Spring servlet, Spring WebFlux, and Quarkus.
+- On initial load, report only locally available client/configuration metadata and inspection state. Do not contact a
+  MongoDB server merely because the route rendered.
+- Provide an explicit **Inspect** action that reads a bounded snapshot of reachable server/topology information,
+  databases, collections, and indexes. Results must be capped and paged where cardinality can grow, and a permissions
+  failure for one database or collection must be reported against that target without discarding the rest of the
+  snapshot.
+- Surface read-only review prompts for high-value, evidence-based issues such as missing indexes for declared repository
+  metadata where this can be determined safely, unexpectedly large unindexed collections, or unsafe development
+  configuration. Do not infer a finding when the server or required metadata is unavailable.
+- Support named/multiple clients and both supported driver styles where the host framework exposes them, while returning
+  the same stable DTOs and UI on every adapter.
+
+Architecture:
+
+- Put report assembly, bounds, ordering, and advisory policy in a JSON-free, framework-neutral engine service. Define a
+  neutral MongoDB provider SPI; adapters translate their native driver metadata into core records.
+- Keep MongoDB driver imports out of the engine. Spring wiring must be classpath/bean-gated. Quarkus wiring must be
+  capability-gated and exclude the optional driver-dependent provider classes when the MongoDB extension is absent, using
+  the existing Hibernate/Cache/Flyway/Liquibase optional-dependency pattern.
+- Treat client settings as live policy inputs where they can change at runtime. Never serialize credentials, raw
+  connection strings, authentication sources, TLS key material, document values, or arbitrary command responses; route
+  displayable addresses and settings through the existing exposure/masking policy.
+
+Out of scope for the first release:
+
+- Browsing, searching, editing, inserting, or deleting documents.
+- An arbitrary MongoDB shell or command runner.
+- Creating or dropping databases, collections, or indexes.
+- Query tracing/profiling, change-stream capture, schema inference from stored documents, or migration tooling.
+- Replacing the Spring Data repository panel; its existing MongoDB repository metadata remains a complementary
+  Spring-specific view.
+
+Acceptance criteria:
+
+- With no supported MongoDB client/extension, the panel is unavailable with a framework-correct setup hint and no
+  optional driver classloading failure.
+- Opening the panel performs no MongoDB network call. Only the explicit Inspect action contacts configured servers, and
+  the shared localhost/write guard plus panel read-only policy protects that action even though it does not mutate data.
+- Inspection uses configurable timeouts and hard caps, returns partial results with explicit per-target errors, and never
+  exposes document contents or secrets.
+- Spring servlet, Spring WebFlux, and Quarkus run the same conformance contract and render the same fixture shape for
+  equivalent MongoDB metadata.
+- The sample applications cover absent-client, unreachable-server, insufficient-permission, empty-database, and
+  multi-client states without requiring MongoDB for the default Docker-free test path.
+
 ## 4. Cross-cutting work for every new panel
 
 For each feature above, the following must move together, consistent with the existing panel-registration process:
 
 - Stable BootUI DTOs in `bootui-core` for all browser-facing responses.
-- A `/bootui/api/**` controller (lazy-imported, internal-bridge first; annotate the production constructor with
-  `@Autowired` when two constructors exist) plus panel registration in `BootUiPanels` and `/bootui/api/panels`
-  availability wiring, including the disabled/unavailable sidebar state. Append new action-capable panels last to keep
-  index-coupled tests stable.
+- A framework-neutral engine service and SPI where the data source differs by runtime, plus thin Spring MVC/WebFlux and
+  Quarkus HTTP adapters. Keep optional framework/driver types in gated adapter classes.
+- Panel registration in `BootUiPanels` and per-adapter `/bootui/api/panels` availability wiring, including the
+  disabled/unavailable sidebar state. Append new action-capable panels last to keep index-coupled tests stable.
 - A Vue 3 route and panel with empty/unavailable states, server-side filtering/paging where lists can be large, and the
   shared masking-aware rendering.
 - Per-panel enable/disable and read-only properties, documented in `docs/PROPERTIES.md`.
 - Backend slice and edge-case tests, frontend unit tests, and sample-app Playwright coverage. Update the hard-coded panel
   counts/indices in `PanelsControllerTests`, `BootUiAutoConfigurationTests`, `PanelAccessFilterTests` (action-capable
   panels only), `routes.test.js`, and e2e `app-shell.spec.js`.
-- Documentation updates in `README.md`, `docs/FEATURES.md`, `docs/SPECIFICATION.md`, and screenshots at the project's
-  standard size.
+- Documentation updates in `docs/FEATURES.md`, `docs/PROPERTIES.md`, `docs/SPECIFICATION.md`, and the relevant platform
+  support document, plus screenshots at the project's standard size.
 
 ## 5. Risks
 
@@ -379,7 +442,10 @@ For each feature above, the following must move together, consistent with the ex
 | Silently swallowing application mail                              | 3.3        | Medium | Pass-through by default; "dev trap" mode strictly opt-in.                                                 |
 | Over-broad or noisy new Live Activity event types (e.g. cache operations) | 3.4 | Medium | Explicit opt-in wiring by bean/class presence, bounded buffers, masked payloads/hashed cache keys. |
 | Messaging capture's added optional-dependency surface (Kafka/RabbitMQ/JMS clients), invasive interception of app-owned messaging beans, and a per-adapter capture design (SmallRye Reactive Messaging on Quarkus vs. imperative templates on Spring) | 3.4 | High | Kafka and RabbitMQ shipped on **both adapters**, and JMS on Spring, with classpath/capability gating identical to Hibernate/Cache/Flyway/Liquibase, pass-through/fail-open wrapping, bounded metadata-only buffers, and no message-value/payload capture. |
-| Scope creep beyond this merged feature set                        | all        | High   | Treat this list as the maximum near-term surface; move further ideas to a later plan.                     |
+| MongoDB inspection leaks credentials/documents or performs surprising network work | 3.5 | High | Never expose documents or raw connection strings; initial render is network-free; inspection is explicit, bounded, timed out, masked, and read-only. |
+| MongoDB optional drivers break applications without the extension | 3.5 | High | Keep driver types in adapter-only providers and use Spring classpath gates plus Quarkus capability/exclusion build steps. |
+| Large MongoDB catalog or partial permissions make inspection slow or misleading | 3.5 | Medium | Hard caps, paging, configurable timeouts, partial-result DTOs, and per-target permission errors. |
+| Scope creep beyond the planned MongoDB inventory/advisor surface | 3.5 | High | Keep document browsing, arbitrary commands, writes, tracing, and migrations out of the first release. |
 
 ## 6. Validation checklist
 
@@ -393,6 +459,7 @@ Run after each feature lands and before any release that includes it:
 - [ ] Server-side filtering/paging works for any high-cardinality list.
 - [ ] Any mutating action is confirmation-gated and disabled by default.
 - [ ] Backend slice/edge-case tests, frontend unit tests, and sample-app Playwright coverage exist for the panel.
-- [ ] `README.md`, `docs/FEATURES.md`, `docs/PROPERTIES.md`, and `docs/SPECIFICATION.md` describe the new surface, with
-      screenshots at the standard size.
-- [ ] BootUI stays disabled in `prod`/`production` unless `bootui.enabled=ON`, and non-local requests are rejected.
+- [ ] `docs/FEATURES.md`, `docs/PROPERTIES.md`, `docs/SPECIFICATION.md`, and the relevant platform support document
+      describe the new surface, with screenshots at the standard size.
+- [ ] Spring Boot stays disabled in `prod`/`production` unless explicitly enabled; Quarkus remains production-dark in
+      normal launch mode; and every adapter rejects non-local requests.
