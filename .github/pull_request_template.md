@@ -11,7 +11,9 @@ Closes #
 ## How was it tested?
 
 - [ ] `./mvnw clean install` passes locally
-- [ ] Started `bootui-spring-sample-app` and verified `/bootui` loads and the change works end-to-end
+- [ ] Ran the affected Spring MVC, Spring WebFlux, and/or Quarkus conformance tests
+- [ ] Started the affected sample app(s) and verified `/bootui` loads on port 8080, 8081, and/or 8082
+- [ ] Ran the affected Playwright suite(s) for browser-facing changes
 - [ ] Added or updated tests where applicable
 
 ## Screenshots (UI changes)

@@ -25,19 +25,93 @@ provide a fix or mitigation within thirty days for high-severity issues.
 
 ## Threat model and intended use
 
-BootUI is a **local developer console**. By design it:
+BootUI is a **local developer console**, not an application authentication
+system. Spring MVC and Spring WebFlux activate it in `AUTO` mode only for the
+configured local profiles or when DevTools is present, unless
+`bootui.enabled=ON` explicitly forces activation. The Quarkus extension wires
+the console only in development and test launch modes; its API is absent and
+its static shell is suppressed in a normal production launch.
 
-- activates only on the `dev` / `local` profile, when DevTools is on the
-  classpath, or when explicitly enabled with `bootui.enabled=ON`;
-- exposes its endpoints on the loopback interface only — non-loopback
-  requests are rejected unless `bootui.allow-non-localhost=true` is set, or the
-  source falls within a range configured in `bootui.trusted-proxies` (a narrow
-  opt-in for local Docker-bridge callers that still enforces the `Host`
-  allow-list and cross-site write protection, and should be scoped to trusted
-  local/dev networks);
-- masks values for property keys that look like secrets (`password`, `token`,
-  `secret`, `key`, …) — controlled by `bootui.expose-values`, which defaults to
-  `MASKED`.
+BootUI uses the host application's HTTP listener. It does not separately bind
+the console to a loopback interface. Instead, every adapter applies the same
+request-time safety and authentication policy described below.
+
+### Request filter and authentication model
+
+For Spring MVC, Spring WebFlux, and Quarkus, BootUI evaluates requests in this
+order:
+
+1. Security headers are attached to the BootUI response.
+2. `LocalhostGuard` protects the entire configured UI and API surface.
+3. Bearer/cookie authentication protects the configured API surface.
+4. Per-panel enabled/read-only policy is applied before an API handler runs.
+
+Spring MVC implements this with servlet filters ordered at
+`Integer.MIN_VALUE` through `Integer.MIN_VALUE + 3`; WebFlux uses the same
+relative order with `WebFilter`; Quarkus uses Vert.x route-filter priorities
+`1000` (guard), `975` (authentication), and `950` (panel policy). The Spring
+Security integration deliberately permits BootUI routes in its own
+highest-precedence chain: it is the BootUI filters above, not the host
+application's login, that enforce this boundary.
+
+Unless `bootui.allow-non-localhost=true`, `LocalhostGuard` applies these checks
+in order:
+
+1. The raw TCP peer must be loopback, in a CIDR listed by
+   `bootui.trusted-proxies`, or an auto-detected container gateway trusted by
+   `bootui.trust-container-gateway`. Forwarded client-address headers are not
+   consulted.
+2. A present `Host` header must use a built-in loopback name or a hostname in
+   `bootui.allowed-hosts`.
+3. A state-changing request is rejected when `Sec-Fetch-Site` is `cross-site`,
+   or when a present `Origin` has a different host. The comparison intentionally
+   ignores scheme and port; requests with neither header are not rejected by
+   this check.
+
+`bootui.allowed-hosts` does not trust a source address. Conversely,
+`bootui.trusted-proxies` and `bootui.trust-container-gateway` treat the matching
+raw peer as trusted: those callers remain authentication-free, but the `Host`
+and cross-site-write checks still apply. Scope these trust mechanisms to
+controlled local/development networks.
+
+`bootui.allow-non-localhost=true` is a broader escape hatch. It bypasses all
+three `LocalhostGuard` checks, but it does **not** mark the peer as trusted.
+The static SPA may load, while every `/bootui/api/**` request from that peer
+must present either the configured/generated token as
+`Authorization: Bearer <token>` or the BootUI session cookie. Authentication
+runs before panel policy, so an unauthenticated API caller receives `401`
+without learning panel availability.
+
+### Token generation and browser cookie exchange
+
+`bootui.authentication.token` is used verbatim when configured. When it is
+blank, BootUI generates a 256-bit URL-safe token for the lifetime of that
+application process. A generated token is logged once at startup when any
+remote-access option is configured (`allow-non-localhost`, trusted CIDRs, or
+container-gateway trust); a configured token is never logged. Keep configured
+tokens in an environment-backed secret rather than source control, and treat
+startup logs containing a generated token as credentials.
+
+The unlock screen sends the token once in a bearer-authenticated
+`POST <api-path>/auth/session`. After the guard and token checks pass, an
+untrusted remote caller receives `204` plus a `BOOTUI_SESSION` cookie containing
+the same token. The cookie is `HttpOnly`, `SameSite=Strict`, and scoped to the
+configured API path including the application's context/root path. It is marked
+`Secure` only when the adapter sees the request as HTTPS. Trusted loopback,
+CIDR, and container-gateway callers do not receive or need this cookie.
+
+Use end-to-end HTTPS for remote access. Bearer credentials and a cookie without
+the `Secure` attribute can be intercepted over plain HTTP. When TLS terminates
+at a development proxy, configure the host framework/proxy so the backend
+correctly recognizes the original HTTPS scheme before relying on the cookie's
+`Secure` attribute. BootUI does not provide token rotation, login throttling,
+or user-level authorization.
+
+### Data exposure
+
+BootUI masks values for property keys that look like secrets (`password`,
+`token`, `secret`, `key`, …). This is controlled by `bootui.expose-values`,
+which defaults to `MASKED`.
 
 ### Local agent session panels (Copilot and Claude Code)
 
@@ -80,9 +154,17 @@ In-scope security issues include:
 - A way to access BootUI endpoints from a non-loopback origin when
   `bootui.allow-non-localhost=false` and `bootui.trusted-proxies` is empty.
 - A way to bypass the `Host` allow-list (DNS-rebinding) or cross-site write
-  (CSRF) protections for a caller trusted only via `bootui.trusted-proxies`.
-- A configuration that causes BootUI to activate when neither the `dev`
-  profile is active, DevTools is present, nor `bootui.enabled=ON`.
+  protections while `LocalhostGuard` is enabled.
+- A way for a peer admitted only by `bootui.allow-non-localhost=true` to access
+  a BootUI API without the correct bearer token or session cookie.
+- A way for an untrusted caller to exchange an invalid token for a
+  `BOOTUI_SESSION` cookie, or to bypass authentication through filter ordering.
+- Trusting a client-supplied forwarded address instead of the raw TCP peer.
+- Disclosure of a configured token, or disclosure of a generated token outside
+  the intentional startup log and authenticated session-cookie exchange.
+- A configuration that activates a Spring adapter without a configured enabled
+  profile, DevTools, or `bootui.enabled=ON`, or that wires the Quarkus API in a
+  normal production launch.
 - Secret values leaked in API responses despite default masking.
 - Stored XSS or RCE against the bundled Vue UI.
 - Path traversal through the runtime overrides file store, or through the

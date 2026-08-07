@@ -16,7 +16,10 @@ participating you are expected to uphold this code.
 - **Node.js 24+** and npm 11+ are downloaded automatically by the
   `frontend-maven-plugin` when you run the build. You do not need to install
   Node manually.
-- **Spring Boot 4.0+** is targeted. BootUI does not support Spring Boot 3.x.
+- **Framework targets**. The Spring MVC and WebFlux adapters target Spring Boot
+  4.0+; the Quarkus adapter targets the LTS version declared by
+  `quarkus.platform.version` in the root `pom.xml`. BootUI does not support
+  Spring Boot 3.x.
 
 ## Project layout
 
@@ -78,10 +81,18 @@ is not baked into `.mvn/maven.config` — add it to your own shell alias or a pe
 as `-Dmaven.repo.local`; see "Parallel worktrees" in `.github/copilot-instructions.md`). CI always
 builds with `-T 1C`.
 
-To rebuild only the backend (useful while iterating on Java code):
+For an adapter-focused Java iteration, select the corresponding sample or
+integration-test module and let Maven build its dependencies:
 
 ```bash
-./mvnw -pl bootui-core,bootui-spring-autoconfigure,bootui-spring-boot-starter,bootui-spring-sample-app -am install
+# Spring MVC
+./mvnw -B -ntp -pl bootui-spring-sample-app -am install
+
+# Spring WebFlux
+./mvnw -B -ntp -pl bootui-spring-webflux-sample-app -am install
+
+# Quarkus extension plus Docker-free integration suites
+./mvnw -B -ntp -pl bootui-quarkus-integration-tests -am install
 ```
 
 ## Testing
@@ -100,6 +111,20 @@ npm install
 npm test
 ```
 
+The shared HTTP contract has one adapter-specific runner per platform. After
+installing the reactor dependencies, run the affected conformance class:
+
+```bash
+# Spring MVC
+./mvnw -B -ntp -pl bootui-spring-sample-app test -Dtest=SpringApiConformanceTest
+
+# Spring WebFlux
+./mvnw -B -ntp -pl bootui-spring-webflux-sample-app test -Dtest=WebFluxApiConformanceTest
+
+# Quarkus
+./mvnw -B -ntp -pl bootui-quarkus-integration-tests/base test -Dtest=BootUiQuarkusApiConformanceTest
+```
+
 ### Panel metadata workflow
 
 Backend panel metadata (`id`, manifest title/order, action capability, and guarded
@@ -114,17 +139,23 @@ manifests, and the directly related docs. When moving a sidebar entry, update
 that the backend catalog, UI routes, conformance manifests, and
 `docs/FEATURES.md` stay aligned.
 
-Run the browser end-to-end suite when you change the UI, browser-facing API responses, or sample-app behavior:
+Run the browser end-to-end suite for every affected adapter when you change the
+UI, browser-facing API responses, or sample-app behavior:
 
 ```bash
-cd bootui-spring-sample-app/e2e
-npm install
-npx playwright install chromium
-npm test
+# Spring MVC and WebFlux share one Playwright project
+(cd bootui-spring-sample-app/e2e && npm ci && npx playwright install chromium)
+(cd bootui-spring-sample-app/e2e && npm test)
+(cd bootui-spring-sample-app/e2e && npm run test:webflux)
+
+# Quarkus (requires JDK 17, 21, or 25 and Docker/Podman for Dev Services)
+(cd bootui-quarkus-sample-app/e2e && npm ci && npx playwright install chromium)
+(cd bootui-quarkus-sample-app/e2e && npm test)
 ```
 
-Playwright can start the sample app automatically. If you already have the sample app running on port 8080, it will
-reuse that server.
+Playwright starts the relevant sample app automatically and reuses an existing
+server on port `8080` (Spring MVC), `8081` (Spring WebFlux), or `8082`
+(Quarkus).
 
 ## Formatting
 
@@ -140,6 +171,16 @@ Use Prettier for the Vue app and Playwright tests:
 ```bash
 (cd bootui-ui/src/main/frontend && npm run format)
 (cd bootui-spring-sample-app/e2e && npm run format)
+(cd bootui-quarkus-sample-app/e2e && npm run format)
+```
+
+Before pushing, run the matching checks:
+
+```bash
+./mvnw -B -ntp spotless:check
+(cd bootui-ui/src/main/frontend && npm run format:check)
+(cd bootui-spring-sample-app/e2e && npm run format:check)
+(cd bootui-quarkus-sample-app/e2e && npm run format:check)
 ```
 
 ## GitHub Actions dependencies
@@ -170,11 +211,17 @@ bash .github/scripts/check-action-references.sh
 
 ## Run the sample app
 
-```bash
-./mvnw -pl bootui-spring-sample-app spring-boot:run -Dspring-boot.run.profiles=dev
-```
+Build the selected adapter first (see the adapter-focused commands above), then
+run its sample without `-am`:
 
-Then open <http://localhost:8080/bootui>.
+| Adapter | Command | Console |
+| ------- | ------- | ------- |
+| Spring MVC | `./mvnw -pl bootui-spring-sample-app spring-boot:run` | <http://localhost:8080/bootui> |
+| Spring WebFlux | `./mvnw -pl bootui-spring-webflux-sample-app spring-boot:run` | <http://localhost:8081/bootui> |
+| Quarkus | `./mvnw -pl bootui-quarkus-sample-app quarkus:dev` | <http://localhost:8082/bootui> |
+
+The Quarkus sample requires JDK 17, 21, or 25 for augmentation and uses Dev
+Services, so Docker or Podman must be available.
 
 ## Front-end development
 
@@ -296,9 +343,10 @@ bash .github/scripts/check-release-integrity.sh
    GitHub username (e.g. `jdubois/improve-config-ui`).
 3. Keep PRs small and focused. Update `docs/` whenever public behaviour
    changes.
-4. Run `./mvnw clean install` before pushing.
-5. Run the Playwright end-to-end suite when you change the UI, browser-facing
-   API responses, or sample-app behavior.
+4. Run `./mvnw -B -ntp clean install` before pushing.
+5. Run the affected Spring MVC, Spring WebFlux, and/or Quarkus conformance and
+   Playwright commands when you change the UI, browser-facing API responses, or
+   sample-app behavior.
 6. Use the pull request template — it links to the verifications we expect.
 
 ## Reporting bugs and security issues
