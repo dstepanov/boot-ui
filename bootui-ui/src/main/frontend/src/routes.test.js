@@ -219,6 +219,14 @@ function findRepositoryRoot(startDirectory) {
 }
 
 describe('routes', () => {
+  it('keeps the final catch-all route outside the panel catalog', () => {
+    const catchAll = routes.at(-1)
+
+    expect(catchAll.path).toBe('/:pathMatch(.*)*')
+    expect(catchAll.name).toBeUndefined()
+    expect(catchAll.meta.title).toBe('Not Found')
+  })
+
   it('keeps the sidebar order aligned with the documented feature order', () => {
     expect(namedRoutes.map((route) => route.meta.title)).toEqual([
       'Overview',

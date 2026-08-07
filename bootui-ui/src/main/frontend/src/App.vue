@@ -12,6 +12,15 @@ import {
   THEME_STORAGE_KEY
 } from './utils/theme.js'
 import {describeLoadError} from './utils/loadError.js'
+import {
+  buildDocumentTitle,
+  createPanelLookup,
+  panelDisabledReason,
+  resolveRouteTitle,
+  routeAvailabilityLabel as routeAccessibleLabel,
+  routeStatusIcon as panelStatusIcon,
+  routeUnavailable as isRouteUnavailable
+} from './utils/panelNavigation.js'
 import {recordRecentPanel} from './utils/recentPanels.js'
 import {safeLocalStorage} from './utils/safeStorage.js'
 import CommandPalette from './views/components/CommandPalette.vue'
@@ -76,6 +85,7 @@ const themeToggleText = computed(() => `${darkTheme.value ? 'Light' : 'Dark'} mo
 
 provide('overview', overview)
 provide('panels', panels)
+provide('openCommandPalette', openCommandPalette)
 
 async function openCommandPalette(event) {
   if (commandPaletteOpen.value || mobileDrawerOpen.value) return
@@ -259,7 +269,7 @@ function loadExpandedGroups() {
 }
 
 const expandedGroups = reactive(loadExpandedGroups())
-const panelLookup = computed(() => new Map((panels.value?.panels ?? []).map((panel) => [panel.id, panel])))
+const panelLookup = computed(() => createPanelLookup(panels.value))
 const activeRoute = computed(() => routes.find((r) => r.name === route.name))
 const activePanel = computed(() => (route.name ? panelLookup.value.get(route.name) : null))
 const activePanelDisabled = computed(() => activePanel.value?.enabled === false)
@@ -277,6 +287,7 @@ const activePanelUnavailableReason = computed(() => {
 const activePanelReadOnly = computed(() => activePanel.value?.readOnly === true && !activePanelUnavailable.value)
 const activePanelReadOnlyReason = computed(() => activePanel.value?.readOnlyReason || 'This panel is read-only.')
 const applicationTitle = computed(() => overview.value?.applicationName || 'application')
+const browserTitle = computed(() => buildDocumentTitle(route, panels.value?.platform, overview.value?.applicationName))
 const runtimeSummary = computed(() => {
   if (shellServerUnreachable.value) return 'The application is not responding. Restart it and retry.'
   if (shellError.value && !overview.value) return 'Unable to load BootUI runtime details.'
@@ -334,8 +345,7 @@ const footerText = computed(() =>
 )
 const githubProjectUrl = 'https://github.com/jdubois/boot-ui'
 function navTitle(r) {
-  const platform = panels.value?.platform
-  return r.meta?.titleByPlatform?.[platform] || r.meta?.title
+  return resolveRouteTitle(r, panels.value?.platform)
 }
 const navigationSections = computed(() => {
   const sections = [
@@ -438,47 +448,16 @@ async function authenticate() {
   }
 }
 
-function panelForRoute(r) {
-  return panelLookup.value.get(r.name)
-}
-
 function routeUnavailable(r) {
-  const panel = panelForRoute(r)
-  return panel?.enabled === false || panel?.available === false
-}
-
-function routeReadOnly(r) {
-  const panel = panelForRoute(r)
-  return panel?.readOnly === true && !routeUnavailable(r)
+  return isRouteUnavailable(r, panelLookup.value)
 }
 
 function routeStatusIcon(r) {
-  if (routeUnavailable(r)) {
-    return 'bi-slash-circle'
-  }
-  if (routeReadOnly(r)) {
-    return 'bi-lock'
-  }
-  return null
-}
-
-function panelDisabledReason(panel) {
-  return `Panel is disabled via bootui.panels.${panel?.id || 'panel'}.enabled=false`
+  return panelStatusIcon(r, panelLookup.value)
 }
 
 function routeAvailabilityLabel(r) {
-  const panel = panelForRoute(r)
-  const title = navTitle(r)
-  if (panel?.enabled === false) {
-    return `${title} - disabled: ${panelDisabledReason(panel)}`
-  }
-  if (panel?.available === false) {
-    return `${title} - unavailable: ${panel.unavailableReason || 'required support is unavailable'}`
-  }
-  if (panel?.readOnly === true) {
-    return `${title} - read-only: ${panel.readOnlyReason || 'mutating actions are disabled'}`
-  }
-  return title
+  return routeAccessibleLabel(r, panelLookup.value, panels.value?.platform)
 }
 
 function groupDomId(group) {
@@ -562,6 +541,14 @@ watch(
     safeLocalStorage.setJson(EXPANDED_GROUPS_STORAGE_KEY, groups)
   },
   {deep: true}
+)
+
+watch(
+  browserTitle,
+  (title) => {
+    document.title = title
+  },
+  {immediate: true}
 )
 
 onMounted(() => {
