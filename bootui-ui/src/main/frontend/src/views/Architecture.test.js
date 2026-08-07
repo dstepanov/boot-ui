@@ -64,6 +64,7 @@ async function mountWithReport(report) {
 
 describe('Architecture', () => {
   afterEach(() => {
+    document.cookie = 'XSRF-TOKEN=; Max-Age=0; path=/'
     vi.unstubAllGlobals()
   })
 
@@ -96,5 +97,35 @@ describe('Architecture', () => {
 
     expect(wrapper.text()).toContain('No architecture rule violations found')
     expect(wrapper.text()).not.toContain('Passing informational rule')
+  })
+
+  it('keeps the last report and shows a warning when another scan is active', async () => {
+    const existing = architectureReport([ruleResult('ARCH-SPRING-004', 'Existing finding', 'HIGH', 'VIOLATION', 1)])
+    const busy = {
+      error: 'BootUI action already in progress',
+      operation: 'architecture.scan',
+      activeOperation: 'architecture.scan',
+      message: "Operation 'architecture.scan' cannot start while 'architecture.scan' is in progress."
+    }
+    document.cookie = 'XSRF-TOKEN=test-token; path=/'
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify(existing), {status: 200}))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify(busy), {status: 409, headers: {'Content-Type': 'application/json'}})
+        )
+    )
+    const wrapper = mount(Architecture)
+    await flushPromises()
+
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Existing finding')
+    expect(wrapper.text()).toContain(busy.message)
+    expect(wrapper.find('[role="status"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Unable to run architecture checks')
   })
 })

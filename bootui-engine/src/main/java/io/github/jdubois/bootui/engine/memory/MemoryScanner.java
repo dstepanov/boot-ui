@@ -5,6 +5,8 @@ import io.github.jdubois.bootui.core.dto.MemoryRuleResultDto;
 import io.github.jdubois.bootui.core.dto.MemoryScanStatusDto;
 import io.github.jdubois.bootui.core.dto.MemorySeverityCountDto;
 import io.github.jdubois.bootui.core.dto.MemorySummaryDto;
+import io.github.jdubois.bootui.engine.action.ActionOperations;
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.support.SeverityOrder;
 import io.github.jdubois.bootui.engine.threads.ThreadDumpService;
 import java.time.Clock;
@@ -45,16 +47,17 @@ public final class MemoryScanner {
 
     private final Supplier<MemoryContext> contextSupplier;
     private final Clock clock;
+    private final SingleFlightAction singleFlight = new SingleFlightAction();
 
     /**
      * Post-histogram GC counters from the previous scan, used as the lower bound of the recent-GC
-     * window. Guarded by the {@code synchronized} {@link #scan()} monitor.
+     * window. Guarded by the scanner's single-flight admission.
      */
     private MemoryContext.GcSample previousGcSample;
 
     /**
      * Cross-scan state for MEM-POOL-007's buffer-pool growth-without-release trend: each pool's used
-     * bytes and consecutive-increase streak as of the previous scan. Guarded by {@link #scan()}.
+     * bytes and consecutive-increase streak as of the previous scan. Guarded by single-flight admission.
      */
     private Map<String, Long> previousBufferPoolUsed = Map.of();
 
@@ -63,7 +66,7 @@ public final class MemoryScanner {
 
     /**
      * Cross-scan state for MEM-HEAP-008's post-GC old-generation usage trend. Guarded by
-     * {@link #scan()}.
+     * single-flight admission.
      */
     private long previousOldGenUsedBytes = -1;
 
@@ -103,7 +106,11 @@ public final class MemoryScanner {
                 List.of());
     }
 
-    public synchronized MemoryReport scan() {
+    public MemoryReport scan() {
+        return singleFlight.run(ActionOperations.MEMORY_SCAN, this::doScan);
+    }
+
+    private MemoryReport doScan() {
         MemoryContext context;
         try {
             context = contextSupplier.get();

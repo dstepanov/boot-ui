@@ -1,5 +1,5 @@
 <script setup>
-import {apiFetch, getJson} from '../api.js'
+import {actionBusyMessage, apiFetch, getJson, isActionBusyError} from '../api.js'
 import {getBootUiApplicationPath} from '../utils/bootUiPath.js'
 import {computed, inject, onActivated, onMounted, reactive, ref} from 'vue'
 import {describeLoadError} from '../utils/loadError.js'
@@ -119,7 +119,15 @@ const scannerDefs = [
 ]
 
 function newScannerState() {
-  return {state: 'idle', score: null, severityCounts: [], statusLabel: null, statusTone: 'secondary', error: null}
+  return {
+    state: 'idle',
+    score: null,
+    severityCounts: [],
+    statusLabel: null,
+    statusTone: 'secondary',
+    error: null,
+    warning: null
+  }
 }
 
 const scanners = reactive(Object.fromEntries(scannerDefs.map((def) => [def.id, newScannerState()])))
@@ -159,6 +167,7 @@ function applyReport(state, report) {
   state.statusTone = scanStatusBadgeClass(status)
   state.state = 'done'
   state.error = null
+  state.warning = null
 }
 
 const visibleScanners = computed(() => scannerDefs.filter((def) => panelAvailable(def.id)))
@@ -166,16 +175,23 @@ const visibleScanners = computed(() => scannerDefs.filter((def) => panelAvailabl
 async function runScanner(def) {
   const state = scanners[def.id]
   const token = nextToken(def.id)
+  const previousState = state.state
   state.state = 'running'
   state.error = null
+  state.warning = null
   try {
     const report = await getJson(def.endpoint, {method: 'POST'})
     if (token !== requestTokens[def.id]) return
     applyReport(state, report)
   } catch (e) {
     if (token !== requestTokens[def.id]) return
-    state.state = 'error'
-    state.error = describeLoadError(e, `Unable to run ${displayTitle(def)}`).message
+    if (isActionBusyError(e)) {
+      state.state = previousState
+      state.warning = actionBusyMessage(e)
+    } else {
+      state.state = 'error'
+      state.error = describeLoadError(e, `Unable to run ${displayTitle(def)}`).message
+    }
   }
 }
 
@@ -517,6 +533,7 @@ onActivated(refreshScores)
           :status-label="scanners[def.id].statusLabel"
           :status-tone="scanners[def.id].statusTone"
           :error-message="scanners[def.id].error"
+          :warning-message="scanners[def.id].warning"
           @run="runScanner(def)"
         />
       </div>

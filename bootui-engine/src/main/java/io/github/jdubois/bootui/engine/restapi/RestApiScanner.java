@@ -5,6 +5,8 @@ import io.github.jdubois.bootui.core.dto.RestApiReport;
 import io.github.jdubois.bootui.core.dto.RestApiRuleResultDto;
 import io.github.jdubois.bootui.core.dto.RestApiScanStatusDto;
 import io.github.jdubois.bootui.core.dto.RestApiSeverityCountDto;
+import io.github.jdubois.bootui.engine.action.ActionOperations;
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.support.SeverityOrder;
 import java.time.Clock;
 import java.util.Comparator;
@@ -45,6 +47,7 @@ public final class RestApiScanner {
     private final RestApiClassImporter importer;
     private final BooleanSupplier openApiAnnotationsPresent;
     private final Clock clock;
+    private final SingleFlightAction singleFlight = new SingleFlightAction();
 
     RestApiScanner(
             Supplier<List<String>> basePackagesSupplier,
@@ -84,6 +87,10 @@ public final class RestApiScanner {
     }
 
     public RestApiReport scan() {
+        return singleFlight.run(ActionOperations.REST_API_SCAN, this::doScan);
+    }
+
+    private RestApiReport doScan() {
         List<String> basePackages = safeBasePackages();
         if (basePackages.isEmpty()) {
             return report(

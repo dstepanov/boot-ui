@@ -4,6 +4,8 @@ import io.github.jdubois.bootui.core.dto.SecurityReport;
 import io.github.jdubois.bootui.core.dto.SecurityRuleResultDto;
 import io.github.jdubois.bootui.core.dto.SecurityScanStatusDto;
 import io.github.jdubois.bootui.core.dto.SecuritySeverityCountDto;
+import io.github.jdubois.bootui.engine.action.ActionOperations;
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import java.time.Clock;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -43,6 +45,7 @@ public final class ReactiveSecurityScanner {
 
     private final Supplier<ReactiveSecurityObservation> observationSupplier;
     private final Clock clock;
+    private final SingleFlightAction singleFlight = new SingleFlightAction();
 
     private volatile ReactiveSecurityContext lastContext;
 
@@ -74,6 +77,10 @@ public final class ReactiveSecurityScanner {
 
     /** Performs the full scan and returns the result. */
     public SecurityReport scan() {
+        return singleFlight.run(ActionOperations.SECURITY_SCAN, this::doScan);
+    }
+
+    private SecurityReport doScan() {
         ReactiveSecurityObservation observation = safeObservation();
         ReactiveSecurityContext context = ReactiveSecurityContext.from(observation);
         if (context.chains().isEmpty()) {

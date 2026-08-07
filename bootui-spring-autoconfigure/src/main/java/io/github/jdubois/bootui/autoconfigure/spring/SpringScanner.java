@@ -6,6 +6,8 @@ import io.github.jdubois.bootui.core.dto.SpringReport;
 import io.github.jdubois.bootui.core.dto.SpringRuleResultDto;
 import io.github.jdubois.bootui.core.dto.SpringScanStatusDto;
 import io.github.jdubois.bootui.core.dto.SpringSeverityCountDto;
+import io.github.jdubois.bootui.engine.action.ActionOperations;
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -109,6 +111,7 @@ final class SpringScanner {
 
     private final Supplier<SpringContext> contextSupplier;
     private final Clock clock;
+    private final SingleFlightAction singleFlight = new SingleFlightAction();
 
     SpringScanner(ConfigurableListableBeanFactory beanFactory, Environment environment, boolean reactive, Clock clock) {
         this(() -> discover(beanFactory, environment, reactive), clock);
@@ -135,6 +138,10 @@ final class SpringScanner {
     }
 
     SpringReport scan() {
+        return singleFlight.run(ActionOperations.SPRING_SCAN, this::doScan);
+    }
+
+    private SpringReport doScan() {
         SpringContext context;
         try {
             context = contextSupplier.get();

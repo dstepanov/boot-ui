@@ -4,6 +4,8 @@ import io.github.jdubois.bootui.core.dto.SpringReport;
 import io.github.jdubois.bootui.core.dto.SpringRuleResultDto;
 import io.github.jdubois.bootui.core.dto.SpringScanStatusDto;
 import io.github.jdubois.bootui.core.dto.SpringSeverityCountDto;
+import io.github.jdubois.bootui.engine.action.ActionOperations;
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.support.SeverityOrder;
 import io.github.jdubois.bootui.spi.QuarkusAppSnapshot;
 import java.time.Clock;
@@ -34,6 +36,7 @@ public final class QuarkusAppScanner {
 
     private final Supplier<QuarkusAppSnapshot> snapshotSupplier;
     private final Clock clock;
+    private final SingleFlightAction singleFlight = new SingleFlightAction();
 
     private QuarkusAppScanner(Supplier<QuarkusAppSnapshot> snapshotSupplier, Clock clock) {
         this.snapshotSupplier = snapshotSupplier;
@@ -55,6 +58,10 @@ public final class QuarkusAppScanner {
     }
 
     public SpringReport scan() {
+        return singleFlight.run(ActionOperations.SPRING_SCAN, this::doScan);
+    }
+
+    private SpringReport doScan() {
         QuarkusAppSnapshot snap;
         try {
             snap = snapshotSupplier.get();

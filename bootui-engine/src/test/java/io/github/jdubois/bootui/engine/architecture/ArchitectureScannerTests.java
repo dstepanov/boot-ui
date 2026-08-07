@@ -1,16 +1,21 @@
 package io.github.jdubois.bootui.engine.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tngtech.archunit.lang.ArchRule;
 import io.github.jdubois.bootui.core.dto.ArchitectureReport;
 import io.github.jdubois.bootui.core.dto.ArchitectureRuleResultDto;
+import io.github.jdubois.bootui.engine.action.ActionBusyException;
 import io.github.jdubois.bootui.engine.support.SeverityOrder;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class ArchitectureScannerTests {
@@ -82,6 +87,34 @@ class ArchitectureScannerTests {
     }
 
     @Test
+    void duplicateScanFailsFastAndLaterRetryRuns() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger imports = new AtomicInteger();
+        ArchitectureClassImporter importer = basePackages -> {
+            imports.incrementAndGet();
+            entered.countDown();
+            await(release);
+            return new ClassFileArchitectureImporter().importPackages(basePackages);
+        };
+        ArchitectureScanner scanner = new ArchitectureScanner(() -> List.of(FIXTURES), importer, CLOCK);
+        Thread winner = new Thread(scanner::scan);
+        winner.start();
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+        assertThatThrownBy(scanner::scan).isInstanceOfSatisfying(ActionBusyException.class, failure -> {
+            assertThat(failure.result().operation()).isEqualTo("architecture.scan");
+            assertThat(failure.result().activeOperation()).isEqualTo("architecture.scan");
+        });
+        assertThat(imports).hasValue(1);
+
+        release.countDown();
+        winner.join(5000);
+        assertThat(scanner.scan().scan().status()).isEqualTo("SCANNED");
+        assertThat(imports).hasValue(2);
+    }
+
+    @Test
     void ruleEvaluationWrapsRuntimeExceptionAsErrorResult() {
         ArchitectureRuleResultDto result = new ThrowingRule().evaluate(null);
 
@@ -91,6 +124,17 @@ class ArchitectureScannerTests {
         assertThat(result.sampleViolations().get(0))
                 .contains("Rule could not be evaluated:")
                 .contains("boom");
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Timed out waiting for test latch");
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(ex);
+        }
     }
 
     @Test

@@ -16,6 +16,7 @@ const props = defineProps({
   statusLabel: {type: String, default: null},
   statusTone: {type: String, default: 'secondary'},
   errorMessage: {type: String, default: null},
+  warningMessage: {type: String, default: null},
   runLabel: {type: String, default: 'Run scan'},
   rerunLabel: {type: String, default: 'Re-run scan'},
   runDisabled: {type: Boolean, default: false},
@@ -97,6 +98,9 @@ function onRun() {
             <div class="text-muted small">{{ idleHint }}</div>
           </template>
         </slot>
+        <div v-if="warningMessage" class="text-warning-emphasis small mt-2" role="status" aria-live="polite">
+          <i class="bi bi-hourglass-split me-1"></i>{{ warningMessage }}
+        </div>
       </div>
 
       <div class="d-flex gap-2 mt-3">

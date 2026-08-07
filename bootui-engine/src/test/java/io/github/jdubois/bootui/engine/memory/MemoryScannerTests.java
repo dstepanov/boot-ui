@@ -1,6 +1,7 @@
 package io.github.jdubois.bootui.engine.memory;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.jdubois.bootui.core.dto.HeapClassHistogramEntryDto;
 import io.github.jdubois.bootui.core.dto.MemoryReport;
@@ -8,6 +9,7 @@ import io.github.jdubois.bootui.core.dto.MemoryRuleResultDto;
 import io.github.jdubois.bootui.core.dto.MemorySeverityCountDto;
 import io.github.jdubois.bootui.core.dto.ThreadInfoDto;
 import io.github.jdubois.bootui.core.dto.ThreadStateCountDto;
+import io.github.jdubois.bootui.engine.action.ActionBusyException;
 import io.github.jdubois.bootui.engine.memory.MemoryContext.ClassLoadingData;
 import io.github.jdubois.bootui.engine.memory.MemoryContext.HeapContentData;
 import io.github.jdubois.bootui.engine.memory.MemoryContext.MemoryData;
@@ -18,6 +20,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class MemoryScannerTests {
@@ -50,6 +55,35 @@ class MemoryScannerTests {
         assertThat(report.violationsFound()).isZero();
         assertThat(report.results()).isEmpty();
         assertThat(report.summary().heapUsedPercent()).isEqualTo(25);
+    }
+
+    @Test
+    void duplicateScanDoesNotQueueOrAdvanceTrendState() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger collections = new AtomicInteger();
+        MemoryScanner scanner = new MemoryScanner(
+                () -> {
+                    collections.incrementAndGet();
+                    entered.countDown();
+                    await(release);
+                    return healthyContext();
+                },
+                CLOCK);
+        Thread winner = new Thread(scanner::scan);
+        winner.start();
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+        assertThatThrownBy(scanner::scan).isInstanceOfSatisfying(ActionBusyException.class, failure -> {
+            assertThat(failure.result().operation()).isEqualTo("memory.scan");
+            assertThat(failure.result().activeOperation()).isEqualTo("memory.scan");
+        });
+        assertThat(collections).hasValue(1);
+
+        release.countDown();
+        winner.join(5000);
+        assertThat(scanner.scan().scan().status()).isEqualTo("SCANNED");
+        assertThat(collections).hasValue(2);
     }
 
     @Test
@@ -351,6 +385,17 @@ class MemoryScannerTests {
                 HeapContentData.unavailable(),
                 new ClassLoadingData(9000, 9500, 500),
                 healthyRuntime());
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Timed out waiting for test latch");
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(ex);
+        }
     }
 
     private static RuntimeData healthyRuntime() {

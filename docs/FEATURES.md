@@ -337,6 +337,11 @@ REST layer, the live Spring context, persistence, JVM memory, and security postu
 has run, its panel shows the same 0–100 score the Overview computes for it (100 minus the weighted finding penalty), so
 each panel and the dashboard always agree.
 
+Expensive advisor actions are single-flight per scanner: a second tab, Overview card, REST caller, or MCP tool cannot
+start the same scanner while it is active. Duplicate REST requests fail immediately with the shared `409` busy response
+instead of waiting or repeating work; MCP reports the same message as an in-band tool error. The panel keeps the last
+completed report and Overview score visible and shows the conflict as a warning. Different scanners remain independent.
+
 Every advisor finding can be **dismissed** when it does not apply to your project. Each rule result carries a _Dismiss_
 button; dismissing a rule moves it into a collapsed "Dismissed rules" list at the bottom of the panel and excludes it
 from the panel's finding count, severity bars, the panel's own advisor score, and the weighted Overview score. The
@@ -743,6 +748,10 @@ you can investigate suspected memory leaks or unexpected retention during the lo
 actions run an explicit, confirmed request that triggers a full GC and writes an `.hprof` file under the configured
 output directory; the panel then shows live heap usage, the top retaining classes by instance count and shallow size,
 and the list of captured dumps with retention-based eviction.
+
+Capture, live analysis, and delete share one single-flight admission because they operate on the same dump directory,
+histogram, and status. A conflicting action receives the canonical `409` busy response naming both the requested and
+active operation; passive report reads remain available throughout.
 
 Heap dumps can contain plaintext secrets, credentials, and personal data, so the panel is designed to be safe by
 default: it only summarizes class names and sizes (never object values), all capture/analyze/delete operations are

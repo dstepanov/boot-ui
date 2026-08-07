@@ -14,6 +14,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -512,6 +517,71 @@ public abstract class AbstractBootUiApiConformanceTest {
         assertThat(scanned.path("scan").path("scannedAt").isNumber())
                 .as("POST /bootui/api/architecture/scan scan.scannedAt must be a number after a real scan")
                 .isTrue();
+    }
+
+    @Test
+    void concurrentArchitectureScansReturnCanonicalBusyConflict() throws Exception {
+        assumeTrue(
+                isPanelUsableInLiveManifest("architecture"), "architecture panel is not available in this environment");
+
+        int requests = 16;
+        BootUiHttpProbe probe = probe();
+        Map<String, String> headers = stateChangingHeaders(probe);
+        CountDownLatch ready = new CountDownLatch(requests);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(requests);
+        List<Future<Response>> futures = new ArrayList<>();
+        try {
+            for (int index = 0; index < requests; index++) {
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    if (!start.await(10, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Timed out waiting to start concurrent architecture scans");
+                    }
+                    return probe.request("POST", "/bootui/api/architecture/scan", headers, "");
+                }));
+            }
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            List<Response> responses = new ArrayList<>();
+            for (Future<Response> future : futures) {
+                responses.add(future.get(40, TimeUnit.SECONDS));
+            }
+            assertThat(responses)
+                    .as("concurrent architecture responses must be either the winner or a single-flight conflict")
+                    .allSatisfy(response -> assertThat(response.status()).isIn(200, 409));
+            // HTTP stacks may admit queued requests after an earlier scan has completed, so multiple
+            // sequential winners are valid; the engine unit test pins that overlapping suppliers never run.
+            assertThat(responses.stream()
+                            .filter(response -> response.status() == 200)
+                            .count())
+                    .as("at least one architecture scan must complete successfully")
+                    .isPositive();
+
+            List<Response> conflicts = responses.stream()
+                    .filter(response -> response.status() == 409)
+                    .toList();
+            assertThat(conflicts).isNotEmpty();
+            assertThat(conflicts).allSatisfy(response -> {
+                assertThat(response.isJson()).isTrue();
+                JsonNode body = response.json();
+                assertThat(body.path("error").asText()).isEqualTo("BootUI action already in progress");
+                assertThat(body.path("operation").asText()).isEqualTo("architecture.scan");
+                assertThat(body.path("activeOperation").asText()).isEqualTo("architecture.scan");
+                assertThat(body.path("message").asText())
+                        .isEqualTo(
+                                "Operation 'architecture.scan' cannot start while 'architecture.scan' is in progress.");
+            });
+
+            Response completed = probe.get("/bootui/api/architecture");
+            assertThat(completed.status()).isEqualTo(200);
+            assertThat(completed.json().path("scan").path("scannedAt").isNumber())
+                    .isTrue();
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
     }
 
     @Test
