@@ -12,9 +12,7 @@ const frontendDir = path.join(repoRoot, 'bootui-ui', 'src', 'main', 'frontend')
 const imagesDir = path.join(repoRoot, 'docs', 'images')
 const e2ePackage = JSON.parse(await fs.readFile(path.join(e2eDir, 'package.json'), 'utf8'))
 const rootPomPath = path.join(repoRoot, 'pom.xml')
-const quarkusSamplePomPath = path.join(repoRoot, 'bootui-quarkus-sample-app', 'pom.xml')
 const rootPom = await fs.readFile(rootPomPath, 'utf8')
-const quarkusSamplePom = await fs.readFile(quarkusSamplePomPath, 'utf8')
 const bootUiVersion = requiredValue(e2ePackage.version, 'version', path.join(e2eDir, 'package.json'))
 const springBootVersion = requiredMatch(
   rootPom,
@@ -23,10 +21,10 @@ const springBootVersion = requiredMatch(
   rootPomPath
 )
 const quarkusVersion = requiredMatch(
-  quarkusSamplePom,
+  rootPom,
   /<quarkus\.platform\.version>([^<]+)<\/quarkus\.platform\.version>/,
   'quarkus.platform.version',
-  quarkusSamplePomPath
+  rootPomPath
 )
 
 const port = Number(process.env.BOOTUI_SCREENSHOT_PORT || 5173)
@@ -550,21 +548,35 @@ const conditions = {
 }
 
 const beans = {
-  total: 6,
+  total: 12,
   beans: [
     {
       name: 'sampleController',
       type: 'io.github.jdubois.bootui.sample.BootUiSampleApplication$SampleController',
       scope: 'singleton',
       classification: 'APPLICATION',
-      dependencies: ['sampleSettings', 'sampleCatalog']
+      dependencies: ['sampleSettings', 'sampleCatalog', 'orderService', 'greetingService', 'auditService']
+    },
+    {
+      name: 'adminController',
+      type: 'io.github.jdubois.bootui.sample.AdminController',
+      scope: 'singleton',
+      classification: 'APPLICATION',
+      dependencies: ['sampleController']
+    },
+    {
+      name: 'sampleApi',
+      type: 'io.github.jdubois.bootui.sample.SampleApiController',
+      scope: 'singleton',
+      classification: 'APPLICATION',
+      dependencies: ['sampleController']
     },
     {
       name: 'sampleCatalog',
       type: 'io.github.jdubois.bootui.sample.BootUiSampleApplication$SampleCatalog',
       scope: 'singleton',
       classification: 'APPLICATION',
-      dependencies: ['productRepository']
+      dependencies: []
     },
     {
       name: 'productRepository',
@@ -572,6 +584,34 @@ const beans = {
       scope: 'singleton',
       classification: 'APPLICATION',
       dependencies: ['jpaSharedEM_entityManagerFactory']
+    },
+    {
+      name: 'orderService',
+      type: 'io.github.jdubois.bootui.sample.OrderService',
+      scope: 'singleton',
+      classification: 'APPLICATION',
+      dependencies: ['auditService']
+    },
+    {
+      name: 'greetingService',
+      type: 'io.github.jdubois.bootui.sample.GreetingService',
+      scope: 'singleton',
+      classification: 'APPLICATION',
+      dependencies: ['sampleSettings']
+    },
+    {
+      name: 'auditService',
+      type: 'io.github.jdubois.bootui.sample.AuditService',
+      scope: 'singleton',
+      classification: 'APPLICATION',
+      dependencies: []
+    },
+    {
+      name: 'sampleSettings',
+      type: 'io.github.jdubois.bootui.sample.SampleSettings',
+      scope: 'singleton',
+      classification: 'APPLICATION',
+      dependencies: []
     },
     {
       name: 'bootUiAutoConfiguration',
@@ -3861,7 +3901,21 @@ const screenshots = [
   ['config', 'Configuration', 'bootui-configuration.webp', waitForText('sample.greeting')],
   ['profile-diff', 'Profile Diff', 'bootui-profile-diff.webp', waitForText('classpath:/application-dev.properties')],
   ['loggers', 'Loggers', 'bootui-loggers.webp', waitForText('io.github.jdubois.bootui')],
-  ['beans', 'Beans', 'bootui-beans.webp', waitForText('sampleController')],
+  [
+    'beans',
+    'Beans',
+    'bootui-beans.webp',
+    async (page) => {
+      await page.locator('svg.bean-graph-svg').waitFor()
+      const focusInput = page.getByPlaceholder('Search for a bean to focus…')
+      await focusInput.fill('sampleController')
+      await focusInput.press('Enter')
+      await page.locator('[aria-label*="sampleController"][aria-pressed="true"]').waitFor()
+      await page.locator('.bean-graph-svg .bg-node').nth(7).waitFor()
+      await page.getByRole('button', {name: 'Zoom out'}).click()
+      await page.getByRole('heading', {name: 'Why this bean exists'}).waitFor()
+    }
+  ],
   ['conditions', 'Conditions', 'bootui-conditions.webp', waitForText('BootUiAutoConfiguration')],
   ['mappings', 'Mappings', 'bootui-mappings.webp', waitForText('/api/sample/products')],
   [

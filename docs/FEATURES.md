@@ -904,7 +904,8 @@ platform.
 
 ### Beans
 
-The Beans panel helps answer which Spring beans exist and where they came from. It supports server-side search across
+The Beans panel helps answer which application-managed beans exist, how they are connected, and where they came from.
+It supports server-side search across
 bean names and types, plus classifications such as application, Spring framework, Java/Jakarta, and other beans. BootUI's
 own beans are hidden by default, and the empty BootUI classification option is omitted; when self-data filtering is
 disabled they are classified separately as BootUI beans and the option appears. A labeled Graph/List segmented control
