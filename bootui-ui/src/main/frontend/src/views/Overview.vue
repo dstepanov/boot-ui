@@ -114,7 +114,8 @@ const scannerDefs = [
     icon: 'bi-bug',
     tone: 'danger',
     to: '/vulnerabilities',
-    endpoint: 'api/vulnerabilities/scan'
+    endpoint: 'api/vulnerabilities/scan',
+    additionalSeverities: ['UNKNOWN']
   }
 ]
 
@@ -135,7 +136,14 @@ function nextToken(id) {
   return requestTokens[id]
 }
 
-function applyReport(state, report) {
+function isAllowedSeverity(def, severity) {
+  return (
+    isKnownSeverity(severity) ||
+    (typeof severity === 'string' && def.additionalSeverities?.includes(severity.toUpperCase()))
+  )
+}
+
+function applyReport(def, state, report) {
   const severityCounts = report?.severityCounts
   if (
     !Array.isArray(severityCounts) ||
@@ -144,7 +152,7 @@ function applyReport(state, report) {
         !entry ||
         typeof entry !== 'object' ||
         Array.isArray(entry) ||
-        !isKnownSeverity(entry.severity) ||
+        !isAllowedSeverity(def, entry.severity) ||
         typeof entry.count !== 'number' ||
         !Number.isFinite(entry.count) ||
         entry.count < 0
@@ -171,7 +179,7 @@ async function runScanner(def) {
   try {
     const report = await getJson(def.endpoint, {method: 'POST'})
     if (token !== requestTokens[def.id]) return
-    applyReport(state, report)
+    applyReport(def, state, report)
   } catch (e) {
     if (token !== requestTokens[def.id]) return
     state.state = 'error'
@@ -194,7 +202,7 @@ async function refreshScanner(def) {
     const report = await res.json()
     if (token !== requestTokens[def.id]) return
     if (!hasScanResult(report.scan?.status)) return
-    applyReport(state, report)
+    applyReport(def, state, report)
   } catch {
     // Best-effort refresh: keep the previously computed score if the report cannot be reloaded.
   }
