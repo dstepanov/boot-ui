@@ -302,13 +302,14 @@ public final class BoundedBodyReader {
                 return;
             }
             completed = true;
-            if (oversized) {
-                subscription.cancel();
-            }
             try {
                 result.complete(decoder.decode(body.toByteArray(), oversized));
             } catch (IOException ex) {
                 result.completeExceptionally(ex);
+            } finally {
+                if (oversized) {
+                    subscription.cancel();
+                }
             }
         }
     }
