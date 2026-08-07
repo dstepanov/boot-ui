@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.jdubois.bootui.engine.panel.BootUiGlobalWritePolicy;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels.Panel;
 import java.io.IOException;
@@ -119,6 +120,12 @@ class BackendPanelCatalogConsistencyTest {
                         .filter(java.util.Objects::nonNull)
                         .collect(java.util.stream.Collectors.toSet()))
                 .containsExactlyInAnyOrderElementsOf(expectedActionPanels);
+
+        assertThat(actions)
+                .filteredOn(action -> action.panelId() == null && action.blockedByGlobalReadOnly())
+                .allSatisfy(action -> assertThat(BootUiGlobalWritePolicy.subjectFor(action.relativePath()))
+                        .as(action.id())
+                        .isPresent());
     }
 
     private static JsonNode loadJsonResource(String resource) {

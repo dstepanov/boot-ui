@@ -299,10 +299,10 @@ public final class BootUiApiContractCatalog {
         all(actions, "rabbitmq.clear", "rabbitmq", "DELETE", "/rabbitmq");
         spring(actions, "jms.clear", "jms", "DELETE", "/jms");
 
-        infrastructure(actions, "dismissed-rules.dismiss", "POST", "/dismissed-rules/conformance-rule", ALL);
-        infrastructure(actions, "dismissed-rules.restore", "DELETE", "/dismissed-rules/conformance-rule", ALL);
-        infrastructure(actions, "mcp.bridge", "POST", "/mcp", ALL);
-        infrastructure(actions, "otlp.ingest", "POST", "/otlp/v1/traces", SPRING);
+        infrastructure(actions, "dismissed-rules.dismiss", "POST", "/dismissed-rules/conformance-rule", ALL, true);
+        infrastructure(actions, "dismissed-rules.restore", "DELETE", "/dismissed-rules/conformance-rule", ALL, true);
+        infrastructure(actions, "mcp.bridge", "POST", "/mcp", ALL, false);
+        infrastructure(actions, "otlp.ingest", "POST", "/otlp/v1/traces", SPRING, false);
         return List.copyOf(actions);
     }
 
@@ -433,24 +433,29 @@ public final class BootUiApiContractCatalog {
     }
 
     private static void all(List<ActionContract> actions, String id, String panelId, String method, String path) {
-        actions.add(new ActionContract(id, panelId, method, path, ALL));
+        actions.add(new ActionContract(id, panelId, method, path, ALL, true));
     }
 
     private static void spring(List<ActionContract> actions, String id, String panelId, String method, String path) {
-        actions.add(new ActionContract(id, panelId, method, path, SPRING));
+        actions.add(new ActionContract(id, panelId, method, path, SPRING, true));
     }
 
     private static void springMvc(List<ActionContract> actions, String id, String panelId, String method, String path) {
-        actions.add(new ActionContract(id, panelId, method, path, Set.of(Runtime.SPRING_MVC)));
+        actions.add(new ActionContract(id, panelId, method, path, Set.of(Runtime.SPRING_MVC), true));
     }
 
     private static void quarkus(List<ActionContract> actions, String id, String panelId, String method, String path) {
-        actions.add(new ActionContract(id, panelId, method, path, Set.of(Runtime.QUARKUS)));
+        actions.add(new ActionContract(id, panelId, method, path, Set.of(Runtime.QUARKUS), true));
     }
 
     private static void infrastructure(
-            List<ActionContract> actions, String id, String method, String path, Set<Runtime> runtimes) {
-        actions.add(new ActionContract(id, null, method, path, runtimes));
+            List<ActionContract> actions,
+            String id,
+            String method,
+            String path,
+            Set<Runtime> runtimes,
+            boolean blockedByGlobalReadOnly) {
+        actions.add(new ActionContract(id, null, method, path, runtimes, blockedByGlobalReadOnly));
     }
 
     public enum Runtime {
@@ -478,7 +483,13 @@ public final class BootUiApiContractCatalog {
         }
     }
 
-    public record ActionContract(String id, String panelId, String method, String relativePath, Set<Runtime> runtimes) {
+    public record ActionContract(
+            String id,
+            String panelId,
+            String method,
+            String relativePath,
+            Set<Runtime> runtimes,
+            boolean blockedByGlobalReadOnly) {
 
         public ActionContract {
             runtimes = Set.copyOf(runtimes);

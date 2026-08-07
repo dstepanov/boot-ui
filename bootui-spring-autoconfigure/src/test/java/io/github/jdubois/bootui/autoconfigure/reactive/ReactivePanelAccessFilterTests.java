@@ -125,6 +125,27 @@ class ReactivePanelAccessFilterTests {
     }
 
     @Test
+    void globalReadOnlyBlocksCatalogedNonPanelBrowserWrites() {
+        properties.setReadOnly(true);
+        List<ActionContract> actions = BootUiApiContractCatalog.actions(Runtime.SPRING_WEBFLUX).stream()
+                .filter(action -> action.panelId() == null && action.blockedByGlobalReadOnly())
+                .toList();
+
+        assertThat(actions).isNotEmpty();
+        for (ActionContract action : actions) {
+            MockServerWebExchange exchange = exchange(action.method(), "/bootui/api" + action.relativePath());
+
+            filter.filter(exchange, OK_CHAIN).block(Duration.ofSeconds(5));
+
+            assertThat(exchange.getResponse().getStatusCode()).as(action.id()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(bodyAsString(exchange))
+                    .as(action.id())
+                    .contains("\"panel\":\"dismissed-rules\"")
+                    .contains("bootui.read-only=true");
+        }
+    }
+
+    @Test
     void perPanelReadOnlyBlocksPentestingScanAction() {
         properties.panel("pentesting").setReadOnly(true);
         MockServerWebExchange exchange = exchange("POST", "/bootui/api/pentesting/scan");

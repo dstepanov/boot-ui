@@ -2111,10 +2111,12 @@ Future compatibility:
   null/empty and availability semantics, pagination containers, scan-status fields, and observable secret masking while
   allowing runtime counts, timestamps, framework versions, and captured data to vary.
 - A central mutation catalog lists every panel action plus the MCP, dismissed-rules, and OTLP infrastructure writes.
-  Adapter access-filter tests consume that catalog so a newly cataloged route cannot silently bypass global read-only
-  policy. The live contract covers confirmation gates, canonical panel denial, missing targets, single-flight `409`
-  responses, and only deterministic repeatable successes; it never calls external services or invokes destructive,
-  heap-capture, or GC-heavy actions.
+  It classifies non-panel writes by global read-only applicability: dismissed-rule persistence is blocked, the MCP bridge
+  delegates authorization to its per-tool panel policy, and OTLP ingestion remains an observability transport. Adapter
+  access-filter tests consume that catalog so a browser mutation cannot silently bypass global read-only policy. The live
+  contract covers confirmation gates, canonical panel denial, missing targets, single-flight `409` responses, and only
+  deterministic repeatable successes; it never calls external services or invokes destructive, heap-capture, or
+  GC-heavy actions.
 - The same suite runs at the default mount and at independent custom UI/API mounts (including each runtime's host root
   path), so shell, assets, reads, streams, downloads, errors, and safe writes share one path contract.
 

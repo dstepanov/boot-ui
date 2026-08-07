@@ -150,6 +150,24 @@ class QuarkusPanelAccessFilterTest {
     }
 
     @Test
+    void globalReadOnlyBlocksCatalogedNonPanelBrowserWrites() {
+        List<ActionContract> actions = BootUiApiContractCatalog.actions(Runtime.QUARKUS).stream()
+                .filter(action -> action.panelId() == null && action.blockedByGlobalReadOnly())
+                .toList();
+
+        assertThat(actions).isNotEmpty();
+        QuarkusPanelAccessFilter filter = newFilter(Map.of("bootui.read-only", "true"));
+        for (ActionContract action : actions) {
+            RoutingContext rc = mockRequest(action.method(), "/bootui/api" + action.relativePath());
+            HttpServerResponse resp = rc.response();
+
+            filter.handle(rc);
+
+            assertBlocked(resp, "dismissed-rules", "BootUI is read-only via bootui.read-only=true");
+        }
+    }
+
+    @Test
     void globalReadOnlyDoesNotBlockAPanelWithoutActions() {
         RoutingContext rc = mockRequest("GET", "/bootui/api/metrics");
         QuarkusPanelAccessFilter filter = newFilter(Map.of("bootui.read-only", "true"));

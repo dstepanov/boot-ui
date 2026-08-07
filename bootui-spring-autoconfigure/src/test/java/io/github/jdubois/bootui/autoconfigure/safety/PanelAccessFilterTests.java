@@ -115,6 +115,28 @@ class PanelAccessFilterTests {
     }
 
     @Test
+    void globalReadOnlyBlocksCatalogedNonPanelBrowserWrites() throws Exception {
+        properties.setReadOnly(true);
+        List<ActionContract> actions = BootUiApiContractCatalog.actions(Runtime.SPRING_MVC).stream()
+                .filter(action -> action.panelId() == null && action.blockedByGlobalReadOnly())
+                .toList();
+
+        assertThat(actions).isNotEmpty();
+        for (ActionContract action : actions) {
+            MockHttpServletRequest request = request(action.method(), "/bootui/api" + action.relativePath());
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            filter.doFilter(request, response, new MockFilterChain());
+
+            assertThat(response.getStatus()).as(action.id()).isEqualTo(403);
+            assertThat(response.getContentAsString())
+                    .as(action.id())
+                    .contains("\"panel\":\"dismissed-rules\"")
+                    .contains("bootui.read-only=true");
+        }
+    }
+
+    @Test
     void perPanelReadOnlyBlocksPentestingScanAction() throws Exception {
         properties.panel("pentesting").setReadOnly(true);
         MockHttpServletRequest request = request("POST", "/bootui/api/pentesting/scan");
