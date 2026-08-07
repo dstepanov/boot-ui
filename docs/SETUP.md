@@ -307,6 +307,9 @@ bootui.trust-container-gateway=AUTO     # auto-trust the container gateway in de
 
 The [Running inside a Docker container](#running-inside-a-docker-container) guidance below applies unchanged. Per-panel
 `bootui.panels.*` enable / read-only toggles and the `bootui.read-only` master switch are enforced identically as well.
+Accepted BootUI API requests also cross a centralized bounded-elastic execution boundary after those checks, keeping
+blocking scans, diagnostics, downloads, filesystem operations, and bounded network calls off Reactor Netty event-loop
+threads. This applies automatically at custom `bootui.api-path` mounts and does not affect application routes.
 
 ### Which panels are available on Spring WebFlux
 

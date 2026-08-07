@@ -12,9 +12,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @SpringBootTest(
-        classes = BootUiWebfluxSampleApplication.class,
+        classes = {
+            BootUiWebfluxSampleApplication.class,
+            WebFluxCustomPathIntegrationTest.ExecutionThreadProbeController.class
+        },
         webEnvironment = WebEnvironment.RANDOM_PORT,
         properties = {
             "spring.profiles.active=dev",
@@ -52,6 +60,9 @@ class WebFluxCustomPathIntegrationTest {
         assertThat(asset.find()).isTrue();
         assertThat(probe.get(UI_PATH + "/" + asset.group(1)).status()).isEqualTo(200);
         assertThat(probe.get(API_PATH + "/overview").status()).isEqualTo(200);
+        assertThat(probe.get(API_PATH + "/rest-client-trace").status()).isEqualTo(200);
+        assertThat(probe.get(API_PATH + "/spring-security").status()).isEqualTo(200);
+        assertThat(probe.get(API_PATH + "/security").status()).isEqualTo(200);
     }
 
     @Test
@@ -84,10 +95,27 @@ class WebFluxCustomPathIntegrationTest {
                 API_PATH + "/mcp",
                 headers,
                 "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}");
+        Response restClientClear = probe.request("POST", API_PATH + "/rest-client-trace/clear", headers, "");
+        Response securityScan = probe.request("POST", API_PATH + "/security/scan", headers, "");
 
         assertThat(logger.status()).isEqualTo(200);
         assertThat(download.status()).isEqualTo(200);
         assertThat(mcp.status()).isEqualTo(200);
+        assertThat(restClientClear.status()).isEqualTo(200);
+        assertThat(securityScan.status()).isEqualTo(200);
+    }
+
+    @Test
+    void runsCustomPathReadAndActionHandlersOffTheNettyEventLoop() {
+        BootUiHttpProbe probe = probe();
+        Response read = probe.get(API_PATH + "/execution-thread");
+        Response action =
+                probe.request("POST", API_PATH + "/execution-thread", stateChangingHeaders(probe), "{\"probe\":true}");
+
+        assertThat(read.status()).isEqualTo(200);
+        assertThat(action.status()).isEqualTo(200);
+        assertThat(read.body()).isNotBlank().doesNotContain("http-nio");
+        assertThat(action.body()).isNotBlank().doesNotContain("http-nio");
     }
 
     private static Map<String, String> stateChangingHeaders(BootUiHttpProbe probe) {
@@ -96,5 +124,20 @@ class WebFluxCustomPathIntegrationTest {
         headers.put("Content-Type", "application/json");
         probe.cookie("XSRF-TOKEN").ifPresent(token -> headers.put("X-XSRF-TOKEN", token));
         return headers;
+    }
+
+    @RestController
+    @RequestMapping("${bootui.api-path:/bootui/api}/execution-thread")
+    static class ExecutionThreadProbeController {
+
+        @GetMapping
+        String read() {
+            return Thread.currentThread().getName();
+        }
+
+        @PostMapping
+        String action(@RequestBody String request) {
+            return Thread.currentThread().getName();
+        }
     }
 }
