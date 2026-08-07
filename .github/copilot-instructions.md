@@ -152,8 +152,12 @@ deliberately Docker-free.
 # After changing UI code that needs to be re-bundled into the JAR:
 ./mvnw -pl bootui-ui install
 
-# Browser end-to-end suite (required for UI, browser-facing API, or sample-app changes).
+# Spring MVC and WebFlux browser suites (required for affected UI, API, or sample-app flows).
 (cd bootui-spring-sample-app/e2e && npm ci && npx playwright install --with-deps chromium && npm test)
+(cd bootui-spring-sample-app/e2e && npm run test:webflux)
+
+# Quarkus browser suite (required for affected shared or Quarkus flows).
+(cd bootui-quarkus-sample-app/e2e && npm ci && npx playwright install --with-deps chromium && npm test)
 ```
 
 ### Isolating parallel worktrees
@@ -167,6 +171,11 @@ isolated local repository and run from that same repo (per-invocation, or via a 
 ./mvnw -Dmaven.repo.local=.m2 -ntp -pl bootui-spring-sample-app -am -DskipTests install
 ./mvnw -Dmaven.repo.local=.m2 -o -ntp -pl bootui-spring-sample-app -Dmaven.test.skip=true spring-boot:run -Dspring-boot.run.profiles=dev
 ```
+
+For Copilot app sessions, prefer the `MAVEN_OPTS` pattern already used by `.github/github-app.yml`, which is inherited by
+every Maven invocation in that script. Do not put `${maven.multiModuleProjectDirectory}/.m2` in global
+`~/.m2/settings.xml`: IntelliJ may pass it through literally and reject it as a non-absolute repository path. Do not
+commit a project-wide Maven repository override solely for worktree isolation.
 
 ### Live UI iteration (hot reload)
 
@@ -646,6 +655,11 @@ hide newer ones. Keep API, UI,
   and the sample-app navigation test (`bootui-spring-sample-app/e2e/tests/app-shell.spec.js`) must stay consistent when panels are
   added, renamed, hidden, or reordered. When renaming a route path, add a redirect from the old path (see the redirect
   block at the end of `routes.js`).
+- Before declaring a panel addition or rename complete, audit the full vertical surface: stable DTO/API contract; shared
+  engine service and SPI; Spring MVC and WebFlux wiring; Quarkus resource, build-time capability gate, and availability;
+  `BootUiPanels`; route id/order/title; configuration keys; setup/features/platform-support docs; screenshots; focused
+  adapter tests; conformance; and the relevant Spring/WebFlux/Quarkus browser specs. Mark a platform explicitly
+  unavailable or not applicable rather than silently omitting it.
 - New browser-facing behavior usually needs a stable DTO, controller tests where practical, Vue route/view updates,
   `docs/FEATURES.md` updates, a conformance check, and an e2e spec when the UI or sample app behavior changes.
 - Feature screenshots in `docs/images/bootui-*.webp` stay at 1600x900 px; they are captured as PNG and re-encoded to WebP
@@ -684,6 +698,9 @@ hide newer ones. Keep API, UI,
   `group` in `meta`; the sidebar in `App.vue` renders from `router.options.routes`.
 - Frontend unit tests use Vitest with Vue Test Utils and jsdom. Add focused `*.test.js` coverage for reusable composables/
   components and UI logic where Playwright would be too broad or slow.
+- Shared interaction changes must be exercised in every affected browser runtime: Spring MVC, Spring WebFlux, and Quarkus.
+  For ARIA, focus, tabs, dialogs, progress, or live-region changes, assert semantic uniqueness and keyboard behavior so
+  duplicate announcements or hidden-but-focusable controls cannot pass on visual appearance alone.
 - The Vite dev server proxies the configured development API path to a running sample app (Spring or Quarkus);
   packaged assets must work from any normalized `bootui.path` without requiring consumers to install Node.
 
@@ -694,6 +711,9 @@ hide newer ones. Keep API, UI,
   sample-app smoke test, no committed secrets) is enforced in review.
 - Run focused Vitest tests for changed Vue composables/components, and run the Playwright suite when changing browser
   flows, browser-facing API response shapes, visible routes, or sample-app behavior.
+- After amending, rebasing, or force-pushing a coordinated PR, verify the remote head SHA changed as intended, the remote
+  commit count/trailers and PR diff match the request, and replacement required checks are attached to that exact SHA.
+  Do not report completion from local state or an older CI run.
 - Both sample apps are for demos/integration tests and set `<maven.deploy.skip>true</maven.deploy.skip>`; do not publish
   them in Maven Central releases.
 - Spring Boot 3.x compatibility is **out of scope** — don't add compatibility shims.
