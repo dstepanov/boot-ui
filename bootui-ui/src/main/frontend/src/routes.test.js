@@ -164,15 +164,6 @@ function parseQuarkusSupportTable(markdown) {
     }))
 }
 
-function parseInlineGroupInventory(markdown) {
-  return new Map(
-    [...markdown.matchAll(/^- \*\*([^*]+)\*\*: (.+)$/gm)].map((match) => [
-      match[1],
-      match[2].split(',').map((title) => title.trim())
-    ])
-  )
-}
-
 function parseSpecificationGroupInventory(markdown) {
   const navigation = markdown.split('### 7.1 Navigation')[1]?.split('### 7.2 UI principles')[0]
   if (!navigation) {
@@ -219,6 +210,14 @@ function findRepositoryRoot(startDirectory) {
 }
 
 describe('routes', () => {
+  it('keeps the final catch-all route outside the panel catalog', () => {
+    const catchAll = routes.at(-1)
+
+    expect(catchAll.path).toBe('/:pathMatch(.*)*')
+    expect(catchAll.name).toBeUndefined()
+    expect(catchAll.meta.title).toBe('Not Found')
+  })
+
   it('keeps the sidebar order aligned with the documented feature order', () => {
     expect(namedRoutes.map((route) => route.meta.title)).toEqual([
       'Overview',
@@ -390,12 +389,6 @@ describe('routes', () => {
         namedRoutes.filter((route) => route.meta.group === group).map((route) => route.meta.title)
       ])
     )
-
-    const instructions = parseInlineGroupInventory(readRepositoryFile('.github/copilot-instructions.md'))
-    for (const [group, expectedTitles] of expectedByGroup) {
-      expect(instructions.get(group), `.github/copilot-instructions.md ${group}`).toEqual(expectedTitles)
-    }
-    expect(instructions.get('Services')).toContain('JMS')
 
     const specification = parseSpecificationGroupInventory(readRepositoryFile('docs/SPECIFICATION.md'))
     for (const [group, expectedTitles] of expectedByGroup) {

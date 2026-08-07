@@ -44,6 +44,7 @@ defineProps({
 @media (prefers-reduced-motion: reduce) {
   .skeleton-line {
     animation: none;
+    background-position: 50% 0;
   }
 }
 </style>

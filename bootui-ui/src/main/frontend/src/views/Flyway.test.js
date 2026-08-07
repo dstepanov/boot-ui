@@ -76,5 +76,7 @@ describe('Flyway', () => {
     expect(wrapper.text()).not.toContain('not on the classpath')
     expect(wrapper.text()).toContain('migration(s) across')
     expect(wrapper.text()).toContain('V1__init.sql')
+    expect(wrapper.get('.table-responsive.bootui-table-scroll .flyway-migrations-table').exists()).toBe(true)
+    expect(wrapper.get('code.bootui-break-anywhere').text()).toBe('dataSource')
   })
 })

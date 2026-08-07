@@ -29,8 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 /**
- * White-box binding tests for {@link BootUiQuarkusSafetyFilter} (hence the same package as the runtime
- * class, even though it lives in the integration-tests module). These exercise the parts of the Vert.x
+ * White-box binding tests for {@link BootUiQuarkusSafetyFilter}. These exercise the parts of the Vert.x
  * binding that the shared, loopback-only {@code AbstractBootUiApiConformanceTest} cannot reach: source
  * trust on a <em>non-loopback</em> peer (impossible to produce over real loopback HTTP), Host-header
  * rebinding (the JDK HttpClient forbids setting a {@code Host} header), the spoof guarantee that the

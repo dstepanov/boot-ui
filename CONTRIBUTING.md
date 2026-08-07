@@ -16,7 +16,10 @@ participating you are expected to uphold this code.
 - **Node.js 24+** and npm 11+ are downloaded automatically by the
   `frontend-maven-plugin` when you run the build. You do not need to install
   Node manually.
-- **Spring Boot 4.0+** is targeted. BootUI does not support Spring Boot 3.x.
+- **Framework targets**. The Spring MVC and WebFlux adapters target Spring Boot
+  4.0+; the Quarkus adapter targets the LTS version declared by
+  `quarkus.platform.version` in the root `pom.xml`. BootUI does not support
+  Spring Boot 3.x.
 
 ## Project layout
 
@@ -47,7 +50,8 @@ Use the root Maven properties as the source of truth for the published adapters 
 ```
 
 When updating compatibility text in docs (README, `docs/SETUP.md`, `docs/FEATURES.md`,
-`.github/copilot-instructions.md`), reference those properties and refresh any explicit version strings in the same PR.
+`.github/copilot-instructions.md`, and `.github/instructions/{spring-adapter,quarkus-adapter}.instructions.md`),
+reference those properties and refresh any explicit version strings in the same PR.
 All Quarkus modules, including the non-published sample app, inherit the Quarkus platform through
 `bootui-quarkus-parent`; keep its LangChain4j BOM compatible with that shared LTS line.
 
@@ -74,13 +78,21 @@ test-bootstrap cache (see the `maven-surefire-plugin` comments in the root `pom.
 `bootui-quarkus-integration-tests/base/pom.xml`). `-T` is a personal preference, not a project default, so it
 is not baked into `.mvn/maven.config` — add it to your own shell alias or a personal, git-ignored
 `.mvn/maven.config` if you want it every time (that file is also used for personal, per-worktree overrides such
-as `-Dmaven.repo.local`; see "Isolating parallel worktrees" in `.github/copilot-instructions.md`). CI always
+as `-Dmaven.repo.local`; see "Parallel worktrees" in `.github/copilot-instructions.md`). CI always
 builds with `-T 1C`.
 
-To rebuild only the backend (useful while iterating on Java code):
+For an adapter-focused Java iteration, select the corresponding sample or
+integration-test module and let Maven build its dependencies:
 
 ```bash
-./mvnw -pl bootui-core,bootui-spring-autoconfigure,bootui-spring-boot-starter,bootui-spring-sample-app -am install
+# Spring MVC
+./mvnw -B -ntp -pl bootui-spring-sample-app -am install
+
+# Spring WebFlux
+./mvnw -B -ntp -pl bootui-spring-webflux-sample-app -am install
+
+# Quarkus extension plus Docker-free integration suites
+./mvnw -B -ntp -pl bootui-quarkus-integration-tests -am install
 ```
 
 ## Testing
@@ -99,6 +111,20 @@ npm install
 npm test
 ```
 
+The shared HTTP contract has one adapter-specific runner per platform. After
+installing the reactor dependencies, run the affected conformance class:
+
+```bash
+# Spring MVC
+./mvnw -B -ntp -pl bootui-spring-sample-app test -Dtest=SpringApiConformanceTest
+
+# Spring WebFlux
+./mvnw -B -ntp -pl bootui-spring-webflux-sample-app test -Dtest=WebFluxApiConformanceTest
+
+# Quarkus
+./mvnw -B -ntp -pl bootui-quarkus-integration-tests/base test -Dtest=BootUiQuarkusApiConformanceTest
+```
+
 ### Panel metadata workflow
 
 Backend panel metadata (`id`, manifest title/order, action capability, and guarded
@@ -113,17 +139,23 @@ manifests, and the directly related docs. When moving a sidebar entry, update
 that the backend catalog, UI routes, conformance manifests, and
 `docs/FEATURES.md` stay aligned.
 
-Run the browser end-to-end suite when you change the UI, browser-facing API responses, or sample-app behavior:
+Run the browser end-to-end suite for every affected adapter when you change the
+UI, browser-facing API responses, or sample-app behavior:
 
 ```bash
-cd bootui-spring-sample-app/e2e
-npm install
-npx playwright install chromium
-npm test
+# Spring MVC and WebFlux share one Playwright project
+(cd bootui-spring-sample-app/e2e && npm ci && npx playwright install chromium)
+(cd bootui-spring-sample-app/e2e && npm test)
+(cd bootui-spring-sample-app/e2e && npm run test:webflux)
+
+# Quarkus (requires JDK 17, 21, or 25 and Docker/Podman for Dev Services)
+(cd bootui-quarkus-sample-app/e2e && npm ci && npx playwright install chromium)
+(cd bootui-quarkus-sample-app/e2e && npm test)
 ```
 
-Playwright can start the sample app automatically. If you already have the sample app running on port 8080, it will
-reuse that server.
+Playwright starts the relevant sample app automatically and reuses an existing
+server on port `8080` (Spring MVC), `8081` (Spring WebFlux), or `8082`
+(Quarkus).
 
 ## Formatting
 
@@ -139,6 +171,16 @@ Use Prettier for the Vue app and Playwright tests:
 ```bash
 (cd bootui-ui/src/main/frontend && npm run format)
 (cd bootui-spring-sample-app/e2e && npm run format)
+(cd bootui-quarkus-sample-app/e2e && npm run format)
+```
+
+Before pushing, run the matching checks:
+
+```bash
+./mvnw -B -ntp spotless:check
+(cd bootui-ui/src/main/frontend && npm run format:check)
+(cd bootui-spring-sample-app/e2e && npm run format:check)
+(cd bootui-quarkus-sample-app/e2e && npm run format:check)
 ```
 
 ## GitHub Actions dependencies
@@ -169,11 +211,17 @@ bash .github/scripts/check-action-references.sh
 
 ## Run the sample app
 
-```bash
-./mvnw -pl bootui-spring-sample-app spring-boot:run -Dspring-boot.run.profiles=dev
-```
+Build the selected adapter first (see the adapter-focused commands above), then
+run its sample without `-am`:
 
-Then open <http://localhost:8080/bootui>.
+| Adapter | Command | Console |
+| ------- | ------- | ------- |
+| Spring MVC | `./mvnw -pl bootui-spring-sample-app spring-boot:run` | <http://localhost:8080/bootui> |
+| Spring WebFlux | `./mvnw -pl bootui-spring-webflux-sample-app spring-boot:run` | <http://localhost:8081/bootui> |
+| Quarkus | `./mvnw -pl bootui-quarkus-sample-app quarkus:dev` | <http://localhost:8082/bootui> |
+
+The Quarkus sample requires JDK 17, 21, or 25 for augmentation and uses Dev
+Services, so Docker or Podman must be available.
 
 ## Front-end development
 
@@ -238,20 +286,24 @@ To prepare and publish a release, run the **Release** GitHub Actions workflow
 from the branch you want to release, usually `main`, and enter the target version
 without the leading `v`, for example `1.0.0`. The workflow updates all Maven
 module versions and refreshes the documentation dependency examples in the working
-tree, optionally verifies with the `release` Maven profile, and publishes to Maven
-Central. It then waits until every published artifact is downloadable from Maven
-Central, smoke-tests the release by running the sample app against the published
-starter and confirming the BootUI console is served, and **only then** commits the
-release, creates an annotated `v1.0.0` tag, pushes the branch plus tag, and
-redeploys the documentation site. Deferring the version bump and the docs rebuild
-until after the JARs are live keeps the documented install version in lockstep with
-what consumers can actually download. The selected branch must allow
-`github-actions[bot]` to push the release commit and tag.
+tree and optionally verifies with the `release` Maven profile. Before any Maven
+Central upload, it commits those exact contents, creates a GPG-signed annotated
+`v1.0.0` tag, and atomically pushes the source branch plus tag. If the source branch
+advanced during preparation, the workflow aborts; it never rebases released
+contents. The selected branch must allow `github-actions[bot]` to push the release
+commit and tag.
+
+The workflow then resolves the remote tag to its peeled commit SHA, checks out that
+SHA in detached state, rechecks the Maven/npm/tag identity, and publishes exactly
+that checkout. After auto-publication it polls every published coordinate, runs the
+Spring MVC, Spring WebFlux, and Quarkus consumer smoke tests, and dispatches the
+Pages workflow at the immutable tag rather than at a branch that may have advanced.
 
 The same workflow (`.github/workflows/release.yml`) also runs on manually pushed
 `v*` tags, or manually with an empty version when the selected ref is already
-tagged with the Maven project version. Configure these repository or environment
-secrets before running it:
+tagged with the Maven project version. Publication entry points require a signed
+annotated tag whose version matches the Maven project. Configure these repository
+or environment secrets before running it:
 
 | Secret                   | Value                                            |
 | ------------------------ | ------------------------------------------------ |
@@ -261,11 +313,28 @@ secrets before running it:
 | `MAVEN_GPG_PASSPHRASE`   | Passphrase for the GPG private key               |
 
 Manual runs publish automatically by default; disable `auto_publish` when you
-want to review and publish the deployment in the Central Portal. With
-`auto_publish` disabled the workflow cannot confirm the artifacts are live, so it
-skips the Maven Central availability wait, the published-artifact smoke test, and
-the documentation-site redeploy — finish the release by publishing the deployment
-in the Portal and then running the `pages.yml` workflow.
+want to review and publish the deployment in the Central Portal. The release commit
+and signed tag are already pushed before that upload. After publishing the staged
+deployment in the Portal, rerun **Release** at the existing tag with an empty
+version, `auto_publish` enabled, and `resume_after_publish` enabled. This skips a
+duplicate Maven deploy and performs availability polling, consumer smoke tests, and
+tag-pinned documentation deployment.
+
+Never move or recreate a release tag after a failure. If deployment failed before
+Central accepted an upload, rerun the workflow at the existing tag. If Central
+created a failed deployment, drop that deployment in the Portal before rerunning
+the same tagged SHA; Central does not accept a duplicate GAV while the failed
+deployment remains. If upload or publication succeeded but a later poll, smoke
+test, or documentation step failed, rerun at the existing tag with
+`resume_after_publish` enabled so the workflow does not upload the coordinates
+again.
+
+CI pins these ordering and immutability rules. Run the focused policy check locally
+with:
+
+```bash
+bash .github/scripts/check-release-integrity.sh
+```
 
 ## Submitting a change
 
@@ -274,9 +343,10 @@ in the Portal and then running the `pages.yml` workflow.
    GitHub username (e.g. `jdubois/improve-config-ui`).
 3. Keep PRs small and focused. Update `docs/` whenever public behaviour
    changes.
-4. Run `./mvnw clean install` before pushing.
-5. Run the Playwright end-to-end suite when you change the UI, browser-facing
-   API responses, or sample-app behavior.
+4. Run `./mvnw -B -ntp clean install` before pushing.
+5. Run the affected Spring MVC, Spring WebFlux, and/or Quarkus conformance and
+   Playwright commands when you change the UI, browser-facing API responses, or
+   sample-app behavior.
 6. Use the pull request template — it links to the verifications we expect.
 
 ## Reporting bugs and security issues

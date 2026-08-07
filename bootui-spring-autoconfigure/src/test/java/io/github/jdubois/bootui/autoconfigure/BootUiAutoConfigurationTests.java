@@ -52,6 +52,7 @@ import org.springframework.boot.actuate.web.exchanges.HttpExchangeRepository;
 import org.springframework.boot.actuate.web.exchanges.InMemoryHttpExchangeRepository;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.restclient.RestClientCustomizer;
 import org.springframework.boot.restclient.RestTemplateCustomizer;
 import org.springframework.boot.servlet.actuate.web.exchanges.HttpExchangesFilter;
@@ -62,16 +63,24 @@ import org.springframework.boot.webclient.WebClientCustomizer;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.SpringProperties;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.handler.SimpleUrlHandlerMapping;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import tools.jackson.databind.DefaultTyping;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 
 class BootUiAutoConfigurationTests {
 
@@ -356,6 +365,51 @@ class BootUiAutoConfigurationTests {
     }
 
     @Test
+    void isolatesBootUiJsonFromHostPolymorphicTyping() {
+        webMvcRunnerWithJackson()
+                .withUserConfiguration(PolymorphicMapperConfiguration.class)
+                .withPropertyValues("bootui.enabled=ON")
+                .run(context -> {
+                    MockMvc mvc = MockMvcBuilders.webAppContextSetup(
+                                    (WebApplicationContext) context.getSourceApplicationContext())
+                            .build();
+
+                    mvc.perform(get("/host/payload"))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.values[0]").value("java.util.ImmutableCollections$List12"));
+                    mvc.perform(get("/bootui/api/overview"))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.activeProfiles").isArray())
+                            .andExpect(jsonPath("$.activeProfiles").isEmpty())
+                            .andExpect(jsonPath("$.defaultProfiles").isArray());
+                    mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                                    "/bootui/api/spring/scan"))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.severityCounts").isArray())
+                            .andExpect(jsonPath("$.severityCounts[0].severity").value("CRITICAL"))
+                            .andExpect(jsonPath("$.results").isArray())
+                            .andExpect(jsonPath("$.scan.rulesEvaluated").isNumber());
+                });
+    }
+
+    @Test
+    void isolatesJsonAtCustomBootUiApiPath() {
+        webMvcRunnerWithJackson()
+                .withUserConfiguration(PolymorphicMapperConfiguration.class)
+                .withPropertyValues("bootui.enabled=ON", "bootui.api-path=/internal/console")
+                .run(context -> {
+                    MockMvc mvc = MockMvcBuilders.webAppContextSetup(
+                                    (WebApplicationContext) context.getSourceApplicationContext())
+                            .build();
+
+                    mvc.perform(get("/internal/console/overview"))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.activeProfiles").isArray())
+                            .andExpect(jsonPath("$.activeProfiles").isEmpty());
+                });
+    }
+
+    @Test
     void doesNotRegisterStaticResourceConfigurerWhenInactive() {
         runner.run(context -> assertThat(context).doesNotHaveBean(BootUiStaticResourceConfigurer.class));
     }
@@ -396,6 +450,49 @@ class BootUiAutoConfigurationTests {
                         DispatcherServletAutoConfiguration.class,
                         WebMvcAutoConfiguration.class,
                         BootUiAutoConfiguration.class));
+    }
+
+    private static WebApplicationContextRunner webMvcRunnerWithJackson() {
+        return new WebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        JacksonAutoConfiguration.class,
+                        DispatcherServletAutoConfiguration.class,
+                        WebMvcAutoConfiguration.class,
+                        BootUiAutoConfiguration.class));
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class PolymorphicMapperConfiguration implements WebMvcConfigurer {
+
+        @Bean
+        @Primary
+        JsonMapper jsonMapper() {
+            var validator = BasicPolymorphicTypeValidator.builder()
+                    .allowIfBaseType(Object.class)
+                    .allowIfSubTypeIsArray()
+                    .build();
+            return JsonMapper.builder()
+                    .activateDefaultTyping(validator, DefaultTyping.NON_CONCRETE_AND_ARRAYS)
+                    .build();
+        }
+
+        @Override
+        public void configureMessageConverters(
+                org.springframework.http.converter.HttpMessageConverters.ServerBuilder builder) {
+            builder.withJsonConverter(
+                    new org.springframework.http.converter.json.JacksonJsonHttpMessageConverter(jsonMapper()));
+        }
+
+        @RestController
+        static class HostListController {
+
+            @GetMapping("/host/payload")
+            HostPayload payload() {
+                return new HostPayload(List.of("host-value"));
+            }
+        }
+
+        record HostPayload(List<String> values) {}
     }
 
     private static java.util.Set<String> bootUiResourcePatterns(

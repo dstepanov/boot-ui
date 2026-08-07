@@ -181,12 +181,52 @@ describe('Overview', () => {
     expect(wrapper.text()).toContain('1 high')
   })
 
+  it.each([
+    ['polymorphic collection wrapper', ['java.util.ImmutableCollections$ListN', [{severity: 'HIGH', count: 1}]]],
+    ['null count', [{severity: 'HIGH', count: null}]],
+    ['negative count', [{severity: 'HIGH', count: -1}]],
+    ['unknown severity', [{severity: 'UNKNOWN', count: 1}]]
+  ])('does not turn a malformed %s into a perfect score', async (_description, severityCounts) => {
+    stubFetch({
+      'api/architecture/scan': {
+        scan: {status: 'SCANNED'},
+        severityCounts
+      }
+    })
+    const wrapper = mountOverview({
+      panels: [
+        {id: 'architecture', available: true},
+        {id: 'memory', available: false},
+        {id: 'rest-api', available: false},
+        {id: 'spring', available: false},
+        {id: 'hibernate', available: false},
+        {id: 'security', available: false},
+        {id: 'pentesting', available: false},
+        {id: 'vulnerabilities', available: false},
+        {id: 'github', available: false}
+      ]
+    })
+    await flushPromises()
+
+    const runButton = wrapper.findAll('button').find((button) => button.text().includes('Run scan'))
+    await runButton.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Unable to run Architecture')
+    expect(wrapper.text()).toContain('0 of 1 scanners scored')
+    expect(wrapper.text()).not.toContain('100 / 100')
+  })
+
   it('aggregates scanner scores into the overall score with Run all', async () => {
     stubFetch({
       'api/vulnerabilities/scan': severityReport([{severity: 'CRITICAL', count: 1}]),
       'api/pentesting/scan': severityReport([]),
       'api/architecture/scan': severityReport([]),
+      'api/memory/scan': severityReport([]),
+      'api/rest-api/scan': severityReport([]),
+      'api/spring/scan': severityReport([]),
       'api/hibernate/scan': severityReport([]),
+      'api/security/scan': severityReport([]),
       'api/github/refresh': githubReport({alerts: 0})
     })
     const wrapper = mountOverview(allPanels)

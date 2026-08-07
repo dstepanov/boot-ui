@@ -33,7 +33,7 @@ public class TelemetryStore {
     static final int SELF_TRACE_MEMORY = 4_096;
 
     private final TelemetrySettings settings;
-    private final LinkedHashMap<String, TraceBucket> tracesById;
+    private final LinkedHashMap<String, MutableTraceBucket> tracesById;
 
     /**
      * Trace ids known to belong to BootUI's own API traffic. A trace is remembered here the first
@@ -98,6 +98,9 @@ public class TelemetryStore {
         }
         lock.writeLock().lock();
         try {
+            if (idleSuspended) {
+                return false;
+            }
             String traceId = span.traceId();
             if (selfSpan) {
                 selfTraceIds.put(traceId, Boolean.TRUE);
@@ -107,11 +110,11 @@ public class TelemetryStore {
             if (selfTraceIds.containsKey(traceId)) {
                 return false;
             }
-            TraceBucket bucket = tracesById.remove(traceId);
+            MutableTraceBucket bucket = tracesById.remove(traceId);
             if (bucket == null) {
-                bucket = new TraceBucket(traceId);
+                bucket = new MutableTraceBucket(traceId);
                 while (tracesById.size() >= effectiveMaxTraces()) {
-                    Iterator<Map.Entry<String, TraceBucket>> it =
+                    Iterator<Map.Entry<String, MutableTraceBucket>> it =
                             tracesById.entrySet().iterator();
                     if (!it.hasNext()) {
                         break;
@@ -137,12 +140,13 @@ public class TelemetryStore {
     public List<TraceBucket> recentTraces(int limit) {
         lock.readLock().lock();
         try {
-            List<TraceBucket> ordered = new ArrayList<>(tracesById.values());
-            Collections.reverse(ordered);
-            if (limit > 0 && ordered.size() > limit) {
-                return new ArrayList<>(ordered.subList(0, limit));
+            List<MutableTraceBucket> buckets = new ArrayList<>(tracesById.values());
+            int resultSize = limit > 0 ? Math.min(limit, buckets.size()) : buckets.size();
+            List<TraceBucket> ordered = new ArrayList<>(resultSize);
+            for (int i = buckets.size() - 1; i >= buckets.size() - resultSize; i--) {
+                ordered.add(buckets.get(i).snapshot());
             }
-            return ordered;
+            return List.copyOf(ordered);
         } finally {
             lock.readLock().unlock();
         }
@@ -151,7 +155,8 @@ public class TelemetryStore {
     public TraceBucket findTrace(String traceId) {
         lock.readLock().lock();
         try {
-            return tracesById.get(traceId);
+            MutableTraceBucket bucket = tracesById.get(traceId);
+            return bucket == null ? null : bucket.snapshot();
         } finally {
             lock.readLock().unlock();
         }
@@ -177,7 +182,7 @@ public class TelemetryStore {
         List<NormalizedSpan> out = new ArrayList<>();
         lock.readLock().lock();
         try {
-            for (TraceBucket bucket : tracesById.values()) {
+            for (MutableTraceBucket bucket : tracesById.values()) {
                 out.addAll(bucket.spans);
             }
         } finally {
@@ -215,20 +220,19 @@ public class TelemetryStore {
         idleSuspended = false;
     }
 
-    /**
-     * Holder for a single trace; the spans list is mutated under the store's monitor.
-     */
+    /** Immutable snapshot of a single trace. */
     public static final class TraceBucket {
 
         private final String traceId;
 
         private final List<NormalizedSpan> spans;
 
-        private long lastUpdateEpochNanos;
+        private final long lastUpdateEpochNanos;
 
-        TraceBucket(String traceId) {
+        private TraceBucket(String traceId, List<NormalizedSpan> spans, long lastUpdateEpochNanos) {
             this.traceId = traceId;
-            this.spans = new ArrayList<>();
+            this.spans = List.copyOf(spans);
+            this.lastUpdateEpochNanos = lastUpdateEpochNanos;
         }
 
         public String traceId() {
@@ -241,6 +245,23 @@ public class TelemetryStore {
 
         public long lastUpdateEpochNanos() {
             return lastUpdateEpochNanos;
+        }
+    }
+
+    private static final class MutableTraceBucket {
+
+        private final String traceId;
+
+        private final List<NormalizedSpan> spans = new ArrayList<>();
+
+        private long lastUpdateEpochNanos;
+
+        private MutableTraceBucket(String traceId) {
+            this.traceId = traceId;
+        }
+
+        private TraceBucket snapshot() {
+            return new TraceBucket(traceId, spans, lastUpdateEpochNanos);
         }
     }
 }

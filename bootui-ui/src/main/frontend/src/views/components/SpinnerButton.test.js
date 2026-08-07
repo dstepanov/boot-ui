@@ -16,6 +16,7 @@ describe('SpinnerButton', () => {
     const wrapper = mount(SpinnerButton, {
       props: {loading: true, label: 'Run checks', loadingLabel: 'Running...'}
     })
+    expect(wrapper.get('button').attributes('aria-busy')).toBe('true')
     expect(wrapper.find('.spinner-border').exists()).toBe(true)
     expect(wrapper.text()).toBe('Running...')
   })

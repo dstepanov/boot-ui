@@ -33,7 +33,7 @@ import reactor.core.publisher.Flux;
  * clients actually present and customized.</p>
  */
 @RestController
-@RequestMapping("/bootui/api/rest-client-trace")
+@RequestMapping("${bootui.api-path:/bootui/api}/rest-client-trace")
 public class ReactiveRestClientTraceController {
 
     private final ObjectProvider<RestClientTraceRecorder> recorderProvider;

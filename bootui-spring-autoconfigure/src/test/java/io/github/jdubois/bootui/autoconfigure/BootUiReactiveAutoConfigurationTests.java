@@ -9,6 +9,7 @@ import io.github.jdubois.bootui.autoconfigure.graalvm.GraalVmController;
 import io.github.jdubois.bootui.autoconfigure.memory.MemoryController;
 import io.github.jdubois.bootui.autoconfigure.pentesting.PentestingController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveBootUiExceptionHandler;
+import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveBootUiHandlerAdapter;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveBootUiIndexController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveBootUiStaticResourceConfigurer;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveClaudeCodeController;
@@ -49,6 +50,7 @@ import org.springframework.boot.actuate.audit.AuditEventRepository;
 import org.springframework.boot.actuate.web.exchanges.HttpExchangeRepository;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.http.codec.autoconfigure.CodecsAutoConfiguration;
 import org.springframework.boot.restclient.RestClientCustomizer;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner;
@@ -56,11 +58,18 @@ import org.springframework.boot.webclient.WebClientCustomizer;
 import org.springframework.boot.webflux.actuate.web.exchanges.HttpExchangesWebFilter;
 import org.springframework.boot.webflux.autoconfigure.HttpHandlerAutoConfiguration;
 import org.springframework.boot.webflux.autoconfigure.WebFluxAutoConfiguration;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.test.StepVerifier;
+import tools.jackson.databind.DefaultTyping;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 
 /**
  * Tests for {@link BootUiReactiveAutoConfiguration}: proves the reactive (WebFlux) BootUI entry point
@@ -89,6 +98,7 @@ class BootUiReactiveAutoConfigurationTests {
                         .hasSingleBean(BootUiReactiveAutoConfiguration.class)
                         .hasSingleBean(ReactiveLocalhostOnlyFilter.class)
                         .hasSingleBean(ReactivePanelAccessFilter.class)
+                        .hasSingleBean(ReactiveBootUiHandlerAdapter.class)
                         .hasSingleBean(KafkaActivityRecorder.class)
                         .hasSingleBean(JmsActivityRecorder.class)
                         .hasSingleBean(ReactiveBootUiIndexController.class)
@@ -386,6 +396,56 @@ class BootUiReactiveAutoConfigurationTests {
                             .expectStatus()
                             .isOk();
                 });
+    }
+
+    @Test
+    void isolatesBootUiJsonFromHostPolymorphicTyping() {
+        webFluxRunnerWithJackson()
+                .withUserConfiguration(PolymorphicReactiveMapperConfiguration.class)
+                .withPropertyValues("bootui.enabled=ON", "bootui.allow-non-localhost=true")
+                .run(context -> {
+                    WebTestClient client = authenticatedClient(context);
+
+                    client.get()
+                            .uri("/host/payload")
+                            .exchange()
+                            .expectStatus()
+                            .isOk()
+                            .expectBody()
+                            .jsonPath("$.values[0]")
+                            .isEqualTo("java.util.ImmutableCollections$List12");
+                    client.get()
+                            .uri("/bootui/api/overview")
+                            .exchange()
+                            .expectStatus()
+                            .isOk()
+                            .expectBody()
+                            .jsonPath("$.activeProfiles")
+                            .isArray()
+                            .jsonPath("$.activeProfiles")
+                            .isEmpty()
+                            .jsonPath("$.defaultProfiles")
+                            .isArray();
+                });
+    }
+
+    @Test
+    void isolatesJsonAtCustomBootUiApiPathOnWebFlux() {
+        webFluxRunnerWithJackson()
+                .withUserConfiguration(PolymorphicReactiveMapperConfiguration.class)
+                .withPropertyValues(
+                        "bootui.enabled=ON", "bootui.allow-non-localhost=true", "bootui.api-path=/internal/console")
+                .run(context -> authenticatedClient(context)
+                        .get()
+                        .uri("/internal/console/overview")
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectBody()
+                        .jsonPath("$.activeProfiles")
+                        .isArray()
+                        .jsonPath("$.activeProfiles")
+                        .isEmpty());
     }
 
     @Test
@@ -729,6 +789,53 @@ class BootUiReactiveAutoConfigurationTests {
                         HttpHandlerAutoConfiguration.class,
                         WebFluxAutoConfiguration.class,
                         BootUiReactiveAutoConfiguration.class));
+    }
+
+    private static ReactiveWebApplicationContextRunner webFluxRunnerWithJackson() {
+        return new ReactiveWebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        CodecsAutoConfiguration.class,
+                        HttpHandlerAutoConfiguration.class,
+                        WebFluxAutoConfiguration.class,
+                        BootUiReactiveAutoConfiguration.class));
+    }
+
+    private static WebTestClient authenticatedClient(ApplicationContext context) {
+        return WebTestClient.bindToApplicationContext(context)
+                .configureClient()
+                .defaultHeader(
+                        "Authorization",
+                        "Bearer "
+                                + context.getBean(io.github.jdubois.bootui.engine.safety.ApiTokenAuthenticator.class)
+                                        .token())
+                .build();
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class PolymorphicReactiveMapperConfiguration {
+
+        @Bean
+        @Primary
+        JsonMapper jsonMapper() {
+            var validator = BasicPolymorphicTypeValidator.builder()
+                    .allowIfBaseType(Object.class)
+                    .allowIfSubTypeIsArray()
+                    .build();
+            return JsonMapper.builder()
+                    .activateDefaultTyping(validator, DefaultTyping.NON_CONCRETE_AND_ARRAYS)
+                    .build();
+        }
+
+        @RestController
+        static class HostListController {
+
+            @GetMapping("/host/payload")
+            HostPayload payload() {
+                return new HostPayload(List.of("host-value"));
+            }
+        }
+
+        record HostPayload(List<String> values) {}
     }
 
     /**

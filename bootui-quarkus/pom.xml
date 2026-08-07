@@ -7,7 +7,7 @@
     <parent>
         <groupId>com.julien-dubois.bootui</groupId>
         <artifactId>bootui-quarkus-parent</artifactId>
-        <version>1.13.0</version>
+        <version>1.13.1</version>
         <relativePath>../bootui-quarkus-parent/pom.xml</relativePath>
     </parent>
 
@@ -254,10 +254,10 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Unit-test deps (quarkus-bom managed). The runtime module carries a small same-package unit test for
-             QuarkusHealthProvider.map(), which needs SmallRye's jakarta.json API + the Parsson implementation —
-             both already on the test classpath via the provided smallrye-health dependency above. Keeping the
-             test in this module (rather than an integration-test module) avoids a split-package across archives. -->
+        <!-- Unit-test deps (quarkus-bom managed). Same-package white-box tests stay in this runtime module
+             rather than an integration-test module so Quarkus augmentation never sees split packages across
+             application archives. QuarkusHealthProviderTest also needs SmallRye's jakarta.json API + the
+             Parsson implementation, both already supplied on the test classpath by smallrye-health above. -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -266,6 +266,11 @@
         <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -354,6 +359,9 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <forkCount>1</forkCount>
+                    <systemPropertyVariables>
+                        <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>

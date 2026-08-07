@@ -25,9 +25,8 @@ import org.mockito.ArgumentCaptor;
 /**
  * White-box binding tests for {@link QuarkusPanelAccessFilter}, mirroring the Spring adapter's
  * {@code PanelAccessFilterTests} scenario-for-scenario at behavioral parity (same config keys, same
- * canonical JSON 403 shape and reason strings). Lives in the integration-tests module (same package as
- * the runtime class) because Mockito is only a test dependency there, matching
- * {@link BootUiQuarkusSafetyFilterTest}'s convention.
+ * canonical JSON 403 shape and reason strings), matching {@link BootUiQuarkusSafetyFilterTest}'s
+ * convention.
  */
 class QuarkusPanelAccessFilterTest {
 
