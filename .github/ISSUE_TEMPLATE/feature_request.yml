@@ -2,6 +2,19 @@ name: Feature request
 description: Suggest an idea for BootUI
 labels: [ enhancement, triage ]
 body:
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Target platform
+      description: Select every adapter this request should cover.
+      multiple: true
+      options:
+        - Spring MVC
+        - Spring WebFlux
+        - Quarkus
+        - Shared engine or UI (all adapters)
+    validations:
+      required: true
   - type: textarea
     id: problem
     attributes:

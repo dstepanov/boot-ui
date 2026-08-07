@@ -1,5 +1,6 @@
 package io.github.jdubois.bootui.quarkus;
 
+import io.github.jdubois.bootui.engine.panel.BootUiGlobalWritePolicy;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels.Panel;
 import io.quarkus.vertx.http.runtime.filters.Filters;
@@ -66,6 +67,15 @@ public class QuarkusPanelAccessFilter {
             return;
         }
 
+        String method = rc.request().method().name();
+        if (!SAFE_METHODS.contains(method) && accessConfig.isGlobalReadOnly()) {
+            var globalSubject = BootUiGlobalWritePolicy.subjectFor(apiRelativePath);
+            if (globalSubject.isPresent()) {
+                writeBlockedResponse(rc, globalSubject.get(), accessConfig.panelReadOnlyReason(globalSubject.get()));
+                return;
+            }
+        }
+
         Panel panel = BootUiPanels.byApiPath(apiRelativePath).orElse(null);
         if (panel == null) {
             rc.next();
@@ -77,7 +87,6 @@ public class QuarkusPanelAccessFilter {
             return;
         }
 
-        String method = rc.request().method().name();
         if (panel.actionCapable() && !SAFE_METHODS.contains(method) && accessConfig.isPanelReadOnly(panel.id())) {
             writeBlockedResponse(rc, panel.id(), accessConfig.panelReadOnlyReason(panel.id()));
             return;

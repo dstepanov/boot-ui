@@ -43,7 +43,7 @@ describe('StreamStatusIndicator', () => {
 
   it('uses one persistent live region instead of announcing the visible chip twice', () => {
     const wrapper = render('unavailable')
-    const liveRegions = wrapper.findAll('[role="status"][aria-live="polite"]')
+    const liveRegions = wrapper.findAll('.stream-status-announcement[role="status"][aria-live="polite"]')
     expect(liveRegions).toHaveLength(1)
     expect(liveRegions[0].classes()).toContain('visually-hidden')
     expect(wrapper.find('.stream-status-indicator').attributes('role')).toBeUndefined()

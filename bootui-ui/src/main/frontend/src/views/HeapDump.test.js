@@ -43,6 +43,7 @@ describe('HeapDump', () => {
   })
 
   afterEach(() => {
+    document.cookie = 'XSRF-TOKEN=; Max-Age=0; path=/'
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
@@ -96,5 +97,35 @@ describe('HeapDump', () => {
 
     expect(wrapper.text()).toContain('java.lang.String')
     expect(wrapper.text()).not.toContain('No classes match the current filter')
+  })
+
+  it('retains the histogram and shows a warning when another heap action is active', async () => {
+    const busy = {
+      error: 'BootUI action already in progress',
+      operation: 'heap-dump.analyze',
+      activeOperation: 'heap-dump.capture',
+      message: "Operation 'heap-dump.analyze' cannot start while 'heap-dump.capture' is in progress."
+    }
+    document.cookie = 'XSRF-TOKEN=test-token; path=/'
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(heapReport()))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(busy), {status: 409, headers: {'Content-Type': 'application/json'}})
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = mount(HeapDump)
+    await flushPromises()
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Analyze live heap'))
+      .trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('java.lang.String')
+    expect(wrapper.text()).toContain(busy.message)
+    expect(wrapper.find('[role="status"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Unable to run heap dump action')
   })
 })

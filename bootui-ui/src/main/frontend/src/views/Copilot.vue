@@ -1,12 +1,13 @@
 <script setup>
 import {apiFetch, getJson} from '../api.js'
-import {computed, ref, watch} from 'vue'
+import {computed, nextTick, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import {formatClockTime, formatNumber} from '../utils/format.js'
 import {describeLoadError, formatLoadError} from '../utils/loadError.js'
 import {useAutoRefresh} from '../utils/useAutoRefresh.js'
 import PanelHeader from './components/PanelHeader.vue'
 import PanelSkeleton from './components/PanelSkeleton.vue'
+import ProgressBar from './components/ProgressBar.vue'
 
 const route = useRoute()
 const panelConfigs = {
@@ -68,6 +69,7 @@ const categories = [
   'FALLBACK',
   'OTHER'
 ]
+const detailTabs = ['activity', 'turns', 'failures']
 
 const sessions = computed(() => sessionList.value?.sessions ?? [])
 const available = computed(() => sessionList.value?.available !== false)
@@ -447,6 +449,36 @@ function showFailures() {
   textFilter.value = ''
 }
 
+function detailTabId(tab) {
+  return `session-detail-${tab}-tab`
+}
+
+function detailPanelId(tab) {
+  return `session-detail-${tab}-panel`
+}
+
+function activateDetailTab(tab) {
+  if (tab === 'activity') showActivity(categoryFilter.value)
+  if (tab === 'turns') showTurns()
+  if (tab === 'failures') showFailures()
+}
+
+async function onDetailTabKeydown(event, currentTab) {
+  const currentIndex = detailTabs.indexOf(currentTab)
+  let targetIndex
+  if (event.key === 'ArrowRight') targetIndex = (currentIndex + 1) % detailTabs.length
+  else if (event.key === 'ArrowLeft') targetIndex = (currentIndex - 1 + detailTabs.length) % detailTabs.length
+  else if (event.key === 'Home') targetIndex = 0
+  else if (event.key === 'End') targetIndex = detailTabs.length - 1
+  else return
+
+  event.preventDefault()
+  const targetTab = detailTabs[targetIndex]
+  activateDetailTab(targetTab)
+  await nextTick()
+  document.getElementById(detailTabId(targetTab))?.focus()
+}
+
 async function revealRaw(event) {
   if (rawById.value[event.id] !== undefined) {
     rawById.value = {...rawById.value, [event.id]: undefined}
@@ -743,9 +775,12 @@ watch(
                       <span class="fw-semibold">{{ row.label }}</span>
                       <span class="text-muted">{{ formatNumber(row.count) }} · {{ row.percent }}%</span>
                     </div>
-                    <div class="progress metric-progress" role="progressbar" :aria-valuenow="row.percent">
-                      <div class="progress-bar" :style="{width: row.percent + '%'}"></div>
-                    </div>
+                    <ProgressBar
+                      :label="`${row.label} event share`"
+                      :value="row.percent"
+                      :value-text="`${row.percent}% of events`"
+                      class="metric-progress"
+                    />
                   </div>
                 </div>
               </div>
@@ -765,9 +800,14 @@ watch(
                     class="d-flex align-items-center gap-2 mb-2"
                   >
                     <code class="tool-label">{{ tool.label }}</code>
-                    <div class="progress flex-grow-1 metric-progress" role="progressbar" :aria-valuenow="tool.percent">
-                      <div class="progress-bar bg-dark" :style="{width: Math.max(4, tool.percent) + '%'}"></div>
-                    </div>
+                    <ProgressBar
+                      bar-class="bg-dark"
+                      class="flex-grow-1 metric-progress"
+                      :label="`${tool.label} tool event share`"
+                      :min-visible-percent="4"
+                      :value="tool.percent"
+                      :value-text="`${tool.percent}% of events`"
+                    />
                     <span class="small text-muted">{{ formatNumber(tool.count) }}</span>
                   </div>
                   <div v-if="dashboard?.otherToolEventCount" class="small text-muted mt-2">
@@ -787,9 +827,14 @@ watch(
                       <span class="text-truncate">{{ model.label }}</span>
                       <span class="text-muted">{{ formatNumber(model.count) }}</span>
                     </div>
-                    <div class="progress metric-progress" role="progressbar" :aria-valuenow="model.percent">
-                      <div class="progress-bar bg-info" :style="{width: Math.max(4, model.percent) + '%'}"></div>
-                    </div>
+                    <ProgressBar
+                      bar-class="bg-info"
+                      :label="`${model.label} session share`"
+                      :min-visible-percent="4"
+                      :value="model.percent"
+                      :value-text="`${model.percent}% of sessions`"
+                      class="metric-progress"
+                    />
                   </div>
                 </div>
               </div>
@@ -1025,33 +1070,48 @@ watch(
                 <ul class="nav nav-tabs mb-3" role="tablist">
                   <li class="nav-item">
                     <button
+                      :id="detailTabId('activity')"
+                      :aria-controls="detailPanelId('activity')"
+                      :aria-selected="activeDetailTab === 'activity'"
                       :class="{active: activeDetailTab === 'activity'}"
+                      :tabindex="activeDetailTab === 'activity' ? 0 : -1"
                       class="nav-link"
                       role="tab"
                       type="button"
-                      @click="showActivity(categoryFilter)"
+                      @click="activateDetailTab('activity')"
+                      @keydown="onDetailTabKeydown($event, 'activity')"
                     >
                       Activity feed
                     </button>
                   </li>
                   <li class="nav-item">
                     <button
+                      :id="detailTabId('turns')"
+                      :aria-controls="detailPanelId('turns')"
+                      :aria-selected="activeDetailTab === 'turns'"
                       :class="{active: activeDetailTab === 'turns'}"
+                      :tabindex="activeDetailTab === 'turns' ? 0 : -1"
                       class="nav-link"
                       role="tab"
                       type="button"
-                      @click="showTurns()"
+                      @click="activateDetailTab('turns')"
+                      @keydown="onDetailTabKeydown($event, 'turns')"
                     >
                       Turn story
                     </button>
                   </li>
                   <li class="nav-item">
                     <button
+                      :id="detailTabId('failures')"
+                      :aria-controls="detailPanelId('failures')"
+                      :aria-selected="activeDetailTab === 'failures'"
                       :class="{active: activeDetailTab === 'failures'}"
+                      :tabindex="activeDetailTab === 'failures' ? 0 : -1"
                       class="nav-link"
                       role="tab"
                       type="button"
-                      @click="showFailures()"
+                      @click="activateDetailTab('failures')"
+                      @keydown="onDetailTabKeydown($event, 'failures')"
                     >
                       Failures
                       <span v-if="detail.counts.errors" class="badge text-bg-danger ms-1">{{
@@ -1062,7 +1122,14 @@ watch(
                 </ul>
 
                 <div class="tab-content">
-                  <div v-if="activeDetailTab === 'activity'" class="tab-pane active" role="tabpanel">
+                  <div
+                    v-show="activeDetailTab === 'activity'"
+                    :id="detailPanelId('activity')"
+                    :aria-labelledby="detailTabId('activity')"
+                    class="tab-pane active"
+                    role="tabpanel"
+                    tabindex="0"
+                  >
                     <div v-if="filteredEvents.length === 0" class="text-muted small">No events match this filter.</div>
                     <ul v-else class="list-group">
                       <li v-for="event in filteredEvents" :key="event.id" class="list-group-item">
@@ -1097,7 +1164,14 @@ watch(
                     </ul>
                   </div>
 
-                  <div v-else-if="activeDetailTab === 'turns'" class="tab-pane active" role="tabpanel">
+                  <div
+                    v-show="activeDetailTab === 'turns'"
+                    :id="detailPanelId('turns')"
+                    :aria-labelledby="detailTabId('turns')"
+                    class="tab-pane active"
+                    role="tabpanel"
+                    tabindex="0"
+                  >
                     <div v-if="!detail.turns || detail.turns.length === 0" class="text-muted small">
                       No turn information available.
                     </div>
@@ -1120,7 +1194,14 @@ watch(
                     </ol>
                   </div>
 
-                  <div v-else-if="activeDetailTab === 'failures'" class="tab-pane active" role="tabpanel">
+                  <div
+                    v-show="activeDetailTab === 'failures'"
+                    :id="detailPanelId('failures')"
+                    :aria-labelledby="detailTabId('failures')"
+                    class="tab-pane active"
+                    role="tabpanel"
+                    tabindex="0"
+                  >
                     <div v-if="failureEvents.length === 0" class="text-muted small">No failures recorded.</div>
                     <ul v-else class="list-group">
                       <li v-for="event in failureEvents" :key="event.id" class="list-group-item">
@@ -1300,6 +1381,13 @@ watch(
   inset: 0;
   position: absolute;
   z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-tooltip {
+    transform: translateX(-50%);
+    transition: none;
+  }
 }
 
 .session-row-target:focus-visible {

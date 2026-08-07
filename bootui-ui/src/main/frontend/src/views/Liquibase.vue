@@ -155,11 +155,11 @@ onMounted(load)
       </div>
 
       <div v-for="db in databases" :key="db.name" class="card mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
           <span>
-            <i class="bi bi-database me-1"></i><code>{{ db.name }}</code>
+            <i class="bi bi-database me-1"></i><code class="bootui-break-anywhere">{{ db.name }}</code>
           </span>
-          <span>
+          <span class="d-flex flex-wrap align-items-center gap-1">
             <span class="badge bg-success me-1">{{ db.applied }} applied</span>
             <span v-if="db.pending > 0" class="badge bg-warning text-dark">{{ db.pending }} pending</span>
           </span>
@@ -181,38 +181,46 @@ onMounted(load)
           </div>
         </div>
         <div class="card-body p-0">
-          <table class="table table-sm table-hover mb-0">
-            <thead>
-              <tr>
-                <th style="width: 60px">#</th>
-                <th>Id</th>
-                <th>Author</th>
-                <th>Change log</th>
-                <th>Exec type</th>
-                <th>Executed</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="c in db.changeSets" :key="c.changeLog + '-' + c.id + '-' + c.author + '-' + c.execType">
-                <td class="small text-muted">{{ c.orderExecuted != null ? c.orderExecuted : '—' }}</td>
-                <td>
-                  <code>{{ c.id }}</code>
-                  <span v-if="c.tag" class="badge bg-primary ms-1">{{ c.tag }}</span>
-                  <div v-if="c.description" class="small text-muted">{{ c.description }}</div>
-                </td>
-                <td class="small">{{ c.author }}</td>
-                <td class="small">
-                  <code>{{ c.changeLog }}</code>
-                </td>
-                <td>
-                  <span :class="execClass(c.execType)" class="badge">{{ c.execType }}</span>
-                </td>
-                <td class="small">{{ c.dateExecuted || '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-responsive bootui-table-scroll">
+            <table class="table table-sm table-hover mb-0 bootui-data-table liquibase-changesets-table">
+              <thead>
+                <tr>
+                  <th style="width: 60px">#</th>
+                  <th>Id</th>
+                  <th>Author</th>
+                  <th>Change log</th>
+                  <th>Exec type</th>
+                  <th>Executed</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="c in db.changeSets" :key="c.changeLog + '-' + c.id + '-' + c.author + '-' + c.execType">
+                  <td class="small text-muted">{{ c.orderExecuted != null ? c.orderExecuted : '—' }}</td>
+                  <td>
+                    <code class="bootui-break-anywhere">{{ c.id }}</code>
+                    <span v-if="c.tag" class="badge bg-primary ms-1">{{ c.tag }}</span>
+                    <div v-if="c.description" class="small text-muted">{{ c.description }}</div>
+                  </td>
+                  <td class="small">{{ c.author }}</td>
+                  <td class="small">
+                    <code class="bootui-break-anywhere">{{ c.changeLog }}</code>
+                  </td>
+                  <td>
+                    <span :class="execClass(c.execType)" class="badge">{{ c.execType }}</span>
+                  </td>
+                  <td class="small">{{ c.dateExecuted || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </template>
   </div>
 </template>
+
+<style scoped>
+.liquibase-changesets-table {
+  --bootui-table-min-width: 48rem;
+}
+</style>

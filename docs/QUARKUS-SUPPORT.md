@@ -50,66 +50,55 @@ The coupling that remains is concentrated in: the web layer (`@RestController`),
 `Environment` data readers, the servlet safety filters, and the `EnvironmentPostProcessor`-based config plumbing. That is
 exactly the surface the SPI seam abstracts.
 
-## 3. Target module topology
+## 3. Current module topology
 
-> **Update (post-merge):** the `bootui-spi` module described below was ultimately **folded into `bootui-engine`** as the
-> `io.github.jdubois.bootui.spi` package, leaving three shared modules (`bootui-core`, `bootui-engine`, `bootui-conformance`).
-> The SPI interfaces, providers, and the framework-neutral boundary (now pinned by `SpiBoundaryArchitectureTests` inside
-> `bootui-engine`) are unchanged — only the module/POM boundary went away. Read every `bootui-spi` mention below as "the
-> `spi` package within `bootui-engine`".
-
-Current modules and their proposed roles:
+Current modules and their roles:
 
 ```
 SHARED (framework-neutral, built once, reused by both backends)
-  bootui-core            DTO records, SecretMasker, BootUiInfo               (unchanged — already Spring-free)
-  bootui-spi             NEW: small interfaces per data-source category
-  bootui-engine          NEW: framework-neutral services & advisor engines,
-                         OSV scanner, OTLP/TelemetryStore, dependency catalog,
-                         JVM/MXBean readers, scoring, MCP server
-                         (depends on: bootui-core, bootui-spi)
-  bootui-ui              Vue 3 SPA + REST contract                            (unchanged — built once)
+  bootui-core                    DTO records, SecretMasker, BootUiInfo
+  bootui-engine                  Framework-neutral services, advisors, and io.github.jdubois.bootui.spi ports
+  bootui-conformance             Shared HTTP contract suite and golden panel manifests
+  bootui-ui                      Vue 3 SPA, built once
 
 SPRING ADAPTER
-  bootui-spring-autoconfigure        Spring MVC controllers (thin) + SPI impls over
-                              Actuator/ApplicationContext/Environment +
-                              servlet safety filters + EnvironmentPostProcessors
-  bootui-spring-boot-starter  Drop-in starter                                 (unchanged role)
-  bootui-spring-sample-app           Demo/integration app + Playwright e2e           (unchanged)
+  bootui-spring-autoconfigure        Shared Spring MVC/WebFlux auto-configuration, endpoints, SPI implementations, and safety
+  bootui-spring-boot-starter         Drop-in Spring MVC starter
+  bootui-spring-boot-starter-reactive
+                                     Drop-in Spring WebFlux starter
+  bootui-spring-sample-app           Spring MVC demo/integration app + Playwright e2e
+  bootui-spring-webflux-sample-app   Spring WebFlux demo/conformance app
 
 QUARKUS ADAPTER
-  bootui-quarkus              NEW (runtime): JAX-RS/Vert.x resources (thin) +
-                              SPI impls over SmallRye/Arc/Micrometer/Agroal/
-                              JBoss LogManager + Vert.x safety handler
-  bootui-quarkus-deployment   NEW (deployment): @BuildStep wiring, dev-mode-only
-                              activation, route + reflection registration
-  bootui-quarkus-sample-app   NEW: demo/integration app + parallel Playwright e2e (§8)
+  bootui-quarkus-parent              Shared Quarkus LTS BOM and plugin management
+  bootui-quarkus                     Runtime JAX-RS/Vert.x resources, SPI implementations, and safety filters
+  bootui-quarkus-deployment          Build-time wiring, capability gates, and production-dark activation
+  bootui-quarkus-integration-tests   Docker-free @QuarkusTest conformance and smoke tests
+  bootui-quarkus-sample-app          Demo/integration app
 ```
 
-Dependency direction (both adapters depend on the shared modules; the shared modules never depend on a framework):
+Dependency direction is one-way: `bootui-engine` depends on `bootui-core`; both adapters depend on the shared modules;
+the shared modules never depend on Spring, Quarkus, servlet, JAX-RS, Vert.x, or either framework's JSON library. The
+neutral SPI remains the `io.github.jdubois.bootui.spi` package inside `bootui-engine`.
 
 ```
-        bootui-core  ◄── bootui-spi  ◄── bootui-engine
-             ▲                ▲               ▲
-             │                │               │
-   ┌─────────┴───────┐  ┌─────┴───────────────┴─────┐
-   │ bootui-          │  │ bootui-quarkus            │
-   │ autoconfigure    │  │ (+ -deployment)           │
-   │ (Spring adapter) │  │ (Quarkus adapter)         │
-   └──────────────────┘  └───────────────────────────┘
+bootui-core ◄── bootui-engine ◄── Spring and Quarkus adapters
+      ▲                ▲
+      └────────────────┘
 
-   bootui-ui  ── built once, packaged into whichever adapter serves /bootui/
+bootui-ui           built once and packaged for each adapter
+bootui-conformance  exercises the same HTTP contract against each adapter
 ```
 
 ### How the web layer stays mostly shared
 
-Spring MVC and JAX-RS annotations are incompatible, so the _controllers themselves_ cannot be one class. The fix is to
-keep controllers **thin** and push all logic into shared `bootui-engine` services:
+Spring MVC/WebFlux and JAX-RS annotations are incompatible, so their adapter-specific bindings cannot be one class. The
+fix is to keep bindings **thin** and push all logic into shared `bootui-engine` services:
 
 ```
 Spring:   @RestController BeansController ─┐
                                            ├─► (shared) service in bootui-engine ─► DTO from bootui-core
-Quarkus:  @Path JAX-RS resource ───────────┘         (calls a bootui-spi provider for raw data)
+Quarkus:  @Path JAX-RS resource ───────────┘         (calls an SPI provider for raw data)
 ```
 
 Most BootUI controllers are already shaped this way (e.g. `ArchitectureController` → `ArchitectureScanner`,
@@ -157,9 +146,10 @@ panel-access filter).
 
 ## 5. The Quarkus panel set
 
-The console keeps a single `routes.js`. The backend's `/bootui/api/panels` manifest declares, per panel, whether it is
-**supported on this platform** (hidden when not) versus **available** (shown, possibly read-only). This is a small
-extension of the mechanism `App.vue` already uses, so the same UI build renders the correct sidebar on each backend.
+The console keeps a single `routes.js`. For every route, the backend's `/bootui/api/panels` manifest returns a
+`PanelDto`: `available` reports whether the adapter can currently serve the panel, and `unavailableReason` explains why
+when it cannot. The separate `enabled`, `readOnly`, and `readOnlyReason` fields describe operator policy. `App.vue` uses
+those fields so the same UI build renders the correct sidebar and status on each backend.
 
 > **Implementation status (current).** The Quarkus adapter now lights up the large majority of the panel set — all of
 > §5.1 and §5.2 below, plus the advisors (Architecture, the Quarkus application advisor replacing Spring, Hibernate,
@@ -173,6 +163,11 @@ extension of the mechanism `App.vue` already uses, so the same UI build renders 
 > intentionally unavailable with a panel-specific not-applicable reason (§5.5). **JMS** is the sole panel that is not yet
 > available on Quarkus (§5.6). The per-panel `**Implemented**` markers below and `docs/FEATURES.md` carry the authoritative,
 > current per-platform detail.
+>
+> Expensive advisor actions also share Spring's per-scanner single-flight contract: overlapping Architecture,
+> Quarkus-application, Hibernate, Memory, Security, Pentesting, REST API, and Vulnerabilities/OSV scans fail fast with
+> the canonical JSON `409` response, while Heap Dump capture/analyze/delete share one mutation-domain admission. MCP
+> returns the same busy message in-band, and passive reads continue serving the last completed report.
 
 ### 5.1 Ported as-is — framework-agnostic or same library (17)
 
@@ -477,7 +472,8 @@ Pentesting, HTTP Probe, MCP Server) need no special ingredients — they work ag
 
 ## 9. Phased delivery
 
-1. **Phase 0 — Refactor in place (no behavior change).** Introduce `bootui-spi` and `bootui-engine`; move
+1. **Phase 0 — Refactor in place (no behavior change).** Introduce `bootui-engine` and its
+   `io.github.jdubois.bootui.spi` package; move
    framework-neutral services and advisor engines out of `bootui-spring-autoconfigure`; reimplement the Spring controllers as
    thin bindings over the shared services; extract `LocalhostGuard`. Spring BootUI must stay green (all existing JUnit,
    Vitest, and Playwright suites pass) — this phase ships value even without Quarkus.

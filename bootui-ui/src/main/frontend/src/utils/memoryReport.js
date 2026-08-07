@@ -93,7 +93,7 @@ export function useMemoryReport({endpoint = 'api/live-memory', tuningInputs = fa
     })
   }
 
-  const {autoRefresh, loading, initialLoading, load} = useAutoRefresh(fetchMemory)
+  const {autoRefresh, loading, hasLoaded, initialLoading, load} = useAutoRefresh(fetchMemory)
 
   onBeforeUnmount(() => {
     if (debounceHandle) clearTimeout(debounceHandle)
@@ -110,6 +110,7 @@ export function useMemoryReport({endpoint = 'api/live-memory', tuningInputs = fa
     kubernetesActuatorEnabled,
     autoRefresh,
     loading,
+    hasLoaded,
     initialLoading,
     load
   }

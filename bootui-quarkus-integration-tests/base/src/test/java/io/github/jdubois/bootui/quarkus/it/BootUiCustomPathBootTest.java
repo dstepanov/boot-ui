@@ -2,6 +2,8 @@ package io.github.jdubois.bootui.quarkus.it;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.jdubois.bootui.conformance.AbstractBootUiApiConformanceTest;
+import io.github.jdubois.bootui.conformance.BootUiApiContractCatalog.Runtime;
 import io.github.jdubois.bootui.conformance.BootUiHttpProbe;
 import io.github.jdubois.bootui.conformance.BootUiHttpProbe.Response;
 import io.quarkus.test.common.http.TestHTTPResource;
@@ -10,13 +12,14 @@ import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import java.net.URL;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @TestProfile(BootUiCustomPathBootTest.CustomPathProfile.class)
-class BootUiCustomPathBootTest {
+class BootUiCustomPathBootTest extends AbstractBootUiApiConformanceTest {
 
     private static final Pattern ASSET = Pattern.compile("(?:src|href)=\"\\./(assets/[^\"]+)\"");
 
@@ -26,6 +29,36 @@ class BootUiCustomPathBootTest {
     private BootUiHttpProbe probe() {
         String serverRoot = baseUrl.getProtocol() + "://" + baseUrl.getHost() + ":" + baseUrl.getPort();
         return new BootUiHttpProbe(serverRoot);
+    }
+
+    @Override
+    protected String baseUrl() {
+        return baseUrl.getProtocol() + "://" + baseUrl.getHost() + ":" + baseUrl.getPort();
+    }
+
+    @Override
+    protected String expectedPanelsResource() {
+        return "/io/github/jdubois/bootui/conformance/expected-panels-quarkus.json";
+    }
+
+    @Override
+    protected Runtime runtime() {
+        return Runtime.QUARKUS;
+    }
+
+    @Override
+    protected Set<String> actionlessPanels() {
+        return Set.of("config");
+    }
+
+    @Override
+    protected String uiPath() {
+        return "/host/dev-console";
+    }
+
+    @Override
+    protected String apiPath() {
+        return "/host/internal/bootui-api";
     }
 
     @Test
@@ -94,7 +127,12 @@ class BootUiCustomPathBootTest {
             return Map.of(
                     "quarkus.http.root-path", "/host",
                     "bootui.path", "/dev-console/",
-                    "bootui.api-path", "/internal/bootui-api/");
+                    "bootui.api-path", "/internal/bootui-api/",
+                    "bootui.panels.copilot.enabled", "false",
+                    "bootui.panels.heap-dump.read-only", "true",
+                    "bootui.heap-dump.capture-enabled", "false",
+                    "bootui.claude-code.enabled", "OFF",
+                    "bootui.conformance.api-token", "conformance-raw-secret-value");
         }
     }
 }

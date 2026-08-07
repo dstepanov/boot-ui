@@ -5,9 +5,12 @@ import {formatDuration, formatNumber, formatRelative, formatTime} from '../utils
 import {describeLoadError, formatLoadError} from '../utils/loadError.js'
 import {useCopyToClipboard} from '../utils/useCopyToClipboard'
 import {useAutoRefresh} from '../utils/useAutoRefresh.js'
+import {useDataState} from '../utils/panelState.js'
 import AiSetupChecklist from './components/AiSetupChecklist.vue'
+import FlashBanner from './components/FlashBanner.vue'
 import PanelHeader from './components/PanelHeader.vue'
 import PanelSkeleton from './components/PanelSkeleton.vue'
+import ProgressBar from './components/ProgressBar.vue'
 
 const overview = ref(null)
 const series = ref(null)
@@ -16,6 +19,9 @@ const error = ref(null)
 const selectedSpanId = ref(null)
 const detailLoading = ref(false)
 const lastUpdated = ref(null)
+const partialWarning = ref(null)
+let tokenSeriesRequest = 0
+let detailRequest = 0
 
 const panels = inject('panels', ref(null))
 const platform = computed(() => panels.value?.platform ?? 'spring-boot')
@@ -28,14 +34,33 @@ const isStale = computed(() => {
 async function fetchAiUsage() {
   error.value = null
   try {
-    const [ovRes, tsRes] = await Promise.all([
+    const requestedWindow = windowMinutes.value
+    const requestId = ++tokenSeriesRequest
+    const [overviewResult, tokenResult] = await Promise.allSettled([
       apiFetch('api/ai/overview'),
-      apiFetch(`api/ai/tokens?minutes=${windowMinutes.value}`)
+      apiFetch(`api/ai/tokens?minutes=${requestedWindow}`)
     ])
+    if (overviewResult.status === 'rejected') throw overviewResult.reason
+    const ovRes = overviewResult.value
     if (!ovRes.ok) throw new Error(`HTTP ${ovRes.status}`)
     overview.value = await ovRes.json()
-    if (tsRes.ok) {
-      series.value = await tsRes.json()
+
+    if (requestId === tokenSeriesRequest) {
+      if (tokenResult.status === 'rejected') {
+        setTokenPartialWarning()
+      } else if (!tokenResult.value.ok) {
+        setTokenPartialWarning(`HTTP ${tokenResult.value.status}`)
+      } else {
+        try {
+          const nextSeries = await tokenResult.value.json()
+          if (requestId === tokenSeriesRequest && requestedWindow === windowMinutes.value) {
+            series.value = nextSeries
+            partialWarning.value = null
+          }
+        } catch {
+          if (requestId === tokenSeriesRequest) setTokenPartialWarning('invalid response')
+        }
+      }
     }
     lastUpdated.value = Date.now()
   } catch (e) {
@@ -43,7 +68,26 @@ async function fetchAiUsage() {
   }
 }
 
-const {autoRefresh, loading, initialLoading, load} = useAutoRefresh(fetchAiUsage)
+const {autoRefresh, loading, hasLoaded, initialLoading, load} = useAutoRefresh(fetchAiUsage)
+const panelState = useDataState({
+  loading,
+  loaded: hasLoaded,
+  error,
+  hasData: computed(() => overview.value !== null),
+  partial: computed(() => partialWarning.value !== null)
+})
+const dataStatusMessage = computed(() => {
+  if (panelState.stale.value) {
+    return {text: 'AI usage could not be refreshed. Showing the last successful snapshot.', type: 'warning'}
+  }
+  if (panelState.partialSuccess.value) {
+    return {text: `Partial AI usage data. ${partialWarning.value}`, type: 'warning'}
+  }
+  if (isStale.value) {
+    return {text: 'Auto-refresh is off. This AI usage snapshot may be stale.', type: 'warning'}
+  }
+  return null
+})
 
 function exportCsv() {
   const rows = filteredChats.value
@@ -90,15 +134,21 @@ function exportCsv() {
 }
 
 async function openChat(spanId) {
+  const requestId = ++detailRequest
   selectedSpanId.value = spanId
   detail.value = null
   detailLoading.value = true
   try {
-    detail.value = await getJson(`api/ai/chats/${spanId}`)
+    const nextDetail = await getJson(`api/ai/chats/${spanId}`)
+    if (requestId === detailRequest && selectedSpanId.value === spanId) {
+      detail.value = nextDetail
+    }
   } catch (e) {
-    detail.value = {error: formatLoadError(e, 'Unable to load AI chat details')}
+    if (requestId === detailRequest && selectedSpanId.value === spanId) {
+      detail.value = {error: formatLoadError(e, 'Unable to load AI chat details')}
+    }
   } finally {
-    detailLoading.value = false
+    if (requestId === detailRequest) detailLoading.value = false
   }
 }
 
@@ -111,8 +161,10 @@ function toggleChat(spanId) {
 }
 
 function closeDrawer() {
+  detailRequest += 1
   selectedSpanId.value = null
   detail.value = null
+  detailLoading.value = false
 }
 
 const tableSearch = ref('')
@@ -213,8 +265,7 @@ const miniTimeline = computed(() => {
   }
 
   const bars = []
-  // base chat span bar
-  bars.push({x: 0, w: width, y: baseY, h: barH, color: '#dee2e6', title: 'Chat span'})
+  bars.push({x: 0, w: width, y: baseY, h: barH, color: 'var(--bootui-chart-span)', title: 'Chat span'})
 
   const children = []
   if (detail.value.toolCalls) {
@@ -226,7 +277,7 @@ const miniTimeline = computed(() => {
           w: Math.max(2, toX(tc.durationNanos)),
           y: baseY,
           h: barH,
-          color: '#0d6efd',
+          color: 'var(--bootui-chart-tool)',
           title: `${tc.name || 'tool'} ${(tc.durationNanos / 1_000_000).toFixed(1)}ms`
         })
       }
@@ -241,7 +292,7 @@ const miniTimeline = computed(() => {
           w: Math.max(2, toX(vo.durationNanos)),
           y: baseY,
           h: barH,
-          color: '#fd7e14',
+          color: 'var(--bootui-chart-vector)',
           title: `${vo.operation || 'vector'} ${(vo.durationNanos / 1_000_000).toFixed(1)}ms`
         })
       }
@@ -288,9 +339,27 @@ const windowMinutes = ref(60)
 const tooltipData = ref(null)
 const chartContainerRef = ref(null)
 
+function setTokenPartialWarning(reason = 'request failed') {
+  partialWarning.value =
+    `Token history could not be refreshed (${reason}). ` +
+    'Overview data remains available; any token chart shown is from the previous successful refresh.'
+}
+
 async function loadTokenSeries() {
-  const res = await apiFetch(`api/ai/tokens?minutes=${windowMinutes.value}`)
-  if (res.ok) series.value = await res.json()
+  const requestedWindow = windowMinutes.value
+  const requestId = ++tokenSeriesRequest
+  try {
+    const res = await apiFetch(`api/ai/tokens?minutes=${requestedWindow}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const nextSeries = await res.json()
+    if (requestId !== tokenSeriesRequest || requestedWindow !== windowMinutes.value) return
+    series.value = nextSeries
+    partialWarning.value = null
+  } catch (e) {
+    if (requestId !== tokenSeriesRequest) return
+    windowMinutes.value = series.value?.minutes ?? requestedWindow
+    setTokenPartialWarning(e instanceof Error ? e.message : 'request failed')
+  }
 }
 
 async function onWindowChange() {
@@ -418,7 +487,7 @@ const detectedFrameworkLabel = computed(() => {
       title="AI Framework"
       :subtitle="overview ? detectedFrameworkLabel : null"
       :loading="loading"
-      :error="error"
+      :error="panelState.retryableError.value ? error : null"
       :last-fetched="lastUpdated"
       v-model:auto-refresh="autoRefresh"
       @refresh="load"
@@ -432,7 +501,6 @@ const detectedFrameworkLabel = computed(() => {
         >
           <i class="bi bi-robot me-1"></i>{{ fw }}
         </span>
-        <span v-if="isStale" class="badge text-bg-warning">Data may be stale</span>
         <button v-if="overview && hasAnyData" class="btn btn-sm btn-outline-secondary" @click="exportCsv">
           <i class="bi bi-download"></i> Export CSV
         </button>
@@ -441,6 +509,7 @@ const detectedFrameworkLabel = computed(() => {
 
     <PanelSkeleton v-if="initialLoading" />
     <template v-else-if="overview">
+      <FlashBanner v-if="dataStatusMessage" :dismissible="false" :message="dataStatusMessage" with-icon />
       <div v-if="overview.contentBanner && hasAnyData" class="alert alert-info small">
         <i class="bi bi-info-circle me-1"></i>{{ overview.contentBanner }}
       </div>
@@ -546,30 +615,72 @@ const detectedFrameworkLabel = computed(() => {
             </div>
             <div
               ref="chartContainerRef"
-              class="position-relative"
+              class="ai-chart-container position-relative"
               @mouseleave="onChartMouseleave"
               @mousemove="onChartMousemove"
             >
               <svg
-                :aria-label="'Token usage over the last ' + windowMinutes + ' minutes'"
+                :aria-label="'Token usage over the last ' + series.minutes + ' minutes'"
                 :viewBox="'0 0 ' + chart.width + ' ' + chart.height"
                 class="w-100"
                 role="img"
                 style="max-height: 100px"
               >
-                <line :x1="0" :x2="chart.width" :y1="chart.halfY" :y2="chart.halfY" stroke="#dee2e6" stroke-width="1" />
-                <text :x="2" :y="8" fill="#6c757d" font-size="9">{{ formatNumber(chart.maxTokens) }}</text>
-                <text :x="2" :y="chart.halfY - 2" fill="#6c757d" font-size="9">
+                <line
+                  :x1="0"
+                  :x2="chart.width"
+                  :y1="chart.halfY"
+                  :y2="chart.halfY"
+                  aria-hidden="true"
+                  class="ai-chart-grid"
+                  stroke="var(--bootui-chart-grid)"
+                  stroke-width="1"
+                />
+                <text :x="2" :y="8" class="ai-chart-axis-label" fill="var(--bootui-chart-axis)" font-size="9">
+                  {{ formatNumber(chart.maxTokens) }}
+                </text>
+                <text
+                  :x="2"
+                  :y="chart.halfY - 2"
+                  class="ai-chart-axis-label"
+                  fill="var(--bootui-chart-axis)"
+                  font-size="9"
+                >
                   {{ formatNumber(Math.round(chart.maxTokens / 2)) }}
                 </text>
-                <text :x="2" :y="chart.height - 1" fill="#6c757d" font-size="9">0</text>
-                <polygon :points="chart.inputAreaPts" fill="#0d6efd" fill-opacity="0.6" />
-                <polygon :points="chart.outputAreaPts" fill="#6610f2" fill-opacity="0.6" />
-                <polyline :points="chart.outputLinePts" fill="none" stroke="#6610f2" stroke-width="1.5" />
+                <text
+                  :x="2"
+                  :y="chart.height - 1"
+                  class="ai-chart-axis-label"
+                  fill="var(--bootui-chart-axis)"
+                  font-size="9"
+                >
+                  0
+                </text>
+                <polygon
+                  :points="chart.inputAreaPts"
+                  class="ai-chart-input-area"
+                  fill="var(--bootui-chart-input)"
+                  fill-opacity="0.6"
+                />
+                <polygon
+                  :points="chart.outputAreaPts"
+                  class="ai-chart-output-area"
+                  fill="var(--bootui-chart-output)"
+                  fill-opacity="0.6"
+                />
+                <polyline
+                  :points="chart.outputLinePts"
+                  class="ai-chart-output-line"
+                  fill="none"
+                  stroke="var(--bootui-chart-output)"
+                  stroke-width="1.5"
+                />
                 <polyline
                   :points="chart.callLinePts"
+                  class="ai-chart-calls-line"
                   fill="none"
-                  stroke="#198754"
+                  stroke="var(--bootui-chart-calls)"
                   stroke-dasharray="4 2"
                   stroke-width="1.5"
                 />
@@ -580,20 +691,21 @@ const detectedFrameworkLabel = computed(() => {
                   :y1="0"
                   :y2="chart.height"
                   aria-hidden="true"
-                  stroke="#adb5bd"
+                  class="ai-chart-selection"
+                  stroke="var(--bootui-chart-selection)"
                   stroke-width="1"
                 />
               </svg>
               <div
                 v-if="tooltipData"
                 :style="{left: tooltipData.x + '%'}"
-                class="position-absolute bg-white border rounded p-1 small shadow-sm"
+                class="ai-chart-tooltip position-absolute rounded p-1 small shadow-sm"
                 style="top: 0; transform: translateX(-50%); pointer-events: none; white-space: nowrap; z-index: 10"
               >
                 <div class="fw-semibold">{{ tooltipData.time }}</div>
-                <div style="color: var(--bootui-chart-input)">In: {{ tooltipData.input }}</div>
-                <div style="color: var(--bootui-chart-output)">Out: {{ tooltipData.output }}</div>
-                <div style="color: var(--bootui-chart-calls)">Calls: {{ tooltipData.calls }}</div>
+                <div class="ai-chart-tooltip-input">In: {{ tooltipData.input }}</div>
+                <div class="ai-chart-tooltip-output">Out: {{ tooltipData.output }}</div>
+                <div class="ai-chart-tooltip-calls">Calls: {{ tooltipData.calls }}</div>
               </div>
             </div>
             <div class="d-flex justify-content-between text-muted small mt-1 px-1">
@@ -690,9 +802,12 @@ const detectedFrameworkLabel = computed(() => {
                     <td class="text-end">{{ formatNumber(row.totalTokens) }}</td>
                     <td class="text-end">{{ formatNumber(row.avgTokens) }}</td>
                     <td style="width: 30%">
-                      <div class="progress" style="height: 6px">
-                        <div :style="{width: row.pct + '%'}" class="progress-bar" role="progressbar"></div>
-                      </div>
+                      <ProgressBar
+                        :label="`${row.model} token share`"
+                        :value="row.pct"
+                        :value-text="`${row.pct}% of tokens`"
+                        style="height: 6px"
+                      />
                     </td>
                   </tr>
                 </tbody>
@@ -1047,5 +1162,23 @@ code {
 }
 .kpi-card-body {
   min-height: 90px;
+}
+
+.ai-chart-tooltip {
+  background: var(--bootui-chart-tooltip-bg);
+  border: 1px solid var(--bootui-chart-tooltip-border);
+  color: var(--bootui-chart-tooltip-text);
+}
+
+.ai-chart-tooltip-input {
+  color: var(--bootui-chart-input);
+}
+
+.ai-chart-tooltip-output {
+  color: var(--bootui-chart-output);
+}
+
+.ai-chart-tooltip-calls {
+  color: var(--bootui-chart-calls);
 }
 </style>

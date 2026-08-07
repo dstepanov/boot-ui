@@ -4,6 +4,8 @@ import io.github.jdubois.bootui.core.dto.SecurityReport;
 import io.github.jdubois.bootui.core.dto.SecurityRuleResultDto;
 import io.github.jdubois.bootui.core.dto.SecurityScanStatusDto;
 import io.github.jdubois.bootui.core.dto.SecuritySeverityCountDto;
+import io.github.jdubois.bootui.engine.action.ActionOperations;
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.support.SeverityOrder;
 import io.github.jdubois.bootui.spi.QuarkusSecurityPermission;
 import io.github.jdubois.bootui.spi.QuarkusSecuritySnapshot;
@@ -34,6 +36,7 @@ public final class QuarkusSecurityScanner {
 
     private final Supplier<QuarkusSecuritySnapshot> snapshotSupplier;
     private final Clock clock;
+    private final SingleFlightAction singleFlight = new SingleFlightAction();
 
     private QuarkusSecurityScanner(Supplier<QuarkusSecuritySnapshot> snapshotSupplier, Clock clock) {
         this.snapshotSupplier = snapshotSupplier;
@@ -54,6 +57,10 @@ public final class QuarkusSecurityScanner {
     }
 
     public SecurityReport scan() {
+        return singleFlight.run(ActionOperations.SECURITY_SCAN, this::doScan);
+    }
+
+    private SecurityReport doScan() {
         QuarkusSecuritySnapshot snap;
         try {
             snap = snapshotSupplier.get();

@@ -9,13 +9,19 @@ reactive analog genuinely exists, and an honest "not yet ported" / "not applicab
 
 ## 2. Current status
 
-The WebFlux adapter serves the large majority of the panel surface — the same 50-panel manifest the servlet adapter
+The WebFlux adapter serves the large majority of the panel surface — the same 52-panel manifest the servlet adapter
 reports, minus the one panel that stays unavailable for stack reasons described below. **Every action-capable panel
 that is available behaves identically to the servlet adapter**, behind the same shared `LocalhostGuard` write floor:
 Loggers (set level), HTTP Probe, Cache (clear), Flyway (migrate/clean), Liquibase (update), Heap Dump
 (capture/analyze/delete/download), Threads (download), Traces (clear), SQL Trace (toggle recording/clear),
 REST Client (clear/toggle recording), the advisor scans (Architecture, Spring, Hibernate, Pentesting, REST API,
 Security, Memory, Vulnerabilities/OSV), and Exceptions triage.
+
+The adapter also shares the exact per-scanner single-flight contract with MVC and Quarkus. Overlapping expensive advisor
+actions fail fast with canonical JSON `409` rather than queueing on Netty or repeating work; Heap Dump
+capture/analyze/delete share one admission. Passive reads keep serving the last completed report, and MCP converts the
+same conflict to an in-band tool error. `WebFluxApiConformanceTest` runs the shared concurrent Architecture burst that
+pins this transport behavior.
 
 Only **HTTP Sessions** stays unavailable, with a panel-specific reason surfaced through the `/bootui/api/panels` manifest
 (and, in turn, the sidebar tooltip and the panel's own alert banner — see §5).
@@ -78,6 +84,15 @@ both, so exactly one of the two autoconfigurations activates.
   while an earlier blocker prevents the packaged `/bootui/**` resources from leaking as a legacy alias. The generated
   shell injects the browser-visible UI/API paths for the shared SPA, and the authentication cookie is scoped to the
   composed API path.
+- **One blocking-execution boundary for the shared controller surface.**
+  `ReactiveBootUiHandlerAdapter` delegates BootUI controller dispatch to WebFlux's fully configured request-mapping
+  adapter on Reactor's bounded-elastic scheduler. This keeps argument resolution, blocking network calls,
+  advisor/classpath scans, heap and JVM diagnostics, downloads, and filesystem handlers off Reactor Netty event-loop
+  threads without duplicating scheduler code across the controllers shared with Spring MVC. Selection follows the
+  existing class-level `${bootui.api-path:...}` mapping convention rather than an endpoint allowlist, so custom API
+  mounts and newly shared controllers inherit it automatically. The shell, static assets, host-application controllers,
+  the host's own WebFlux blocking-execution policy, and requests rejected by the preceding safety filters remain
+  untouched.
 - **Same platform-aware manifest mechanism the Quarkus adapter established.** `PanelsController` — a single shared
   bean bulk-imported unmodified by both autoconfigurations — detects the running context type
   (`applicationContext instanceof ReactiveWebApplicationContext`) and reports `platform:
@@ -106,6 +121,11 @@ RabbitMQ · JMS. `KafkaController`, `RabbitController`, and `JmsController`, plu
 their Live Activity `MESSAGING` capture work identically to the servlet adapter with zero adapter changes. JMS remains
 an imperative, blocking broker API, but its work runs on the application's JMS template/listener threads; the WebFlux
 panel only reads the shared in-memory recorder.
+
+These controllers keep their synchronous servlet-facing signatures. On WebFlux, the centralized
+`ReactiveBootUiHandlerAdapter` dispatches their argument resolution and handler invocation on bounded-elastic threads,
+so controller-local scheduler annotations or endpoint allowlists are not required and new shared handlers cannot
+accidentally inherit the Reactor Netty event loop.
 
 [^spring-advisor-reactive]: The `SpringController` wiring itself needed no adapter change, but the ruleset it runs
     (`SpringScanner`/`SpringRules`) is reactive-aware internally: it detects a WebFlux `ReactiveWebApplicationContext`

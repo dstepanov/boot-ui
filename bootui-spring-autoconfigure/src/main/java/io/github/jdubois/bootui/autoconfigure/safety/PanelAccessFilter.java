@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.autoconfigure.safety;
 
 import io.github.jdubois.bootui.autoconfigure.BootUiProperties;
 import io.github.jdubois.bootui.autoconfigure.web.AbstractBootUiFilter;
+import io.github.jdubois.bootui.engine.panel.BootUiGlobalWritePolicy;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels.Panel;
 import jakarta.servlet.FilterChain;
@@ -31,6 +32,19 @@ public class PanelAccessFilter extends AbstractBootUiFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String apiRelativePath = apiRelativePath(request);
+        String method = request.getMethod();
+        if (!SAFE_METHODS.contains(method) && properties.isReadOnly()) {
+            var globalSubject = BootUiGlobalWritePolicy.subjectFor(apiRelativePath);
+            if (globalSubject.isPresent()) {
+                writeBlockedResponse(
+                        response,
+                        "BootUI panel access denied",
+                        globalSubject.get(),
+                        properties.panelReadOnlyReason(globalSubject.get()));
+                return;
+            }
+        }
+
         Panel panel = BootUiPanels.byApiPath(apiRelativePath).orElse(null);
         if (panel == null) {
             chain.doFilter(request, response);
@@ -43,9 +57,7 @@ public class PanelAccessFilter extends AbstractBootUiFilter {
             return;
         }
 
-        if (panel.actionCapable()
-                && !SAFE_METHODS.contains(request.getMethod())
-                && properties.isPanelReadOnly(panel.id())) {
+        if (panel.actionCapable() && !SAFE_METHODS.contains(method) && properties.isPanelReadOnly(panel.id())) {
             writeBlockedResponse(
                     response, "BootUI panel access denied", panel.id(), properties.panelReadOnlyReason(panel.id()));
             return;

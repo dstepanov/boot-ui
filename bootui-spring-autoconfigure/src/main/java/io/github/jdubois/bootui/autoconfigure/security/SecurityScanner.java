@@ -7,6 +7,8 @@ import io.github.jdubois.bootui.core.dto.SecurityReport;
 import io.github.jdubois.bootui.core.dto.SecurityRuleResultDto;
 import io.github.jdubois.bootui.core.dto.SecurityScanStatusDto;
 import io.github.jdubois.bootui.core.dto.SecuritySeverityCountDto;
+import io.github.jdubois.bootui.engine.action.ActionOperations;
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import jakarta.servlet.Filter;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Field;
@@ -76,6 +78,7 @@ final class SecurityScanner {
     private final Supplier<SecurityDiscovery> discoverySupplier;
     private final Environment environment;
     private final Clock clock;
+    private final SingleFlightAction singleFlight = new SingleFlightAction();
 
     SecurityScanner(
             ObjectProvider<FilterChainProxy> filterChainProxies,
@@ -106,6 +109,10 @@ final class SecurityScanner {
     }
 
     SecurityReport scan() {
+        return singleFlight.run(ActionOperations.SECURITY_SCAN, this::doScan);
+    }
+
+    private SecurityReport doScan() {
         SecurityDiscovery discovery = safeDiscovery();
         SecurityContext context = discovery.context();
         if (context == null) {

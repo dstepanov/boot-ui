@@ -47,6 +47,11 @@ public final class SqlTracingProxies {
             Set.of("execute", "executeQuery", "executeUpdate", "executeLargeUpdate");
     private static final Set<String> BATCH_EXECUTE_METHODS = Set.of("executeBatch", "executeLargeBatch");
 
+    static final int MAX_BATCH_PREVIEW_ITEMS = 5;
+    static final int MAX_BATCH_PREVIEW_PARAMETERS = 5;
+    static final int MAX_BATCH_SQL_PREVIEW_CHARS = 256;
+    static final int MAX_BATCH_PARAMETER_PREVIEW_CHARS = 128;
+
     // Fixed proxy interface sets. These must stay in sync with SqlTraceRuntimeHints, which registers the
     // same JDK proxies for native images; the ordering is significant because it identifies the proxy class.
     static final Class<?>[] DATA_SOURCE_INTERFACES = {DataSource.class, AutoCloseable.class, SqlTracedDataSource.class};
@@ -294,8 +299,9 @@ public final class SqlTracingProxies {
         private final String preparedSql;
 
         private final TreeMap<Integer, String> parameters = new TreeMap<>();
-        private final List<List<String>> batchParameterSets = new ArrayList<>();
-        private final List<String> batchSqls = new ArrayList<>();
+        private final List<String> batchParameterPreviews = new ArrayList<>(MAX_BATCH_PREVIEW_ITEMS);
+        private final List<String> batchSqlPreviews = new ArrayList<>(MAX_BATCH_PREVIEW_ITEMS);
+        private int batchSize;
 
         StatementHandler(
                 Object target,
@@ -328,8 +334,7 @@ public final class SqlTracingProxies {
                 return invokeTarget(method, args);
             }
             if ("clearBatch".equals(name)) {
-                batchParameterSets.clear();
-                batchSqls.clear();
+                clearBatchState();
                 return invokeTarget(method, args);
             }
             if (BATCH_EXECUTE_METHODS.contains(name)) {
@@ -361,9 +366,15 @@ public final class SqlTracingProxies {
 
         private void rememberBatch(Object[] args) {
             if (preparedSql != null) {
-                batchParameterSets.add(orderedParameters());
+                batchSize++;
+                if (recorder.isCaptureParameters() && batchParameterPreviews.size() < MAX_BATCH_PREVIEW_ITEMS) {
+                    batchParameterPreviews.add(parameterSetPreview(batchSize));
+                }
             } else if (args != null && args.length > 0 && args[0] instanceof String sql) {
-                batchSqls.add(sql);
+                batchSize++;
+                if (batchSqlPreviews.size() < MAX_BATCH_PREVIEW_ITEMS) {
+                    batchSqlPreviews.add(truncatePreview(sql, MAX_BATCH_SQL_PREVIEW_CHARS));
+                }
             }
         }
 
@@ -405,8 +416,7 @@ public final class SqlTracingProxies {
         }
 
         private Object timeBatch(Method method, Object[] args) throws Throwable {
-            String sql = preparedSql != null ? preparedSql : String.join(";\n", batchSqls);
-            int batchSize = preparedSql != null ? batchParameterSets.size() : batchSqls.size();
+            String sql = preparedSql != null ? preparedSql : batchSqlPreview();
             Category category = classify(null, preparedSql != null ? preparedSql : firstBatchSql());
             long start = System.nanoTime();
             boolean success = true;
@@ -425,7 +435,7 @@ public final class SqlTracingProxies {
                         statementType,
                         category,
                         sql,
-                        List.of(),
+                        preparedSql != null ? batchParameterPreview() : List.of(),
                         millis(start),
                         success,
                         error,
@@ -433,13 +443,63 @@ public final class SqlTracingProxies {
                         batchSize,
                         connectionId,
                         Thread.currentThread().getName());
-                batchParameterSets.clear();
-                batchSqls.clear();
+                clearBatchState();
             }
         }
 
         private String firstBatchSql() {
-            return batchSqls.isEmpty() ? null : batchSqls.get(0);
+            return batchSqlPreviews.isEmpty() ? null : batchSqlPreviews.get(0);
+        }
+
+        private String batchSqlPreview() {
+            List<String> preview = new ArrayList<>(batchSqlPreviews);
+            int omitted = batchSize - preview.size();
+            if (omitted > 0) {
+                preview.add("-- … (+" + omitted + " more statements)");
+            }
+            return String.join(";\n", preview);
+        }
+
+        private List<String> batchParameterPreview() {
+            if (!recorder.isCaptureParameters()) {
+                return List.of();
+            }
+            List<String> preview = new ArrayList<>(batchParameterPreviews);
+            int omitted = batchSize - preview.size();
+            if (omitted > 0) {
+                preview.add("… (+" + omitted + " more parameter sets)");
+            }
+            return preview;
+        }
+
+        private String parameterSetPreview(int batchNumber) {
+            StringBuilder preview =
+                    new StringBuilder("batch ").append(batchNumber).append(": [");
+            int included = 0;
+            for (String parameter : parameters.values()) {
+                if (included == MAX_BATCH_PREVIEW_PARAMETERS) {
+                    break;
+                }
+                if (included > 0) {
+                    preview.append(", ");
+                }
+                preview.append(truncatePreview(parameter, MAX_BATCH_PARAMETER_PREVIEW_CHARS));
+                included++;
+            }
+            int omitted = parameters.size() - included;
+            if (omitted > 0) {
+                if (included > 0) {
+                    preview.append(", ");
+                }
+                preview.append("… (+").append(omitted).append(" more values)");
+            }
+            return preview.append(']').toString();
+        }
+
+        private void clearBatchState() {
+            batchSize = 0;
+            batchParameterPreviews.clear();
+            batchSqlPreviews.clear();
         }
 
         private List<String> orderedParameters() {
@@ -462,6 +522,13 @@ public final class SqlTracingProxies {
         private long millis(long startNanos) {
             return (System.nanoTime() - startNanos) / 1_000_000L;
         }
+    }
+
+    private static String truncatePreview(String value, int maxChars) {
+        if (value == null || value.length() <= maxChars) {
+            return value;
+        }
+        return value.substring(0, maxChars) + "…";
     }
 
     /**

@@ -1,5 +1,6 @@
 package io.github.jdubois.bootui.autoconfigure.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
@@ -18,6 +19,10 @@ import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
 import io.github.jdubois.bootui.engine.vulnerabilities.DependencyReports;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -81,6 +86,64 @@ class VulnerabilitiesControllerTests {
                 .andExpect(jsonPath("$.scan.status").value("SCANNED"))
                 .andExpect(jsonPath("$.scan.message").value("done"))
                 .andExpect(jsonPath("$.scan.packagesScanned").value(1));
+    }
+
+    @Test
+    void duplicateScanReturnsCanonicalConflictWithoutReplacingCachedReport() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger scans = new AtomicInteger();
+        VulnerabilitiesController controller = new VulnerabilitiesController(
+                new BootUiProperties(),
+                () -> List.of(dependency("org.example", "sample", "1.0.0")),
+                dependencies -> {
+                    scans.incrementAndGet();
+                    entered.countDown();
+                    try {
+                        if (!release.await(5, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("Timed out waiting for test latch");
+                        }
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(ex);
+                    }
+                    return DependencyReports.report(true, "SCANNED", "done", 1L, 1, dependencies);
+                },
+                emptyDismissedRulesStore());
+        MockMvc mvc = standaloneSetup(controller)
+                .setControllerAdvice(new ActionBusyExceptionHandler())
+                .build();
+        AtomicReference<Throwable> winnerFailure = new AtomicReference<>();
+        Thread winner = new Thread(() -> {
+            try {
+                mvc.perform(post("/bootui/api/vulnerabilities/scan")).andExpect(status().isOk());
+            } catch (Throwable failure) {
+                winnerFailure.set(failure);
+            }
+        });
+        winner.start();
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+        mvc.perform(get("/bootui/api/vulnerabilities"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scan.status").value("NOT_SCANNED"));
+        mvc.perform(post("/bootui/api/vulnerabilities/scan"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("BootUI action already in progress"))
+                .andExpect(jsonPath("$.operation").value("vulnerabilities.scan"))
+                .andExpect(jsonPath("$.activeOperation").value("vulnerabilities.scan"))
+                .andExpect(
+                        jsonPath("$.message")
+                                .value(
+                                        "Operation 'vulnerabilities.scan' cannot start while 'vulnerabilities.scan' is in progress."));
+        assertThat(scans).hasValue(1);
+
+        release.countDown();
+        winner.join(5000);
+        assertThat(winnerFailure.get()).isNull();
+        mvc.perform(get("/bootui/api/vulnerabilities"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scan.status").value("SCANNED"));
     }
 
     @Test

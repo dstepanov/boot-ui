@@ -132,6 +132,32 @@ describe('useServerPagedList', () => {
     await api.load()
     expect(api.error.value.message).toBe('Unable to load data: HTTP 503')
     expect(api.loading.value).toBe(false)
+    expect(api.hasLoaded.value).toBe(true)
+  })
+
+  it('tracks first-load completion separately from refresh loading', async () => {
+    const {fetchMock, resolve} = abortablePending()
+    global.fetch = fetchMock
+    const {api} = harness('api/things', 'things', () => ({}))
+
+    const firstLoad = api.load()
+    expect(api.hasLoaded.value).toBe(false)
+
+    resolve(jsonResponse({things: [{id: 1}], page: {matched: 1, total: 1}}))
+    await firstLoad
+
+    expect(api.hasLoaded.value).toBe(true)
+    expect(api.items.value).toEqual([{id: 1}])
+
+    const refresh = abortablePending()
+    global.fetch = refresh.fetchMock
+    api.load()
+
+    expect(api.hasLoaded.value).toBe(true)
+    expect(api.loading.value).toBe(true)
+    expect(api.items.value).toEqual([{id: 1}])
+
+    api.scheduleReload()
   })
 
   it('uses the errorContext option in error messages', async () => {

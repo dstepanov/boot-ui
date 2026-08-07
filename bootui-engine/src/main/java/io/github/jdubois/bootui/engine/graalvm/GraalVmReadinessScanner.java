@@ -8,6 +8,8 @@ import io.github.jdubois.bootui.core.dto.GraalVmReadinessReport;
 import io.github.jdubois.bootui.core.dto.GraalVmScanProgressDto;
 import io.github.jdubois.bootui.core.dto.GraalVmScanStatusDto;
 import io.github.jdubois.bootui.core.dto.GraalVmSeverityCountDto;
+import io.github.jdubois.bootui.engine.action.ActionOperations;
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.support.SeverityOrder;
 import java.time.Clock;
 import java.util.Comparator;
@@ -44,6 +46,7 @@ public final class GraalVmReadinessScanner {
     private final Clock clock;
     private final AtomicReference<GraalVmDependencyScanner.Progress> dependencyProgress;
     private final AtomicReference<GraalVmScanProgressDto> progress = new AtomicReference<>(idleProgress());
+    private final SingleFlightAction singleFlight = new SingleFlightAction();
 
     GraalVmReadinessScanner(
             Supplier<List<String>> basePackagesSupplier,
@@ -117,6 +120,17 @@ public final class GraalVmReadinessScanner {
     }
 
     public GraalVmScanResult scan(boolean includeDependencies) {
+        return singleFlight.run(ActionOperations.GRAALVM_SCAN, () -> {
+            try {
+                return doScan(includeDependencies);
+            } finally {
+                dependencyProgress.set(GraalVmDependencyScanner.Progress.idle());
+                progress.set(idleProgress());
+            }
+        });
+    }
+
+    private GraalVmScanResult doScan(boolean includeDependencies) {
         dependencyProgress.set(GraalVmDependencyScanner.Progress.idle());
         progress.set(new GraalVmScanProgressDto(true, "base-packages", "Detecting application base packages.", 0, 0));
         BasePackageDetection basePackages = detectBasePackages();

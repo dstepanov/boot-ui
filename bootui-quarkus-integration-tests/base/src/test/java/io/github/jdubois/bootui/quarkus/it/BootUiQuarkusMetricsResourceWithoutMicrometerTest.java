@@ -49,6 +49,21 @@ class BootUiQuarkusMetricsResourceWithoutMicrometerTest {
                         && response.json().path("meters").isEmpty())
                 .as("an unavailable report carries an empty meters array")
                 .isTrue();
+        assertThat(response.json().path("page").path("limit").asInt())
+                .as("the unavailable response still advertises the bounded default")
+                .isEqualTo(200);
+        assertThat(response.json().path("availableTypes").isArray()
+                        && response.json().path("availableTypes").isEmpty())
+                .as("the unavailable response carries an empty type inventory")
+                .isTrue();
+    }
+
+    @Test
+    void metricsPanelValidatesQueriesBeforeResolvingTheRegistry() {
+        Response response = probe().get("/bootui/api/metrics?offset=invalid");
+
+        assertThat(response.status()).isEqualTo(400);
+        assertThat(response.json().path("error").asText()).isEqualTo("Metric offset must be 0 or greater");
     }
 
     @Test

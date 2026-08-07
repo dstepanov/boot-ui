@@ -8,6 +8,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.jdubois.bootui.conformance.BootUiApiContractCatalog;
+import io.github.jdubois.bootui.conformance.BootUiApiContractCatalog.ActionContract;
+import io.github.jdubois.bootui.conformance.BootUiApiContractCatalog.Runtime;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.smallrye.config.PropertiesConfigSource;
 import io.smallrye.config.SmallRyeConfigBuilder;
@@ -15,7 +18,7 @@ import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.ext.web.RoutingContext;
-import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.eclipse.microprofile.config.Config;
@@ -119,13 +122,15 @@ class QuarkusPanelAccessFilterTest {
 
     @Test
     void globalReadOnlyBlocksEveryQuarkusActionCapablePanelAction() {
-        Map<String, ActionRequest> actionRequestsByPanel = actionRequestsByPanel();
+        List<ActionContract> actions = BootUiApiContractCatalog.actions(Runtime.QUARKUS).stream()
+                .filter(action -> action.panelId() != null)
+                .toList();
 
         // Completeness self-check: every actionCapable panel in the shared registry must be triaged into
         // exactly one of the fixture map, the not-applicable-on-Quarkus set, or the no-write-path-yet set
         // (Config). This fails loudly if a new action-capable panel is added to the registry without being
         // triaged, instead of silently under-covering it.
-        assertThat(actionRequestsByPanel.keySet())
+        assertThat(actions.stream().map(ActionContract::panelId).collect(java.util.stream.Collectors.toSet()))
                 .containsExactlyInAnyOrderElementsOf(BootUiPanels.all().stream()
                         .filter(BootUiPanels.Panel::actionCapable)
                         .map(BootUiPanels.Panel::id)
@@ -134,14 +139,31 @@ class QuarkusPanelAccessFilterTest {
                         .toList());
 
         QuarkusPanelAccessFilter filter = newFilter(Map.of("bootui.read-only", "true"));
-        for (Map.Entry<String, ActionRequest> entry : actionRequestsByPanel.entrySet()) {
-            RoutingContext rc =
-                    mockRequest(entry.getValue().method(), entry.getValue().uri());
+        for (ActionContract action : actions) {
+            RoutingContext rc = mockRequest(action.method(), "/bootui/api" + action.relativePath());
             HttpServerResponse resp = rc.response();
 
             filter.handle(rc);
 
-            assertBlocked(resp, entry.getKey(), "BootUI is read-only via bootui.read-only=true");
+            assertBlocked(resp, action.panelId(), "BootUI is read-only via bootui.read-only=true");
+        }
+    }
+
+    @Test
+    void globalReadOnlyBlocksCatalogedNonPanelBrowserWrites() {
+        List<ActionContract> actions = BootUiApiContractCatalog.actions(Runtime.QUARKUS).stream()
+                .filter(action -> action.panelId() == null && action.blockedByGlobalReadOnly())
+                .toList();
+
+        assertThat(actions).isNotEmpty();
+        QuarkusPanelAccessFilter filter = newFilter(Map.of("bootui.read-only", "true"));
+        for (ActionContract action : actions) {
+            RoutingContext rc = mockRequest(action.method(), "/bootui/api" + action.relativePath());
+            HttpServerResponse resp = rc.response();
+
+            filter.handle(rc);
+
+            assertBlocked(resp, "dismissed-rules", "BootUI is read-only via bootui.read-only=true");
         }
     }
 
@@ -236,7 +258,7 @@ class QuarkusPanelAccessFilterTest {
             Set.of(BootUiPanels.HTTP_SESSIONS, BootUiPanels.GRAALVM, BootUiPanels.DEVTOOLS, BootUiPanels.CRAC);
 
     /** Action-capable in the shared registry (Spring has a write path), but Quarkus has none yet. */
-    private static final Set<String> NO_WRITE_PATH_ON_QUARKUS_YET = Set.of(BootUiPanels.CONFIG);
+    private static final Set<String> NO_WRITE_PATH_ON_QUARKUS_YET = Set.of(BootUiPanels.CONFIG, BootUiPanels.JMS);
 
     private static QuarkusPanelAccessFilter newFilter(Map<String, String> properties) {
         return new QuarkusPanelAccessFilter(configOf(properties));
@@ -270,45 +292,4 @@ class QuarkusPanelAccessFilterTest {
                 .isEqualTo("{\"error\":\"BootUI panel access denied\",\"panel\":\"" + expectedPanelId
                         + "\",\"reason\":\"" + expectedReason + "\"}");
     }
-
-    /**
-     * The Quarkus-verified action-request fixture, one representative endpoint per real, available,
-     * action-capable Quarkus panel — the Quarkus analogue of Spring's {@code actionRequestsByPanel()},
-     * re-derived from the actual {@code @POST}/{@code @DELETE} JAX-RS resources rather than copied from
-     * Spring (paths can differ — e.g. Spring's {@code dev-services} path has an extra {@code services/}
-     * segment that the real Quarkus resource does not).
-     */
-    private static Map<String, ActionRequest> actionRequestsByPanel() {
-        Map<String, ActionRequest> requests = new LinkedHashMap<>();
-        requests.put("heap-dump", new ActionRequest("POST", "/bootui/api/heap-dump/capture"));
-        requests.put("threads", new ActionRequest("POST", "/bootui/api/threads/download"));
-        requests.put("memory", new ActionRequest("POST", "/bootui/api/memory/scan"));
-        requests.put("loggers", new ActionRequest("POST", "/bootui/api/loggers/io.github.jdubois.bootui"));
-        requests.put("security", new ActionRequest("POST", "/bootui/api/security/scan"));
-        requests.put("pentesting", new ActionRequest("POST", "/bootui/api/pentesting/scan"));
-        requests.put("hibernate", new ActionRequest("POST", "/bootui/api/hibernate/scan"));
-        requests.put("cache", new ActionRequest("POST", "/bootui/api/cache/clear"));
-        requests.put("kafka", new ActionRequest("DELETE", "/bootui/api/kafka"));
-        requests.put("rabbitmq", new ActionRequest("DELETE", "/bootui/api/rabbitmq"));
-        requests.put("jms", new ActionRequest("DELETE", "/bootui/api/jms"));
-        requests.put("traces", new ActionRequest("DELETE", "/bootui/api/traces"));
-        requests.put("exceptions", new ActionRequest("DELETE", "/bootui/api/exceptions"));
-        requests.put("http-probe", new ActionRequest("POST", "/bootui/api/http-probe"));
-        requests.put("architecture", new ActionRequest("POST", "/bootui/api/architecture/scan"));
-        requests.put("vulnerabilities", new ActionRequest("POST", "/bootui/api/vulnerabilities/scan"));
-        requests.put("dev-services", new ActionRequest("POST", "/bootui/api/dev-services/demo/restart"));
-        requests.put("flyway", new ActionRequest("POST", "/bootui/api/flyway/migrate"));
-        requests.put("liquibase", new ActionRequest("POST", "/bootui/api/liquibase/update"));
-        requests.put("github", new ActionRequest("POST", "/bootui/api/github/refresh"));
-        requests.put("rest-api", new ActionRequest("POST", "/bootui/api/rest-api/scan"));
-        requests.put("spring", new ActionRequest("POST", "/bootui/api/spring/scan"));
-        requests.put("sql-trace", new ActionRequest("POST", "/bootui/api/sql-trace/clear"));
-        requests.put("rest-client-trace", new ActionRequest("POST", "/bootui/api/rest-client-trace/recording"));
-        requests.put("email", new ActionRequest("DELETE", "/bootui/api/email"));
-        requests.put("mcp-server", new ActionRequest("POST", "/bootui/api/mcp-server/toggle"));
-        requests.put("activity", new ActionRequest("POST", "/bootui/api/activity/use-existing-datasource"));
-        return requests;
-    }
-
-    private record ActionRequest(String method, String uri) {}
 }

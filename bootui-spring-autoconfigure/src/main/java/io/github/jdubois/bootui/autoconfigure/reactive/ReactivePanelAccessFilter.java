@@ -1,6 +1,7 @@
 package io.github.jdubois.bootui.autoconfigure.reactive;
 
 import io.github.jdubois.bootui.autoconfigure.BootUiProperties;
+import io.github.jdubois.bootui.engine.panel.BootUiGlobalWritePolicy;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels.Panel;
 import java.util.Set;
@@ -44,6 +45,15 @@ public class ReactivePanelAccessFilter extends AbstractReactiveBootUiFilter impl
     protected Mono<Void> doFilterInternal(ServerWebExchange exchange, WebFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
         String apiRelativePath = apiRelativePath(request);
+        String method = request.getMethod() != null ? request.getMethod().name() : "";
+        if (!SAFE_METHODS.contains(method) && properties.isReadOnly()) {
+            var globalSubject = BootUiGlobalWritePolicy.subjectFor(apiRelativePath);
+            if (globalSubject.isPresent()) {
+                return writeBlockedResponse(
+                        exchange, globalSubject.get(), properties.panelReadOnlyReason(globalSubject.get()));
+            }
+        }
+
         Panel panel = apiRelativePath != null
                 ? BootUiPanels.byApiPath(apiRelativePath).orElse(null)
                 : null;
@@ -55,7 +65,6 @@ public class ReactivePanelAccessFilter extends AbstractReactiveBootUiFilter impl
             return writeBlockedResponse(exchange, panel.id(), properties.panelDisabledReason(panel.id()));
         }
 
-        String method = request.getMethod() != null ? request.getMethod().name() : "";
         if (panel.actionCapable() && !SAFE_METHODS.contains(method) && properties.isPanelReadOnly(panel.id())) {
             return writeBlockedResponse(exchange, panel.id(), properties.panelReadOnlyReason(panel.id()));
         }

@@ -1,12 +1,13 @@
 <script setup>
 defineProps({
   rows: {type: Number, default: 5},
-  card: {type: Boolean, default: false}
+  card: {type: Boolean, default: false},
+  label: {type: String, default: 'Loading…'}
 })
 </script>
 
 <template>
-  <div :class="card ? 'card p-3' : ''" class="skeleton-wrapper" aria-busy="true" aria-label="Loading…">
+  <div :class="card ? 'card p-3' : ''" class="skeleton-wrapper" aria-busy="true" :aria-label="label">
     <div class="skeleton-line skeleton-line--title mb-3"></div>
     <div v-for="i in rows" :key="i" :style="{width: `${65 + ((i * 17) % 35)}%`}" class="skeleton-line mb-2"></div>
   </div>
@@ -38,5 +39,12 @@ defineProps({
 .skeleton-line--title {
   height: 1.4rem;
   width: 40%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line {
+    animation: none;
+    background-position: 50% 0;
+  }
 }
 </style>

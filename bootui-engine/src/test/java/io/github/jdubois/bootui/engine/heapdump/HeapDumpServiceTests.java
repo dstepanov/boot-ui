@@ -1,13 +1,18 @@
 package io.github.jdubois.bootui.engine.heapdump;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.jdubois.bootui.core.dto.HeapDumpReport;
+import io.github.jdubois.bootui.engine.action.ActionBusyException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -77,6 +82,46 @@ class HeapDumpServiceTests {
         assertThat(report.dumpCount()).isZero();
         assertThat(report.topClasses()).isEmpty();
         assertThat(report.capture().status()).isEqualTo("NOT_CAPTURED");
+    }
+
+    @Test
+    void captureAndAnalyzeShareFailFastAdmission(@TempDir Path dir) throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger dumps = new AtomicInteger();
+        AtomicInteger histograms = new AtomicInteger();
+        HeapDumpService service = new HeapDumpService(
+                config(),
+                dir,
+                (file, live) -> {
+                    dumps.incrementAndGet();
+                    entered.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Timed out waiting for test latch");
+                    }
+                    Files.writeString(file, "fake-hprof");
+                },
+                () -> {
+                    histograms.incrementAndGet();
+                    return HISTOGRAM;
+                },
+                Clock.fixed(Instant.parse("2026-05-31T05:00:00Z"), ZoneOffset.UTC),
+                true);
+        Thread winner = new Thread(() -> service.capture(true));
+        winner.start();
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+        assertThatThrownBy(service::analyze).isInstanceOfSatisfying(ActionBusyException.class, failure -> {
+            assertThat(failure.result().operation()).isEqualTo("heap-dump.analyze");
+            assertThat(failure.result().activeOperation()).isEqualTo("heap-dump.capture");
+        });
+        assertThat(dumps).hasValue(1);
+        assertThat(histograms).hasValue(0);
+
+        release.countDown();
+        winner.join(5000);
+        assertThat(service.analyze().capture().status()).isEqualTo("ANALYZED");
+        assertThat(histograms).hasValue(2);
     }
 
     @Test

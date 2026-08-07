@@ -1,12 +1,14 @@
 package io.github.jdubois.bootui.quarkus.it;
 
 import io.github.jdubois.bootui.conformance.AbstractBootUiApiConformanceTest;
+import io.github.jdubois.bootui.conformance.BootUiApiContractCatalog.Runtime;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import java.net.URL;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Runs the shared, framework-neutral {@link AbstractBootUiApiConformanceTest} contract against the
@@ -37,7 +39,8 @@ class BootUiQuarkusApiConformanceTest extends AbstractBootUiApiConformanceTest {
                     "bootui.panels.copilot.enabled", "false",
                     "bootui.panels.heap-dump.read-only", "true",
                     "bootui.heap-dump.capture-enabled", "false",
-                    "bootui.claude-code.enabled", "OFF");
+                    "bootui.claude-code.enabled", "OFF",
+                    "bootui.conformance.api-token", "conformance-raw-secret-value");
         }
     }
 
@@ -52,5 +55,15 @@ class BootUiQuarkusApiConformanceTest extends AbstractBootUiApiConformanceTest {
     @Override
     protected String expectedPanelsResource() {
         return "/io/github/jdubois/bootui/conformance/expected-panels-quarkus.json";
+    }
+
+    @Override
+    protected Runtime runtime() {
+        return Runtime.QUARKUS;
+    }
+
+    @Override
+    protected Set<String> actionlessPanels() {
+        return Set.of("config");
     }
 }

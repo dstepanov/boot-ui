@@ -2,6 +2,9 @@ import {flushPromises, mount} from '@vue/test-utils'
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 
 import LiveMemory from './LiveMemory.vue'
+import FlashBanner from './components/FlashBanner.vue'
+import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 
 const MB = 1024 * 1024
 
@@ -95,5 +98,43 @@ describe('LiveMemory', () => {
     expect(renderedText).not.toContain('JVM memory calculator')
     expect(renderedText).not.toContain('Recommended JVM Options')
     expect(renderedText).not.toContain('Kubernetes calculator')
+    expect(wrapper.get('[role="progressbar"][aria-label="Heap memory used"]').attributes('aria-valuetext')).toBe(
+      '25% of maximum used'
+    )
+    expect(wrapper.get('[role="progressbar"][aria-label="Non-heap memory used"]').attributes('aria-valuenow')).toBe(
+      '50'
+    )
+    expect(
+      wrapper.get('[role="progressbar"][aria-label="G1 Eden Space memory pool used"]').attributes('aria-valuetext')
+    ).toBe('25% used')
+  })
+
+  it('shows a retryable error instead of an ambiguous blank state on the first failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(null, false, 503)))
+
+    wrapper = mount(LiveMemory)
+    await flushPromises()
+
+    expect(wrapper.findComponent(PanelSkeleton).exists()).toBe(false)
+    expect(wrapper.getComponent(PanelHeader).text()).toContain('Retry')
+    expect(wrapper.text()).not.toContain('Live memory data is unavailable')
+  })
+
+  it('keeps the last successful snapshot visible when a refresh fails', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(memoryReport()))
+      .mockResolvedValueOnce(jsonResponse(null, false, 503))
+    vi.stubGlobal('fetch', fetchMock)
+
+    wrapper = mount(LiveMemory)
+    await flushPromises()
+
+    wrapper.getComponent(PanelHeader).vm.$emit('refresh')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Heap Memory')
+    expect(wrapper.getComponent(FlashBanner).text()).toContain('Showing the last successful snapshot')
+    expect(wrapper.getComponent(FlashBanner).find('button.btn-close').exists()).toBe(false)
   })
 })

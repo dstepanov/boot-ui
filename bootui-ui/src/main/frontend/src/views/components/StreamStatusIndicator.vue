@@ -52,7 +52,9 @@ function handleRetry() {
 </script>
 
 <template>
-  <span role="status" aria-live="polite" aria-atomic="true" class="visually-hidden">{{ announcement }}</span>
+  <span role="status" aria-live="polite" aria-atomic="true" class="stream-status-announcement visually-hidden">{{
+    announcement
+  }}</span>
 
   <div v-if="isVisible" class="stream-status-indicator">
     <template v-if="connectionState === 'reconnecting'">

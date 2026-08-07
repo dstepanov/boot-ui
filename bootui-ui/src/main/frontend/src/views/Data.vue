@@ -136,10 +136,10 @@ onMounted(load)
               type="button"
               @click="open(r)"
             >
-              <div class="d-flex justify-content-between align-items-start">
-                <div>
+              <div class="d-flex justify-content-between align-items-start gap-2">
+                <div class="repository-summary">
                   <div>
-                    <strong>{{ shortName(r.repositoryInterface) }}</strong>
+                    <strong class="bootui-break-anywhere">{{ shortName(r.repositoryInterface) }}</strong>
                   </div>
                   <div class="small text-muted">
                     {{ shortName(r.domainType) }}
@@ -164,7 +164,7 @@ onMounted(load)
             <div class="card-body">
               <h5 class="card-title mb-1">{{ shortName(detail.repositoryInterface) }}</h5>
               <div class="text-muted small mb-3">
-                <code>{{ detail.repositoryInterface }}</code>
+                <code class="bootui-break-anywhere">{{ detail.repositoryInterface }}</code>
               </div>
               <dl class="row mb-3 small">
                 <dt class="col-sm-3">Store module</dt>
@@ -173,20 +173,20 @@ onMounted(load)
                 </dd>
                 <dt class="col-sm-3">Domain type</dt>
                 <dd class="col-sm-9">
-                  <code>{{ detail.domainType }}</code>
+                  <code class="bootui-break-anywhere">{{ detail.domainType }}</code>
                 </dd>
                 <dt class="col-sm-3">ID type</dt>
                 <dd class="col-sm-9">
-                  <code>{{ detail.idType }}</code>
+                  <code class="bootui-break-anywhere">{{ detail.idType }}</code>
                 </dd>
                 <dt class="col-sm-3">Bean name</dt>
                 <dd class="col-sm-9">
-                  <code>{{ detail.beanName }}</code>
+                  <code class="bootui-break-anywhere">{{ detail.beanName }}</code>
                 </dd>
                 <template v-if="detail.customImplementation">
                   <dt class="col-sm-3">Base class</dt>
                   <dd class="col-sm-9">
-                    <code>{{ detail.customImplementation }}</code>
+                    <code class="bootui-break-anywhere">{{ detail.customImplementation }}</code>
                   </dd>
                 </template>
               </dl>
@@ -194,31 +194,35 @@ onMounted(load)
               <h6 class="mb-2">
                 Methods <span class="badge bg-secondary">{{ detail.methods.length }}</span>
               </h6>
-              <table class="table table-sm table-hover">
-                <thead>
-                  <tr>
-                    <th style="width: 110px">Origin</th>
-                    <th>Signature</th>
-                    <th>Query</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="m in detail.methods" :key="m.signature">
-                    <td>
-                      <span :class="originClass(m.origin)" class="badge">{{ m.origin }}</span>
-                    </td>
-                    <td>
-                      <code>{{ m.signature }}</code>
-                    </td>
-                    <td>
-                      <code v-if="m.query" class="small">{{ m.query }}</code>
-                      <span v-else-if="m.namedQuery" class="small text-muted">named: {{ m.namedQuery }}</span>
-                      <span v-else class="text-muted small">—</span>
-                      <span v-if="m.nativeQuery" class="badge bg-warning text-dark ms-1">native</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <div class="table-responsive bootui-table-scroll">
+                <table class="table table-sm table-hover bootui-data-table data-methods-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 110px">Origin</th>
+                      <th>Signature</th>
+                      <th>Query</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="m in detail.methods" :key="m.signature">
+                      <td>
+                        <span :class="originClass(m.origin)" class="badge">{{ m.origin }}</span>
+                      </td>
+                      <td>
+                        <code class="bootui-break-anywhere">{{ m.signature }}</code>
+                      </td>
+                      <td>
+                        <code v-if="m.query" class="small bootui-break-anywhere">{{ m.query }}</code>
+                        <span v-else-if="m.namedQuery" class="small text-muted bootui-break-anywhere"
+                          >named: {{ m.namedQuery }}</span
+                        >
+                        <span v-else class="text-muted small">—</span>
+                        <span v-if="m.nativeQuery" class="badge bg-warning text-dark ms-1">native</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -226,3 +230,13 @@ onMounted(load)
     </template>
   </div>
 </template>
+
+<style scoped>
+.repository-summary {
+  min-width: 0;
+}
+
+.data-methods-table {
+  --bootui-table-min-width: 42rem;
+}
+</style>
