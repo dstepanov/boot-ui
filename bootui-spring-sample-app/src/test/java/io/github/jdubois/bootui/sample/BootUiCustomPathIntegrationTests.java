@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.sample;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.jdubois.bootui.conformance.AbstractBootUiApiConformanceTest;
 import io.github.jdubois.bootui.conformance.BootUiHttpProbe;
 import io.github.jdubois.bootui.conformance.BootUiHttpProbe.Response;
 import java.util.HashMap;
@@ -23,9 +24,14 @@ import org.springframework.boot.test.web.server.LocalServerPort;
             "bootui.path=/dev-console/",
             "bootui.api-path=/internal/bootui-api/",
             "bootui.show-banner=false",
-            "bootui.overrides-file=target/bootui-custom-path-test-overrides.properties"
+            "bootui.overrides-file=target/bootui-custom-path-test-overrides.properties",
+            "bootui.panels.copilot.enabled=false",
+            "bootui.panels.heap-dump.read-only=true",
+            "bootui.heap-dump.capture-enabled=false",
+            "bootui.claude-code.enabled=OFF",
+            "bootui.conformance.api-token=conformance-raw-secret-value"
         })
-class BootUiCustomPathIntegrationTests {
+class BootUiCustomPathIntegrationTests extends AbstractBootUiApiConformanceTest {
 
     private static final String UI_PATH = "/host/dev-console";
     private static final String API_PATH = "/host/internal/bootui-api";
@@ -36,6 +42,21 @@ class BootUiCustomPathIntegrationTests {
 
     private BootUiHttpProbe probe() {
         return new BootUiHttpProbe("http://localhost:" + port);
+    }
+
+    @Override
+    protected String baseUrl() {
+        return "http://localhost:" + port;
+    }
+
+    @Override
+    protected String uiPath() {
+        return UI_PATH;
+    }
+
+    @Override
+    protected String apiPath() {
+        return API_PATH;
     }
 
     @Test

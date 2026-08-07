@@ -2052,7 +2052,24 @@ Current compatibility:
 - Newer panels work against the sample app or degrade cleanly when optional infrastructure is absent.
 - Production profile disables BootUI.
 
-### 9.4 Browser/UI tests
+### 9.4 Cross-runtime API conformance
+
+- `bootui-conformance` runs one black-box HTTP contract against Spring MVC, Spring WebFlux, and Quarkus.
+- Golden panel fixtures continue to pin panel ids, titles, ordering, and action-capable metadata.
+- Available data panels are checked through a central DTO-family catalog. The contract asserts stable field types,
+  null/empty and availability semantics, pagination containers, scan-status fields, and observable secret masking while
+  allowing runtime counts, timestamps, framework versions, and captured data to vary.
+- A central mutation catalog lists every panel action plus the MCP, dismissed-rules, and OTLP infrastructure writes.
+  It classifies non-panel writes by global read-only applicability: dismissed-rule persistence is blocked, the MCP bridge
+  delegates authorization to its per-tool panel policy, and OTLP ingestion remains an observability transport. Adapter
+  access-filter tests consume that catalog so a browser mutation cannot silently bypass global read-only policy. The live
+  contract covers confirmation gates, canonical panel denial, missing targets, single-flight `409` responses, and only
+  deterministic repeatable successes; it never calls external services or invokes destructive, heap-capture, or
+  GC-heavy actions.
+- The same suite runs at the default mount and at independent custom UI/API mounts (including each runtime's host root
+  path), so shell, assets, reads, streams, downloads, errors, and safe writes share one path contract.
+
+### 9.5 Browser/UI tests
 
 - Playwright smoke tests for all visible panels in `bootui-spring-sample-app/e2e`.
 - Search and filter behavior.
