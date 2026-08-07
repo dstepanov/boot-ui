@@ -9,7 +9,7 @@ reactive analog genuinely exists, and an honest "not yet ported" / "not applicab
 
 ## 2. Current status
 
-The WebFlux adapter serves the large majority of the panel surface — the same 50-panel manifest the servlet adapter
+The WebFlux adapter serves the large majority of the panel surface — the same 52-panel manifest the servlet adapter
 reports, minus the one panel that stays unavailable for stack reasons described below. **Every action-capable panel
 that is available behaves identically to the servlet adapter**, behind the same shared `LocalhostGuard` write floor:
 Loggers (set level), HTTP Probe, Cache (clear), Flyway (migrate/clean), Liquibase (update), Heap Dump
