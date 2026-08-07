@@ -74,6 +74,12 @@ describe('Liquibase', () => {
     expect(wrapper.text()).not.toContain('not on the classpath')
     expect(wrapper.text()).toContain('change set(s) across')
     expect(wrapper.text()).toContain('create-users')
+    expect(wrapper.get('.table-responsive.bootui-table-scroll .liquibase-changesets-table').exists()).toBe(true)
+    expect(wrapper.findAll('code.bootui-break-anywhere').map((node) => node.text())).toEqual([
+      'dataSource',
+      'create-users',
+      'db/changelog.xml'
+    ])
   })
 
   it('shows Quarkus-specific copy when Liquibase is not configured on Quarkus', async () => {

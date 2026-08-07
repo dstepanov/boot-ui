@@ -30,6 +30,22 @@ describe('PanelHeader', () => {
     wrapper.unmount()
   })
 
+  it('communicates refresh activity when reduced motion leaves the icon static', () => {
+    const wrapper = mount(PanelHeader, {
+      props: {
+        title: 'Health',
+        loading: true,
+        onRefresh: vi.fn()
+      }
+    })
+
+    const refresh = wrapper.get('button[title="Refresh"]')
+    expect(refresh.attributes('aria-busy')).toBe('true')
+    expect(refresh.attributes('aria-label')).toBe('Refreshing panel')
+
+    wrapper.unmount()
+  })
+
   it('renders shared auto-refresh controls and emits auto-refresh updates', async () => {
     const onUpdateAutoRefresh = vi.fn()
     const wrapper = mount(PanelHeader, {

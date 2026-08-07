@@ -1383,6 +1383,13 @@ watch(
   z-index: 1;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .activity-tooltip {
+    transform: translateX(-50%);
+    transition: none;
+  }
+}
+
 .session-row-target:focus-visible {
   outline-offset: -3px;
 }

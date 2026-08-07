@@ -1,11 +1,19 @@
 <script setup>
-import {computed, nextTick, ref, watch} from 'vue'
+import {computed, inject, nextTick, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {routes} from '../../routes.js'
+import {
+  createPanelLookup,
+  resolveRouteTitle,
+  routeAvailabilityLabel,
+  routeNavigationGroup,
+  routePanelState
+} from '../../utils/panelNavigation.js'
 import {loadRecentPanels} from '../../utils/recentPanels.js'
 
 const emit = defineEmits(['close'])
 const router = useRouter()
+const panels = inject('panels', ref(null))
 const query = ref('')
 const backdropEl = ref(null)
 const inputEl = ref(null)
@@ -14,10 +22,17 @@ const inputId = 'bootui-command-palette-input'
 const listboxId = 'bootui-command-palette-listbox'
 
 const searchableRoutes = routes.filter((r) => r.name && r.meta?.title)
-const recentRouteList = loadRecentPanels()
-  .map((name) => searchableRoutes.find((r) => r.name === name))
-  .filter(Boolean)
-const recentNames = new Set(recentRouteList.map((r) => r.name))
+const recentPanelNames = loadRecentPanels()
+const panelLookup = computed(() => createPanelLookup(panels.value))
+const platform = computed(() => panels.value?.platform)
+const recentRouteList = computed(() =>
+  recentPanelNames.map((name) => searchableRoutes.find((r) => r.name === name)).filter(Boolean)
+)
+const recentNames = computed(() => new Set(recentRouteList.value.map((r) => r.name)))
+
+function routeTitle(route) {
+  return resolveRouteTitle(route, platform.value)
+}
 
 function keywordMatch(keywords, needle) {
   // Match on word prefixes within a keyword rather than arbitrary substrings,
@@ -26,7 +41,7 @@ function keywordMatch(keywords, needle) {
 }
 
 function score(route, q) {
-  const title = (route.meta.title || '').toLowerCase()
+  const title = (routeTitle(route) || '').toLowerCase()
   const group = (route.meta.group || '').toLowerCase()
   const shortcut = (route.meta.shortcut || '').toLowerCase()
   const keywords = (route.meta.keywords || []).map((k) => k.toLowerCase())
@@ -40,14 +55,14 @@ function score(route, q) {
   return 0
 }
 
-const showRecent = computed(() => !query.value.trim() && recentRouteList.length > 0)
+const showRecent = computed(() => !query.value.trim() && recentRouteList.value.length > 0)
 
 const results = computed(() => {
   const q = query.value.trim()
   if (!q) {
-    if (!recentRouteList.length) return searchableRoutes
-    const rest = searchableRoutes.filter((r) => !recentNames.has(r.name))
-    return [...recentRouteList, ...rest]
+    if (!recentRouteList.value.length) return searchableRoutes
+    const rest = searchableRoutes.filter((r) => !recentNames.value.has(r.name))
+    return [...recentRouteList.value, ...rest]
   }
   return searchableRoutes
     .map((r) => ({route: r, score: score(r, q)}))
@@ -57,7 +72,19 @@ const results = computed(() => {
 })
 
 function isRecent(route) {
-  return showRecent.value && recentNames.has(route.name)
+  return showRecent.value && recentNames.value.has(route.name)
+}
+
+function panelState(route) {
+  return routePanelState(route, panelLookup.value)
+}
+
+function routeLabel(route) {
+  return routeAvailabilityLabel(route, panelLookup.value, platform.value)
+}
+
+function routeGroup(route) {
+  return routeNavigationGroup(route, panelLookup.value)
 }
 
 watch(results, (currentResults) => {
@@ -200,7 +227,11 @@ defineExpose({focusInput})
           :id="optionId(r)"
           :key="r.name"
           :aria-selected="i === activeIndex"
-          :class="{active: i === activeIndex}"
+          :aria-label="routeLabel(r)"
+          :class="{
+            active: i === activeIndex,
+            'cp-item--unavailable': ['disabled', 'unavailable'].includes(panelState(r)?.kind)
+          }"
           class="cp-item"
           :data-option-index="i"
           role="option"
@@ -210,15 +241,22 @@ defineExpose({focusInput})
         >
           <span v-if="i < 9 && !query.trim()" class="cp-item-num">{{ i + 1 }}</span>
           <i :class="['bi', r.meta.icon, 'cp-item-icon']"></i>
-          <span class="cp-item-title">{{ r.meta.title }}</span>
+          <span class="cp-item-title">{{ routeTitle(r) }}</span>
           <i
             v-if="isRecent(r)"
             class="bi bi-clock-history cp-item-recent"
             title="Recently viewed"
             aria-hidden="true"
           ></i>
+          <i
+            v-if="panelState(r)"
+            :class="['bi', panelState(r).icon, 'cp-item-status']"
+            :title="panelState(r).label"
+            aria-hidden="true"
+          ></i>
+          <span v-if="panelState(r)" class="visually-hidden">({{ panelState(r).label }})</span>
           <span v-if="r.meta.shortcut" class="cp-item-shortcut">{{ r.meta.shortcut }}</span>
-          <span class="cp-item-group">{{ r.meta.group }}</span>
+          <span class="cp-item-group">{{ routeGroup(r) }}</span>
         </li>
       </ul>
       <div v-if="!results.length" class="cp-empty">No panels match "{{ query }}"</div>
@@ -373,6 +411,17 @@ defineExpose({focusInput})
   color: var(--bootui-green, #198754);
   flex-shrink: 0;
   font-size: 0.85rem;
+}
+
+.cp-item-status {
+  color: var(--bootui-text-subtle, #5b6b80);
+  flex-shrink: 0;
+  font-size: 0.85rem;
+}
+
+.cp-item--unavailable .cp-item-title {
+  color: var(--bootui-text-subtle, #5b6b80);
+  font-style: italic;
 }
 
 .cp-section-label {

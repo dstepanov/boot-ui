@@ -12,6 +12,15 @@ import {
   THEME_STORAGE_KEY
 } from './utils/theme.js'
 import {describeLoadError} from './utils/loadError.js'
+import {
+  buildDocumentTitle,
+  createPanelLookup,
+  panelDisabledReason,
+  resolveRouteTitle,
+  routeAvailabilityLabel as routeAccessibleLabel,
+  routeStatusIcon as panelStatusIcon,
+  routeUnavailable as isRouteUnavailable
+} from './utils/panelNavigation.js'
 import {recordRecentPanel} from './utils/recentPanels.js'
 import {safeLocalStorage} from './utils/safeStorage.js'
 import CommandPalette from './views/components/CommandPalette.vue'
@@ -76,6 +85,7 @@ const themeToggleText = computed(() => `${darkTheme.value ? 'Light' : 'Dark'} mo
 
 provide('overview', overview)
 provide('panels', panels)
+provide('openCommandPalette', openCommandPalette)
 
 async function openCommandPalette(event) {
   if (commandPaletteOpen.value || mobileDrawerOpen.value) return
@@ -259,7 +269,7 @@ function loadExpandedGroups() {
 }
 
 const expandedGroups = reactive(loadExpandedGroups())
-const panelLookup = computed(() => new Map((panels.value?.panels ?? []).map((panel) => [panel.id, panel])))
+const panelLookup = computed(() => createPanelLookup(panels.value))
 const activeRoute = computed(() => routes.find((r) => r.name === route.name))
 const activePanel = computed(() => (route.name ? panelLookup.value.get(route.name) : null))
 const activePanelDisabled = computed(() => activePanel.value?.enabled === false)
@@ -277,6 +287,7 @@ const activePanelUnavailableReason = computed(() => {
 const activePanelReadOnly = computed(() => activePanel.value?.readOnly === true && !activePanelUnavailable.value)
 const activePanelReadOnlyReason = computed(() => activePanel.value?.readOnlyReason || 'This panel is read-only.')
 const applicationTitle = computed(() => overview.value?.applicationName || 'application')
+const browserTitle = computed(() => buildDocumentTitle(route, panels.value?.platform, overview.value?.applicationName))
 const runtimeSummary = computed(() => {
   if (shellServerUnreachable.value) return 'The application is not responding. Restart it and retry.'
   if (shellError.value && !overview.value) return 'Unable to load BootUI runtime details.'
@@ -334,8 +345,7 @@ const footerText = computed(() =>
 )
 const githubProjectUrl = 'https://github.com/jdubois/boot-ui'
 function navTitle(r) {
-  const platform = panels.value?.platform
-  return r.meta?.titleByPlatform?.[platform] || r.meta?.title
+  return resolveRouteTitle(r, panels.value?.platform)
 }
 const navigationSections = computed(() => {
   const sections = [
@@ -438,47 +448,16 @@ async function authenticate() {
   }
 }
 
-function panelForRoute(r) {
-  return panelLookup.value.get(r.name)
-}
-
 function routeUnavailable(r) {
-  const panel = panelForRoute(r)
-  return panel?.enabled === false || panel?.available === false
-}
-
-function routeReadOnly(r) {
-  const panel = panelForRoute(r)
-  return panel?.readOnly === true && !routeUnavailable(r)
+  return isRouteUnavailable(r, panelLookup.value)
 }
 
 function routeStatusIcon(r) {
-  if (routeUnavailable(r)) {
-    return 'bi-slash-circle'
-  }
-  if (routeReadOnly(r)) {
-    return 'bi-lock'
-  }
-  return null
-}
-
-function panelDisabledReason(panel) {
-  return `Panel is disabled via bootui.panels.${panel?.id || 'panel'}.enabled=false`
+  return panelStatusIcon(r, panelLookup.value)
 }
 
 function routeAvailabilityLabel(r) {
-  const panel = panelForRoute(r)
-  const title = navTitle(r)
-  if (panel?.enabled === false) {
-    return `${title} - disabled: ${panelDisabledReason(panel)}`
-  }
-  if (panel?.available === false) {
-    return `${title} - unavailable: ${panel.unavailableReason || 'required support is unavailable'}`
-  }
-  if (panel?.readOnly === true) {
-    return `${title} - read-only: ${panel.readOnlyReason || 'mutating actions are disabled'}`
-  }
-  return title
+  return routeAccessibleLabel(r, panelLookup.value, panels.value?.platform)
 }
 
 function groupDomId(group) {
@@ -562,6 +541,14 @@ watch(
     safeLocalStorage.setJson(EXPANDED_GROUPS_STORAGE_KEY, groups)
   },
   {deep: true}
+)
+
+watch(
+  browserTitle,
+  (title) => {
+    document.title = title
+  },
+  {immediate: true}
 )
 
 onMounted(() => {
@@ -988,10 +975,19 @@ function onGlobalKeydown(e) {
   --bootui-nav-group-color: var(--bootui-text-muted);
   --bootui-nav-link-color: #334155;
 
-  /* Chart legend */
+  /* Data visualization */
+  --bootui-chart-grid: #dee2e6;
+  --bootui-chart-axis: #56667b;
   --bootui-chart-input: #0d6efd;
   --bootui-chart-output: #6610f2;
   --bootui-chart-calls: #198754;
+  --bootui-chart-selection: #64748b;
+  --bootui-chart-span: #dee2e6;
+  --bootui-chart-tool: #0d6efd;
+  --bootui-chart-vector: #fd7e14;
+  --bootui-chart-tooltip-bg: #ffffff;
+  --bootui-chart-tooltip-border: #cbd5e1;
+  --bootui-chart-tooltip-text: #152033;
 
   /* Skeleton loaders */
   --bootui-skeleton-base: #e2e8f0;
@@ -1101,10 +1097,19 @@ function onGlobalKeydown(e) {
   --bootui-nav-group-color: var(--bootui-text-muted);
   --bootui-nav-link-color: #cbd5e1;
 
-  /* Chart legend */
+  /* Data visualization */
+  --bootui-chart-grid: #475569;
+  --bootui-chart-axis: #a3b1c6;
   --bootui-chart-input: #6ea8fe;
   --bootui-chart-output: #c084fc;
   --bootui-chart-calls: #75b798;
+  --bootui-chart-selection: #94a3b8;
+  --bootui-chart-span: #475569;
+  --bootui-chart-tool: #6ea8fe;
+  --bootui-chart-vector: #fd9843;
+  --bootui-chart-tooltip-bg: #1e293b;
+  --bootui-chart-tooltip-border: #64748b;
+  --bootui-chart-tooltip-text: #e2e8f0;
 
   /* Skeleton loaders */
   --bootui-skeleton-base: #334155;
@@ -1319,6 +1324,22 @@ function onGlobalKeydown(e) {
 :global(.progress-bar) {
   /* impeccable-disable-next-line layout-transition -- progress fill animates width by design */
   transition: width 500ms ease;
+}
+
+:global(.bootui-table-scroll) {
+  max-width: 100%;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+:global(.bootui-data-table) {
+  min-width: var(--bootui-table-min-width, 42rem);
+}
+
+:global(.bootui-break-anywhere) {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .bootui-shell {
@@ -1785,6 +1806,7 @@ function onGlobalKeydown(e) {
   flex-direction: column;
   height: 100vh;
   min-width: 0;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -1982,8 +2004,19 @@ function onGlobalKeydown(e) {
 
 @media (max-width: 575.98px) {
   .topbar {
+    align-items: stretch;
+    flex-direction: column;
     padding-left: 1rem;
     padding-right: 1rem;
+  }
+
+  .topbar-actions {
+    justify-content: flex-start;
+  }
+
+  .topbar-title,
+  .topbar-subtitle {
+    overflow-wrap: anywhere;
   }
 
   .content-stage,
@@ -1991,16 +2024,67 @@ function onGlobalKeydown(e) {
     padding-left: 1rem;
     padding-right: 1rem;
   }
+
+  :global(button),
+  :global(a.btn),
+  :global(summary),
+  :global(.form-control-sm),
+  :global(.form-select-sm) {
+    min-block-size: 44px;
+    min-inline-size: 44px;
+  }
+
+  :global(.form-check-input) {
+    min-block-size: 44px;
+    min-inline-size: 44px;
+    margin-top: 0;
+  }
+
+  :global(.form-check) {
+    min-block-size: 44px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
+  :global(html) {
     scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
+  }
+
+  .bootui-sidebar,
+  .bootui-sidebar--drawer,
+  .bootui-nav-backdrop,
+  .flyout-fade-enter-active,
+  .flyout-fade-leave-active,
+  .page-slide-enter-active,
+  .page-slide-leave-active,
+  .brand-card,
+  .contribute-card,
+  .bootui-nav-link,
+  .bootui-nav-group__toggle,
+  .sidebar-toggle,
+  .nav-hamburger,
+  .cp-trigger,
+  .theme-toggle,
+  :global(.card),
+  :global(.btn),
+  :global(.progress-bar),
+  :global(.spinner-border),
+  :global(.spinner-grow),
+  :global(.spin) {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .page-slide-enter-from,
+  .page-slide-leave-to,
+  .flyout-fade-enter-from,
+  .flyout-fade-leave-to,
+  .brand-card:hover,
+  .contribute-card:hover,
+  .bootui-nav-link:hover,
+  .bootui-nav-group__toggle:hover,
+  .bootui-nav-group__toggle.active {
+    transform: none;
   }
 }
 

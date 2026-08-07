@@ -78,6 +78,15 @@ both, so exactly one of the two autoconfigurations activates.
   while an earlier blocker prevents the packaged `/bootui/**` resources from leaking as a legacy alias. The generated
   shell injects the browser-visible UI/API paths for the shared SPA, and the authentication cookie is scoped to the
   composed API path.
+- **One blocking-execution boundary for the shared controller surface.**
+  `ReactiveBootUiHandlerAdapter` delegates BootUI controller dispatch to WebFlux's fully configured request-mapping
+  adapter on Reactor's bounded-elastic scheduler. This keeps argument resolution, blocking network calls,
+  advisor/classpath scans, heap and JVM diagnostics, downloads, and filesystem handlers off Reactor Netty event-loop
+  threads without duplicating scheduler code across the controllers shared with Spring MVC. Selection follows the
+  existing class-level `${bootui.api-path:...}` mapping convention rather than an endpoint allowlist, so custom API
+  mounts and newly shared controllers inherit it automatically. The shell, static assets, host-application controllers,
+  the host's own WebFlux blocking-execution policy, and requests rejected by the preceding safety filters remain
+  untouched.
 - **Same platform-aware manifest mechanism the Quarkus adapter established.** `PanelsController` — a single shared
   bean bulk-imported unmodified by both autoconfigurations — detects the running context type
   (`applicationContext instanceof ReactiveWebApplicationContext`) and reports `platform:
@@ -106,6 +115,11 @@ RabbitMQ · JMS. `KafkaController`, `RabbitController`, and `JmsController`, plu
 their Live Activity `MESSAGING` capture work identically to the servlet adapter with zero adapter changes. JMS remains
 an imperative, blocking broker API, but its work runs on the application's JMS template/listener threads; the WebFlux
 panel only reads the shared in-memory recorder.
+
+These controllers keep their synchronous servlet-facing signatures. On WebFlux, the centralized
+`ReactiveBootUiHandlerAdapter` dispatches their argument resolution and handler invocation on bounded-elastic threads,
+so controller-local scheduler annotations or endpoint allowlists are not required and new shared handlers cannot
+accidentally inherit the Reactor Netty event loop.
 
 [^spring-advisor-reactive]: The `SpringController` wiring itself needed no adapter change, but the ruleset it runs
     (`SpringScanner`/`SpringRules`) is reactive-aware internally: it detects a WebFlux `ReactiveWebApplicationContext`

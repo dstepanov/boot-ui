@@ -28,7 +28,7 @@ import reactor.core.scheduler.Schedulers;
  */
 @RestController
 @Lazy
-@RequestMapping("/bootui/api/security")
+@RequestMapping("${bootui.api-path:/bootui/api}/security")
 public class ReactiveSecurityController {
 
     private final ReactiveSecurityAdvisorService advisor;
