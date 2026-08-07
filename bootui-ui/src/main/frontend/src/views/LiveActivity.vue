@@ -54,6 +54,7 @@ const profileLoading = ref(false)
 const profileError = ref(null)
 const profileRequestId = ref(null)
 const drawerEl = ref(null)
+const profileOpenerEl = ref(null)
 
 // "Load older" pagination state. Only ever populated when the backing store is durable (see
 // `persistent` below); stays empty for the default in-memory mode so nothing here changes its
@@ -370,14 +371,25 @@ function entryLink(entry) {
   return deepLink(entry)
 }
 
-function onRowClick(entry) {
+function onRowClick(entry, event) {
   if (entry.profileable) {
-    openProfile(entry)
+    openProfile(entry, event.currentTarget instanceof HTMLElement ? event.currentTarget : null)
   }
 }
 
-async function openProfile(entry) {
+function openProfileFromButton(entry, event) {
+  openProfile(entry, event.currentTarget instanceof HTMLElement ? event.currentTarget : null)
+}
+
+async function openProfile(
+  entry,
+  opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+) {
   if (!entry.profileable) return
+  profileOpenerEl.value =
+    opener?.matches?.('button, a, input, select, textarea, [tabindex]:not([tabindex="-1"])') === true
+      ? opener
+      : opener?.querySelector?.('.bootui-keyboard-target') || null
   profileRequestId.value = entry.id
   profileLoading.value = true
   profileError.value = null
@@ -397,9 +409,12 @@ async function openProfile(entry) {
 }
 
 function closeProfile() {
+  const opener = profileOpenerEl.value
   profileRequestId.value = null
   profile.value = null
   profileError.value = null
+  profileOpenerEl.value = null
+  requestAnimationFrame(() => opener?.focus?.())
 }
 
 function focusDrawer() {
@@ -884,8 +899,8 @@ function clearFilters() {
                   entry.profileable ? 'activity-row-clickable' : '',
                   hasChildren(entry) ? 'activity-parent-row' : ''
                 ]"
-                data-keyboard-delegate="openProfile(entry)"
-                @click="onRowClick(entry)"
+                data-keyboard-delegate="openProfileFromButton(entry, $event)"
+                @click="onRowClick(entry, $event)"
               >
                 <td class="text-nowrap small">{{ formatClockTime(entry.timestamp) }}</td>
                 <td class="text-nowrap"><i :class="['bi', typeIcon(entry.type), 'me-1']"></i>{{ entry.type }}</td>
@@ -949,7 +964,7 @@ function clearFilters() {
                     v-if="entry.profileable"
                     class="btn btn-outline-primary btn-sm rounded-pill bootui-keyboard-target"
                     type="button"
-                    @click="openProfile(entry)"
+                    @click="openProfileFromButton(entry, $event)"
                   >
                     <i class="bi bi-search me-1"></i>Profile
                   </button>

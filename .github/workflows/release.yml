@@ -12,13 +12,17 @@ on:
         type: string
         default: ''
       skip_build:
-        description: Skip the verification build before creating the release commit and tag
+        description: Skip the verification build before sealing the release commit and tag
         type: boolean
         default: false
       auto_publish:
         description: Publish automatically after upload to Maven Central
         type: boolean
         default: true
+      resume_after_publish:
+        description: Resume availability checks after an existing tagged deployment was published; skips Maven deploy
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-release
@@ -34,6 +38,8 @@ jobs:
       actions: write
     env:
       CENTRAL_AUTO_PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.auto_publish }}
+      REQUESTED_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+      RESUME_AFTER_PUBLISH: ${{ github.event_name == 'workflow_dispatch' && inputs.resume_after_publish }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -73,6 +79,8 @@ jobs:
 
           VERSION="${RELEASE_VERSION#v}"
           TAG="v$VERSION"
+          SOURCE_BRANCH="$GITHUB_REF_NAME"
+          SOURCE_SHA="$GITHUB_SHA"
 
           if [[ -z "$VERSION" || "$VERSION" == *[[:space:]]* || "$VERSION" == */* ]]; then
             echo "::error::Invalid release version: $RELEASE_VERSION"
@@ -86,6 +94,11 @@ jobs:
 
           if [[ "$GITHUB_REF_TYPE" != "branch" ]]; then
             echo "::error::Preparing a release requires running this workflow from a branch, not $GITHUB_REF_TYPE"
+            exit 1
+          fi
+
+          if [[ "$RESUME_AFTER_PUBLISH" == "true" ]]; then
+            echo "::error::resume_after_publish can only be used with an empty version on an existing release tag"
             exit 1
           fi
 
@@ -158,41 +171,170 @@ jobs:
             ./mvnw -B -ntp -Prelease clean verify
           fi
 
-          echo "Prepared release $TAG (version $VERSION) in the working tree; deferring the commit, tag, and push until the artifacts are verified on Maven Central."
+          # Fail fast if versions:set (run with -DprocessAllModules=true, so it walks every
+          # pom.xml in the tree regardless of nesting depth) missed a module.
+          stale_poms="$(git ls-files '*pom.xml' | xargs -I{} sh -c "grep -q '<version>$VERSION</version>' '{}' || echo '{}'")"
+          if [[ -n "$stale_poms" ]]; then
+            echo "::error::The following poms were not bumped to $VERSION:"
+            echo "$stale_poms"
+            exit 1
+          fi
 
+          if [[ -n "$(git status --porcelain)" ]]; then
+            # Stage every tracked file touched by the version bump, including nested poms.
+            git add -u
+            git commit -m "Release $TAG"
+          else
+            echo "Project files already declare the released version; sealing current HEAD."
+          fi
+
+          RELEASE_SHA="$(git rev-parse HEAD)"
+
+          # Release contents are immutable once publication starts. Refuse to transplant the
+          # release commit if the selected source branch moved during preparation or verification.
+          git fetch --no-tags origin "+refs/heads/${SOURCE_BRANCH}:refs/remotes/origin/${SOURCE_BRANCH}"
+          REMOTE_SOURCE_SHA="$(git rev-parse "refs/remotes/origin/${SOURCE_BRANCH}")"
+          if [[ "$REMOTE_SOURCE_SHA" != "$SOURCE_SHA" ]]; then
+            echo "::error::Source branch $SOURCE_BRANCH advanced from $SOURCE_SHA to $REMOTE_SOURCE_SHA while preparing $TAG. Aborting without rebasing or publishing."
+            exit 1
+          fi
+
+          SIGNING_KEY="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "sec" { print $5; exit }')"
+          if [[ -z "$SIGNING_KEY" ]]; then
+            echo "::error::No GPG secret key is available to sign $TAG"
+            exit 1
+          fi
+          git config user.signingkey "$SIGNING_KEY"
+
+          # setup-java imports the release key and exposes its passphrase to Maven, but raw
+          # git tag signing still needs a headless pinentry path. Keep the passphrase out of
+          # process arguments and preserve stdin for the tag payload by passing it on fd 3.
+          GPG_WRAPPER="$RUNNER_TEMP/bootui-git-gpg"
+          cat > "$GPG_WRAPPER" <<'EOF'
+          #!/usr/bin/env bash
+          exec gpg --batch --pinentry-mode loopback --passphrase-fd 3 "$@" \
+            3<<<"$MAVEN_GPG_PASSPHRASE"
+          EOF
+          chmod 700 "$GPG_WRAPPER"
+          cleanup_git_gpg() {
+            git config --unset gpg.program || true
+            rm -f "$GPG_WRAPPER"
+          }
+          trap cleanup_git_gpg EXIT
+          git config gpg.program "$GPG_WRAPPER"
+          git tag -s "$TAG" -m "Release $TAG"
+          git verify-tag "$TAG"
+          cleanup_git_gpg
+          trap - EXIT
+
+          # The branch update and tag creation must either both land or neither land. A race after
+          # the explicit source check rejects this atomic push; released contents are never rebased.
+          if ! git push --atomic origin \
+            "HEAD:refs/heads/${SOURCE_BRANCH}" \
+            "refs/tags/${TAG}:refs/tags/${TAG}"; then
+            git fetch --no-tags origin "+refs/heads/${SOURCE_BRANCH}:refs/remotes/origin/${SOURCE_BRANCH}"
+            echo "::error::Atomic release push failed. origin/$SOURCE_BRANCH is now $(git rev-parse "refs/remotes/origin/${SOURCE_BRANCH}"); expected $SOURCE_SHA. Aborting without rebasing or moving $TAG."
+            exit 1
+          fi
+
+          echo "Sealed release $TAG at $RELEASE_SHA and pushed its commit and signed annotated tag atomically."
           echo "PREPARED_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "PREPARED_RELEASE_SHA=$RELEASE_SHA" >> "$GITHUB_ENV"
+
+      - name: Resolve immutable release
+        run: |
+         set -euo pipefail
+
+         VERSION="$(./mvnw -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
+         EXPECTED_TAG="v$VERSION"
+
+         if [[ "$VERSION" == *-SNAPSHOT ]]; then
+           echo "::error::Refusing to release snapshot version $VERSION"
+           exit 1
+         fi
+
+         if [[ -n "${PREPARED_TAG:-}" && "$PREPARED_TAG" != "$EXPECTED_TAG" ]]; then
+           echo "::error::Prepared tag $PREPARED_TAG does not match project version $VERSION"
+           exit 1
+         fi
+
+         if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "$EXPECTED_TAG" ]]; then
+           echo "::error::Tag $GITHUB_REF_NAME does not match project version $VERSION"
+           exit 1
+         fi
+
+         if [[ "$RESUME_AFTER_PUBLISH" == "true" ]]; then
+           if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || -n "$REQUESTED_VERSION" ]]; then
+             echo "::error::resume_after_publish requires a manual run with an empty version"
+             exit 1
+           fi
+           if [[ "$CENTRAL_AUTO_PUBLISH" != "true" ]]; then
+             echo "::error::resume_after_publish requires auto_publish so the public artifacts can be verified"
+             exit 1
+           fi
+         fi
+
+         if ! git rev-parse -q --verify "refs/tags/$EXPECTED_TAG" >/dev/null; then
+           git fetch --no-tags origin "refs/tags/$EXPECTED_TAG:refs/tags/$EXPECTED_TAG"
+         fi
+
+         if [[ "$(git cat-file -t "refs/tags/$EXPECTED_TAG")" != "tag" ]]; then
+           echo "::error::$EXPECTED_TAG must be an annotated tag"
+           exit 1
+         fi
+         git verify-tag "$EXPECTED_TAG"
+
+         RELEASE_SHA="$(git rev-parse "refs/tags/$EXPECTED_TAG^{}")"
+         REMOTE_RELEASE_SHA="$(git ls-remote origin "refs/tags/$EXPECTED_TAG^{}" | awk '{ print $1 }')"
+         if [[ -z "$REMOTE_RELEASE_SHA" || "$REMOTE_RELEASE_SHA" != "$RELEASE_SHA" ]]; then
+           echo "::error::Remote tag $EXPECTED_TAG does not resolve to the verified local release SHA $RELEASE_SHA"
+           exit 1
+         fi
+
+         if [[ -n "${PREPARED_RELEASE_SHA:-}" ]]; then
+           if [[ "$PREPARED_RELEASE_SHA" != "$RELEASE_SHA" ]]; then
+             echo "::error::Pushed tag $EXPECTED_TAG resolves to $RELEASE_SHA, expected $PREPARED_RELEASE_SHA"
+             exit 1
+           fi
+         elif [[ "$(git rev-parse HEAD)" != "$RELEASE_SHA" ]]; then
+           echo "::error::Manual or tag-triggered publication must select the commit tagged $EXPECTED_TAG ($RELEASE_SHA)"
+           exit 1
+         fi
+
+         echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+         echo "RELEASE_TAG=$EXPECTED_TAG" >> "$GITHUB_ENV"
+         echo "RELEASE_SHA=$RELEASE_SHA" >> "$GITHUB_ENV"
+         echo "Resolved signed release $EXPECTED_TAG to immutable commit $RELEASE_SHA."
+
+      - name: Checkout immutable release
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ env.RELEASE_SHA }}
 
       - name: Verify release version
         run: |
-          set -euo pipefail
+         set -euo pipefail
 
-          VERSION="$(./mvnw -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
-          EXPECTED_TAG="v$VERSION"
+         VERSION="$(./mvnw -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
+         EXPECTED_TAG="v$VERSION"
 
-          if [[ "$VERSION" == *-SNAPSHOT ]]; then
-            echo "::error::Refusing to release snapshot version $VERSION"
-            exit 1
-          fi
+         if [[ "$(git rev-parse HEAD)" != "$RELEASE_SHA" ]]; then
+           echo "::error::Checkout moved away from immutable release SHA $RELEASE_SHA"
+           exit 1
+         fi
 
-          if [[ -n "${PREPARED_TAG:-}" && "$PREPARED_TAG" != "$EXPECTED_TAG" ]]; then
-            echo "::error::Prepared tag $PREPARED_TAG does not match project version $VERSION"
-            exit 1
-          fi
+         if [[ "$VERSION" != "$RELEASE_VERSION" || "$EXPECTED_TAG" != "$RELEASE_TAG" ]]; then
+           echo "::error::Immutable checkout version $VERSION does not match resolved release $RELEASE_TAG"
+           exit 1
+         fi
 
-          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "$EXPECTED_TAG" ]]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match project version $VERSION"
-            exit 1
-          fi
+         if [[ "$(git rev-parse "refs/tags/$RELEASE_TAG^{}")" != "$RELEASE_SHA" ]]; then
+           echo "::error::Release tag $RELEASE_TAG no longer resolves to $RELEASE_SHA"
+           exit 1
+         fi
 
-          if [[ "$GITHUB_REF_TYPE" != "tag" && -z "${PREPARED_TAG:-}" ]]; then
-            EXACT_TAG="$(git tag --points-at HEAD | grep -Fx "$EXPECTED_TAG" || true)"
-            if [[ -z "$EXACT_TAG" ]]; then
-              echo "::error::Manual publishing from a branch requires preparing a version or selecting a ref tagged $EXPECTED_TAG"
-              exit 1
-            fi
-          fi
-
-          for npm_dir in . bootui-ui/src/main/frontend bootui-spring-sample-app/e2e bootui-quarkus-sample-app/e2e; do
+         for npm_dir in . bootui-ui/src/main/frontend bootui-spring-sample-app/e2e bootui-quarkus-sample-app/e2e; do
             node -e '
               const fs = require("fs");
               const [dir, expected] = process.argv.slice(1);
@@ -208,9 +350,10 @@ jobs:
             ' "$npm_dir" "$VERSION"
           done
 
-          echo "Releasing version $VERSION"
+          echo "Publishing version $VERSION from $RELEASE_SHA"
 
       - name: Publish to Maven Central
+        if: env.RESUME_AFTER_PUBLISH != 'true'
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -414,75 +557,15 @@ jobs:
 
           echo "All BootUI ${VERSION} distribution smoke tests passed (Spring MVC, Spring WebFlux, Quarkus)."
 
-      - name: Commit, tag, and push release
-        if: github.event_name == 'workflow_dispatch' && inputs.version != ''
-        run: |
-          set -euo pipefail
-
-          TAG="${PREPARED_TAG:?PREPARED_TAG was not set by the prepare step}"
-          VERSION="${TAG#v}"
-
-          # Fail fast if versions:set (run with -DprocessAllModules=true, so it walks every
-          # pom.xml in the tree regardless of nesting depth) missed a module: a stale nested
-          # pom (e.g. under bootui-quarkus-integration-tests/*/pom.xml) would otherwise slip
-          # through a shallow */pom.xml glob undetected.
-          stale_poms="$(git ls-files '*pom.xml' | xargs -I{} sh -c "grep -q '<version>$VERSION</version>' '{}' || echo '{}'")"
-          if [[ -n "$stale_poms" ]]; then
-            echo "::error::The following poms were not bumped to $VERSION:"
-            echo "$stale_poms"
-            exit 1
-          fi
-
-          if [[ -n "$(git status --porcelain)" ]]; then
-            # Stage every tracked file the version bump touched, at any depth, instead of an
-            # explicit path list: an explicit shallow glob (e.g. */pom.xml) silently misses
-            # nested poms that versions:set still updates in the working tree.
-            git add -u
-            git commit -m "Release $TAG"
-          else
-            echo "Project files already declare the released version; tagging current HEAD."
-          fi
-
-          # The Maven Central publish + availability wait + smoke test steps above can take
-          # tens of minutes - long enough for another PR to merge into $GITHUB_REF_NAME while
-          # this job runs, which would otherwise reject this push as a non-fast-forward. Retry
-          # by rebasing onto the latest remote tip instead of failing outright: the release
-          # commit only touches version-specific files (pom.xml, README.md, docs/SETUP.md,
-          # package.json/-lock.json), so an unrelated concurrent merge is expected to rebase
-          # cleanly. A genuine conflict (e.g. a second release racing this one) still fails loudly.
-          attempt=1
-          max_attempts=5
-          while ! git push origin "HEAD:$GITHUB_REF_NAME"; do
-            if (( attempt >= max_attempts )); then
-              echo "::error::Failed to push the release commit to $GITHUB_REF_NAME after $max_attempts attempts (another merge kept landing on $GITHUB_REF_NAME)."
-              exit 1
-            fi
-            attempt=$((attempt + 1))
-            echo "Push rejected: $GITHUB_REF_NAME advanced during the release. Rebasing onto the latest origin/$GITHUB_REF_NAME and retrying (attempt $attempt/$max_attempts)."
-            sleep 5
-            git fetch origin "$GITHUB_REF_NAME"
-            if ! git rebase FETCH_HEAD; then
-              git rebase --abort
-              echo "::error::Rebasing the release commit onto origin/$GITHUB_REF_NAME hit a conflict; resolve manually and re-run the release."
-              exit 1
-            fi
-          done
-
-          # Tag after the push succeeds so the tag points at the commit that actually landed on
-          # $GITHUB_REF_NAME (a rebase above would have changed the release commit's SHA).
-          git tag -a "$TAG" -m "Release $TAG"
-          git push origin "$TAG"
-
       - name: Redeploy documentation site
         if: env.CENTRAL_AUTO_PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # The release commit is pushed to main with GITHUB_TOKEN, which does not
-          # trigger the Pages workflow. Dispatch it explicitly so the docs site
-          # rebuilds with the released version's setup instructions - only now that the
-          # artifacts are live on Maven Central and the smoke test has passed.
-          gh workflow run pages.yml --ref main
+          # A release push made with GITHUB_TOKEN does not trigger the Pages workflow.
+          # Dispatch the immutable tag, not a branch that may have advanced while Central
+          # propagated the artifacts.
+          gh workflow run pages.yml --ref "$RELEASE_TAG"
 
       - name: Manual publish reminder
         if: env.CENTRAL_AUTO_PUBLISH != 'true'
@@ -491,11 +574,13 @@ jobs:
           Auto-publish was disabled, so the deployment was uploaded to the Sonatype Central
           Portal but the artifacts are NOT yet public on Maven Central.
 
-          To keep the documented version in lockstep with what is downloadable, this run skipped
-          the Maven Central availability wait, the published-artifact smoke test, and the
-          documentation-site redeploy.
+          The signed release tag is already immutable and must not be recreated or moved. This
+          run skipped the Maven Central availability wait, the published-artifact smoke test,
+          and the documentation-site redeploy.
 
-          Finish the release by publishing the deployment in the Central Portal, then run the
-          "pages.yml" workflow (from the Actions tab) so the documentation site advertises the
-          new version.
+          Finish the release by publishing the deployment in the Central Portal. Then manually
+          run this Release workflow at the existing release tag with an empty version,
+          auto_publish enabled, and resume_after_publish enabled. That continuation skips a
+          duplicate deploy, verifies the public artifacts, runs consumer smoke tests from the
+          tagged SHA, and deploys documentation from the same tag.
           EOF

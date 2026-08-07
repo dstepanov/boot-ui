@@ -7,6 +7,7 @@ describe('FlashBanner', () => {
   it('renders nothing when there is no message', () => {
     const wrapper = mount(FlashBanner, {props: {message: null}})
     expect(wrapper.find('.alert').exists()).toBe(false)
+    expect(wrapper.get('[role="status"]').text()).toBe('')
   })
 
   it('renders the message text with the type-specific alert class', () => {
@@ -14,6 +15,20 @@ describe('FlashBanner', () => {
     const alert = wrapper.get('.alert')
     expect(alert.classes()).toContain('alert-success')
     expect(alert.text()).toContain('Saved')
+    expect(alert.attributes()).toMatchObject({
+      role: 'status',
+      'aria-live': 'polite',
+      'aria-atomic': 'true'
+    })
+  })
+
+  it.each(['warning', 'danger'])('announces %s messages assertively', (type) => {
+    const wrapper = mount(FlashBanner, {props: {message: {text: 'Action failed', type}}})
+    expect(wrapper.get('.alert').attributes()).toMatchObject({
+      role: 'alert',
+      'aria-atomic': 'true'
+    })
+    expect(wrapper.get('.alert').attributes('aria-live')).toBeUndefined()
   })
 
   it('omits the icon by default', () => {
