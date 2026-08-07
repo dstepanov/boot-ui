@@ -1,0 +1,79 @@
+name: OSV live smoke
+
+# Normal PR CI uses a deterministic loopback OSV fixture. This separate smoke catches public API/protocol
+# drift without making pull requests depend on OSV.dev availability.
+on:
+  schedule:
+    # Weekly at an off-peak minute to reduce the chance of delayed/dropped scheduled events.
+    - cron: '37 6 * * 2'
+  workflow_dispatch:
+
+concurrency:
+  group: osv-live-smoke
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  live-osv:
+    name: Quarkus live OSV browser smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.16.0'
+          cache: npm
+          cache-dependency-path: bootui-quarkus-sample-app/e2e/package-lock.json
+
+      - name: Build BootUI Quarkus extension and sample app
+        run: ./mvnw -T 1C -B -ntp -pl bootui-quarkus-sample-app -am -DskipTests install
+
+      - name: Install Playwright dependencies
+        working-directory: bootui-quarkus-sample-app/e2e
+        run: npm ci --ignore-scripts
+
+      - name: Install Playwright browser
+        working-directory: bootui-quarkus-sample-app/e2e
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Run live OSV smoke
+        working-directory: bootui-quarkus-sample-app/e2e
+        env:
+          BOOTUI_OSV_LIVE: '1'
+          BOOTUI_WEBSERVER_TIMEOUT: '300000'
+        run: npm test -- tests/vulnerabilities-live.spec.js
+
+      - name: Publish live smoke test report
+        if: ${{ !cancelled() }}
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        with:
+          name: OSV live smoke (Playwright)
+          path: bootui-quarkus-sample-app/e2e/test-results/junit/results.xml
+          reporter: jest-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: Upload live smoke diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: osv-live-smoke-report
+          path: |
+            bootui-quarkus-sample-app/e2e/playwright-report/
+            bootui-quarkus-sample-app/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

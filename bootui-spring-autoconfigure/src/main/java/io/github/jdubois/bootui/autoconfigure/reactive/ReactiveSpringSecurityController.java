@@ -46,7 +46,7 @@ import reactor.core.publisher.Mono;
 @RestController
 @Lazy
 @ConditionalOnClass(SecurityWebFilterChain.class)
-@RequestMapping("/bootui/api/spring-security")
+@RequestMapping("${bootui.api-path:/bootui/api}/spring-security")
 public class ReactiveSpringSecurityController {
 
     private final ReactiveSpringSecurityService securityService;

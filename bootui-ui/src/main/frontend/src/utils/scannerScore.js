@@ -16,6 +16,10 @@ function severityWeight(severity) {
   return SEVERITY_WEIGHTS[severity.toString().toUpperCase()] ?? 0
 }
 
+export function isKnownSeverity(severity) {
+  return typeof severity === 'string' && Object.hasOwn(SEVERITY_WEIGHTS, severity.toUpperCase())
+}
+
 // Computes a 0-100 score from a list of {severity, count} entries.
 export function scoreFromSeverityCounts(severityCounts) {
   if (!Array.isArray(severityCounts)) return MAX_SCORE

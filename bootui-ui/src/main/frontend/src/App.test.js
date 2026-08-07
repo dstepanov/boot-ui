@@ -9,7 +9,7 @@ const namedRoutes = routes.filter((route) => route.name && route.meta?.title)
 const NARROW_QUERY = '(max-width: 991.98px)'
 
 function shellRoutes() {
-  return routes.map((route) => (route.redirect ? route : {...route, component: TestPanel}))
+  return routes.map((route) => (route.redirect || !route.name ? route : {...route, component: TestPanel}))
 }
 
 function jsonResponse(body) {
@@ -132,7 +132,7 @@ async function mountApp(initialPath = '/overview', options = {}) {
       plugins: [router],
       stubs: {
         CommandPalette: options.stubCommandPalette === false ? false : true,
-        RouterView: {template: '<div />'}
+        RouterView: options.stubRouterView === false ? false : {template: '<div />'}
       }
     }
   })
@@ -366,6 +366,52 @@ describe('App command palette', () => {
     expect(router.currentRoute.value.name).toBe('architecture')
     expect(wrapper.find('[aria-label="Command palette"]').exists()).toBe(false)
     expect(document.activeElement).toBe(wrapper.find('main').element)
+  })
+})
+
+describe('App route recovery and document title', () => {
+  beforeEach(() => {
+    stubLocalStorage()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    restoreLocalStorage()
+    document.body.innerHTML = ''
+    document.title = ''
+  })
+
+  it('updates the title from the active platform route and existing overview application name', async () => {
+    mockShellFetch('quarkus')
+    const {router} = await mountApp('/spring')
+
+    expect(document.title).toBe('Quarkus · bootui-sample · BootUI')
+
+    await router.push('/beans')
+    await flushPromises()
+    expect(document.title).toBe('Beans · bootui-sample · BootUI')
+  })
+
+  it('renders the catch-all route and recovers through overview or command search', async () => {
+    mockShellFetch()
+    const {router, wrapper} = await mountApp('/missing-panel', {
+      stubCommandPalette: false,
+      stubRouterView: false
+    })
+
+    expect(wrapper.get('#not-found-title').text()).toBe('Page not found')
+    expect(document.title).toBe('Not Found · bootui-sample · BootUI')
+
+    await wrapper.get('.not-found-actions a').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('overview')
+
+    await router.push('/still-missing')
+    await flushPromises()
+    await wrapper.get('.not-found-actions button').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[aria-label="Command palette"]').exists()).toBe(true)
+    expect(document.activeElement).toBe(wrapper.get('.cp-input').element)
   })
 })
 

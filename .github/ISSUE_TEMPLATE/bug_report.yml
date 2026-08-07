@@ -14,11 +14,22 @@ body:
       placeholder: "0.1.0-SNAPSHOT"
     validations:
       required: true
-  - type: input
-    id: spring-boot-version
+  - type: dropdown
+    id: adapter
     attributes:
-      label: Spring Boot version
-      placeholder: "4.0.6"
+      label: BootUI adapter
+      options:
+        - Spring MVC
+        - Spring WebFlux
+        - Quarkus
+    validations:
+      required: true
+  - type: input
+    id: framework-version
+    attributes:
+      label: Spring Boot or Quarkus version
+      description: Use the framework version for the selected adapter.
+      placeholder: "Spring Boot 4.1.0 or Quarkus 3.33.3.1"
     validations:
       required: true
   - type: input
@@ -56,11 +67,11 @@ body:
     id: repro
     attributes:
       label: Steps to reproduce
-      description: Provide a minimal repro. A pom.xml snippet and the active profiles are usually enough.
+      description: Provide a minimal repro. Include the relevant starter/extension, configuration, and active profile or launch mode.
       placeholder: |
-        1. Add `bootui-spring-boot-starter` to a Spring Boot 4 project
-        2. Run with `--spring.profiles.active=dev`
-        3. Open http://localhost:8080/bootui
+        1. Add the Spring MVC starter, Spring WebFlux starter, or Quarkus extension
+        2. Run with a local Spring profile or in Quarkus dev mode
+        3. Open the configured BootUI path
         4. ...
     validations:
       required: true

@@ -17,6 +17,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 
@@ -131,6 +132,110 @@ class SqlTracingProxiesTests {
         assertThat(entry.category()).isEqualTo(Category.INSERT);
         assertThat(entry.batchSize()).isEqualTo(2);
         assertThat(entry.affectedRows()).isEqualTo(3L);
+        assertThat(entry.parameters()).containsExactly("batch 1: ['a']", "batch 2: ['b']");
+    }
+
+    @Test
+    void keepsPreparedBatchStateAndRenderedParameterPreviewBounded() throws Exception {
+        SqlTraceRecorder recorder = recorder();
+        DataSource ds = mock(DataSource.class);
+        Connection conn = mock(Connection.class);
+        PreparedStatement ps = mock(PreparedStatement.class);
+        String sql = "insert into account values (?, ?, ?, ?, ?, ?, ?)";
+        when(ds.getConnection()).thenReturn(conn);
+        when(conn.prepareStatement(sql)).thenReturn(ps);
+        when(ps.executeBatch()).thenReturn(new int[0]);
+
+        DataSource traced = SqlTracingProxies.wrap(ds, recorder);
+        PreparedStatement p = traced.getConnection().prepareStatement(sql);
+        String oversizedParameter = "x".repeat(SqlTracingProxies.MAX_BATCH_PARAMETER_PREVIEW_CHARS * 8);
+        int batchSize = 10_000;
+        for (int i = 0; i < batchSize; i++) {
+            p.setString(1, oversizedParameter);
+            for (int parameter = 2; parameter <= 7; parameter++) {
+                p.setInt(parameter, parameter);
+            }
+            p.addBatch();
+        }
+
+        assertThat(proxyHandlerField(p, "batchSize")).isEqualTo(batchSize);
+        assertThat((List<?>) proxyHandlerField(p, "batchParameterPreviews"))
+                .hasSize(SqlTracingProxies.MAX_BATCH_PREVIEW_ITEMS);
+
+        p.executeBatch();
+
+        CapturedStatement entry = recorder.recent().get(0);
+        assertThat(entry.batchSize()).isEqualTo(batchSize);
+        assertThat(entry.parameters())
+                .hasSize(SqlTracingProxies.MAX_BATCH_PREVIEW_ITEMS + 1)
+                .endsWith("… (+9995 more parameter sets)");
+        assertThat(entry.parameters().subList(0, SqlTracingProxies.MAX_BATCH_PREVIEW_ITEMS))
+                .allSatisfy(preview -> assertThat(preview)
+                        .contains("…, 2, 3, 4, 5, … (+2 more values)]")
+                        .hasSizeLessThan(200));
+        assertThat(recorder.report(false).entries().get(0).parameters()).isEmpty();
+        assertThat(proxyHandlerField(p, "batchSize")).isEqualTo(0);
+        assertThat((List<?>) proxyHandlerField(p, "batchParameterPreviews")).isEmpty();
+    }
+
+    @Test
+    void keepsSmallPlainBatchSqlUseful() throws Exception {
+        SqlTraceRecorder recorder = recorder();
+        DataSource ds = mock(DataSource.class);
+        Connection conn = mock(Connection.class);
+        Statement statement = mock(Statement.class);
+        when(ds.getConnection()).thenReturn(conn);
+        when(conn.createStatement()).thenReturn(statement);
+        when(statement.executeBatch()).thenReturn(new int[] {1, 2});
+
+        DataSource traced = SqlTracingProxies.wrap(ds, recorder);
+        Statement s = traced.getConnection().createStatement();
+        s.addBatch("insert into account(name) values ('alice')");
+        s.addBatch("update account set active = true");
+        s.executeBatch();
+
+        CapturedStatement entry = recorder.recent().get(0);
+        assertThat(entry.batchSize()).isEqualTo(2);
+        assertThat(entry.sql())
+                .isEqualTo("insert into account(name) values ('alice');\nupdate account set active = true");
+        assertThat(entry.category()).isEqualTo(Category.INSERT);
+    }
+
+    @Test
+    void keepsPlainBatchStateAndRenderedSqlPreviewBounded() throws Exception {
+        SqlTraceRecorder recorder = recorder();
+        DataSource ds = mock(DataSource.class);
+        Connection conn = mock(Connection.class);
+        Statement statement = mock(Statement.class);
+        when(ds.getConnection()).thenReturn(conn);
+        when(conn.createStatement()).thenReturn(statement);
+        when(statement.executeBatch()).thenReturn(new int[0]);
+
+        DataSource traced = SqlTracingProxies.wrap(ds, recorder);
+        Statement s = traced.getConnection().createStatement();
+        String oversizedSql = "insert into audit_log(payload) values ('"
+                + "x".repeat(SqlTracingProxies.MAX_BATCH_SQL_PREVIEW_CHARS * 8)
+                + "')";
+        int batchSize = 10_000;
+        for (int i = 0; i < batchSize; i++) {
+            s.addBatch(oversizedSql);
+        }
+
+        assertThat(proxyHandlerField(s, "batchSize")).isEqualTo(batchSize);
+        assertThat((List<?>) proxyHandlerField(s, "batchSqlPreviews"))
+                .hasSize(SqlTracingProxies.MAX_BATCH_PREVIEW_ITEMS)
+                .allSatisfy(sql -> assertThat((String) sql)
+                        .hasSize(SqlTracingProxies.MAX_BATCH_SQL_PREVIEW_CHARS + 1)
+                        .endsWith("…"));
+
+        s.executeBatch();
+
+        CapturedStatement entry = recorder.recent().get(0);
+        assertThat(entry.batchSize()).isEqualTo(batchSize);
+        assertThat(entry.sql()).endsWith("-- … (+9995 more statements)").doesNotContain(oversizedSql);
+        assertThat(entry.sql().length()).isLessThan(1_500);
+        assertThat(proxyHandlerField(s, "batchSize")).isEqualTo(0);
+        assertThat((List<?>) proxyHandlerField(s, "batchSqlPreviews")).isEmpty();
     }
 
     @Test
@@ -291,17 +396,21 @@ class SqlTracingProxiesTests {
     }
 
     private static Object proxyTarget(Object proxy) throws Exception {
+        return proxyHandlerField(proxy, "target");
+    }
+
+    private static Object proxyHandlerField(Object proxy, String fieldName) throws Exception {
         Object handler = Proxy.getInvocationHandler(proxy);
         for (Class<?> type = handler.getClass(); type != null; type = type.getSuperclass()) {
             try {
-                java.lang.reflect.Field field = type.getDeclaredField("target");
+                java.lang.reflect.Field field = type.getDeclaredField(fieldName);
                 field.setAccessible(true);
                 return field.get(handler);
             } catch (NoSuchFieldException ignored) {
-                // Walk up to the DelegatingHandler superclass that declares the field.
+                // Walk up to the handler superclass that declares the field.
             }
         }
-        throw new NoSuchFieldException("target");
+        throw new NoSuchFieldException(fieldName);
     }
 
     private static boolean loaderSees(ClassLoader loader, String className) {

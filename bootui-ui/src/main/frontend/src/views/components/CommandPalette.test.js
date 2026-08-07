@@ -1,8 +1,10 @@
 import {flushPromises, mount} from '@vue/test-utils'
 import {createMemoryHistory, createRouter} from 'vue-router'
+import {ref} from 'vue'
 import {afterEach, describe, expect, it, vi} from 'vitest'
 
 import {routes} from '../../routes.js'
+import {safeLocalStorage} from '../../utils/safeStorage.js'
 import CommandPalette from './CommandPalette.vue'
 
 const namedRoutes = routes.filter((route) => route.name && route.meta?.title)
@@ -18,7 +20,8 @@ async function mountPalette(options = {}) {
   const wrapper = mount(CommandPalette, {
     attachTo: options.attachTo,
     global: {
-      plugins: [router]
+      plugins: [router],
+      provide: options.panels ? {panels: ref(options.panels)} : {}
     }
   })
 
@@ -34,6 +37,7 @@ async function setQuery(wrapper, value) {
 describe('CommandPalette', () => {
   afterEach(() => {
     document.body.innerHTML = ''
+    vi.restoreAllMocks()
   })
 
   it('lists every navigable panel before filtering', async () => {
@@ -91,6 +95,59 @@ describe('CommandPalette', () => {
     expect(titles[0]).toBe('Spring')
     expect(titles).toContain('Beans')
     expect(titles.indexOf('Spring')).toBeLessThan(titles.indexOf('Beans'))
+  })
+
+  it('uses the manifest platform for the shared application-advisor label and search', async () => {
+    const {wrapper} = await mountPalette({
+      panels: {
+        platform: 'quarkus',
+        panels: namedRoutes.map((route) => ({id: route.name, available: true, enabled: true}))
+      }
+    })
+
+    await setQuery(wrapper, 'quarkus')
+
+    expect(wrapper.findAll('.cp-item-title').map((item) => item.text())).toContain('Quarkus')
+    expect(wrapper.findAll('.cp-item-title').map((item) => item.text())).not.toContain('Spring')
+  })
+
+  it('keeps unavailable panels discoverable in the explicit sidebar-equivalent group', async () => {
+    const {wrapper} = await mountPalette({
+      panels: {
+        platform: 'spring-boot',
+        panels: [
+          {
+            id: 'ai',
+            available: false,
+            enabled: true,
+            unavailableReason: 'AI support is not installed'
+          }
+        ]
+      }
+    })
+
+    await setQuery(wrapper, 'AI Framework')
+
+    const result = wrapper.get('[role="option"]')
+    expect(result.classes()).toContain('cp-item--unavailable')
+    expect(result.get('.cp-item-group').text()).toBe('Disabled / unavailable')
+    expect(result.attributes('aria-label')).toBe('AI Framework - unavailable: AI support is not installed')
+    expect(result.get('.cp-item-status').attributes('title')).toBe('Unavailable')
+  })
+
+  it('keeps unavailable recent panels first without losing their status', async () => {
+    vi.spyOn(safeLocalStorage, 'getJson').mockReturnValue(['ai'])
+    const {wrapper} = await mountPalette({
+      panels: {
+        platform: 'spring-boot',
+        panels: [{id: 'ai', available: false, enabled: true}]
+      }
+    })
+
+    const firstResult = wrapper.get('[role="option"]')
+    expect(firstResult.get('.cp-item-title').text()).toBe('AI Framework')
+    expect(firstResult.find('.cp-item-recent').exists()).toBe(true)
+    expect(firstResult.classes()).toContain('cp-item--unavailable')
   })
 
   it('navigates with a number key while browsing the unfiltered list', async () => {

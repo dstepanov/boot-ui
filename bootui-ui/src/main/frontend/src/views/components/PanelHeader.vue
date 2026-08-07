@@ -85,6 +85,8 @@ onBeforeUnmount(stopRelativeTimer)
       />
       <button
         v-if="hasRefresh"
+        :aria-busy="loading || undefined"
+        :aria-label="loading ? 'Refreshing panel' : 'Refresh panel'"
         :disabled="loading"
         class="btn btn-outline-secondary btn-sm"
         title="Refresh"
@@ -148,5 +150,11 @@ onBeforeUnmount(stopRelativeTimer)
 .spin {
   animation: spin 900ms linear infinite;
   display: inline-block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
 }
 </style>

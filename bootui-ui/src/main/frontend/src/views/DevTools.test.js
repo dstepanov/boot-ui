@@ -40,7 +40,7 @@ describe('DevTools', () => {
     wrapper = mount(DevTools)
     await flushPromises()
 
-    const alert = wrapper.get('[role="alert"]')
+    const alert = wrapper.get('.alert-secondary[role="alert"]')
     expect(alert.classes()).toContain('alert-secondary')
     expect(alert.text()).toContain('DevTools status is unavailable')
   })
