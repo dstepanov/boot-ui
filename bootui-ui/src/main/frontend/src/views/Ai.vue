@@ -214,8 +214,7 @@ const miniTimeline = computed(() => {
   }
 
   const bars = []
-  // base chat span bar
-  bars.push({x: 0, w: width, y: baseY, h: barH, color: '#dee2e6', title: 'Chat span'})
+  bars.push({x: 0, w: width, y: baseY, h: barH, color: 'var(--bootui-chart-span)', title: 'Chat span'})
 
   const children = []
   if (detail.value.toolCalls) {
@@ -227,7 +226,7 @@ const miniTimeline = computed(() => {
           w: Math.max(2, toX(tc.durationNanos)),
           y: baseY,
           h: barH,
-          color: '#0d6efd',
+          color: 'var(--bootui-chart-tool)',
           title: `${tc.name || 'tool'} ${(tc.durationNanos / 1_000_000).toFixed(1)}ms`
         })
       }
@@ -242,7 +241,7 @@ const miniTimeline = computed(() => {
           w: Math.max(2, toX(vo.durationNanos)),
           y: baseY,
           h: barH,
-          color: '#fd7e14',
+          color: 'var(--bootui-chart-vector)',
           title: `${vo.operation || 'vector'} ${(vo.durationNanos / 1_000_000).toFixed(1)}ms`
         })
       }
@@ -547,7 +546,7 @@ const detectedFrameworkLabel = computed(() => {
             </div>
             <div
               ref="chartContainerRef"
-              class="position-relative"
+              class="ai-chart-container position-relative"
               @mouseleave="onChartMouseleave"
               @mousemove="onChartMousemove"
             >
@@ -558,19 +557,61 @@ const detectedFrameworkLabel = computed(() => {
                 role="img"
                 style="max-height: 100px"
               >
-                <line :x1="0" :x2="chart.width" :y1="chart.halfY" :y2="chart.halfY" stroke="#dee2e6" stroke-width="1" />
-                <text :x="2" :y="8" fill="#6c757d" font-size="9">{{ formatNumber(chart.maxTokens) }}</text>
-                <text :x="2" :y="chart.halfY - 2" fill="#6c757d" font-size="9">
+                <line
+                  :x1="0"
+                  :x2="chart.width"
+                  :y1="chart.halfY"
+                  :y2="chart.halfY"
+                  aria-hidden="true"
+                  class="ai-chart-grid"
+                  stroke="var(--bootui-chart-grid)"
+                  stroke-width="1"
+                />
+                <text :x="2" :y="8" class="ai-chart-axis-label" fill="var(--bootui-chart-axis)" font-size="9">
+                  {{ formatNumber(chart.maxTokens) }}
+                </text>
+                <text
+                  :x="2"
+                  :y="chart.halfY - 2"
+                  class="ai-chart-axis-label"
+                  fill="var(--bootui-chart-axis)"
+                  font-size="9"
+                >
                   {{ formatNumber(Math.round(chart.maxTokens / 2)) }}
                 </text>
-                <text :x="2" :y="chart.height - 1" fill="#6c757d" font-size="9">0</text>
-                <polygon :points="chart.inputAreaPts" fill="#0d6efd" fill-opacity="0.6" />
-                <polygon :points="chart.outputAreaPts" fill="#6610f2" fill-opacity="0.6" />
-                <polyline :points="chart.outputLinePts" fill="none" stroke="#6610f2" stroke-width="1.5" />
+                <text
+                  :x="2"
+                  :y="chart.height - 1"
+                  class="ai-chart-axis-label"
+                  fill="var(--bootui-chart-axis)"
+                  font-size="9"
+                >
+                  0
+                </text>
+                <polygon
+                  :points="chart.inputAreaPts"
+                  class="ai-chart-input-area"
+                  fill="var(--bootui-chart-input)"
+                  fill-opacity="0.6"
+                />
+                <polygon
+                  :points="chart.outputAreaPts"
+                  class="ai-chart-output-area"
+                  fill="var(--bootui-chart-output)"
+                  fill-opacity="0.6"
+                />
+                <polyline
+                  :points="chart.outputLinePts"
+                  class="ai-chart-output-line"
+                  fill="none"
+                  stroke="var(--bootui-chart-output)"
+                  stroke-width="1.5"
+                />
                 <polyline
                   :points="chart.callLinePts"
+                  class="ai-chart-calls-line"
                   fill="none"
-                  stroke="#198754"
+                  stroke="var(--bootui-chart-calls)"
                   stroke-dasharray="4 2"
                   stroke-width="1.5"
                 />
@@ -581,20 +622,21 @@ const detectedFrameworkLabel = computed(() => {
                   :y1="0"
                   :y2="chart.height"
                   aria-hidden="true"
-                  stroke="#adb5bd"
+                  class="ai-chart-selection"
+                  stroke="var(--bootui-chart-selection)"
                   stroke-width="1"
                 />
               </svg>
               <div
                 v-if="tooltipData"
                 :style="{left: tooltipData.x + '%'}"
-                class="position-absolute bg-white border rounded p-1 small shadow-sm"
+                class="ai-chart-tooltip position-absolute rounded p-1 small shadow-sm"
                 style="top: 0; transform: translateX(-50%); pointer-events: none; white-space: nowrap; z-index: 10"
               >
                 <div class="fw-semibold">{{ tooltipData.time }}</div>
-                <div style="color: var(--bootui-chart-input)">In: {{ tooltipData.input }}</div>
-                <div style="color: var(--bootui-chart-output)">Out: {{ tooltipData.output }}</div>
-                <div style="color: var(--bootui-chart-calls)">Calls: {{ tooltipData.calls }}</div>
+                <div class="ai-chart-tooltip-input">In: {{ tooltipData.input }}</div>
+                <div class="ai-chart-tooltip-output">Out: {{ tooltipData.output }}</div>
+                <div class="ai-chart-tooltip-calls">Calls: {{ tooltipData.calls }}</div>
               </div>
             </div>
             <div class="d-flex justify-content-between text-muted small mt-1 px-1">
@@ -1051,5 +1093,23 @@ code {
 }
 .kpi-card-body {
   min-height: 90px;
+}
+
+.ai-chart-tooltip {
+  background: var(--bootui-chart-tooltip-bg);
+  border: 1px solid var(--bootui-chart-tooltip-border);
+  color: var(--bootui-chart-tooltip-text);
+}
+
+.ai-chart-tooltip-input {
+  color: var(--bootui-chart-input);
+}
+
+.ai-chart-tooltip-output {
+  color: var(--bootui-chart-output);
+}
+
+.ai-chart-tooltip-calls {
+  color: var(--bootui-chart-calls);
 }
 </style>

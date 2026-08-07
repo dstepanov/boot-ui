@@ -3,6 +3,30 @@ import {expect, test} from './fixtures.js'
 
 const chatSpanId = '1111111111111111'
 
+function parseColor(value) {
+  const channels = value.match(/[\d.]+/g)?.map(Number)
+  if (!channels || channels.length < 3) throw new Error(`Unsupported computed color: ${value}`)
+  return {red: channels[0], green: channels[1], blue: channels[2]}
+}
+
+function linearChannel(channel) {
+  const srgb = channel / 255
+  return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4
+}
+
+function relativeLuminance(color) {
+  return 0.2126 * linearChannel(color.red) + 0.7152 * linearChannel(color.green) + 0.0722 * linearChannel(color.blue)
+}
+
+function contrastRatio(foreground, background) {
+  const foregroundLuminance = relativeLuminance(parseColor(foreground))
+  const backgroundLuminance = relativeLuminance(parseColor(background))
+  return (
+    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+  )
+}
+
 const overview = {
   enabled: true,
   springAiDetected: true,
@@ -88,6 +112,60 @@ test.describe('AI Framework view', () => {
     await expect(page.locator('.chat-detail-row').getByText('docs', {exact: true})).toBeVisible()
     await page.locator('.chat-detail-row summary', {hasText: 'gen_ai'}).click()
     await expect(page.locator('.chat-detail-row').getByText('gen_ai.system')).toBeVisible()
+  })
+
+  test('applies accessible chart tokens in light and dark themes', async ({openView, page}) => {
+    await stubAi(page, overview)
+    const renderedThemes = []
+
+    for (const theme of ['light', 'dark']) {
+      await page.goto('/bootui/')
+      await page.evaluate((value) => localStorage.setItem('bootui.theme', value), theme)
+      await page.reload()
+      await expect(page.locator('html')).toHaveAttribute('data-bootui-theme', theme)
+      await openView('ai', /AI Framework/)
+
+      const chart = page.getByRole('img', {name: /Token usage over the last/})
+      await chart.hover({position: {x: 500, y: 20}})
+      const tooltip = page.locator('.ai-chart-tooltip')
+      await expect(tooltip).toBeVisible()
+
+      const colors = await tooltip.evaluate((tooltipElement) => {
+        const rootStyle = getComputedStyle(document.documentElement)
+        const resolveToken = (name) => {
+          const probe = document.createElement('span')
+          probe.style.color = rootStyle.getPropertyValue(name)
+          document.body.append(probe)
+          const color = getComputedStyle(probe).color
+          probe.remove()
+          return color
+        }
+        return {
+          axis: getComputedStyle(document.querySelector('.ai-chart-axis-label')).fill,
+          axisToken: resolveToken('--bootui-chart-axis'),
+          input: getComputedStyle(tooltipElement.querySelector('.ai-chart-tooltip-input')).color,
+          output: getComputedStyle(tooltipElement.querySelector('.ai-chart-tooltip-output')).color,
+          calls: getComputedStyle(tooltipElement.querySelector('.ai-chart-tooltip-calls')).color,
+          tooltipText: getComputedStyle(tooltipElement).color,
+          tooltipBackground: getComputedStyle(tooltipElement).backgroundColor,
+          selection: getComputedStyle(document.querySelector('.ai-chart-selection')).stroke,
+          selectionToken: resolveToken('--bootui-chart-selection'),
+          surface: resolveToken('--bootui-surface-solid')
+        }
+      })
+
+      expect(colors.axis).toBe(colors.axisToken)
+      expect(colors.selection).toBe(colors.selectionToken)
+      expect(contrastRatio(colors.axis, colors.surface)).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(colors.selection, colors.surface)).toBeGreaterThanOrEqual(3)
+      for (const foreground of [colors.tooltipText, colors.input, colors.output, colors.calls]) {
+        expect(contrastRatio(foreground, colors.tooltipBackground)).toBeGreaterThanOrEqual(4.5)
+      }
+      renderedThemes.push(colors)
+    }
+
+    expect(renderedThemes[1].tooltipBackground).not.toBe(renderedThemes[0].tooltipBackground)
+    expect(renderedThemes[1].axis).not.toBe(renderedThemes[0].axis)
   })
 
   test('shows disabled mode when telemetry is unavailable', async ({page}) => {
