@@ -1,6 +1,16 @@
 import {resolveBootUiApiUrl} from './utils/bootUiPath.js'
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE'])
+const ACTION_BUSY_ERROR = 'BootUI action already in progress'
+
+export class ApiError extends Error {
+  constructor(status, body = null) {
+    super(`HTTP ${status}`)
+    this.name = 'ApiError'
+    this.status = status
+    this.body = body
+  }
+}
 
 /**
  * @param {RequestInfo | URL} input
@@ -42,8 +52,29 @@ export async function apiFetch(input, init = {}) {
  */
 export async function getJson(input, init) {
   const res = await apiFetch(input, init)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  if (!res.ok) throw await apiError(res)
   return res.json()
+}
+
+export function isActionBusyError(error) {
+  return error instanceof ApiError && error.status === 409 && error.body?.error === ACTION_BUSY_ERROR
+}
+
+export function actionBusyMessage(error) {
+  return isActionBusyError(error) && typeof error.body?.message === 'string'
+    ? error.body.message
+    : 'This action is already in progress.'
+}
+
+async function apiError(response) {
+  if (!response.headers?.get('content-type')?.toLowerCase().includes('json')) {
+    return new ApiError(response.status)
+  }
+  try {
+    return new ApiError(response.status, await response.json())
+  } catch {
+    return new ApiError(response.status)
+  }
 }
 
 function csrfToken() {

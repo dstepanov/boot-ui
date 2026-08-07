@@ -5,6 +5,8 @@ import io.github.jdubois.bootui.core.dto.ArchitectureReport;
 import io.github.jdubois.bootui.core.dto.ArchitectureRuleResultDto;
 import io.github.jdubois.bootui.core.dto.ArchitectureScanStatusDto;
 import io.github.jdubois.bootui.core.dto.ArchitectureSeverityCountDto;
+import io.github.jdubois.bootui.engine.action.ActionOperations;
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.support.SeverityOrder;
 import java.time.Clock;
 import java.util.Comparator;
@@ -36,6 +38,7 @@ public final class ArchitectureScanner {
     private final Supplier<List<String>> basePackagesSupplier;
     private final ArchitectureClassImporter importer;
     private final Clock clock;
+    private final SingleFlightAction singleFlight = new SingleFlightAction();
 
     ArchitectureScanner(Supplier<List<String>> basePackagesSupplier, ArchitectureClassImporter importer, Clock clock) {
         this.basePackagesSupplier = basePackagesSupplier;
@@ -66,6 +69,10 @@ public final class ArchitectureScanner {
     }
 
     public ArchitectureReport scan() {
+        return singleFlight.run(ActionOperations.ARCHITECTURE_SCAN, this::doScan);
+    }
+
+    private ArchitectureReport doScan() {
         List<String> basePackages = safeBasePackages();
         if (basePackages.isEmpty()) {
             return report(

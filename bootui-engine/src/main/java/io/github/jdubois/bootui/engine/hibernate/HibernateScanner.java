@@ -4,6 +4,8 @@ import io.github.jdubois.bootui.core.dto.HibernateReport;
 import io.github.jdubois.bootui.core.dto.HibernateRuleResultDto;
 import io.github.jdubois.bootui.core.dto.HibernateScanStatusDto;
 import io.github.jdubois.bootui.core.dto.HibernateSeverityCountDto;
+import io.github.jdubois.bootui.engine.action.ActionOperations;
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.support.SeverityOrder;
 import java.time.Clock;
 import java.util.Comparator;
@@ -39,6 +41,7 @@ public final class HibernateScanner {
     private final Function<String, String> propertyLookup;
     private final Supplier<List<String>> activeProfiles;
     private final Clock clock;
+    private final SingleFlightAction singleFlight = new SingleFlightAction();
 
     /**
      * Builds the scanner an adapter wires: entity discovery (typically the engine
@@ -121,6 +124,10 @@ public final class HibernateScanner {
     }
 
     public HibernateReport scan() {
+        return singleFlight.run(ActionOperations.HIBERNATE_SCAN, this::doScan);
+    }
+
+    private HibernateReport doScan() {
         EntityDiscovery discovery = safeEntityDiscovery();
         if (discovery.entities().isEmpty()) {
             String message = discovery.errors().isEmpty()

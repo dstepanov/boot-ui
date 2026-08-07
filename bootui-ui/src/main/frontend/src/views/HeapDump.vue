@@ -1,5 +1,5 @@
 <script setup>
-import {apiFetch, getJson} from '../api.js'
+import {actionBusyMessage, getJson, isActionBusyError} from '../api.js'
 import {computed, onBeforeUnmount, onMounted, ref} from 'vue'
 import {formatClockTime, formatNumber} from '../utils/format.js'
 import {resolveBootUiApiUrl} from '../utils/bootUiPath.js'
@@ -114,18 +114,23 @@ async function runAction(path, body) {
     return
   }
   loading.value = true
+  actionMessage.value = null
   try {
     const init = {method: 'POST'}
     if (body) {
       init.headers = {'Content-Type': 'application/x-www-form-urlencoded'}
       init.body = body
     }
-    const res = await apiFetch(path, init)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    await getJson(path, init)
     await loadReport()
     error.value = null
   } catch (e) {
-    error.value = describeLoadError(e, 'Unable to run heap dump action')
+    if (isActionBusyError(e)) {
+      showActionMessage(actionBusyMessage(e))
+      error.value = null
+    } else {
+      error.value = describeLoadError(e, 'Unable to run heap dump action')
+    }
   } finally {
     loading.value = false
   }
@@ -172,7 +177,11 @@ function downloadUrl(name) {
 }
 
 function showReadOnlyMessage() {
-  actionMessage.value = readOnlyReason.value
+  showActionMessage(readOnlyReason.value)
+}
+
+function showActionMessage(message) {
+  actionMessage.value = message
   setTimeout(() => {
     actionMessage.value = null
   }, 6000)
@@ -227,7 +236,7 @@ onBeforeUnmount(() => {
         />
       </template>
     </PanelHeader>
-    <div v-if="actionMessage" class="alert alert-warning">{{ actionMessage }}</div>
+    <div v-if="actionMessage" class="alert alert-warning" role="status" aria-live="polite">{{ actionMessage }}</div>
 
     <div class="alert alert-warning">
       <strong>Local-only and sensitive.</strong>

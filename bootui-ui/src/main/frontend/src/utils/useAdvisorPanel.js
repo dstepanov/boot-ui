@@ -1,4 +1,4 @@
-import {apiFetch} from '../api.js'
+import {actionBusyMessage, getJson, isActionBusyError} from '../api.js'
 import {computed, onMounted, reactive, ref} from 'vue'
 import {formatClockTime} from './format.js'
 import {describeLoadError} from './loadError.js'
@@ -116,9 +116,7 @@ export function useAdvisorPanel(props, options) {
   async function loadReport() {
     if (!manifestAvailable.value) return
     try {
-      const res = await apiFetch(options.apiPath)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      report.value = await res.json()
+      report.value = await getJson(options.apiPath)
       error.value = null
     } catch (e) {
       error.value = describeLoadError(e, options.loadErrorMessage)
@@ -135,20 +133,28 @@ export function useAdvisorPanel(props, options) {
       return
     }
     loading.value = true
+    actionMessage.value = null
     try {
-      const res = await apiFetch(`${options.apiPath}/scan`, {method: 'POST'})
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      report.value = await res.json()
+      report.value = await getJson(`${options.apiPath}/scan`, {method: 'POST'})
       error.value = null
     } catch (e) {
-      error.value = describeLoadError(e, options.scanErrorMessage)
+      if (isActionBusyError(e)) {
+        showActionMessage(actionBusyMessage(e))
+        error.value = null
+      } else {
+        error.value = describeLoadError(e, options.scanErrorMessage)
+      }
     } finally {
       loading.value = false
     }
   }
 
   function showReadOnlyMessage() {
-    actionMessage.value = readOnlyReason.value
+    showActionMessage(readOnlyReason.value)
+  }
+
+  function showActionMessage(message) {
+    actionMessage.value = message
     setTimeout(() => {
       actionMessage.value = null
     }, 6000)

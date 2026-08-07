@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.engine.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.mcp.McpDispatchOutcome.InitializeResult;
 import io.github.jdubois.bootui.engine.mcp.McpDispatchOutcome.NoResponse;
 import io.github.jdubois.bootui.engine.mcp.McpDispatchOutcome.PingResult;
@@ -228,10 +229,52 @@ class McpDispatcherTests {
     }
 
     @Test
+    void busyActionToolIsInBandError() throws Exception {
+        SingleFlightAction singleFlight = new SingleFlightAction();
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread winner = new Thread(() -> singleFlight.run("architecture.scan", () -> {
+            entered.countDown();
+            await(release);
+            return null;
+        }));
+        winner.start();
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+        McpTool busy = new McpTool(
+                "architecture_scan",
+                "Run the architecture advisor.",
+                McpToolSchema.NONE,
+                "architecture",
+                true,
+                args -> singleFlight.run("architecture.scan", () -> Map.of()));
+        McpDispatcher dispatcher = new McpDispatcher(List.of(busy), List.of(), policy, "1.0", "x", 50, 20, diagnostics);
+
+        assertThat(dispatcher.dispatch(call("architecture_scan")))
+                .isEqualTo(new ToolCallError(
+                        "Operation 'architecture.scan' cannot start while 'architecture.scan' is in progress."));
+        assertThat(diagnostics.count()).isZero();
+
+        release.countDown();
+        winner.join(5000);
+    }
+
+    @Test
     void readToolOnReadOnlyPanelStillRuns() {
         policy.readOnly.add("overview");
 
         assertThat(dispatcher().dispatch(call("get_overview"))).isInstanceOf(ToolCallResult.class);
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Timed out waiting for test latch");
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(ex);
+        }
     }
 
     @Test

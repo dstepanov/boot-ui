@@ -181,6 +181,49 @@ describe('Overview', () => {
     expect(wrapper.text()).toContain('1 high')
   })
 
+  it('preserves a scanner score and shows a warning when a re-run is already active', async () => {
+    const busy = {
+      error: 'BootUI action already in progress',
+      operation: 'architecture.scan',
+      activeOperation: 'architecture.scan',
+      message: "Operation 'architecture.scan' cannot start while 'architecture.scan' is in progress."
+    }
+    document.cookie = 'XSRF-TOKEN=test-token; path=/'
+    let scans = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input) => {
+        if (String(input).includes('api/architecture/scan')) {
+          scans++
+          if (scans === 1) {
+            return Promise.resolve(
+              new Response(JSON.stringify(severityReport([{severity: 'HIGH', count: 1}])), {status: 200})
+            )
+          }
+          return Promise.resolve(
+            new Response(JSON.stringify(busy), {status: 409, headers: {'Content-Type': 'application/json'}})
+          )
+        }
+        return Promise.resolve(new Response('{}', {status: 200}))
+      })
+    )
+    const wrapper = mountOverview({
+      panels: [{id: 'architecture', available: true}]
+    })
+    await flushPromises()
+    const runButton = wrapper.findAll('button').find((button) => button.text().includes('Run scan'))
+
+    await runButton.trigger('click')
+    await flushPromises()
+    expect(architectureScore(wrapper)).toBe('90')
+
+    await runButton.trigger('click')
+    await flushPromises()
+
+    expect(architectureScore(wrapper)).toBe('90')
+    expect(wrapper.text()).toContain(busy.message)
+  })
+
   it('aggregates scanner scores into the overall score with Run all', async () => {
     stubFetch({
       'api/vulnerabilities/scan': severityReport([{severity: 'CRITICAL', count: 1}]),

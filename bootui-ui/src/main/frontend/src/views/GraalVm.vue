@@ -1,6 +1,6 @@
 <script setup>
 import {computed, onBeforeUnmount, onMounted, ref} from 'vue'
-import {apiFetch, getJson} from '../api.js'
+import {actionBusyMessage, apiFetch, getJson, isActionBusyError} from '../api.js'
 import {formatClockTime} from '../utils/format.js'
 import {describeLoadError} from '../utils/loadError.js'
 import {resolveBootUiApiUrl} from '../utils/bootUiPath.js'
@@ -241,12 +241,18 @@ async function runScan() {
     return
   }
   loading.value = true
+  actionMessage.value = null
   startProgressPolling()
   try {
     report.value = await getJson(`api/graalvm/scan?includeDependencies=${includeDependencies.value}`, {method: 'POST'})
     error.value = null
   } catch (e) {
-    error.value = describeLoadError(e, 'Unable to run GraalVM readiness checks')
+    if (isActionBusyError(e)) {
+      showActionMessage(actionBusyMessage(e))
+      error.value = null
+    } else {
+      error.value = describeLoadError(e, 'Unable to run GraalVM readiness checks')
+    }
   } finally {
     loading.value = false
     cancellingScan.value = false
@@ -344,7 +350,11 @@ async function installBoth() {
 }
 
 function showReadOnlyMessage() {
-  actionMessage.value = readOnlyReason.value
+  showActionMessage(readOnlyReason.value)
+}
+
+function showActionMessage(message) {
+  actionMessage.value = message
   setTimeout(() => {
     actionMessage.value = null
   }, 6000)
@@ -389,7 +399,7 @@ onBeforeUnmount(stopProgressPolling)
         />
       </template>
     </PanelHeader>
-    <div v-if="actionMessage" class="alert alert-warning">{{ actionMessage }}</div>
+    <div v-if="actionMessage" class="alert alert-warning" role="status" aria-live="polite">{{ actionMessage }}</div>
     <div v-if="loading && scanProgress" class="alert alert-primary">
       <div class="d-flex justify-content-between align-items-center gap-3">
         <div>

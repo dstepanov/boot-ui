@@ -234,6 +234,33 @@ The first screen should show:
 - Quick links to the main panels.
 - Warnings for missing recommended data sources, such as Actuator endpoints not available.
 
+### 4.5 Expensive action admission
+
+Explicit expensive scans use one framework-neutral single-flight admission per scanner/service instance. Architecture,
+REST API, Spring/Quarkus application, Hibernate, Memory, Security, Pentesting, GraalVM, CRaC, and Vulnerabilities/OSV
+scans are protected independently; unrelated scanners can still run concurrently. Heap Dump capture, analysis, and
+delete share one admission because they operate on the same files, histogram, and status.
+
+A duplicate request never waits or repeats the work. MVC, WebFlux, and Quarkus return `409 Conflict` with the same JSON
+shape:
+
+```json
+{
+  "error": "BootUI action already in progress",
+  "operation": "architecture.scan",
+  "activeOperation": "architecture.scan",
+  "message": "Operation 'architecture.scan' cannot start while 'architecture.scan' is in progress."
+}
+```
+
+Operation ids are stable `<panel>.<action>` values. Passive `GET` requests continue returning the last completed report
+while an action runs; a rejected duplicate does not mutate cached reports, timestamps, Heap Dump state, GraalVM progress,
+or Memory trend samples. Activation, localhost/Host/cross-site-write safety, panel enabled/read-only policy, validation,
+confirmation, and feature configuration are evaluated before single-flight admission. In particular,
+`bootui.vulnerabilities.osv-enabled=false` still returns its existing `DISABLED` report without claiming admission or
+performing network work. The shared UI treats this conflict as a warning, retains the visible report/Overview score, and
+stops only the duplicate caller's spinner.
+
 ## 5. Functional specification
 
 ### 5.1 Overview panel
@@ -1905,6 +1932,10 @@ Design rules:
   unknown-method/tool errors retain their specific safe messages.
 - **Reuse, don't reimplement.** Each tool delegates to the same controller/service the REST API and panels use and
   returns the existing DTO records, so contracts stay stable and masked.
+- **Single-flight parity.** Advisor action tools share the same per-scanner admission as REST. A duplicate
+  `tools/call` remains an HTTP `200` MCP response but returns an in-band tool error (`isError: true`) with the canonical
+  busy message. Panel disabled/read-only policy is checked first, and the aggregate MCP concurrent-call cap remains a
+  separate capacity limit.
 - **Tool surface.** Advisor scans as action tools (`architecture_scan`, `spring_scan`, `hibernate_scan`, `memory_scan`,
   `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`); diagnostics reads (`get_live_activity`,
   `get_exceptions`, `get_exception_detail`, `get_security_logs`, `get_sql_traces`, `get_traces`, `get_log_tail`,

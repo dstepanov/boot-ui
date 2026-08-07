@@ -111,6 +111,7 @@ import tools.jackson.databind.ObjectMapper;
 @ImportRuntimeHints({BootUiRuntimeHints.class, SqlTraceRuntimeHints.class})
 @Import({
     OverviewController.class,
+    ActionBusyExceptionHandler.class,
     GitHubController.class,
     PanelsController.class,
     BeansController.class,

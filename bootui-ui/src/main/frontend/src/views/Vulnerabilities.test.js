@@ -89,7 +89,41 @@ async function mountWithReports(reports) {
 
 describe('Vulnerabilities', () => {
   afterEach(() => {
+    document.cookie = 'XSRF-TOKEN=; Max-Age=0; path=/'
     vi.unstubAllGlobals()
+  })
+
+  it('retains dependency results and shows a warning when an OSV scan is already active', async () => {
+    const existing = report([dependency('org.example:sample', '1.0.0', [], 'NONE')])
+    const busy = {
+      error: 'BootUI action already in progress',
+      operation: 'vulnerabilities.scan',
+      activeOperation: 'vulnerabilities.scan',
+      message: "Operation 'vulnerabilities.scan' cannot start while 'vulnerabilities.scan' is in progress."
+    }
+    document.cookie = 'XSRF-TOKEN=test-token; path=/'
+    const fetchMock = vi.fn((input, init) => {
+      if ((init?.method || 'GET') === 'POST') {
+        return Promise.resolve(
+          new Response(JSON.stringify(busy), {status: 409, headers: {'Content-Type': 'application/json'}})
+        )
+      }
+      return Promise.resolve(new Response(JSON.stringify(existing), {status: 200}))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = mount(Vulnerabilities)
+    await flushPromises()
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Scan with OSV.dev'))
+      .trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('org.example:sample')
+    expect(wrapper.text()).toContain(busy.message)
+    expect(wrapper.find('[role="status"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Unable to scan dependencies')
   })
 
   it('shows "None found" only when a dependency has no vulnerabilities at all', async () => {

@@ -52,7 +52,9 @@ function formatBytes(value) {
         />
       </template>
     </PanelHeader>
-    <div v-if="panel.actionMessage" class="alert alert-warning">{{ panel.actionMessage }}</div>
+    <div v-if="panel.actionMessage" class="alert alert-warning" role="status" aria-live="polite">
+      {{ panel.actionMessage }}
+    </div>
 
     <template v-if="panel.report">
       <AdvisorSummary

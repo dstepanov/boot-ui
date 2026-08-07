@@ -1,5 +1,5 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
-import {apiFetch, getJson} from './api.js'
+import {actionBusyMessage, apiFetch, getJson, isActionBusyError} from './api.js'
 
 function clearXsrfCookie() {
   document.cookie = 'XSRF-TOKEN=; Max-Age=0; path=/'
@@ -116,5 +116,32 @@ describe('getJson', () => {
     )
 
     await expect(getJson('api/health')).rejects.toThrow('HTTP 503')
+  })
+
+  it('preserves the canonical busy response for action-aware callers', async () => {
+    const body = {
+      error: 'BootUI action already in progress',
+      operation: 'architecture.scan',
+      activeOperation: 'architecture.scan',
+      message: "Operation 'architecture.scan' cannot start while 'architecture.scan' is in progress."
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify(body), {
+            status: 409,
+            headers: {'Content-Type': 'application/json'}
+          })
+        )
+      )
+    )
+
+    const error = await getJson('api/architecture/scan').catch((failure) => failure)
+
+    expect(isActionBusyError(error)).toBe(true)
+    expect(actionBusyMessage(error)).toBe(body.message)
+    expect(error.status).toBe(409)
+    expect(error.body).toEqual(body)
   })
 })

@@ -1,6 +1,8 @@
 // @ts-check
 import {expect, test} from './fixtures.js'
 
+const busyMessage = "Operation 'heap-dump.analyze' cannot start while 'heap-dump.capture' is in progress."
+
 test.describe('Heap Dump view', () => {
   test('renders the safety warning, summary cards, and action buttons', async ({openView, page}) => {
     await openView('heap-dump', 'Heap Dump')
@@ -54,5 +56,34 @@ test.describe('Heap Dump view', () => {
 
     await expect.poll(async () => rows.count(), {timeout: 15_000}).toBeGreaterThan(0)
     await expect(histogramCard).not.toContainText('No classes match the current filter')
+  })
+
+  test('shows a warning when another heap action owns admission', async ({openView, page}) => {
+    await page.route(
+      (url) => url.pathname === '/bootui/api/heap-dump/analyze',
+      async (route) => {
+        await route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: 'BootUI action already in progress',
+            operation: 'heap-dump.analyze',
+            activeOperation: 'heap-dump.capture',
+            message: busyMessage
+          })
+        })
+      }
+    )
+
+    await openView('heap-dump', 'Heap Dump')
+    const lastActionCard = page.locator('.card', {hasText: 'Last action'}).first()
+    const reportBeforeConflict = (await lastActionCard.textContent()) ?? ''
+
+    await page.getByRole('button', {name: 'Analyze live heap'}).click()
+
+    await expect(page.getByRole('status')).toHaveText(busyMessage)
+    await expect(lastActionCard).toHaveText(reportBeforeConflict)
+    await expect(page.locator('.alert-danger')).toHaveCount(0)
+    await expect(page.getByRole('button', {name: 'Analyze live heap'})).toBeEnabled()
   })
 })
