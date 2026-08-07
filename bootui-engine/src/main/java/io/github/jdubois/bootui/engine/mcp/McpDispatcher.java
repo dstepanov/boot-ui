@@ -1,5 +1,6 @@
 package io.github.jdubois.bootui.engine.mcp;
 
+import io.github.jdubois.bootui.engine.action.ActionBusyException;
 import io.github.jdubois.bootui.engine.mcp.McpDispatchOutcome.InitializeResult;
 import io.github.jdubois.bootui.engine.mcp.McpDispatchOutcome.NoResponse;
 import io.github.jdubois.bootui.engine.mcp.McpDispatchOutcome.PingResult;
@@ -201,8 +202,12 @@ public final class McpDispatcher {
         // Permit acquired; the try/finally immediately below guarantees it is always released,
         // since there is no code path between tryAcquire() and the try block.
         try {
-            Object payload = tool.invoke(arguments);
-            return new ToolCallResult(payload);
+            try {
+                Object payload = tool.invoke(arguments);
+                return new ToolCallResult(payload);
+            } catch (ActionBusyException ex) {
+                return new ToolCallError(ex.result().message());
+            }
         } finally {
             toolCallSemaphore.release();
         }

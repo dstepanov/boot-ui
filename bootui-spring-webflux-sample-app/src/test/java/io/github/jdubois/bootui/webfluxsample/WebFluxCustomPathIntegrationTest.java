@@ -2,10 +2,13 @@ package io.github.jdubois.bootui.webfluxsample;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.jdubois.bootui.conformance.AbstractBootUiApiConformanceTest;
+import io.github.jdubois.bootui.conformance.BootUiApiContractCatalog.Runtime;
 import io.github.jdubois.bootui.conformance.BootUiHttpProbe;
 import io.github.jdubois.bootui.conformance.BootUiHttpProbe.Response;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -30,9 +33,14 @@ import org.springframework.web.bind.annotation.RestController;
             "bootui.path=/dev-console/",
             "bootui.api-path=/internal/bootui-api/",
             "bootui.show-banner=false",
-            "bootui.overrides-file=target/bootui-custom-path-test-overrides.properties"
+            "bootui.overrides-file=target/bootui-custom-path-test-overrides.properties",
+            "bootui.panels.copilot.enabled=false",
+            "bootui.panels.heap-dump.read-only=true",
+            "bootui.heap-dump.capture-enabled=false",
+            "bootui.claude-code.enabled=OFF",
+            "bootui.conformance.api-token=conformance-raw-secret-value"
         })
-class WebFluxCustomPathIntegrationTest {
+class WebFluxCustomPathIntegrationTest extends AbstractBootUiApiConformanceTest {
 
     private static final String UI_PATH = "/host/dev-console";
     private static final String API_PATH = "/host/internal/bootui-api";
@@ -43,6 +51,38 @@ class WebFluxCustomPathIntegrationTest {
 
     private BootUiHttpProbe probe() {
         return new BootUiHttpProbe("http://localhost:" + port);
+    }
+
+    @Override
+    protected String baseUrl() {
+        return "http://localhost:" + port;
+    }
+
+    @Override
+    protected String expectedPanelsResource() {
+        return "/io/github/jdubois/bootui/conformance/expected-panels-webflux.json";
+    }
+
+    @Override
+    protected Runtime runtime() {
+        return Runtime.SPRING_WEBFLUX;
+    }
+
+    @Override
+    protected String uiPath() {
+        return UI_PATH;
+    }
+
+    @Override
+    protected String apiPath() {
+        return API_PATH;
+    }
+
+    @Override
+    protected Set<String> unsupportedReadContracts() {
+        // PR #726 moves these rebuilt reactive handlers behind the configured API path. Keep C1
+        // stacked only on #732 and consume that sibling fix when it lands instead of duplicating it.
+        return Set.of("rest-client-trace", "security", "spring-security");
     }
 
     @Test

@@ -34,19 +34,36 @@ public class MetricsResource {
     }
 
     @GET
-    public MetricsReport metrics() {
-        return provider.metrics();
+    public Response metrics(
+            @QueryParam("q") String query,
+            @QueryParam("type") String type,
+            @QueryParam("offset") String offset,
+            @QueryParam("limit") String limit) {
+        try {
+            MetricsReport report = provider.metrics(query, type, offset, limit);
+            return Response.ok(report).build();
+        } catch (IllegalArgumentException ex) {
+            return badRequest(ex);
+        }
     }
 
     @GET
     @Path("/detail")
-    public Response metric(@QueryParam("name") String name, @QueryParam("tag") List<String> tagFilters) {
+    public Response metric(
+            @QueryParam("name") String name,
+            @QueryParam("tag") List<String> tagFilters,
+            @QueryParam("offset") String offset,
+            @QueryParam("limit") String limit) {
         try {
-            return Response.ok(provider.metric(name, tagFilters)).build();
+            return Response.ok(provider.metric(name, tagFilters, offset, limit)).build();
         } catch (IllegalArgumentException ex) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", ex.getMessage() == null ? "Invalid request" : ex.getMessage()))
-                    .build();
+            return badRequest(ex);
         }
+    }
+
+    private Response badRequest(IllegalArgumentException ex) {
+        return Response.status(Response.Status.BAD_REQUEST)
+                .entity(Map.of("error", ex.getMessage() == null ? "Invalid request" : ex.getMessage()))
+                .build();
     }
 }

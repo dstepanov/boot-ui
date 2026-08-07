@@ -4,6 +4,8 @@ import io.github.jdubois.bootui.core.dto.HeapClassHistogramEntryDto;
 import io.github.jdubois.bootui.core.dto.HeapDumpCaptureStatusDto;
 import io.github.jdubois.bootui.core.dto.HeapDumpFileDto;
 import io.github.jdubois.bootui.core.dto.HeapDumpReport;
+import io.github.jdubois.bootui.engine.action.ActionOperations;
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
@@ -87,6 +89,7 @@ public class HeapDumpService {
     private final HistogramSource histogramSource;
     private final Clock clock;
     private final boolean hotspotAvailable;
+    private final SingleFlightAction singleFlight = new SingleFlightAction();
 
     private volatile HeapDumpCaptureStatusDto status = new HeapDumpCaptureStatusDto(STATUS_NOT_CAPTURED, null, null);
     private volatile List<HeapClassHistogramEntryDto> allClasses = List.of();
@@ -147,13 +150,17 @@ public class HeapDumpService {
         return config.allowRawDownload();
     }
 
-    public synchronized HeapDumpReport capture(boolean live) {
+    public HeapDumpReport capture(boolean live) {
         if (!hotspotAvailable) {
             return errorReport("Heap dumps are not supported on this JVM");
         }
         if (!config.captureEnabled()) {
             return errorReport("Heap dump capture is disabled via bootui.heap-dump.capture-enabled=false");
         }
+        return singleFlight.run(ActionOperations.HEAP_DUMP_CAPTURE, () -> doCapture(live));
+    }
+
+    private HeapDumpReport doCapture(boolean live) {
         try {
             Files.createDirectories(baseDir);
             long heapUsed = liveHeapUsedBytes();
@@ -173,10 +180,14 @@ public class HeapDumpService {
         }
     }
 
-    public synchronized HeapDumpReport analyze() {
+    public HeapDumpReport analyze() {
         if (!hotspotAvailable) {
             return errorReport("Heap analysis is not supported on this JVM");
         }
+        return singleFlight.run(ActionOperations.HEAP_DUMP_ANALYZE, this::doAnalyze);
+    }
+
+    private HeapDumpReport doAnalyze() {
         try {
             refreshHistogram();
             this.status =
@@ -187,11 +198,15 @@ public class HeapDumpService {
         }
     }
 
-    public synchronized HeapDumpReport delete(String name) {
+    public HeapDumpReport delete(String name) {
         Path file = resolveExisting(name);
         if (file == null) {
             return errorReport("Unknown heap dump");
         }
+        return singleFlight.run(ActionOperations.HEAP_DUMP_DELETE, () -> doDelete(file));
+    }
+
+    private HeapDumpReport doDelete(Path file) {
         try {
             Files.deleteIfExists(file);
             return buildReport(null, null);

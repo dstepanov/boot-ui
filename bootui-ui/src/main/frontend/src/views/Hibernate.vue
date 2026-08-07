@@ -44,7 +44,9 @@ const panel = useAdvisorPanel(props, {
         <a href="https://vladmihalcea.com" rel="noopener noreferrer" target="_blank">https://vladmihalcea.com</a>
       </div>
     </div>
-    <div v-if="panel.actionMessage" class="alert alert-warning">{{ panel.actionMessage }}</div>
+    <div v-if="panel.actionMessage" class="alert alert-warning" role="status" aria-live="polite">
+      {{ panel.actionMessage }}
+    </div>
 
     <template v-if="panel.report">
       <AdvisorSummary

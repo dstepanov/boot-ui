@@ -1,6 +1,6 @@
 <script setup>
 import {computed, onMounted, ref} from 'vue'
-import {apiFetch, getJson} from '../api.js'
+import {actionBusyMessage, apiFetch, getJson, isActionBusyError} from '../api.js'
 import {formatClockTime} from '../utils/format.js'
 import {describeLoadError} from '../utils/loadError.js'
 import {resolveBootUiApiUrl} from '../utils/bootUiPath.js'
@@ -182,18 +182,28 @@ async function runScan() {
     return
   }
   loading.value = true
+  actionMessage.value = null
   try {
     report.value = await getJson('api/crac/scan', {method: 'POST'})
     error.value = null
   } catch (e) {
-    error.value = describeLoadError(e, 'Unable to run CRaC readiness checks')
+    if (isActionBusyError(e)) {
+      showActionMessage(actionBusyMessage(e))
+      error.value = null
+    } else {
+      error.value = describeLoadError(e, 'Unable to run CRaC readiness checks')
+    }
   } finally {
     loading.value = false
   }
 }
 
 function showReadOnlyMessage() {
-  actionMessage.value = readOnlyReason.value
+  showActionMessage(readOnlyReason.value)
+}
+
+function showActionMessage(message) {
+  actionMessage.value = message
   setTimeout(() => {
     actionMessage.value = null
   }, 6000)
@@ -315,7 +325,7 @@ onMounted(loadReport)
         />
       </template>
     </PanelHeader>
-    <div v-if="actionMessage" class="alert alert-warning">{{ actionMessage }}</div>
+    <div v-if="actionMessage" class="alert alert-warning" role="status" aria-live="polite">{{ actionMessage }}</div>
 
     <template v-if="report">
       <div v-if="runtime" class="card mb-3">

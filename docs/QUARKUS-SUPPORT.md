@@ -163,6 +163,11 @@ those fields so the same UI build renders the correct sidebar and status on each
 > intentionally unavailable with a panel-specific not-applicable reason (§5.5). **JMS** is the sole panel that is not yet
 > available on Quarkus (§5.6). The per-panel `**Implemented**` markers below and `docs/FEATURES.md` carry the authoritative,
 > current per-platform detail.
+>
+> Expensive advisor actions also share Spring's per-scanner single-flight contract: overlapping Architecture,
+> Quarkus-application, Hibernate, Memory, Security, Pentesting, REST API, and Vulnerabilities/OSV scans fail fast with
+> the canonical JSON `409` response, while Heap Dump capture/analyze/delete share one mutation-domain admission. MCP
+> returns the same busy message in-band, and passive reads continue serving the last completed report.
 
 ### 5.1 Ported as-is — framework-agnostic or same library (17)
 

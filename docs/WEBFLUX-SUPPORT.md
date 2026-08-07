@@ -17,6 +17,12 @@ Loggers (set level), HTTP Probe, Cache (clear), Flyway (migrate/clean), Liquibas
 REST Client (clear/toggle recording), the advisor scans (Architecture, Spring, Hibernate, Pentesting, REST API,
 Security, Memory, Vulnerabilities/OSV), and Exceptions triage.
 
+The adapter also shares the exact per-scanner single-flight contract with MVC and Quarkus. Overlapping expensive advisor
+actions fail fast with canonical JSON `409` rather than queueing on Netty or repeating work; Heap Dump
+capture/analyze/delete share one admission. Passive reads keep serving the last completed report, and MCP converts the
+same conflict to an in-band tool error. `WebFluxApiConformanceTest` runs the shared concurrent Architecture burst that
+pins this transport behavior.
+
 Only **HTTP Sessions** stays unavailable, with a panel-specific reason surfaced through the `/bootui/api/panels` manifest
 (and, in turn, the sidebar tooltip and the panel's own alert banner — see §5).
 `docs/FEATURES.md` and the per-panel `unavailableReason` strings in `PanelsController` are the authoritative, current

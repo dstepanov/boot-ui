@@ -1,4 +1,4 @@
-import {computed} from 'vue'
+import {computed, toValue} from 'vue'
 
 export const panelProps = {
   panel: {
@@ -29,4 +29,68 @@ export function usePanelState(props) {
   })
 
   return {readOnly, readOnlyReason, manifestAvailable, manifestUnavailableReason}
+}
+
+/**
+ * Derives the mutually exclusive presentation states shared by data-heavy panels.
+ *
+ * @param {Object} state
+ * @param {import('vue').MaybeRefOrGetter<boolean>} state.loading
+ * @param {import('vue').MaybeRefOrGetter<boolean>} state.loaded
+ * @param {import('vue').MaybeRefOrGetter<unknown>} state.error
+ * @param {import('vue').MaybeRefOrGetter<boolean>} state.hasData
+ * @param {import('vue').MaybeRefOrGetter<boolean>} [state.available]
+ * @param {import('vue').MaybeRefOrGetter<number>} [state.total]
+ * @param {import('vue').MaybeRefOrGetter<number>} [state.matched]
+ * @param {import('vue').MaybeRefOrGetter<boolean>} [state.filterActive]
+ * @param {import('vue').MaybeRefOrGetter<boolean>} [state.partial]
+ */
+export function useDataState({
+  loading,
+  loaded,
+  error,
+  hasData,
+  available = true,
+  total = 0,
+  matched = total,
+  filterActive = false,
+  partial = false
+}) {
+  const initialLoading = computed(() => Boolean(toValue(loading)) && !toValue(loaded))
+  const hasSuccessfulData = computed(() => Boolean(toValue(hasData)))
+  const retryableError = computed(() => Boolean(toValue(error)) && !hasSuccessfulData.value)
+  const stale = computed(() => Boolean(toValue(error)) && hasSuccessfulData.value)
+  const unavailable = computed(
+    () => toValue(loaded) && !toValue(loading) && !toValue(error) && toValue(available) === false
+  )
+  const empty = computed(
+    () =>
+      toValue(loaded) &&
+      !toValue(loading) &&
+      !toValue(error) &&
+      toValue(available) !== false &&
+      Number(toValue(total)) === 0
+  )
+  const filteredEmpty = computed(
+    () =>
+      toValue(loaded) &&
+      !toValue(loading) &&
+      !toValue(error) &&
+      toValue(available) !== false &&
+      Boolean(toValue(filterActive)) &&
+      Number(toValue(total)) > 0 &&
+      Number(toValue(matched)) === 0
+  )
+  const partialSuccess = computed(() => hasSuccessfulData.value && Boolean(toValue(partial)))
+
+  return {
+    empty,
+    filteredEmpty,
+    hasSuccessfulData,
+    initialLoading,
+    partialSuccess,
+    retryableError,
+    stale,
+    unavailable
+  }
 }

@@ -234,6 +234,33 @@ The first screen should show:
 - Quick links to the main panels.
 - Warnings for missing recommended data sources, such as Actuator endpoints not available.
 
+### 4.5 Expensive action admission
+
+Explicit expensive scans use one framework-neutral single-flight admission per scanner/service instance. Architecture,
+REST API, Spring/Quarkus application, Hibernate, Memory, Security, Pentesting, GraalVM, CRaC, and Vulnerabilities/OSV
+scans are protected independently; unrelated scanners can still run concurrently. Heap Dump capture, analysis, and
+delete share one admission because they operate on the same files, histogram, and status.
+
+A duplicate request never waits or repeats the work. MVC, WebFlux, and Quarkus return `409 Conflict` with the same JSON
+shape:
+
+```json
+{
+  "error": "BootUI action already in progress",
+  "operation": "architecture.scan",
+  "activeOperation": "architecture.scan",
+  "message": "Operation 'architecture.scan' cannot start while 'architecture.scan' is in progress."
+}
+```
+
+Operation ids are stable `<panel>.<action>` values. Passive `GET` requests continue returning the last completed report
+while an action runs; a rejected duplicate does not mutate cached reports, timestamps, Heap Dump state, GraalVM progress,
+or Memory trend samples. Activation, localhost/Host/cross-site-write safety, panel enabled/read-only policy, validation,
+confirmation, and feature configuration are evaluated before single-flight admission. In particular,
+`bootui.vulnerabilities.osv-enabled=false` still returns its existing `DISABLED` report without claiming admission or
+performing network work. The shared UI treats this conflict as a warning, retains the visible report/Overview score, and
+stops only the duplicate caller's spinner.
+
 ## 5. Functional specification
 
 ### 5.1 Overview panel
@@ -1633,8 +1660,8 @@ Initial endpoints:
 | `/bootui/api/startup`                        | GET    | Startup timeline                                                                       |
 | `/bootui/api/threads`                        | GET    | Stable, paged live thread snapshot with state counts and deadlock info                 |
 | `/bootui/api/threads/download`               | POST   | Confirmation-gated raw text thread dump download                                       |
-| `/bootui/api/metrics`                        | GET    | Browseable Micrometer meter list                                                       |
-| `/bootui/api/metrics/detail`                 | GET    | Micrometer meter detail and live measurements                                          |
+| `/bootui/api/metrics`                        | GET    | Searchable/type-filtered Micrometer meter list, paged at 200 by default (1,000 maximum) |
+| `/bootui/api/metrics/detail`                 | GET    | Meter detail with tag filters and samples paged at 100 by default (1,000 maximum)       |
 | `/bootui/api/database-connection-pools/pools` | GET    | JDBC connection pool metadata                                                          |
 | `/bootui/api/database-connection-pools/pools/{name}/snapshot` | GET | Live connection pool utilization snapshot                                   |
 | `/bootui/api/vulnerabilities`                   | GET    | Runtime Maven dependency inventory without external scanning                           |
@@ -1859,6 +1886,10 @@ Design rules:
   unknown-method/tool errors retain their specific safe messages.
 - **Reuse, don't reimplement.** Each tool delegates to the same controller/service the REST API and panels use and
   returns the existing DTO records, so contracts stay stable and masked.
+- **Single-flight parity.** Advisor action tools share the same per-scanner admission as REST. A duplicate
+  `tools/call` remains an HTTP `200` MCP response but returns an in-band tool error (`isError: true`) with the canonical
+  busy message. Panel disabled/read-only policy is checked first, and the aggregate MCP concurrent-call cap remains a
+  separate capacity limit.
 - **Tool surface.** Advisor scans as action tools (`architecture_scan`, `spring_scan`, `hibernate_scan`, `memory_scan`,
   `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`); diagnostics reads (`get_live_activity`,
   `get_exceptions`, `get_exception_detail`, `get_security_logs`, `get_sql_traces`, `get_traces`, `get_log_tail`,
@@ -2021,7 +2052,24 @@ Current compatibility:
 - Newer panels work against the sample app or degrade cleanly when optional infrastructure is absent.
 - Production profile disables BootUI.
 
-### 9.4 Browser/UI tests
+### 9.4 Cross-runtime API conformance
+
+- `bootui-conformance` runs one black-box HTTP contract against Spring MVC, Spring WebFlux, and Quarkus.
+- Golden panel fixtures continue to pin panel ids, titles, ordering, and action-capable metadata.
+- Available data panels are checked through a central DTO-family catalog. The contract asserts stable field types,
+  null/empty and availability semantics, pagination containers, scan-status fields, and observable secret masking while
+  allowing runtime counts, timestamps, framework versions, and captured data to vary.
+- A central mutation catalog lists every panel action plus the MCP, dismissed-rules, and OTLP infrastructure writes.
+  It classifies non-panel writes by global read-only applicability: dismissed-rule persistence is blocked, the MCP bridge
+  delegates authorization to its per-tool panel policy, and OTLP ingestion remains an observability transport. Adapter
+  access-filter tests consume that catalog so a browser mutation cannot silently bypass global read-only policy. The live
+  contract covers confirmation gates, canonical panel denial, missing targets, single-flight `409` responses, and only
+  deterministic repeatable successes; it never calls external services or invokes destructive, heap-capture, or
+  GC-heavy actions.
+- The same suite runs at the default mount and at independent custom UI/API mounts (including each runtime's host root
+  path), so shell, assets, reads, streams, downloads, errors, and safe writes share one path contract.
+
+### 9.5 Browser/UI tests
 
 - Playwright smoke tests for all visible panels in `bootui-spring-sample-app/e2e`.
 - Search and filter behavior.

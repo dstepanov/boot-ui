@@ -64,7 +64,7 @@ public final class QuarkusPanelAccessConfig {
         return "Panel is read-only via bootui.panels." + id + ".read-only=true";
     }
 
-    private boolean isGlobalReadOnly() {
+    boolean isGlobalReadOnly() {
         return booleanValue(GLOBAL_READ_ONLY_KEY, false);
     }
 

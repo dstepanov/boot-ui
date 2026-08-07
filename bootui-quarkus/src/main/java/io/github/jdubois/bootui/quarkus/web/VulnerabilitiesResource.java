@@ -2,6 +2,8 @@ package io.github.jdubois.bootui.quarkus.web;
 
 import io.github.jdubois.bootui.core.dto.DependenciesReport;
 import io.github.jdubois.bootui.core.dto.DependencyDto;
+import io.github.jdubois.bootui.engine.action.ActionOperations;
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
 import io.github.jdubois.bootui.engine.vulnerabilities.DependencyReports;
 import io.github.jdubois.bootui.quarkus.OsvVulnerabilityScanner;
@@ -51,6 +53,7 @@ public class VulnerabilitiesResource {
     private final Config config;
 
     private final DismissedRulesStore dismissedRules;
+    private final SingleFlightAction singleFlight = new SingleFlightAction();
 
     private volatile DependenciesReport lastScanReport;
 
@@ -99,7 +102,8 @@ public class VulnerabilitiesResource {
                     0,
                     dependencies);
         } else {
-            report = vulnerabilityScanner.scan(dependencies);
+            report = singleFlight.run(
+                    ActionOperations.VULNERABILITIES_SCAN, () -> vulnerabilityScanner.scan(dependencies));
         }
         if (!"DISABLED".equals(report.status())) {
             this.lastScanReport = report;

@@ -71,6 +71,15 @@ class BootUiQuarkusMetricsCaptureTest {
         assertThat(root.path("metricsAvailable").asBoolean(false))
                 .as("with a Micrometer registry present the report is available")
                 .isTrue();
+        assertThat(root.path("page").path("limit").asInt())
+                .as("the default meter page is bounded")
+                .isEqualTo(200);
+        assertThat(root.path("page").path("returned").asInt())
+                .as("page metadata matches the returned meter array")
+                .isEqualTo(root.path("meters").size());
+        assertThat(root.path("availableTypes").isArray())
+                .as("type filtering choices are part of the shared contract")
+                .isTrue();
 
         List<String> meterNames = new ArrayList<>();
         for (JsonNode meter : root.path("meters")) {
@@ -99,5 +108,16 @@ class BootUiQuarkusMetricsCaptureTest {
         assertThat(leakedSelfPaths)
                 .as("no reported meter may expose a /bootui path tag (BootUI's own traffic must stay hidden)")
                 .isEmpty();
+
+        Response detail = probe().get("/bootui/api/metrics/detail?name=it.sample.host.requests&offset=0&limit=1");
+        assertThat(detail.status()).as("GET /bootui/api/metrics/detail status").isEqualTo(200);
+        assertThat(detail.json().path("totalSamples").asInt()).isEqualTo(1);
+        assertThat(detail.json().path("samplePage").path("limit").asInt()).isEqualTo(1);
+        assertThat(detail.json().path("samples").size()).isEqualTo(1);
+        assertThat(detail.json().path("samplesTruncated").asBoolean(true)).isFalse();
+
+        Response invalid = probe().get("/bootui/api/metrics?limit=many");
+        assertThat(invalid.status()).isEqualTo(400);
+        assertThat(invalid.json().path("error").asText()).isEqualTo("Metric limit must be between 1 and 1000");
     }
 }

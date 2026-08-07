@@ -1,6 +1,7 @@
 package io.github.jdubois.bootui.webfluxsample;
 
 import io.github.jdubois.bootui.conformance.AbstractBootUiApiConformanceTest;
+import io.github.jdubois.bootui.conformance.BootUiApiContractCatalog.Runtime;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -36,7 +37,8 @@ import org.springframework.boot.test.web.server.LocalServerPort;
             "bootui.panels.copilot.enabled=false",
             "bootui.panels.heap-dump.read-only=true",
             "bootui.heap-dump.capture-enabled=false",
-            "bootui.claude-code.enabled=OFF"
+            "bootui.claude-code.enabled=OFF",
+            "bootui.conformance.api-token=conformance-raw-secret-value"
         })
 class WebFluxApiConformanceTest extends AbstractBootUiApiConformanceTest {
 
@@ -51,5 +53,10 @@ class WebFluxApiConformanceTest extends AbstractBootUiApiConformanceTest {
     @Override
     protected String expectedPanelsResource() {
         return "/io/github/jdubois/bootui/conformance/expected-panels-webflux.json";
+    }
+
+    @Override
+    protected Runtime runtime() {
+        return Runtime.SPRING_WEBFLUX;
     }
 }

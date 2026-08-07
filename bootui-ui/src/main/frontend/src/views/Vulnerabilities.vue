@@ -1,5 +1,5 @@
 <script setup>
-import {getJson} from '../api.js'
+import {actionBusyMessage, getJson, isActionBusyError} from '../api.js'
 import {computed, onMounted, ref} from 'vue'
 import {formatClockTime} from '../utils/format.js'
 import {describeLoadError} from '../utils/loadError.js'
@@ -199,6 +199,7 @@ async function scanDependencies() {
     return
   }
   loading.value = true
+  actionMessage.value = null
   try {
     data.value = await getJson('api/vulnerabilities/scan', {method: 'POST'})
     if (data.value.vulnerable > 0) {
@@ -206,14 +207,23 @@ async function scanDependencies() {
     }
     error.value = null
   } catch (e) {
-    error.value = describeLoadError(e, 'Unable to scan dependencies')
+    if (isActionBusyError(e)) {
+      showActionMessage(actionBusyMessage(e))
+      error.value = null
+    } else {
+      error.value = describeLoadError(e, 'Unable to scan dependencies')
+    }
   } finally {
     loading.value = false
   }
 }
 
 function showReadOnlyMessage() {
-  actionMessage.value = readOnlyReason.value
+  showActionMessage(readOnlyReason.value)
+}
+
+function showActionMessage(message) {
+  actionMessage.value = message
   setTimeout(() => {
     actionMessage.value = null
   }, 6000)
@@ -242,7 +252,7 @@ onMounted(loadDependencies)
         />
       </template>
     </PanelHeader>
-    <div v-if="actionMessage" class="alert alert-warning">{{ actionMessage }}</div>
+    <div v-if="actionMessage" class="alert alert-warning" role="status" aria-live="polite">{{ actionMessage }}</div>
 
     <template v-if="data">
       <div class="alert alert-info">

@@ -6,6 +6,8 @@ import io.github.jdubois.bootui.core.dto.CracReadinessReport;
 import io.github.jdubois.bootui.core.dto.CracRuntimeStatusDto;
 import io.github.jdubois.bootui.core.dto.CracScanStatusDto;
 import io.github.jdubois.bootui.core.dto.CracSeverityCountDto;
+import io.github.jdubois.bootui.engine.action.ActionOperations;
+import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.support.SeverityOrder;
 import java.time.Clock;
 import java.util.Comparator;
@@ -39,6 +41,7 @@ public final class CracReadinessScanner {
     private final CracClassImporter importer;
     private final Clock clock;
     private final Supplier<CracRuntimeInventory> inventorySupplier;
+    private final SingleFlightAction singleFlight = new SingleFlightAction();
 
     CracReadinessScanner(Supplier<List<String>> basePackagesSupplier, CracClassImporter importer, Clock clock) {
         this(basePackagesSupplier, importer, clock, CracRuntimeInventory::empty);
@@ -83,6 +86,10 @@ public final class CracReadinessScanner {
     }
 
     public CracScanResult scan() {
+        return singleFlight.run(ActionOperations.CRAC_SCAN, this::doScan);
+    }
+
+    private CracScanResult doScan() {
         BasePackageDetection basePackages = detectBasePackages();
         if (basePackages.packages().isEmpty()) {
             return new CracScanResult(
