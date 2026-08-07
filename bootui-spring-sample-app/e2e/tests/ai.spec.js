@@ -149,9 +149,21 @@ test.describe('AI Framework view', () => {
     await expect(page.getByText('Spring AI or LangChain4j on classpath')).toBeVisible()
     await expect(page.getByText('No AI chat completions recorded yet')).toHaveCount(0)
   })
+
+  test('keeps useful overview data visible when token history is partial', async ({openView, page}) => {
+    await stubAi(page, overview, {tokenStatus: 503})
+
+    await openView('ai', /AI Framework/)
+
+    await expect(page.getByText('Partial AI usage data.')).toBeVisible()
+    await expect(page.getByText(/Token history could not be refreshed \(HTTP 503\)/)).toBeVisible()
+    await expect(page.getByText(/Overview data remains available/)).toBeVisible()
+    await expect(page.locator('.kpi-card-body', {hasText: 'Total tokens'}).getByText('49', {exact: true})).toBeVisible()
+    await expect(page.getByText('Token usage (last 60 min)')).toHaveCount(0)
+  })
 })
 
-async function stubAi(page, overviewResponse) {
+async function stubAi(page, overviewResponse, {tokenStatus = 200} = {}) {
   await stubShell(
     page,
     overviewResponse.enabled && (overviewResponse.springAiDetected || overviewResponse.langChain4jDetected)
@@ -165,7 +177,11 @@ async function stubAi(page, overviewResponse) {
   await page.route(
     (url) => url.pathname === '/bootui/api/ai/tokens',
     async (route) => {
-      await route.fulfill({contentType: 'application/json', body: JSON.stringify(tokenSeries)})
+      await route.fulfill({
+        status: tokenStatus,
+        contentType: 'application/json',
+        body: JSON.stringify(tokenStatus === 200 ? tokenSeries : {})
+      })
     }
   )
   await page.route(

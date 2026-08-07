@@ -11,6 +11,7 @@ export function useServerPagedList(endpoint, itemsKey, queryParams, options = {}
   const data = ref(null)
   const loading = ref(false)
   const loadingMore = ref(false)
+  const hasLoaded = ref(false)
   const error = ref(null)
 
   let baseAc = null
@@ -109,6 +110,7 @@ export function useServerPagedList(endpoint, itemsKey, queryParams, options = {}
         if (baseAc === ac) {
           baseAc = null
           loading.value = false
+          hasLoaded.value = true
         }
       }
     }
@@ -157,6 +159,7 @@ export function useServerPagedList(endpoint, itemsKey, queryParams, options = {}
   return {
     data,
     error,
+    hasLoaded,
     hiddenCount,
     items,
     load,

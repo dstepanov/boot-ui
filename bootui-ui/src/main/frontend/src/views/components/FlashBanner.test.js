@@ -46,4 +46,16 @@ describe('FlashBanner', () => {
     await wrapper.get('button.btn-close').trigger('click')
     expect(wrapper.emitted('dismiss')).toHaveLength(1)
   })
+
+  it('supports persistent status messages without a dismiss control', () => {
+    const wrapper = mount(FlashBanner, {
+      props: {
+        message: {text: 'Showing the last successful results.', type: 'warning'},
+        dismissible: false
+      }
+    })
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('Showing the last successful results.')
+    expect(wrapper.find('button.btn-close').exists()).toBe(false)
+  })
 })
