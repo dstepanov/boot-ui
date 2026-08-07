@@ -12,6 +12,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
@@ -74,6 +75,50 @@ class BackendPanelCatalogConsistencyTest {
                     .containsPattern(Pattern.compile(
                             "^" + Pattern.quote(headingPrefix + panel.title()) + "$", Pattern.MULTILINE));
         }
+    }
+
+    @Test
+    void readContractCatalogCoversEveryDataPanelExactlyOnce() {
+        Set<String> expected = BootUiPanels.all().stream()
+                .map(Panel::id)
+                .filter(id -> !BootUiPanels.HTTP_PROBE.equals(id))
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertThat(BootUiApiContractCatalog.reads())
+                .extracting(BootUiApiContractCatalog.ReadContract::panelId)
+                .doesNotHaveDuplicates()
+                .containsExactlyInAnyOrderElementsOf(expected);
+    }
+
+    @Test
+    void actionContractCatalogIsUniqueAndResolvesThroughThePanelRegistry() {
+        List<BootUiApiContractCatalog.ActionContract> actions = BootUiApiContractCatalog.actions();
+
+        assertThat(actions)
+                .extracting(action -> action.method() + " " + action.relativePath() + " " + action.runtimes())
+                .doesNotHaveDuplicates();
+        assertThat(actions).allSatisfy(action -> {
+            assertThat(action.relativePath()).startsWith("/");
+            assertThat(action.method()).isIn("POST", "PUT", "PATCH", "DELETE");
+            assertThat(action.runtimes()).isNotEmpty();
+            if (action.panelId() != null) {
+                assertThat(BootUiPanels.byApiPath(action.relativePath()))
+                        .as(action.id())
+                        .get()
+                        .extracting(Panel::id)
+                        .isEqualTo(action.panelId());
+            }
+        });
+
+        Set<String> expectedActionPanels = BootUiPanels.all().stream()
+                .filter(Panel::actionCapable)
+                .map(Panel::id)
+                .collect(java.util.stream.Collectors.toSet());
+        assertThat(actions.stream()
+                        .map(BootUiApiContractCatalog.ActionContract::panelId)
+                        .filter(java.util.Objects::nonNull)
+                        .collect(java.util.stream.Collectors.toSet()))
+                .containsExactlyInAnyOrderElementsOf(expectedActionPanels);
     }
 
     private static JsonNode loadJsonResource(String resource) {

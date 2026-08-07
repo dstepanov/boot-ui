@@ -32,7 +32,8 @@ import org.springframework.boot.test.web.server.LocalServerPort;
             "bootui.panels.copilot.enabled=false",
             "bootui.panels.heap-dump.read-only=true",
             "bootui.heap-dump.capture-enabled=false",
-            "bootui.claude-code.enabled=OFF"
+            "bootui.claude-code.enabled=OFF",
+            "bootui.conformance.api-token=conformance-raw-secret-value"
         })
 class SpringApiConformanceTest extends AbstractBootUiApiConformanceTest {
 

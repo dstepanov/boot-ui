@@ -3,9 +3,11 @@ package io.github.jdubois.bootui.autoconfigure.safety;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.jdubois.bootui.autoconfigure.BootUiProperties;
+import io.github.jdubois.bootui.conformance.BootUiApiContractCatalog;
+import io.github.jdubois.bootui.conformance.BootUiApiContractCatalog.ActionContract;
+import io.github.jdubois.bootui.conformance.BootUiApiContractCatalog.Runtime;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
@@ -89,24 +91,25 @@ class PanelAccessFilterTests {
     @Test
     void globalReadOnlyBlocksActionCapablePanelActions() throws Exception {
         properties.setReadOnly(true);
-        Map<String, ActionRequest> actionRequestsByPanel = actionRequestsByPanel();
+        List<ActionContract> actions = BootUiApiContractCatalog.actions(Runtime.SPRING_MVC).stream()
+                .filter(action -> action.panelId() != null)
+                .toList();
 
-        assertThat(actionRequestsByPanel.keySet())
-                .containsExactlyElementsOf(BootUiPanels.all().stream()
+        assertThat(actions.stream().map(ActionContract::panelId).collect(java.util.stream.Collectors.toSet()))
+                .containsExactlyInAnyOrderElementsOf(BootUiPanels.all().stream()
                         .filter(BootUiPanels.Panel::actionCapable)
                         .map(BootUiPanels.Panel::id)
                         .toList());
-        for (Map.Entry<String, ActionRequest> entry : actionRequestsByPanel.entrySet()) {
-            MockHttpServletRequest request =
-                    request(entry.getValue().method(), entry.getValue().uri());
+        for (ActionContract action : actions) {
+            MockHttpServletRequest request = request(action.method(), "/bootui/api" + action.relativePath());
             MockHttpServletResponse response = new MockHttpServletResponse();
 
             filter.doFilter(request, response, new MockFilterChain());
 
-            assertThat(response.getStatus()).as(entry.getKey()).isEqualTo(403);
+            assertThat(response.getStatus()).as(action.id()).isEqualTo(403);
             assertThat(response.getContentAsString())
-                    .as(entry.getKey())
-                    .contains("\"panel\":\"" + entry.getKey() + "\"")
+                    .as(action.id())
+                    .contains("\"panel\":\"" + action.panelId() + "\"")
                     .contains("bootui.read-only=true");
         }
     }
@@ -203,43 +206,4 @@ class PanelAccessFilterTests {
         request.setRequestURI(uri);
         return request;
     }
-
-    private Map<String, ActionRequest> actionRequestsByPanel() {
-        Map<String, ActionRequest> requests = new LinkedHashMap<>();
-        requests.put("http-sessions", new ActionRequest("POST", "/bootui/api/http-sessions/session-key/invalidate"));
-        requests.put("heap-dump", new ActionRequest("POST", "/bootui/api/heap-dump/capture"));
-        requests.put("threads", new ActionRequest("POST", "/bootui/api/threads/download"));
-        requests.put("memory", new ActionRequest("POST", "/bootui/api/memory/scan"));
-        requests.put("graalvm", new ActionRequest("POST", "/bootui/api/graalvm/scan"));
-        requests.put("config", new ActionRequest("POST", "/bootui/api/config/overrides"));
-        requests.put("loggers", new ActionRequest("POST", "/bootui/api/loggers/io.github.jdubois.bootui"));
-        requests.put("security", new ActionRequest("POST", "/bootui/api/security/scan"));
-        requests.put("pentesting", new ActionRequest("POST", "/bootui/api/pentesting/scan"));
-        requests.put("hibernate", new ActionRequest("POST", "/bootui/api/hibernate/scan"));
-        requests.put("cache", new ActionRequest("POST", "/bootui/api/cache/clear"));
-        requests.put("traces", new ActionRequest("DELETE", "/bootui/api/traces"));
-        requests.put("exceptions", new ActionRequest("DELETE", "/bootui/api/exceptions"));
-        requests.put("http-probe", new ActionRequest("POST", "/bootui/api/http-probe"));
-        requests.put("architecture", new ActionRequest("POST", "/bootui/api/architecture/scan"));
-        requests.put("vulnerabilities", new ActionRequest("POST", "/bootui/api/vulnerabilities/scan"));
-        requests.put("devtools", new ActionRequest("POST", "/bootui/api/devtools/restart"));
-        requests.put("dev-services", new ActionRequest("POST", "/bootui/api/dev-services/services/demo/restart"));
-        requests.put("flyway", new ActionRequest("POST", "/bootui/api/flyway/migrate"));
-        requests.put("liquibase", new ActionRequest("POST", "/bootui/api/liquibase/update"));
-        requests.put("github", new ActionRequest("POST", "/bootui/api/github/refresh"));
-        requests.put("rest-api", new ActionRequest("POST", "/bootui/api/rest-api/scan"));
-        requests.put("spring", new ActionRequest("POST", "/bootui/api/spring/scan"));
-        requests.put("crac", new ActionRequest("POST", "/bootui/api/crac/scan"));
-        requests.put("sql-trace", new ActionRequest("POST", "/bootui/api/sql-trace/clear"));
-        requests.put("rest-client-trace", new ActionRequest("POST", "/bootui/api/rest-client-trace/clear"));
-        requests.put("mcp-server", new ActionRequest("POST", "/bootui/api/mcp-server/toggle"));
-        requests.put("activity", new ActionRequest("POST", "/bootui/api/activity/use-existing-datasource"));
-        requests.put("email", new ActionRequest("DELETE", "/bootui/api/email"));
-        requests.put("kafka", new ActionRequest("DELETE", "/bootui/api/kafka"));
-        requests.put("rabbitmq", new ActionRequest("DELETE", "/bootui/api/rabbitmq"));
-        requests.put("jms", new ActionRequest("DELETE", "/bootui/api/jms"));
-        return requests;
-    }
-
-    private record ActionRequest(String method, String uri) {}
 }
