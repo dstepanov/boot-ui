@@ -25,6 +25,7 @@ import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveActivitySignalFil
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveAgentSessionController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveApiAuthenticationFilter;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveBootUiExceptionHandler;
+import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveBootUiHandlerAdapter;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveBootUiIndexController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveBootUiMcpController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveBootUiMcpServerController;
@@ -67,6 +68,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.aot.AotDetector;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.SmartInitializingSingleton;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
@@ -131,6 +133,11 @@ import tools.jackson.databind.ObjectMapper;
  *       the handful of duplicated beans above that do I/O or reflection at construction time) so
  *       rarely-visited panels are not eagerly constructed at context startup, matching the servlet
  *       adapter's resource profile.</li>
+ *   <li>{@link ReactiveBootUiHandlerAdapter} is the centralized WebFlux execution boundary for BootUI
+ *       API controller methods. It delegates to WebFlux's configured request-mapping adapter on bounded
+ *       elastic threads, so shared synchronous controllers can keep their servlet contract while
+ *       blocking network, scan, classpath, heap/JVM, download, and filesystem work never runs on Reactor
+ *       Netty event loops.</li>
  * </ul>
  *
  * <p><strong>Server-Sent Events panels (Phase 3 of the WebFlux port).</strong> Live Activity aside (see
@@ -515,6 +522,17 @@ public class BootUiReactiveAutoConfiguration {
     @Bean
     public ReactivePanelAccessFilter bootUiReactivePanelAccessFilter(BootUiProperties properties) {
         return new ReactivePanelAccessFilter(properties);
+    }
+
+    @Bean
+    public ReactiveBootUiHandlerAdapter bootUiReactiveHandlerAdapter(
+            @Qualifier("requestMappingHandlerAdapter")
+                    ObjectProvider<
+                                    org.springframework.web.reactive.result.method.annotation
+                                            .RequestMappingHandlerAdapter>
+                            delegateProvider,
+            ApplicationContext applicationContext) {
+        return new ReactiveBootUiHandlerAdapter(delegateProvider, applicationContext);
     }
 
     @Bean
