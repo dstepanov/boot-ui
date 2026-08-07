@@ -361,7 +361,7 @@ and the shell-chrome `GET /bootui/api/overview` endpoint is served on both adapt
   (`BootUiQuarkusProdShellGuardBootTest`, in the dedicated `bootui-quarkus-prod-shell-guard-integration-tests`
   module — kept separate from every `@QuarkusTest`-based module because Quarkus's own test framework refuses to mix
   `QuarkusProdModeTest` and `@QuarkusTest` in the same Surefire fork), alongside a white-box unit suite
-  (`BootUiProdShellGuardFilterTest`, in `bootui-quarkus-integration-tests`) — see `BootUiQuarkusProcessor`'s class
+  (`BootUiProdShellGuardFilterTest`, in `bootui-quarkus`) — see `BootUiQuarkusProcessor`'s class
   Javadoc for the full investigation.
 - **Native is therefore a non-issue.** Quarkus dev mode always runs on the JVM, so the bytecode-scanning advisors,
   classpath Maven metadata (`Vulnerabilities`), and JVM MXBeans all work exactly as on Spring. The native-image
