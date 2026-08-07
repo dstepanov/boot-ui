@@ -229,6 +229,22 @@ test.describe('BootUI app shell', () => {
     await expect(page.locator('main.content-stage')).toBeFocused()
   })
 
+  test('unknown hashes provide accessible recovery without leaving the mounted console', async ({page}) => {
+    await page.goto('/bootui/#/missing-panel')
+
+    await expect(page.getByRole('heading', {name: 'Page not found'})).toBeVisible()
+    await expect(page).toHaveTitle('Not Found · bootui-sample · BootUI')
+
+    await page.getByRole('button', {name: 'Search panels'}).click()
+    const palette = page.getByRole('dialog', {name: 'Command palette'})
+    await expect(palette.getByRole('combobox', {name: 'Search panels'})).toBeFocused()
+    await page.keyboard.press('Escape')
+
+    await page.getByRole('link', {name: 'Go to Overview'}).click()
+    await expect(page).toHaveURL(/\/bootui\/#\/overview$/)
+    await expect(page).toHaveTitle('Overview · bootui-sample · BootUI')
+  })
+
   test('mobile command palette restores shortcut focus on cancel', async ({page}) => {
     await page.setViewportSize({width: 390, height: 844})
     await page.goto('/bootui/')

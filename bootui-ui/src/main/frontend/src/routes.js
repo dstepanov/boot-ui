@@ -49,6 +49,7 @@ const Email = () => import('./views/Email.vue')
 const Kafka = () => import('./views/Kafka.vue')
 const RabbitMQ = () => import('./views/RabbitMQ.vue')
 const Jms = () => import('./views/Jms.vue')
+const NotFound = () => import('./views/NotFound.vue')
 
 export const groups = {
   overview: 'overview',
@@ -864,5 +865,10 @@ export const routes = [
   {path: '/memory-advisor', redirect: '/memory'},
   {path: '/security-advisor', redirect: '/security'},
   {path: '/profiles', redirect: '/profile-diff'},
-  {path: '/spring-cache', redirect: '/cache'}
+  {path: '/spring-cache', redirect: '/cache'},
+  {
+    path: '/:pathMatch(.*)*',
+    component: NotFound,
+    meta: {title: 'Not Found'}
+  }
 ]
