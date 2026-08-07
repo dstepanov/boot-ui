@@ -722,14 +722,18 @@ must not be published.
   body, and `POST https://keyserver.ubuntu.com/pks/add` with form field `keytext`).
 - **A failed deployment still consumes the version coordinate in Central.** Once the publishing plugin uploads
   `com.julien-dubois.bootui:<artifact>:<version>` — even if validation rejects it — you cannot re-upload that exact GAV
-  without dropping the failed deployment from the Sonatype Central Portal first. The default path is to run the `Release`
-  workflow with a new version so it bumps the codebase, commits, tags, and publishes in one run.
+  without dropping the failed deployment from the Sonatype Central Portal first. Never move or recreate the signed
+  release tag: drop the failed deployment, then rerun the workflow at that existing tag. If the upload succeeded and only
+  polling, smoke tests, or docs deployment failed, rerun at the tag with `resume_after_publish=true` to skip a duplicate
+  deploy.
 - **Use the `Release` workflow (`.github/workflows/release.yml`) to bump versions** rather than running `versions:set` by
   hand. It runs `versions:set`, updates the `docs/SETUP.md` install snippet (the public `README.md` only links to the docs
   site), *and* bumps every npm `package.json` / `package-lock.json` (root docs site, `bootui-ui` frontend, the
-  `bootui-spring-sample-app/e2e` suite) via `npm version --no-git-tag-version`, then verify-builds, commits, tags, and publishes.
-  Manual `versions:set` skips the install-snippet rewrite and the npm bumps, leaving them pointing at a stale version. When
-  touching version strings, keep the Quarkus modules' `quarkus.platform.version` independent of the project version.
+  `bootui-spring-sample-app/e2e` suite) via `npm version --no-git-tag-version`, then verify-builds, commits, creates a
+  GPG-signed annotated tag, and atomically pushes both before publication. It aborts if the source branch advanced and
+  never rebases release contents; all publish, verification, smoke, and docs work then runs from the tag's exact commit
+  SHA. Manual `versions:set` skips the install-snippet rewrite and the npm bumps, leaving them pointing at a stale version.
+  When touching version strings, keep the Quarkus modules' `quarkus.platform.version` independent of the project version.
 
 ## Design context
 
