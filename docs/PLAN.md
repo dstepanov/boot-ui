@@ -533,13 +533,23 @@ path through the application. This increment closes that gap without adding any 
 - **Slow interactions are now unmistakable by timing, not color alone:** duration itself now differs by tone — a calm
   amber pulse (with a restrained trailing halo) for a slow completion runs 1200–1500ms, a normal completion
   650–850ms, and a failure 900–1100ms — and a non-color "slow" text label appears in the node detail view and in
-  live-region announcements alongside the existing amber/red styling. A sequenced pulse's CSS keyframe keeps it fully
-  transparent for its entire delay (`animation-fill-mode: both`), so it never flashes into view before its causal
+  live-region announcements alongside the existing amber/red styling. A sequenced pulse's CSS Motion Path animation
+  stays fully transparent for its entire mount-relative delay, so it never flashes into view before its causal
   predecessor has arrived; every pulse still plays exactly once, linearly, with no bounce, loop, or drift.
 - Reduced motion is deliberately unchanged in timing: it never sequences or delays anything (there is no travel to
   pace), so every changed edge is still emphasized immediately. Its live-region announcement was extended with a
   `describeFlowSequence` narration so a screen-reader user gets the same causal story — "Flow: &lt;inbound&gt; →
   &lt;cache&gt; → &lt;outbound&gt;" — that sighted users read from the sequenced motion.
+
+**Later refinement — bounded hybrid layout and transient target evidence.** Typical maps now use a fixed-radius
+right-facing fan through six dependencies, while denser maps switch to a spacious two-column rack bounded at 1,040
+logical pixels wide. A 72-pixel row pitch reserves the SLOW/ERROR chip and ring envelope; the 28-node rack is 1,046
+pixels tall inside the existing scrollable stage. Smooth fan paths and deterministic dense routes keep every connector
+clear of unrelated nodes, and CSS Motion Path consumes each connector's exact path with mount-relative timing. Retained
+failures no longer permanently color topology nodes or edges. Accepted slow/failure pulses instead schedule
+reference-counted target rings and explicit `SLOW · <duration>` / `ERROR` chips for exactly their own delay and duration;
+inbound targets the application, outbound targets the dependency, and failure wins only while overlapping slow.
+Reduced-motion users receive the same target semantics as a brief static emphasis plus explicit live narration.
 
 Complexity and risks:
 

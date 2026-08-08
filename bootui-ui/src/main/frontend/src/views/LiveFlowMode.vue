@@ -13,6 +13,7 @@ import {
   PULSE_DURATION_MS,
   REDUCED_MOTION_HIGHLIGHT_MS,
   createFlowQueue,
+  createTransientTargetStateManager,
   describeNewEvidence,
   diffFlowPulses,
   externalEndpointId,
@@ -49,6 +50,7 @@ const zoom = ref(1)
 const liveMessage = ref('')
 const pulses = ref([])
 const highlightedEdges = ref(new Set())
+const targetStates = ref([])
 const scrollElement = ref(null)
 const svgElement = ref(null)
 
@@ -60,11 +62,16 @@ let previousEdges = null
 let requestInFlight = false
 let refreshPending = false
 let unmounted = false
+let pauseGeneration = 0
 const highlightTimers = new Map()
 
 const queue = createFlowQueue({maxConcurrent: MAX_CONCURRENT_PULSES, duration: PULSE_DURATION_MS})
 const unsubscribeQueue = queue.subscribe((active) => {
   pulses.value = [...active]
+})
+const targetStateManager = createTransientTargetStateManager()
+const unsubscribeTargetStates = targetStateManager.subscribe((active) => {
+  targetStates.value = [...active]
 })
 
 const map = computed(() => normalizeServiceMap(report.value))
@@ -83,6 +90,7 @@ const selectedEdge = computed(() => {
     filtered.value.edges.find((edge) => edge.fromId === selected.value.id || edge.toId === selected.value.id) ?? null
   )
 })
+const targetStatesById = computed(() => new Map(targetStates.value.map((state) => [state.targetId, state])))
 const truncation = computed(() => map.value.truncation)
 // Roving tabindex anchor. Falls back to the first visible node whenever the selected one is filtered
 // away, so the graph can never become unreachable by keyboard.
@@ -101,6 +109,8 @@ async function loadServiceMap() {
     return
   }
   requestInFlight = true
+  const requestPauseGeneration = pauseGeneration
+  const animationEligibleAtStart = !props.paused
   loading.value = true
   try {
     const response = await apiFetch('api/activity/service-map')
@@ -109,7 +119,7 @@ async function loadServiceMap() {
     }
     const next = normalizeServiceMap(await response.json())
     if (unmounted) return
-    applyNewEvidence(next)
+    applyNewEvidence(next, animationEligibleAtStart && !props.paused && requestPauseGeneration === pauseGeneration)
     report.value = next
     error.value = null
     lastFetched.value = Date.now()
@@ -140,16 +150,27 @@ async function loadServiceMap() {
  * emphasized immediately, without the causal stagger's delay, and the polite announcement below already
  * narrates the same causal story in full sentences instead.
  */
-function applyNewEvidence(next) {
+function applyNewEvidence(next, animationEligible) {
+  // A response that crossed a pause boundary is baseline-only even if resume won the race before it
+  // resolved. This prevents evidence captured by an old request generation from replaying after resume.
+  if (!animationEligible) {
+    previousEdges = next.edges
+    return
+  }
   const fresh = diffFlowPulses(previousEdges, next.edges)
   previousEdges = next.edges
   if (!fresh.length) return
   liveMessage.value = describeNewEvidence(fresh, nodesById.value)
   if (reducedMotion.value) {
     for (const pulse of fresh) highlightEdge(pulse.edgeId)
+    targetStateManager.enqueue(fresh, {
+      durationOverride: REDUCED_MOTION_HIGHLIGHT_MS,
+      immediate: true
+    })
     return
   }
-  queue.enqueue(sequenceFlowPulses(fresh))
+  const accepted = queue.enqueue(sequenceFlowPulses(fresh))
+  targetStateManager.enqueue(accepted)
 }
 
 /** The reduced-motion equivalent of a pulse: a brief, static emphasis on the edge that changed. */
@@ -170,23 +191,34 @@ function highlightEdge(edgeId) {
   )
 }
 
+/** Cancels every transient visual and its timer; used by pause, preference changes, and unmount. */
+function clearTransientEvidence() {
+  for (const timer of highlightTimers.values()) clearTimeout(timer)
+  highlightTimers.clear()
+  highlightedEdges.value = new Set()
+  queue.clear()
+  targetStateManager.clear()
+  liveMessage.value = ''
+}
+
 function pulseGeometry(pulse) {
   const edge = layout.value.edges.find((candidate) => candidate.id === pulse.edgeId)
   if (!edge) return null
+  const duration = `${pulse.durationMs ?? PULSE_DURATION_MS}ms`
+  const delay = `${pulse.startDelayMs ?? 0}ms`
   return {
     key: pulse.id,
     tone: pulse.tone,
+    path: edge.animationPath,
+    duration,
+    delay,
+    // CSS Motion Path is intentionally used instead of SMIL: CSS animation delays are relative to the
+    // dynamically inserted element's own animation timeline in Chromium, BootUI's supported E2E browser.
+    // The exact visible SVG path is reused, so curved and corridor-routed pulses cannot drift off-route.
     style: {
-      '--flow-x1': `${edge.x1}px`,
-      '--flow-y1': `${edge.y1}px`,
-      '--flow-x2': `${edge.x2}px`,
-      '--flow-y2': `${edge.y2}px`,
-      // Each pulse carries its own tone-specific duration (slow is unmistakably the longest) and its own
-      // sequencing delay (0 unless it is a downstream leg of a causally-sequenced flow). The CSS keyframe
-      // below keeps a delayed pulse fully invisible for the entire delay via `animation-fill-mode: both`,
-      // so it never flashes into view at the wrong moment.
-      '--flow-duration': `${pulse.durationMs ?? PULSE_DURATION_MS}ms`,
-      '--flow-delay': `${pulse.startDelayMs ?? 0}ms`
+      offsetPath: `path("${edge.animationPath}")`,
+      animationDuration: duration,
+      animationDelay: delay
     }
   }
 }
@@ -197,6 +229,10 @@ const visibleSlowPulses = computed(() => visiblePulses.value.filter((pulse) => p
 
 function isHighlighted(edgeId) {
   return highlightedEdges.value.has(edgeId)
+}
+
+function targetState(nodeId) {
+  return targetStatesById.value.get(nodeId) ?? null
 }
 
 function select(id) {
@@ -268,22 +304,38 @@ onMounted(() => {
 
 function onMotionPreferenceChange(event) {
   reducedMotion.value = event.matches === true
-  if (reducedMotion.value) queue.clear()
+  if (reducedMotion.value) clearTransientEvidence()
 }
 
 onBeforeUnmount(() => {
   unmounted = true
   refreshPending = false
   motionQuery?.removeEventListener?.('change', onMotionPreferenceChange)
-  for (const timer of highlightTimers.values()) clearTimeout(timer)
-  highlightTimers.clear()
+  clearTransientEvidence()
   unsubscribeQueue()
-  queue.clear()
+  unsubscribeTargetStates()
 })
 
 watch(
   () => props.refreshTick,
   () => loadServiceMap()
+)
+
+watch(
+  () => ({
+    nodeIds: [map.value.application?.id, ...filtered.value.nodes.map((node) => node.id)],
+    edgeIds: filtered.value.edges.map((edge) => edge.id)
+  }),
+  ({nodeIds, edgeIds}) => targetStateManager.reconcile(new Set(nodeIds), new Set(edgeIds))
+)
+
+watch(
+  () => props.paused,
+  (paused) => {
+    if (!paused) return
+    pauseGeneration += 1
+    clearTransientEvidence()
+  }
 )
 
 watch(selectedId, async (id) => {
@@ -422,16 +474,14 @@ watch(selectedId, async (id) => {
           </defs>
 
           <g aria-hidden="true">
-            <line
-              v-for="edge in layout.edges"
+            <path
+              v-for="(edge, index) in layout.edges"
               :key="edge.id"
-              :x1="edge.x1"
-              :y1="edge.y1"
-              :x2="edge.x2"
-              :y2="edge.y2"
+              :id="`flow-route-${index}`"
+              :d="edge.path"
               :class="[
                 'flow-edge',
-                `flow-edge--${edge.edge.outcome.toLowerCase()}`,
+                {'flow-edge--no_evidence': edge.edge.outcome === 'NO_EVIDENCE'},
                 {'flow-edge--highlighted': isHighlighted(edge.id)}
               ]"
               marker-end="url(#flow-arrow)"
@@ -445,25 +495,39 @@ watch(selectedId, async (id) => {
               v-for="pulse in visibleSlowPulses"
               :key="`${pulse.key}-trail`"
               class="flow-pulse-trail"
+              r="9"
               :style="pulse.style"
-              r="8"
             />
             <circle
               v-for="pulse in visiblePulses"
               :key="pulse.key"
               :class="['flow-pulse', `flow-pulse--${pulse.tone}`]"
+              r="4.5"
               :style="pulse.style"
-              r="4"
             />
           </g>
 
           <g
             v-if="layout.application"
             :transform="`translate(${layout.application.x - layout.application.w / 2},${layout.application.y - layout.application.h / 2})`"
-            class="flow-node flow-node--app"
+            :class="[
+              'flow-node',
+              'flow-node--app',
+              targetState(layout.application.node.id) &&
+                `flow-node--transient-${targetState(layout.application.node.id).tone}`
+            ]"
             role="img"
             aria-label="This application, the centre of the map"
           >
+            <rect
+              v-if="targetState(layout.application.node.id)"
+              class="flow-target-ring"
+              x="-5"
+              y="-5"
+              :width="layout.application.w + 10"
+              :height="layout.application.h + 10"
+              rx="14"
+            />
             <rect class="flow-node-shape" :width="layout.application.w" :height="layout.application.h" rx="10" />
             <text
               :x="layout.application.w / 2"
@@ -473,6 +537,16 @@ watch(selectedId, async (id) => {
             >
               This application
             </text>
+            <g
+              v-if="targetState(layout.application.node.id)"
+              class="flow-target-chip"
+              :transform="`translate(${layout.application.w / 2},-13)`"
+            >
+              <rect x="-48" y="-10" width="96" height="20" rx="10" />
+              <text text-anchor="middle" dominant-baseline="central">
+                {{ targetState(layout.application.node.id).label }}
+              </text>
+            </g>
           </g>
 
           <g
@@ -485,7 +559,7 @@ watch(selectedId, async (id) => {
               {
                 'flow-node--selected': selectedId === box.node.id,
                 'flow-node--unobserved': !box.node.observed,
-                'flow-node--failing': box.node.outcome === 'RETAINED_FAILURES'
+                [`flow-node--transient-${targetState(box.node.id)?.tone}`]: targetState(box.node.id)
               }
             ]"
             role="button"
@@ -505,6 +579,15 @@ watch(selectedId, async (id) => {
               :height="box.h + 10"
             />
             <rect class="flow-focus-ring flow-focus-ring--inner" x="-2" y="-2" :width="box.w + 4" :height="box.h + 4" />
+            <rect
+              v-if="targetState(box.node.id)"
+              class="flow-target-ring"
+              x="-5"
+              y="-5"
+              :width="box.w + 10"
+              :height="box.h + 10"
+              rx="12"
+            />
             <rect class="flow-node-shape" :width="box.w" :height="box.h" rx="8" />
             <text class="flow-node-label" x="12" :y="box.h / 2 - 5" dominant-baseline="central">
               {{ shortLabel(box.node.label) }}
@@ -514,6 +597,10 @@ watch(selectedId, async (id) => {
               {{ box.node.observed ? `${formatNumber(box.node.interactions)} retained` : 'configured' }}
               <template v-if="box.node.failures">· {{ formatNumber(box.node.failures) }} failed</template>
             </text>
+            <g v-if="targetState(box.node.id)" class="flow-target-chip" :transform="`translate(${box.w / 2},-13)`">
+              <rect x="-48" y="-10" width="96" height="20" rx="10" />
+              <text text-anchor="middle" dominant-baseline="central">{{ targetState(box.node.id).label }}</text>
+            </g>
           </g>
         </svg>
       </div>
@@ -616,10 +703,12 @@ watch(selectedId, async (id) => {
           only</span
         >
         <span class="flow-legend__item"
-          ><span class="flow-legend__swatch flow-legend__swatch--failing" aria-hidden="true"></span>Retained
-          failures</span
+          ><span class="flow-legend__swatch flow-legend__swatch--transient" aria-hidden="true"></span>New slow or failed
+          evidence</span
         >
-        <span class="flow-legend__note">Motion marks newly completed interactions only.</span>
+        <span class="flow-legend__note"
+          >Amber/red emphasis is temporary; retained failures remain in counts and details.</span
+        >
       </div>
     </template>
   </div>
@@ -715,7 +804,7 @@ watch(selectedId, async (id) => {
   background: var(--bootui-surface-alt);
   border: 1px solid var(--bootui-border);
   border-radius: var(--bootui-radius-md);
-  height: clamp(20rem, 52vh, 34rem);
+  height: clamp(22rem, 58vh, 38rem);
 }
 
 .flow-svg {
@@ -739,28 +828,19 @@ watch(selectedId, async (id) => {
   opacity: 0.55;
 }
 
-.flow-edge--retained_failures {
-  stroke: var(--bootui-danger-text);
-}
-
 .flow-edge--highlighted {
   stroke-width: 3;
   opacity: 1;
 }
 
 /* ── Pulses ────────────────────────────────────────────────────────────────── */
-/* A pulse's `--flow-delay` (see `pulseGeometry`) is 0 unless `sequenceFlowPulses` staggered it as a
-   downstream leg of a causal flow. `animation-fill-mode: both` applies the 0% keyframe - positioned at
-   the source, fully transparent - for that entire delay, so a sequenced pulse never flashes into view at
-   the wrong moment; it only ever becomes visible once its own travel actually begins. One fixed keyframe,
-   a single non-repeating pass, and a linear timing function keep every tone free of bounce, looping, or
-   drift - motion here only ever explains causality, once, then stops. */
+/* CSS Motion Path starts on the dynamically mounted element's own animation timeline, unlike SMIL begin
+   timestamps which are document-relative. `both` keeps the pulse invisible throughout its causal delay. */
 .flow-pulse {
   fill: var(--bootui-green);
   opacity: 0;
-  animation-name: flow-travel;
-  animation-duration: var(--flow-duration);
-  animation-delay: var(--flow-delay, 0ms);
+  offset-distance: 0%;
+  animation-name: flow-pulse-travel;
   animation-timing-function: linear;
   animation-iteration-count: 1;
   animation-fill-mode: both;
@@ -784,19 +864,18 @@ watch(selectedId, async (id) => {
 .flow-pulse-trail {
   fill: none;
   stroke: var(--bootui-warning-text-strong);
-  stroke-width: 1.5;
+  stroke-width: 1.75;
   opacity: 0;
-  animation-name: flow-travel-trail;
-  animation-duration: var(--flow-duration);
-  animation-delay: var(--flow-delay, 0ms);
+  offset-distance: 0%;
+  animation-name: flow-pulse-trail-travel;
   animation-timing-function: linear;
   animation-iteration-count: 1;
   animation-fill-mode: both;
 }
 
-@keyframes flow-travel {
+@keyframes flow-pulse-travel {
   0% {
-    transform: translate(var(--flow-x1), var(--flow-y1));
+    offset-distance: 0%;
     opacity: 0;
   }
   8% {
@@ -806,24 +885,24 @@ watch(selectedId, async (id) => {
     opacity: 1;
   }
   100% {
-    transform: translate(var(--flow-x2), var(--flow-y2));
+    offset-distance: 100%;
     opacity: 0;
   }
 }
 
-@keyframes flow-travel-trail {
+@keyframes flow-pulse-trail-travel {
   0% {
-    transform: translate(var(--flow-x1), var(--flow-y1));
+    offset-distance: 0%;
     opacity: 0;
   }
   10% {
-    opacity: 0.35;
+    opacity: 0.42;
   }
   90% {
-    opacity: 0.35;
+    opacity: 0.42;
   }
   100% {
-    transform: translate(var(--flow-x2), var(--flow-y2));
+    offset-distance: 100%;
     opacity: 0;
   }
 }
@@ -896,10 +975,6 @@ watch(selectedId, async (id) => {
   stroke-dasharray: 5 4;
 }
 
-.flow-node--failing .flow-node-shape {
-  stroke: var(--bootui-danger-text);
-}
-
 /* The green-to-blue gradient marks selection, and selection only. */
 .flow-node--selected .flow-node-shape {
   fill: url(#flow-selected-fill);
@@ -910,6 +985,40 @@ watch(selectedId, async (id) => {
 .flow-node--selected .flow-node-label,
 .flow-node--selected .flow-node-meta {
   fill: #fff;
+}
+
+.flow-target-ring {
+  pointer-events: none;
+  stroke-width: 2;
+}
+
+.flow-target-chip {
+  pointer-events: none;
+}
+
+.flow-target-chip text {
+  fill: var(--bootui-surface-solid);
+  font-family: var(--bs-font-sans-serif);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.flow-node--transient-failed .flow-target-ring {
+  fill: color-mix(in srgb, var(--bootui-danger) 14%, transparent);
+  stroke: var(--bootui-danger-text);
+}
+
+.flow-node--transient-failed .flow-target-chip rect {
+  fill: var(--bootui-danger-text);
+}
+
+.flow-node--transient-slow .flow-target-ring {
+  fill: color-mix(in srgb, var(--bootui-warning) 18%, transparent);
+  stroke: var(--bootui-warning-text-strong);
+}
+
+.flow-node--transient-slow .flow-target-chip rect {
+  fill: var(--bootui-warning-text-strong);
 }
 
 /* ── Detail ────────────────────────────────────────────────────────────────── */
@@ -1058,8 +1167,13 @@ watch(selectedId, async (id) => {
   border-style: dashed;
 }
 
-.flow-legend__swatch--failing {
-  border-color: var(--bootui-danger-text);
+.flow-legend__swatch--transient {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--bootui-warning) 28%, transparent) 0 50%,
+    color-mix(in srgb, var(--bootui-danger) 22%, transparent) 50% 100%
+  );
+  border-color: var(--bootui-border-alt);
 }
 
 .flow-legend__note {
@@ -1077,9 +1191,8 @@ watch(selectedId, async (id) => {
   }
 }
 
-/* Reduced motion is handled in script by replacing pulses with a brief static edge highlight and a
-   polite live-region update; this rule is the belt-and-braces guarantee that nothing animates - no
-   travel, no delayed appearance, no trail. */
+/* Reduced motion is handled in script by replacing travel with a brief static target/edge emphasis and
+   a polite live-region update; this rule is the belt-and-braces guarantee that no particle moves. */
 @media (prefers-reduced-motion: reduce) {
   .flow-pulse,
   .flow-pulse-trail {

@@ -344,13 +344,22 @@ Sequencing changes only the pacing of already-completed evidence, never the evid
 concurrency and per-edge bounds.
 
 Slow interactions pulse a calm amber for longer than normal completions or failures, with a restrained trailing halo,
-so timing carries meaning without relying on color alone. Everything the motion conveys is also readable statically
-from the counts, the edge styling, the detail panel, and the live-region narration.
-Under `prefers-reduced-motion`, particles are replaced by a brief static edge highlight plus a polite live-region
-sentence naming what changed. The whole map is keyboard navigable (arrow keys move between nodes, Enter or Space
-selects), carries a hidden textual list of every node and relationship for screen readers, and supports protocol and
-free-text filters plus zoom for dense graphs. Evidence from a disabled or unavailable source panel never reaches the
-map.
+so timing carries meaning without relying on color alone. A matching temporary target ring and text chip (`SLOW · 1.3
+s` or `ERROR`) appears only for the pulse's scheduled window: inbound HTTP targets the application and outbound
+evidence targets its dependency. Retained failures remain visible in counts, details, recent rows, and accessible text,
+but never leave the map's nodes or edges permanently red. Under `prefers-reduced-motion`, particles are replaced by a
+brief static target/edge highlight plus a polite live-region sentence naming what changed and its duration.
+
+The spatial model is hybrid and deterministic: inbound lane on the left, application hub in the centre, and an airy
+right-facing fan for up to six dependencies before denser maps switch to a two-column rack. The fan uses a fixed
+288-pixel radius and 72-pixel vertical pitch, keeping typical maps around 800–844 logical pixels wide. The dense rack
+uses a 72-pixel application gap, 32-pixel column gap, and 72-pixel row pitch, and is bounded at 1,040 pixels wide and
+1,046 pixels tall at the 28-dependency cap inside the scrollable stage. Smooth fan connectors and deterministic
+collision-free rack routes are reused exactly by each pulse and slow trail through CSS Motion Path, so dynamically
+inserted evidence starts on its own mount-relative delay instead of the SVG document timeline. The whole map is keyboard
+navigable (arrow keys move between nodes, Enter or Space selects), carries a hidden textual list of every node and
+relationship for screen readers, and supports protocol and free-text filters plus zoom. Evidence from a disabled or
+unavailable source panel never reaches the map.
 
 ![BootUI Live Activity panel](./images/bootui-activity.webp)
 

@@ -166,31 +166,271 @@ const APP_W = 172
 const APP_H = 60
 const NODE_W = 196
 const NODE_H = 46
-const INBOUND_GAP = 150
-const MARGIN = 24
-const MIN_ARC_SPACING = NODE_H + 20
-const FAN_DEGREES = 150
+const MARGIN = 32
+const LANE_GAP = 112
+const FAN_RADIUS = 288
+const FAN_ROW_PITCH = 72
+const FAN_MIN_HEIGHT = 320
+const FAN_MIN_WIDTH = 800
+const RACK_GAP = 72
+const RACK_COLUMN_GAP = 32
+const RACK_ROW_GAP = 26
+const RACK_MIN_HEIGHT = 320
+export const FAN_DEPENDENCY_THRESHOLD = 6
+const EDGE_SOURCE_GAP = 4
+const EDGE_TARGET_GAP = 8
+const TARGET_RING_PADDING = 5
+const TARGET_CHIP_WIDTH = 96
+const TARGET_CHIP_HEIGHT = 20
+const TARGET_CHIP_Y = -13
+export const MAX_SERVICE_MAP_WIDTH = 1040
+
+function boxRect(box) {
+  return {
+    left: box.x - box.w / 2,
+    top: box.y - box.h / 2,
+    right: box.x + box.w / 2,
+    bottom: box.y + box.h / 2
+  }
+}
 
 /**
- * Fans the dependencies out to the right of the centered application, mirroring the Beans graph's
- * ring layout so the two graph surfaces feel like one system.
+ * Bounding rectangle reserved for a node's transient ring and SLOW/ERROR chip. Keeping this pure makes
+ * the row-pitch contract executable: no transient decoration may intrude into any neighbouring node.
+ */
+export function transientTargetBounds(box) {
+  const node = boxRect(box)
+  const chipCenterX = box.x
+  const chipCenterY = node.top + TARGET_CHIP_Y
+  return {
+    left: Math.min(node.left - TARGET_RING_PADDING, chipCenterX - TARGET_CHIP_WIDTH / 2),
+    top: Math.min(node.top - TARGET_RING_PADDING, chipCenterY - TARGET_CHIP_HEIGHT / 2),
+    right: Math.max(node.right + TARGET_RING_PADDING, chipCenterX + TARGET_CHIP_WIDTH / 2),
+    bottom: node.bottom + TARGET_RING_PADDING
+  }
+}
+
+function pathFromPoints(points) {
+  return points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ')
+}
+
+function cubicPoint(start, control1, control2, end, progress) {
+  const inverse = 1 - progress
+  return {
+    x:
+      inverse ** 3 * start.x +
+      3 * inverse ** 2 * progress * control1.x +
+      3 * inverse * progress ** 2 * control2.x +
+      progress ** 3 * end.x,
+    y:
+      inverse ** 3 * start.y +
+      3 * inverse ** 2 * progress * control1.y +
+      3 * inverse * progress ** 2 * control2.y +
+      progress ** 3 * end.y
+  }
+}
+
+function curvedPath(start, end) {
+  const travel = end.x - start.x
+  const control1 = {x: start.x + travel * 0.42, y: start.y}
+  const control2 = {x: end.x - travel * 0.38, y: end.y}
+  return cubicPath(start, control1, control2, end)
+}
+
+function cubicPath(start, control1, control2, end) {
+  const points = Array.from({length: 25}, (unused, index) => cubicPoint(start, control1, control2, end, index / 24))
+  const path = `M ${start.x} ${start.y} C ${control1.x} ${control1.y} ${control2.x} ${control2.y} ${end.x} ${end.y}`
+  return {points, path, animationPath: path}
+}
+
+function segmentCrossesRectangle(start, end, rectangle) {
+  const axisInterval = (origin, delta, minimum, maximum) => {
+    if (Math.abs(delta) < 0.0001) return origin > minimum && origin < maximum ? [-Infinity, Infinity] : null
+    const first = (minimum - origin) / delta
+    const second = (maximum - origin) / delta
+    return [Math.min(first, second), Math.max(first, second)]
+  }
+  const xInterval = axisInterval(start.x, end.x - start.x, rectangle.left, rectangle.right)
+  const yInterval = axisInterval(start.y, end.y - start.y, rectangle.top, rectangle.bottom)
+  if (!xInterval || !yInterval) return false
+  return Math.max(0, xInterval[0], yInterval[0]) < Math.min(1, xInterval[1], yInterval[1])
+}
+
+function shortestClearRoute(start, end, obstacles) {
+  const clearance = 4
+  const rectangles = obstacles.map((box) => {
+    const rectangle = boxRect(box)
+    return {
+      left: rectangle.left - clearance,
+      top: rectangle.top - clearance,
+      right: rectangle.right + clearance,
+      bottom: rectangle.bottom + clearance
+    }
+  })
+  const nodes = [
+    start,
+    end,
+    ...rectangles.flatMap((rectangle) => [
+      {x: rectangle.left, y: rectangle.top},
+      {x: rectangle.right, y: rectangle.top},
+      {x: rectangle.right, y: rectangle.bottom},
+      {x: rectangle.left, y: rectangle.bottom}
+    ])
+  ]
+  const visible = (left, right) => rectangles.every((rectangle) => !segmentCrossesRectangle(left, right, rectangle))
+  const distances = Array(nodes.length).fill(Number.POSITIVE_INFINITY)
+  const previous = Array(nodes.length).fill(-1)
+  const visited = new Set()
+  distances[0] = 0
+
+  while (visited.size < nodes.length) {
+    let current = -1
+    for (let index = 0; index < nodes.length; index += 1) {
+      if (!visited.has(index) && (current < 0 || distances[index] < distances[current])) current = index
+    }
+    if (current < 0 || !Number.isFinite(distances[current]) || current === 1) break
+    visited.add(current)
+    for (let next = 0; next < nodes.length; next += 1) {
+      if (visited.has(next) || next === current || !visible(nodes[current], nodes[next])) continue
+      const candidate =
+        distances[current] + Math.hypot(nodes[next].x - nodes[current].x, nodes[next].y - nodes[current].y)
+      if (candidate < distances[next]) {
+        distances[next] = candidate
+        previous[next] = current
+      }
+    }
+  }
+
+  const points = []
+  for (let current = 1; current >= 0; current = previous[current]) {
+    points.unshift(nodes[current])
+    if (current === 0) break
+  }
+  if (points[0] !== start)
+    return {points: [start, end], path: pathFromPoints([start, end]), animationPath: pathFromPoints([start, end])}
+  const path = pathFromPoints(points)
+  return {points, path, animationPath: path}
+}
+
+/**
+ * Routes one dense-rack edge around reserved node rectangles.
  *
- * The radius grows with the dependency count so adjacent nodes never overlap, which is what keeps the
- * layout readable at the hard cardinality cap without any collision solving.
+ * First-column dependencies use a simple curve. Second-column edges use a deterministic visibility graph
+ * around every unrelated node and take its shortest clear route.
+ */
+function routeRackEdge(edge, from, to, {application, dependencies, columnCount}) {
+  const fromRect = boxRect(from)
+  const toRect = boxRect(to)
+  let points
+
+  if (edge.direction === 'INBOUND') {
+    points = [
+      {x: fromRect.right + EDGE_SOURCE_GAP, y: from.y},
+      {x: toRect.left - EDGE_TARGET_GAP, y: to.y}
+    ]
+  } else if (from === application) {
+    const start = {x: fromRect.right + EDGE_SOURCE_GAP, y: from.y}
+    const end = {x: toRect.left - EDGE_TARGET_GAP, y: to.y}
+
+    if (columnCount === 2 && to.column === 1) {
+      const obstacles = dependencies.filter((box) => box !== to)
+      return shortestClearRoute(start, end, obstacles)
+    } else {
+      return curvedPath(start, end)
+    }
+  } else {
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const distance = Math.sqrt(dx * dx + dy * dy)
+    if (distance < 1) return null
+    const ux = dx / distance
+    const uy = dy / distance
+    const start = trim(from, ux, uy, EDGE_SOURCE_GAP)
+    const end = trim(to, ux, uy, EDGE_TARGET_GAP)
+    points = [
+      {x: from.x + ux * start, y: from.y + uy * start},
+      {x: to.x - ux * end, y: to.y - uy * end}
+    ]
+  }
+
+  const path = pathFromPoints(points)
+  return {points, path, animationPath: path}
+}
+
+function routeFanEdge(edge, from, to, application) {
+  const fromRect = boxRect(from)
+  const toRect = boxRect(to)
+  if (edge.direction === 'INBOUND') {
+    return curvedPath({x: fromRect.right + EDGE_SOURCE_GAP, y: from.y}, {x: toRect.left - EDGE_TARGET_GAP, y: to.y})
+  }
+  if (from === application) {
+    return curvedPath({x: fromRect.right + EDGE_SOURCE_GAP, y: from.y}, {x: toRect.left - EDGE_TARGET_GAP, y: to.y})
+  }
+
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const distance = Math.sqrt(dx * dx + dy * dy)
+  if (distance < 1) return null
+  const ux = dx / distance
+  const uy = dy / distance
+  const start = trim(from, ux, uy, EDGE_SOURCE_GAP)
+  const end = trim(to, ux, uy, EDGE_TARGET_GAP)
+  return curvedPath({x: from.x + ux * start, y: from.y + uy * start}, {x: to.x - ux * end, y: to.y - uy * end})
+}
+
+function fanLayout(dependencies, applicationX, centerY, nodeWidth, nodeHeight) {
+  const middle = (dependencies.length - 1) / 2
+  return dependencies.map((node, index) => {
+    const verticalOffset = (index - middle) * FAN_ROW_PITCH
+    const horizontalOffset = Math.sqrt(Math.max(0, FAN_RADIUS ** 2 - verticalOffset ** 2))
+    return {
+      node,
+      column: 0,
+      row: index,
+      x: applicationX + horizontalOffset,
+      y: centerY + verticalOffset,
+      w: nodeWidth,
+      h: nodeHeight
+    }
+  })
+}
+
+function rackLayout(dependencies, firstRackX, nodeWidth, nodeHeight) {
+  return dependencies.map((node, index) => {
+    const column = index % 2
+    const row = Math.floor(index / 2)
+    return {
+      node,
+      column,
+      row,
+      x: firstRackX + column * (nodeWidth + RACK_COLUMN_GAP),
+      y: MARGIN + nodeHeight / 2 + row * (nodeHeight + RACK_ROW_GAP),
+      w: nodeWidth,
+      h: nodeHeight
+    }
+  })
+}
+
+/**
+ * Places the inbound lane, application hub, and outbound dependencies in a bounded hybrid topology.
+ * Up to six dependencies form an airy right-facing fan; denser maps switch to a spacious two-column
+ * rack. Both modes keep width bounded and reserve the full transient target envelope.
  */
 export function layoutServiceMap(map, {nodeWidth = NODE_W, nodeHeight = NODE_H} = {}) {
   const {inbound, dependencies} = partitionNodes(map)
   const count = dependencies.length
-  const fanRadians = (FAN_DEGREES * Math.PI) / 180
-  const minRadius = APP_W / 2 + nodeWidth / 2 + 90
-  const radius = count <= 1 ? minRadius : Math.max(minRadius, (MIN_ARC_SPACING * count) / fanRadians)
-
-  const halfHeight = count <= 1 ? APP_H : Math.max(APP_H, radius * Math.sin(fanRadians / 2) + nodeHeight)
-  const height = Math.max(360, halfHeight * 2 + MARGIN * 2)
+  const dense = count > FAN_DEPENDENCY_THRESHOLD
+  const rowCount = dense ? Math.ceil(count / 2) : count
+  const contentHeight = dense
+    ? rowCount * nodeHeight + Math.max(0, rowCount - 1) * RACK_ROW_GAP
+    : count
+      ? (count - 1) * FAN_ROW_PITCH + nodeHeight
+      : APP_H
+  const height = Math.max(dense ? RACK_MIN_HEIGHT : FAN_MIN_HEIGHT, contentHeight + MARGIN * 2)
   const cy = height / 2
-  const leftExtent = inbound ? nodeWidth + INBOUND_GAP : 0
-  const cx = MARGIN + leftExtent + APP_W / 2
-  const width = cx + radius + nodeWidth / 2 + MARGIN
+  // Keep the application visually central even when filtering hides the inbound lane.
+  const cx = MARGIN + nodeWidth + LANE_GAP + APP_W / 2
+  const firstRackX = cx + APP_W / 2 + RACK_GAP + nodeWidth / 2
 
   const positions = new Map()
   const application = map.application ? {node: map.application, x: cx, y: cy, w: APP_W, h: APP_H} : null
@@ -202,41 +442,33 @@ export function layoutServiceMap(map, {nodeWidth = NODE_W, nodeHeight = NODE_H} 
     positions.set(inbound.id, inboundBox)
   }
 
-  const dependencyBoxes = dependencies.map((node, index) => {
-    // A single dependency sits straight ahead; more than one spreads evenly across the fan.
-    const ratio = count === 1 ? 0.5 : index / (count - 1)
-    const angle = -fanRadians / 2 + ratio * fanRadians
-    const box = {
-      node,
-      x: cx + radius * Math.cos(angle),
-      y: cy + radius * Math.sin(angle),
-      w: nodeWidth,
-      h: nodeHeight
-    }
-    positions.set(node.id, box)
-    return box
-  })
+  const dependencyBoxes = dense
+    ? rackLayout(dependencies, firstRackX, nodeWidth, nodeHeight)
+    : fanLayout(dependencies, cx, cy, nodeWidth, nodeHeight)
+  for (const box of dependencyBoxes) {
+    positions.set(box.node.id, box)
+  }
+
+  const furthestRight = Math.max(cx + APP_W / 2, ...dependencyBoxes.map((box) => box.x + box.w / 2))
+  const width = dense ? MAX_SERVICE_MAP_WIDTH : Math.max(FAN_MIN_WIDTH, Math.ceil(furthestRight + MARGIN))
 
   const edges = map.edges
     .map((edge) => {
       const from = positions.get(edge.fromId)
       const to = positions.get(edge.toId)
       if (!from || !to) return null
-      const dx = to.x - from.x
-      const dy = to.y - from.y
-      const distance = Math.sqrt(dx * dx + dy * dy)
-      if (distance < 1) return null
-      const ux = dx / distance
-      const uy = dy / distance
-      const start = trim(from, ux, uy, 4)
-      const end = trim(to, ux, uy, 12)
+      const route = dense
+        ? routeRackEdge(edge, from, to, {
+            application,
+            dependencies: dependencyBoxes,
+            columnCount: 2
+          })
+        : routeFanEdge(edge, from, to, application)
+      if (!route) return null
       return {
         edge,
         id: edge.id,
-        x1: from.x + ux * start,
-        y1: from.y + uy * start,
-        x2: to.x - ux * end,
-        y2: to.y - uy * end
+        ...route
       }
     })
     .filter(Boolean)
@@ -247,7 +479,8 @@ export function layoutServiceMap(map, {nodeWidth = NODE_W, nodeHeight = NODE_H} 
     application,
     inbound: inboundBox,
     dependencies: dependencyBoxes,
-    edges
+    edges,
+    mode: dense ? 'rack' : 'fan'
   }
 }
 
@@ -305,6 +538,22 @@ export function diffFlowPulses(previousEdges, nextEdges, {maxPerEdge = MAX_PULSE
 /** Returns the non-application endpoint represented by a directional service-map edge. */
 export function externalEndpointId(edge) {
   return edge?.direction === 'INBOUND' ? edge.fromId : edge?.toId
+}
+
+/** The node that causally receives temporary slow/failure evidence from a pulse. */
+export function pulseTargetId(pulse, applicationId = 'app') {
+  if (!pulse) return null
+  return pulse.direction === 'INBOUND' ? pulse.toId || applicationId : pulse.toId
+}
+
+/** Non-color text displayed beside a target while exceptional evidence is in flight. */
+export function pulseTargetLabel(pulse) {
+  if (pulse?.tone === 'failed') return 'ERROR'
+  if (pulse?.tone !== 'slow') return ''
+  const durationMs = pulse.interaction?.durationMs
+  if (durationMs == null) return 'SLOW'
+  const seconds = (durationMs / 1000).toFixed(durationMs % 1000 === 0 ? 0 : 1)
+  return `SLOW · ${seconds} s`
 }
 
 /**
@@ -417,7 +666,17 @@ export function describeNewEvidence(pulses, nodesById) {
   const notes = []
   if (failures) notes.push(`${failures} failed`)
   if (slow) notes.push(`${slow} slow`)
-  const suffix = notes.length ? `, including ${notes.join(', ')}` : ''
+  const exceptionalTargets = pulses
+    .filter((pulse) => pulse.tone === 'failed' || pulse.tone === 'slow')
+    .map((pulse) => {
+      const targetId = pulseTargetId(pulse)
+      const target =
+        nodesById?.get?.(targetId)?.label ?? (pulse.direction === 'INBOUND' ? 'This application' : targetId)
+      const duration = pulse.interaction?.durationMs
+      const timing = duration == null ? '' : ` (${duration} ms)`
+      return `${target} ${pulse.tone === 'failed' ? 'failed' : 'slow'}${timing}`
+    })
+  const suffix = notes.length ? `, including ${notes.join(', ')}: ${exceptionalTargets.join('; ')}` : ''
   const generic = `New completed interactions: ${parts.join(', ')}${suffix}.`
   const flowSentences = describeFlowSequence(pulses, nodesById)
   return [...flowSentences, generic].join(' ')
@@ -430,7 +689,7 @@ export function describeNewEvidence(pulses, nodesById) {
  * dropped instead of queued, so motion can never lag behind reality or keep running after traffic
  * stops. Each accepted pulse is admitted to `active` immediately (so the concurrency cap is reserved and
  * `active()` stays an honest picture of everything in flight, sequenced or not) and releases itself after
- * its own `startDelayMs + durationMs` - the delay itself is a purely visual concern the CSS layer owns
+ * its own `startDelayMs + durationMs` - the delay itself is a purely visual concern the CSS animation layer owns
  * (the pulse renders invisible for its `startDelayMs`, matching `sequenceFlowPulses`'s causal pacing)
  * rather than a second bookkeeping phase in here, so the queue's bounds and "no stale backlog" guarantee
  * never depend on whether any given pulse happens to be sequenced.
@@ -500,6 +759,103 @@ export function createFlowQueue({
         active = []
         notify()
       }
+    }
+  }
+}
+
+/**
+ * Schedules temporary target evidence in lockstep with accepted pulse CSS timing.
+ *
+ * Entries are reference-counted by pulse id, so overlapping evidence on one target cannot clear another
+ * pulse early. Failure wins while present; when it finishes, an overlapping slow state becomes visible
+ * for the remainder of its own window. Normal pulses intentionally create no target state.
+ */
+export function createTransientTargetStateManager({
+  applicationId = 'app',
+  maxConcurrent = MAX_CONCURRENT_PULSES,
+  schedule = (callback, delay) => setTimeout(callback, delay),
+  cancel = (handle) => clearTimeout(handle)
+} = {}) {
+  const entries = new Map()
+  const listeners = new Set()
+
+  function snapshot() {
+    const byTarget = new Map()
+    for (const entry of entries.values()) {
+      if (!entry.active) continue
+      if (!byTarget.has(entry.targetId)) byTarget.set(entry.targetId, [])
+      byTarget.get(entry.targetId).push(entry.pulse)
+    }
+    return [...byTarget].map(([targetId, pulses]) => {
+      const failed = pulses.filter((pulse) => pulse.tone === 'failed')
+      const slow = pulses.filter((pulse) => pulse.tone === 'slow')
+      const tone = failed.length ? 'failed' : 'slow'
+      const representative = tone === 'failed' ? failed[failed.length - 1] : slow[slow.length - 1]
+      return {targetId, tone, label: pulseTargetLabel(representative), count: pulses.length}
+    })
+  }
+
+  function notify() {
+    const state = snapshot()
+    for (const listener of listeners) listener(state)
+  }
+
+  function release(id) {
+    const entry = entries.get(id)
+    if (!entry) return
+    if (entry.startHandle !== undefined) cancel(entry.startHandle)
+    if (entry.endHandle !== undefined) cancel(entry.endHandle)
+    entries.delete(id)
+    if (entry.active) notify()
+  }
+
+  function start(entry) {
+    if (!entries.has(entry.pulse.id)) return
+    entry.active = true
+    notify()
+  }
+
+  return {
+    enqueue(pulses, {durationOverride = null, immediate = false} = {}) {
+      const accepted = []
+      for (const pulse of pulses ?? []) {
+        if (!['failed', 'slow'].includes(pulse?.tone) || entries.has(pulse.id)) continue
+        if (entries.size >= maxConcurrent) break
+        const targetId = pulseTargetId(pulse, applicationId)
+        if (!targetId) continue
+        const startDelayMs = immediate ? 0 : Math.max(0, pulse.startDelayMs ?? 0)
+        const durationMs = Math.max(0, durationOverride ?? pulse.durationMs ?? PULSE_DURATION_OK_MS)
+        const entry = {pulse, targetId, active: false, startHandle: undefined, endHandle: undefined}
+        entries.set(pulse.id, entry)
+        if (startDelayMs === 0) start(entry)
+        else entry.startHandle = schedule(() => start(entry), startDelayMs)
+        entry.endHandle = schedule(() => release(pulse.id), startDelayMs + durationMs)
+        accepted.push(pulse)
+      }
+      return accepted
+    },
+    release,
+    reconcile(visibleTargetIds, visibleEdgeIds = null) {
+      const visible = visibleTargetIds instanceof Set ? visibleTargetIds : new Set(visibleTargetIds ?? [])
+      const edges =
+        visibleEdgeIds == null ? null : visibleEdgeIds instanceof Set ? visibleEdgeIds : new Set(visibleEdgeIds)
+      for (const [id, entry] of [...entries]) {
+        if (!visible.has(entry.targetId) || (edges && !edges.has(entry.pulse.edgeId))) release(id)
+      }
+    },
+    active: snapshot,
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    clear() {
+      const hadActive = [...entries.values()].some((entry) => entry.active)
+      for (const entry of entries.values()) {
+        if (entry.startHandle !== undefined) cancel(entry.startHandle)
+        if (entry.endHandle !== undefined) cancel(entry.endHandle)
+      }
+      entries.clear()
+      if (hadActive) notify()
     }
   }
 }

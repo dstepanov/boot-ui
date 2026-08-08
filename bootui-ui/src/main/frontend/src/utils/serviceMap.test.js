@@ -2,13 +2,16 @@ import {describe, expect, it, vi} from 'vitest'
 import {
   FLOW_STAGE_STAGGER_MS,
   MAX_CONCURRENT_PULSES,
+  FAN_DEPENDENCY_THRESHOLD,
   MAX_FLOW_STAGGER_STEPS,
   MAX_PULSES_PER_EDGE,
+  MAX_SERVICE_MAP_WIDTH,
   PULSE_DURATION_FAILED_MS,
   PULSE_DURATION_OK_MS,
   PULSE_DURATION_SLOW_MS,
   SLOW_INTERACTION_MS,
   createFlowQueue,
+  createTransientTargetStateManager,
   describeFlowSequence,
   describeNewEvidence,
   diffFlowPulses,
@@ -17,8 +20,11 @@ import {
   normalizeServiceMap,
   partitionNodes,
   pulseDurationMs,
+  pulseTargetId,
+  pulseTargetLabel,
   pulseTone,
-  sequenceFlowPulses
+  sequenceFlowPulses,
+  transientTargetBounds
 } from './serviceMap.js'
 
 function node(overrides = {}) {
@@ -155,7 +161,69 @@ describe('filterServiceMap', () => {
 })
 
 describe('layoutServiceMap', () => {
-  it('centres the application, places the inbound lane left of it, and fans dependencies right', () => {
+  function mapWith(count, {inbound = true} = {}) {
+    const dependencies = Array.from({length: count}, (unused, index) =>
+      node({id: `http:host-${index}`, label: `host-${index}`})
+    )
+    const inboundNode = node({
+      id: 'inbound:http',
+      kind: 'INBOUND',
+      protocol: 'HTTP_INBOUND',
+      label: 'Local HTTP clients'
+    })
+    return normalizeServiceMap(
+      report({
+        nodes: [...(inbound ? [inboundNode] : []), ...dependencies],
+        edges: [
+          ...(inbound
+            ? [edge({id: 'inbound:http->app', fromId: 'inbound:http', toId: 'app', direction: 'INBOUND'})]
+            : []),
+          ...dependencies.map((entry) => edge({id: `app->${entry.id}`, toId: entry.id}))
+        ]
+      })
+    )
+  }
+
+  function boxesOverlap(a, b) {
+    return Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < (a.h + b.h) / 2
+  }
+
+  function rectanglesOverlap(a, b) {
+    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+  }
+
+  function nodeRectangle(box) {
+    return {
+      left: box.x - box.w / 2,
+      right: box.x + box.w / 2,
+      top: box.y - box.h / 2,
+      bottom: box.y + box.h / 2
+    }
+  }
+
+  function segmentIntersectsRectangle(start, end, rectangle) {
+    const axisInterval = (origin, delta, minimum, maximum) => {
+      if (Math.abs(delta) < 0.0001) return origin > minimum && origin < maximum ? [-Infinity, Infinity] : null
+      const first = (minimum - origin) / delta
+      const second = (maximum - origin) / delta
+      return [Math.min(first, second), Math.max(first, second)]
+    }
+    const xInterval = axisInterval(start.x, end.x - start.x, rectangle.left, rectangle.right)
+    const yInterval = axisInterval(start.y, end.y - start.y, rectangle.top, rectangle.bottom)
+    if (!xInterval || !yInterval) return false
+    return Math.max(0, xInterval[0], yInterval[0]) < Math.min(1, xInterval[1], yInterval[1])
+  }
+
+  function routeLength(edge) {
+    return edge.points
+      .slice(1)
+      .reduce(
+        (total, point, index) => total + Math.hypot(point.x - edge.points[index].x, point.y - edge.points[index].y),
+        0
+      )
+  }
+
+  it('places inbound, application, and a typical dependency fan left to right', () => {
     const map = normalizeServiceMap(
       report({
         nodes: [
@@ -175,6 +243,7 @@ describe('layoutServiceMap', () => {
 
     expect(layout.application.x).toBeGreaterThan(layout.inbound.x)
     expect(layout.dependencies).toHaveLength(2)
+    expect(layout.mode).toBe('fan')
     for (const box of layout.dependencies) {
       expect(box.x).toBeGreaterThan(layout.application.x)
     }
@@ -182,28 +251,100 @@ describe('layoutServiceMap', () => {
     expect(layout.height).toBeGreaterThan(0)
   })
 
-  it('grows the fan radius with the dependency count so nodes never overlap', () => {
-    function mapWith(count) {
-      const nodes = Array.from({length: count}, (unused, index) =>
-        node({id: `http:host-${index}`, label: `host-${index}`})
-      )
-      return normalizeServiceMap(
-        report({nodes, edges: nodes.map((entry) => edge({id: `app->${entry.id}`, toId: entry.id}))})
-      )
+  it.each([0, 1, 5, 7, 28])('keeps %i dependencies bounded, deterministic, and collision-free', (count) => {
+    const first = layoutServiceMap(mapWith(count))
+    const second = layoutServiceMap(mapWith(count))
+    const boxes = [first.application, first.inbound, ...first.dependencies].filter(Boolean)
+
+    expect(first).toEqual(second)
+    expect(first.width).toBeLessThanOrEqual(MAX_SERVICE_MAP_WIDTH)
+    expect(first.height).toBeGreaterThanOrEqual(320)
+    if (count === 28) expect(first.height).toBe(1046)
+    expect(first.height).toBeLessThanOrEqual(1046)
+    for (let left = 0; left < boxes.length; left += 1) {
+      for (let right = left + 1; right < boxes.length; right += 1) {
+        expect(boxesOverlap(boxes[left], boxes[right])).toBe(false)
+      }
     }
+  })
 
-    const few = layoutServiceMap(mapWith(3))
-    const many = layoutServiceMap(mapWith(28))
+  it.each([
+    ['small', 3],
+    ['seven-node', 7],
+    ['dense', 14],
+    ['maximum', 28]
+  ])('routes every %s edge around every unrelated node rectangle', (unusedName, count) => {
+    const result = layoutServiceMap(mapWith(count))
+    const boxes = [result.application, result.inbound, ...result.dependencies].filter(Boolean)
+    const boxesById = new Map(boxes.map((box) => [box.node.id, box]))
 
-    expect(many.height).toBeGreaterThan(few.height)
-    const spacing = many.dependencies
-      .map((box, index) =>
-        index === 0
-          ? Infinity
-          : Math.hypot(box.x - many.dependencies[index - 1].x, box.y - many.dependencies[index - 1].y)
-      )
-      .slice(1)
-    expect(Math.min(...spacing)).toBeGreaterThanOrEqual(46)
+    for (const routedEdge of result.edges) {
+      expect(routedEdge.animationPath).toBe(routedEdge.path)
+      const unrelated = boxes.filter((box) => ![routedEdge.edge.fromId, routedEdge.edge.toId].includes(box.node.id))
+      for (let index = 1; index < routedEdge.points.length; index += 1) {
+        for (const box of unrelated) {
+          expect(
+            segmentIntersectsRectangle(routedEdge.points[index - 1], routedEdge.points[index], nodeRectangle(box)),
+            `${routedEdge.id} segment ${index} crossed ${box.node.id}`
+          ).toBe(false)
+        }
+      }
+      expect(boxesById.has(routedEdge.edge.fromId)).toBe(true)
+      expect(boxesById.has(routedEdge.edge.toId)).toBe(true)
+    }
+  })
+
+  it.each([1, 6, 7, 14, 28])('reserves transient chip and ring space for every node in a %i-node layout', (count) => {
+    const result = layoutServiceMap(mapWith(count))
+    const boxes = [result.application, result.inbound, ...result.dependencies].filter(Boolean)
+
+    for (const decorated of boxes) {
+      for (const neighbour of boxes.filter((box) => box !== decorated)) {
+        expect(
+          rectanglesOverlap(transientTargetBounds(decorated), nodeRectangle(neighbour)),
+          `${decorated.node.id} transient decoration overlapped ${neighbour.node.id}`
+        ).toBe(false)
+      }
+    }
+  })
+
+  it('uses a right-facing fan through six dependencies and a two-column rack above that threshold', () => {
+    const small = layoutServiceMap(mapWith(FAN_DEPENDENCY_THRESHOLD))
+    const dense = layoutServiceMap(mapWith(FAN_DEPENDENCY_THRESHOLD + 1))
+
+    expect(small.mode).toBe('fan')
+    expect(new Set(small.dependencies.map((box) => box.x)).size).toBeGreaterThan(1)
+    expect(small.dependencies.map((box) => box.y)).toEqual(
+      [...small.dependencies.map((box) => box.y)].sort((a, b) => a - b)
+    )
+    expect(dense.mode).toBe('rack')
+    expect(new Set(dense.dependencies.map((box) => box.x)).size).toBe(2)
+    expect(dense.width).toBe(MAX_SERVICE_MAP_WIDTH)
+    expect(layoutServiceMap(mapWith(0)).width).toBeLessThanOrEqual(small.width)
+  })
+
+  it.each([1, 2, 4, 6])('gives a typical %i-dependency fan readable bounded travel and visual spread', (count) => {
+    const result = layoutServiceMap(mapWith(count))
+    const outbound = result.edges.filter((edge) => edge.edge.direction === 'OUTBOUND')
+
+    expect(result.width).toBeGreaterThanOrEqual(800)
+    expect(result.width).toBeLessThanOrEqual(950)
+    expect(Math.max(...outbound.map(routeLength))).toBeLessThanOrEqual(280)
+    expect(Math.min(...outbound.map(routeLength))).toBeGreaterThanOrEqual(90)
+    if (count > 1) {
+      expect(
+        Math.max(...result.dependencies.map((box) => box.y)) - Math.min(...result.dependencies.map((box) => box.y))
+      ).toBe((count - 1) * 72)
+    }
+  })
+
+  it('keeps the maximum dense rack and its far-column routes bounded', () => {
+    const result = layoutServiceMap(mapWith(28))
+
+    expect(result.mode).toBe('rack')
+    expect(result.width).toBe(1040)
+    expect(result.height).toBe(1046)
+    expect(Math.max(...result.edges.map(routeLength))).toBeLessThanOrEqual(665)
   })
 
   it('drops edges whose endpoints are not laid out', () => {
@@ -217,9 +358,11 @@ describe('layoutServiceMap', () => {
 
     const [line] = layoutServiceMap(map).edges
     const target = layoutServiceMap(map).dependencies[0]
+    const start = line.points[0]
+    const end = line.points.at(-1)
 
-    expect(line.x1).toBeGreaterThan(layoutServiceMap(map).application.x)
-    expect(line.x2).toBeLessThan(target.x)
+    expect(start.x).toBeGreaterThan(layoutServiceMap(map).application.x)
+    expect(end.x).toBeLessThan(target.x)
   })
 })
 
@@ -242,6 +385,33 @@ describe('pulseTone', () => {
     expect(pulseTone(interaction('b', {durationMs: SLOW_INTERACTION_MS}))).toBe('slow')
     expect(pulseTone(interaction('c', {durationMs: 5}))).toBe('ok')
     expect(pulseTone(interaction('d', {durationMs: null}))).toBe('ok')
+  })
+
+  describe('transient target decisions', () => {
+    it('targets the application, never the HTTP client, for a failed inbound request', () => {
+      const pulse = flowPulse({
+        direction: 'INBOUND',
+        fromId: 'inbound:http',
+        toId: 'app',
+        tone: 'failed',
+        interaction: interaction('inbound:1', {outcome: 'FAILED'})
+      })
+
+      expect(pulseTargetId(pulse)).toBe('app')
+      expect(pulseTargetId(pulse)).not.toBe('inbound:http')
+      expect(pulseTargetLabel(pulse)).toBe('ERROR')
+    })
+
+    it('targets the remote dependency and names slow duration without relying on amber', () => {
+      const pulse = flowPulse({
+        toId: 'jdbc:orders',
+        tone: 'slow',
+        interaction: interaction('sql:1', {durationMs: 1300})
+      })
+
+      expect(pulseTargetId(pulse)).toBe('jdbc:orders')
+      expect(pulseTargetLabel(pulse)).toBe('SLOW · 1.3 s')
+    })
   })
 })
 
@@ -649,7 +819,7 @@ describe('describeNewEvidence', () => {
     )
 
     expect(describeNewEvidence(pulses, nodesById)).toBe(
-      'New completed interactions: 1 on https://api.example.com, including 1 failed.'
+      'New completed interactions: 1 on https://api.example.com, including 1 failed: https://api.example.com failed (12 ms).'
     )
   })
 
@@ -690,7 +860,7 @@ describe('describeNewEvidence', () => {
     )
 
     expect(describeNewEvidence(pulses, nodesById)).toBe(
-      'New completed interactions: 1 on https://api.example.com, including 1 slow.'
+      'New completed interactions: 1 on https://api.example.com, including 1 slow: https://api.example.com slow (500 ms).'
     )
   })
 
@@ -732,6 +902,110 @@ describe('describeNewEvidence', () => {
 
     expect(message.startsWith('Flow: Local HTTP clients GET \u2192 products HIT.')).toBe(true)
     expect(message).toContain('New completed interactions:')
+  })
+})
+
+describe('createTransientTargetStateManager', () => {
+  it('starts delayed target state with its pulse and clears it at the exact end of that window', () => {
+    vi.useFakeTimers()
+    const manager = createTransientTargetStateManager()
+    const pulse = flowPulse({
+      tone: 'slow',
+      durationMs: 1350,
+      interaction: interaction('http:slow', {durationMs: 1300})
+    })
+    pulse.startDelayMs = 750
+
+    manager.enqueue([pulse])
+    expect(manager.active()).toEqual([])
+    vi.advanceTimersByTime(749)
+    expect(manager.active()).toEqual([])
+    vi.advanceTimersByTime(1)
+    expect(manager.active()[0]).toMatchObject({
+      targetId: 'http:https://api.example.com',
+      tone: 'slow',
+      label: 'SLOW · 1.3 s'
+    })
+    vi.advanceTimersByTime(1349)
+    expect(manager.active()).toHaveLength(1)
+    vi.advanceTimersByTime(1)
+    expect(manager.active()).toEqual([])
+    vi.useRealTimers()
+  })
+
+  it('reference-counts overlaps and lets failure dominate slow only while failure remains', () => {
+    vi.useFakeTimers()
+    const manager = createTransientTargetStateManager()
+    const slow = flowPulse({
+      id: 'slow',
+      tone: 'slow',
+      durationMs: 1400,
+      interaction: interaction('slow', {durationMs: 1300})
+    })
+    const failed = flowPulse({
+      id: 'failed',
+      tone: 'failed',
+      durationMs: 800,
+      interaction: interaction('failed', {outcome: 'FAILED'})
+    })
+
+    manager.enqueue([slow, failed])
+    expect(manager.active()[0]).toMatchObject({tone: 'failed', label: 'ERROR', count: 2})
+    vi.advanceTimersByTime(800)
+    expect(manager.active()[0]).toMatchObject({tone: 'slow', label: 'SLOW · 1.3 s', count: 1})
+    vi.advanceTimersByTime(600)
+    expect(manager.active()).toEqual([])
+    vi.useRealTimers()
+  })
+
+  it('clears delayed and active work without leaving timers or stale state', () => {
+    vi.useFakeTimers()
+    const manager = createTransientTargetStateManager()
+    const immediate = flowPulse({id: 'failed', tone: 'failed'})
+    const delayed = flowPulse({id: 'slow', tone: 'slow'})
+    delayed.startDelayMs = 500
+
+    manager.enqueue([immediate, delayed])
+    manager.clear()
+    vi.runAllTimers()
+
+    expect(manager.active()).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
+    vi.useRealTimers()
+  })
+
+  it('drops exceptional target work above its concurrency bound instead of queueing it', () => {
+    const manager = createTransientTargetStateManager({maxConcurrent: 2})
+    const pulses = ['one', 'two', 'three'].map((id) => flowPulse({id, tone: 'failed'}))
+
+    expect(manager.enqueue(pulses).map((pulse) => pulse.id)).toEqual(['one', 'two'])
+    expect(manager.active()[0].count).toBe(2)
+  })
+
+  it('drops target state as soon as filtering removes its target', () => {
+    const manager = createTransientTargetStateManager()
+    manager.enqueue([flowPulse({tone: 'failed'})])
+
+    manager.reconcile(new Set(['app']))
+
+    expect(manager.active()).toEqual([])
+  })
+
+  it('drops an inbound application target when filtering removes its causal edge', () => {
+    const manager = createTransientTargetStateManager()
+    manager.enqueue([
+      flowPulse({
+        direction: 'INBOUND',
+        fromId: 'inbound:http',
+        toId: 'app',
+        edgeId: 'inbound:http->app',
+        tone: 'failed'
+      })
+    ])
+
+    manager.reconcile(new Set(['app']), new Set())
+
+    expect(manager.active()).toEqual([])
   })
 })
 

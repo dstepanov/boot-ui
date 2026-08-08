@@ -2,7 +2,7 @@ import {flushPromises, mount} from '@vue/test-utils'
 import {afterEach, describe, expect, it, vi} from 'vitest'
 
 import LiveFlowMode from './LiveFlowMode.vue'
-import {MAX_CONCURRENT_PULSES, PULSE_DURATION_OK_MS} from '../utils/serviceMap.js'
+import {MAX_CONCURRENT_PULSES, PULSE_DURATION_OK_MS, PULSE_DURATION_SLOW_MS} from '../utils/serviceMap.js'
 
 function node(overrides = {}) {
   return {
@@ -368,6 +368,195 @@ describe('LiveFlowMode', () => {
     const pulses = wrapper.findAll('.flow-pulse')
     expect(pulses).toHaveLength(1)
     expect(pulses[0].classes()).toContain('flow-pulse--failed')
+    expect(wrapper.find('.flow-node--http').classes()).toContain('flow-node--transient-failed')
+    expect(wrapper.find('.flow-target-chip').text()).toBe('ERROR')
+    expect(wrapper.find('[aria-live="polite"]').text()).toContain('New completed interactions')
+  })
+
+  it('does not permanently color nodes or edges from retained failure counts', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stubFetch(
+        serviceMap({
+          nodes: [node({failures: 2, outcome: 'RETAINED_FAILURES'})],
+          edges: [edge({failures: 2, outcome: 'RETAINED_FAILURES'})]
+        })
+      )
+    )
+    stubMatchMedia(false)
+
+    wrapper = mountFlow()
+    await flushPromises()
+
+    expect(wrapper.find('[class*="flow-node--transient-"]').exists()).toBe(false)
+    expect(wrapper.find('.flow-node--failing').exists()).toBe(false)
+    expect(wrapper.find('.flow-edge--retained_failures').exists()).toBe(false)
+    expect(wrapper.text()).toContain('with retained failures')
+  })
+
+  it('temporarily targets the application, not the HTTP client, for failed inbound HTTP', async () => {
+    const initial = sequencedFlowMap([], [])
+    const next = sequencedFlowMap(
+      [{id: 'inbound:1', timestamp: 1700000001000, operation: 'GET', outcome: 'FAILED', durationMs: 42}],
+      []
+    )
+    vi.stubGlobal('fetch', stubFetch(initial, next))
+    stubMatchMedia(false)
+
+    wrapper = mountFlow({props: {refreshTick: 0}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await flushPromises()
+
+    expect(wrapper.find('.flow-node--app').classes()).toContain('flow-node--transient-failed')
+    expect(wrapper.find('.flow-node--http_inbound').classes()).not.toContain('flow-node--transient-failed')
+    expect(wrapper.find('[aria-live="polite"]').text()).toContain('This application failed (42 ms)')
+  })
+
+  it('makes slow outbound evidence explicit at its dependency target', async () => {
+    const next = serviceMap({
+      edges: [
+        edge({
+          recentInteractions: [
+            {id: 'http:5', timestamp: 1700000001000, operation: 'GET', outcome: 'OK', durationMs: 1300},
+            {id: 'http:4', timestamp: 1700000000000, operation: 'GET', outcome: 'OK', durationMs: 18}
+          ]
+        })
+      ]
+    })
+    vi.stubGlobal('fetch', stubFetch(serviceMap(), next))
+    stubMatchMedia(false)
+
+    wrapper = mountFlow({props: {refreshTick: 0}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await flushPromises()
+
+    expect(wrapper.find('.flow-node--http').classes()).toContain('flow-node--transient-slow')
+    expect(wrapper.find('.flow-target-chip').text()).toBe('SLOW · 1.3 s')
+    expect(wrapper.find('[aria-live="polite"]').text()).toContain('slow (1300 ms)')
+    const pulse = wrapper.find('.flow-pulse--slow')
+    const trail = wrapper.find('.flow-pulse-trail')
+    expect(trail.attributes('style')).toBe(pulse.attributes('style'))
+    expect(trail.attributes('style')).toContain(`animation-duration: ${PULSE_DURATION_SLOW_MS}ms`)
+  })
+
+  it('clears transient evidence when live updates are paused', async () => {
+    const next = serviceMap({
+      edges: [
+        edge({
+          recentInteractions: [
+            {id: 'http:5', timestamp: 1700000001000, operation: 'GET', outcome: 'FAILED', durationMs: 20}
+          ]
+        })
+      ]
+    })
+    vi.stubGlobal('fetch', stubFetch(serviceMap(), next))
+    stubMatchMedia(false)
+
+    wrapper = mountFlow({props: {refreshTick: 0, paused: false}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await flushPromises()
+    expect(wrapper.find('.flow-target-chip').exists()).toBe(true)
+
+    await wrapper.setProps({paused: true})
+    expect(wrapper.find('.flow-target-chip').exists()).toBe(false)
+    expect(wrapper.findAll('.flow-pulse')).toHaveLength(0)
+  })
+
+  it('does not animate or replay evidence when an in-flight fetch resolves after pause', async () => {
+    vi.useFakeTimers()
+    const pending = deferred()
+    const pausedEvidence = serviceMap({
+      nodes: [node({label: 'paused.example.com'})],
+      edges: [
+        edge({
+          recentInteractions: [
+            {id: 'http:5', timestamp: 1700000001000, operation: 'GET', outcome: 'FAILED', durationMs: 20}
+          ]
+        })
+      ]
+    })
+    const fetchStub = vi
+      .fn()
+      .mockResolvedValueOnce({ok: true, status: 200, json: () => Promise.resolve(serviceMap())})
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce({ok: true, status: 200, json: () => Promise.resolve(pausedEvidence)})
+    vi.stubGlobal('fetch', fetchStub)
+    stubMatchMedia(false)
+
+    wrapper = mountFlow({props: {refreshTick: 0, paused: false}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await wrapper.setProps({paused: true})
+    pending.resolve({ok: true, status: 200, json: () => Promise.resolve(pausedEvidence)})
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('paused.example.com')
+    expect(wrapper.findAll('.flow-pulse')).toHaveLength(0)
+    expect(wrapper.find('.flow-target-chip').exists()).toBe(false)
+    expect(wrapper.find('.flow-edge--highlighted').exists()).toBe(false)
+    expect(wrapper.find('[aria-live="polite"]').text()).toBe('')
+    expect(vi.getTimerCount()).toBe(0)
+
+    await wrapper.setProps({paused: false, refreshTick: 2})
+    await flushPromises()
+    expect(wrapper.findAll('.flow-pulse')).toHaveLength(0)
+    expect(wrapper.find('[aria-live="polite"]').text()).toBe('')
+  })
+
+  it('keeps a pre-pause request baseline-only when it resolves after a quick resume', async () => {
+    const pending = deferred()
+    const pausedEvidence = serviceMap({
+      nodes: [node({label: 'paused.example.com'})],
+      edges: [
+        edge({
+          recentInteractions: [
+            {id: 'http:5', timestamp: 1700000001000, operation: 'GET', outcome: 'FAILED', durationMs: 20}
+          ]
+        })
+      ]
+    })
+    const resumedEvidence = serviceMap({
+      nodes: [node({label: 'resumed.example.com'})],
+      edges: [
+        edge({
+          recentInteractions: [
+            {id: 'http:6', timestamp: 1700000002000, operation: 'GET', outcome: 'FAILED', durationMs: 30},
+            {id: 'http:5', timestamp: 1700000001000, operation: 'GET', outcome: 'FAILED', durationMs: 20}
+          ]
+        })
+      ]
+    })
+    const fetchStub = vi
+      .fn()
+      .mockResolvedValueOnce({ok: true, status: 200, json: () => Promise.resolve(serviceMap())})
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce({ok: true, status: 200, json: () => Promise.resolve(resumedEvidence)})
+    vi.stubGlobal('fetch', fetchStub)
+    stubMatchMedia(false)
+
+    wrapper = mountFlow({props: {refreshTick: 0, paused: false}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await wrapper.setProps({paused: true})
+    await wrapper.setProps({paused: false})
+    pending.resolve({ok: true, status: 200, json: () => Promise.resolve(pausedEvidence)})
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('paused.example.com')
+    expect(wrapper.findAll('.flow-pulse')).toHaveLength(0)
+    expect(wrapper.find('.flow-target-chip').exists()).toBe(false)
+    expect(wrapper.find('.flow-edge--highlighted').exists()).toBe(false)
+    expect(wrapper.find('[aria-live="polite"]').text()).toBe('')
+
+    await wrapper.setProps({refreshTick: 2})
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('resumed.example.com')
+    expect(wrapper.findAll('.flow-pulse')).toHaveLength(1)
+    expect(wrapper.find('.flow-target-chip').text()).toBe('ERROR')
     expect(wrapper.find('[aria-live="polite"]').text()).toContain('New completed interactions')
   })
 
@@ -393,6 +582,112 @@ describe('LiveFlowMode', () => {
 
     expect(wrapper.findAll('.flow-pulse')).toHaveLength(0)
     expect(wrapper.find('[aria-live="polite"]').text()).toContain('New completed interactions')
+  })
+
+  it('uses a non-moving slow target signal under reduced motion', async () => {
+    vi.useFakeTimers()
+    const next = serviceMap({
+      edges: [
+        edge({
+          recentInteractions: [
+            {id: 'http:5', timestamp: 1700000001000, operation: 'GET', outcome: 'OK', durationMs: 1300}
+          ]
+        })
+      ]
+    })
+    vi.stubGlobal('fetch', stubFetch(serviceMap(), next))
+    stubMatchMedia(true)
+
+    wrapper = mountFlow({props: {refreshTick: 0}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await flushPromises()
+
+    expect(wrapper.findAll('.flow-pulse')).toHaveLength(0)
+    expect(wrapper.find('.flow-target-chip').text()).toBe('SLOW · 1.3 s')
+    vi.advanceTimersByTime(1200)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.flow-target-chip').exists()).toBe(false)
+  })
+
+  it('keeps later failed and slow targets when normal reduced-motion pulses fill the edge cap', async () => {
+    vi.useFakeTimers()
+    const interactions = [
+      ...Array.from({length: 6}, (unused, index) => ({
+        id: `normal:${index}`,
+        timestamp: 1700000001000 + index,
+        operation: 'GET',
+        outcome: 'OK',
+        durationMs: 12
+      })),
+      {
+        id: 'failed:6',
+        timestamp: 1700000001006,
+        operation: 'GET',
+        outcome: 'FAILED',
+        durationMs: 20
+      },
+      {
+        id: 'slow:7',
+        timestamp: 1700000001007,
+        operation: 'GET',
+        outcome: 'OK',
+        durationMs: 1300
+      }
+    ]
+    const nodes = interactions.map((interaction, index) =>
+      node({id: `http:target-${index}`, label: `target-${index}.example.com`})
+    )
+    const edges = (fresh) =>
+      interactions.map((interaction, index) =>
+        edge({
+          id: `app->http:target-${index}`,
+          toId: `http:target-${index}`,
+          recentInteractions: fresh ? [interaction] : []
+        })
+      )
+    vi.stubGlobal('fetch', stubFetch(serviceMap({nodes, edges: edges(false)}), serviceMap({nodes, edges: edges(true)})))
+    stubMatchMedia(true)
+
+    wrapper = mountFlow({props: {refreshTick: 0}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await flushPromises()
+
+    const targetLabels = wrapper.findAll('.flow-target-chip').map((chip) => chip.text())
+    expect(targetLabels).toContain('ERROR')
+    expect(targetLabels).toContain('SLOW · 1.3 s')
+  })
+
+  it('clears every reduced-motion transient and timer when paused', async () => {
+    vi.useFakeTimers()
+    const next = serviceMap({
+      edges: [
+        edge({
+          recentInteractions: [
+            {id: 'http:5', timestamp: 1700000001000, operation: 'GET', outcome: 'FAILED', durationMs: 20}
+          ]
+        })
+      ]
+    })
+    vi.stubGlobal('fetch', stubFetch(serviceMap(), next))
+    stubMatchMedia(true)
+
+    wrapper = mountFlow({props: {refreshTick: 0, paused: false}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await flushPromises()
+
+    expect(wrapper.find('.flow-edge--highlighted').exists()).toBe(true)
+    expect(wrapper.find('.flow-target-chip').exists()).toBe(true)
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+    await wrapper.setProps({paused: true})
+
+    expect(wrapper.find('.flow-edge--highlighted').exists()).toBe(false)
+    expect(wrapper.find('.flow-target-chip').exists()).toBe(false)
+    expect(wrapper.findAll('.flow-pulse')).toHaveLength(0)
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('restores motion after the reduced-motion preference is turned on and back off', async () => {
@@ -448,7 +743,7 @@ describe('LiveFlowMode', () => {
     return serviceMap({nodes: [inboundNode, cacheNode], edges: [inboundEdge, cacheEdge]})
   }
 
-  it('sequences a shared flow so the downstream cache pulse starts only after the inbound pulse would arrive', async () => {
+  it('uses mount-relative CSS motion paths and sequences a shared flow without SMIL document timing', async () => {
     const initial = sequencedFlowMap([], [])
     const next = sequencedFlowMap(
       [{id: 'inbound:1', timestamp: 1700000001000, operation: 'GET', outcome: 'OK', durationMs: 12, flowId: 'flow-1'}],
@@ -464,12 +759,50 @@ describe('LiveFlowMode', () => {
 
     const pulses = wrapper.findAll('.flow-pulse')
     expect(pulses).toHaveLength(2)
+    expect(wrapper.findAll('animateMotion')).toHaveLength(0)
+    expect(wrapper.findAll('.flow-pulses animate')).toHaveLength(0)
     // Inbound is the flow's first stage and always starts immediately; cache only starts once the
-    // inbound pulse would have finished arriving at the application - its own travel duration later.
-    // A delayed pulse's CSS keyframe keeps it fully transparent for its `--flow-delay`, so it never
-    // flashes into view before its causal predecessor has actually arrived.
-    expect(pulses[0].attributes('style')).toContain('--flow-delay: 0ms')
-    expect(pulses[1].attributes('style')).toContain(`--flow-delay: ${PULSE_DURATION_OK_MS}ms`)
+    // inbound pulse would have finished arriving. CSS animation-delay starts from each dynamically
+    // mounted pulse, unlike document-timeline-relative SMIL begin timestamps.
+    const edges = wrapper.findAll('.flow-edge')
+    expect(pulses[0].attributes('style')).toContain(`offset-path: path("${edges[0].attributes('d')}")`)
+    expect(pulses[1].attributes('style')).toContain(`offset-path: path("${edges[1].attributes('d')}")`)
+    expect(pulses[0].attributes('style')).toContain(`animation-duration: ${PULSE_DURATION_OK_MS}ms`)
+    expect(pulses[0].attributes('style')).toContain('animation-delay: 0ms')
+    expect(pulses[1].attributes('style')).toContain(`animation-delay: ${PULSE_DURATION_OK_MS}ms`)
+  })
+
+  it('keeps a downstream slow label hidden until the delayed pulse actually starts', async () => {
+    vi.useFakeTimers()
+    const initial = sequencedFlowMap([], [])
+    const next = sequencedFlowMap(
+      [{id: 'inbound:1', timestamp: 1700000001000, operation: 'GET', outcome: 'OK', durationMs: 12, flowId: 'flow-1'}],
+      [
+        {
+          id: 'cache:1',
+          timestamp: 1700000001000,
+          operation: 'HIT',
+          outcome: 'OK',
+          durationMs: 1300,
+          flowId: 'flow-1'
+        }
+      ]
+    )
+    vi.stubGlobal('fetch', stubFetch(initial, next))
+    stubMatchMedia(false)
+
+    wrapper = mountFlow({props: {refreshTick: 0}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await flushPromises()
+
+    expect(wrapper.find('.flow-target-chip').exists()).toBe(false)
+    vi.advanceTimersByTime(PULSE_DURATION_OK_MS - 1)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.flow-target-chip').exists()).toBe(false)
+    vi.advanceTimersByTime(1)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.flow-target-chip').text()).toBe('SLOW · 1.3 s')
   })
 
   it('never sequences (never delays) a downstream pulse when its batch carries no inbound pulse', async () => {
@@ -492,7 +825,8 @@ describe('LiveFlowMode', () => {
 
     const pulses = wrapper.findAll('.flow-pulse')
     expect(pulses).toHaveLength(1)
-    expect(pulses[0].attributes('style')).toContain('--flow-delay: 0ms')
+    expect(pulses[0].attributes('style')).toContain('animation-delay: 0ms')
+    expect(wrapper.find('animateMotion').exists()).toBe(false)
   })
 
   it('narrates the complete causal flow in the polite live region even under reduced motion', async () => {
@@ -583,6 +917,31 @@ describe('LiveFlowMode', () => {
     await flushPromises()
 
     expect(wrapper.findAll('.flow-pulse').length).toBeLessThanOrEqual(MAX_CONCURRENT_PULSES)
+  })
+
+  it('cleans all pulse and target timers when unmounted', async () => {
+    vi.useFakeTimers()
+    const next = serviceMap({
+      edges: [
+        edge({
+          recentInteractions: [
+            {id: 'http:5', timestamp: 1700000001000, operation: 'GET', outcome: 'FAILED', durationMs: 20}
+          ]
+        })
+      ]
+    })
+    vi.stubGlobal('fetch', stubFetch(serviceMap(), next))
+    stubMatchMedia(false)
+
+    wrapper = mountFlow({props: {refreshTick: 0}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await flushPromises()
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+    wrapper.unmount()
+    wrapper = null
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('reports truncation visibly instead of silently dropping dependencies', async () => {

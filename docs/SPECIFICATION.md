@@ -1133,6 +1133,13 @@ Bounds and motion:
 - Dependencies are capped at 28 and each edge carries at most 6 retained interactions. Configured dependencies rank
   ahead of purely observed ones so a burst of one-off origins cannot push a declared database off the map. Any omission
   is reported through `truncation` and a warning.
+- The client lays the map out as a bounded hybrid left-to-right topology: inbound HTTP lane, central application hub,
+  then an airy right-facing fan through six dependencies or a two-column rack above that threshold. The fan uses a fixed
+  288-pixel radius and 72-pixel vertical pitch, producing an 800–844-pixel-wide typical map with readable connector
+  travel. The dense rack increases the application gap to 72 pixels, column gap to 32 pixels, and row pitch to 72 pixels;
+  it is bounded at 1,040 logical SVG pixels wide and 1,046 pixels tall at the 28-dependency cap inside the stage's
+  scroll area. Fan connectors use smooth cubic paths; dense routes use deterministic shortest clear paths around node
+  rectangles. Every pulse and slow trail uses CSS Motion Path with the visible connector's exact path.
 - `ServiceMapInteractionDto.id` is derived from the originating buffer's monotonic sequence, so it is stable across
   refreshes. The client animates a short particle only when a **stable** edge (present in both the previous and the next
   snapshot) carries an interaction id the previous snapshot did not. A first load, a newly appearing dependency, and an
@@ -1152,9 +1159,14 @@ Bounds and motion:
   cap apply identically whether or not a pulse happens to be sequenced.
 - Slow interactions pulse a calm, unmistakable amber with a restrained trailing halo — 1200–1500ms, longer than a
   normal completion (650–850ms) or a failure (900–1100ms) — so timing itself, not color alone, carries the "slow"
-  meaning; a non-color "slow" label also appears in the node detail view and in live-region announcements. No pulse
-  flashes, bounces, loops, or drifts: each plays exactly once, linearly, and a sequenced pulse stays fully invisible
-  for its entire delay so it never appears before its causal predecessor has actually arrived.
+  meaning. During exactly the same delayed animation window, its causal target carries a temporary amber ring and a
+  `SLOW · <duration>` chip; failure uses a temporary red ring and `ERROR` chip. Inbound evidence targets the application,
+  while outbound evidence targets the remote dependency; overlapping failure takes visual precedence over slow without
+  clearing the slow window early. Retained failures never permanently color topology nodes or edges — they remain in
+  counts, details, recent rows, accessible text, and source links. No pulse flashes, bounces, loops, or drifts: each plays
+  exactly once, linearly, and a sequenced pulse and its target signal stay hidden for their entire causal delay. Motion
+  uses CSS `offset-path`/`offset-distance`, whose delay starts when the dynamic pulse mounts in the supported Chromium
+  browser, rather than SMIL `begin` timestamps tied to the document timeline.
 
 Acceptance criteria:
 
@@ -1169,8 +1181,11 @@ Acceptance criteria:
 - The rendered graph is bounded before serialization and every omission is visible.
 - The map is usable by keyboard and screen reader (focusable nodes, arrow-key traversal, an accessible detail view, and
   a hidden textual list of every node and relationship) and honors `prefers-reduced-motion` by replacing motion with a
-  brief, immediate static edge highlight (never delayed or sequenced) plus a polite live-region update that narrates a
-  sequenced flow's complete causal story in one sentence.
+  brief, immediate static target/edge highlight (never delayed or sequenced) plus a polite live-region update that
+  narrates slow/failure duration and a sequenced flow's complete causal story in one sentence.
+- Pausing cancels every pulse, target state, reduced-motion highlight, announcement, and associated timer. A response
+  already in flight may refresh the retained report while paused, but becomes the new comparison baseline without
+  scheduling or replaying its evidence after resume.
 - Spring MVC, Spring WebFlux, and Quarkus serve the same shape, verified by the shared conformance suite.
 
 ### 5.14.3 Traces Panel
