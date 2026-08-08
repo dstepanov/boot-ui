@@ -130,14 +130,14 @@ function updateValue(event) {
 }
 
 .auto-refresh-status--unavailable {
-  color: var(--bootui-danger-text, #b02a37);
+  color: var(--bootui-text, #152033);
 }
 
 .auto-refresh-retry {
   background: none;
   border: none;
   border-radius: var(--bootui-radius-xs, 0.35rem);
-  color: var(--bootui-blue-text, #0a53be);
+  color: var(--bootui-blue, #0d6efd);
   cursor: pointer;
   font-weight: 600;
   padding: 0.1rem;
