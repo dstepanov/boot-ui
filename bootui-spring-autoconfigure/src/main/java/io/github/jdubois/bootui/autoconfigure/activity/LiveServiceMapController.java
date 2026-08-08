@@ -4,6 +4,7 @@ import io.github.jdubois.bootui.autoconfigure.BootUiProperties;
 import io.github.jdubois.bootui.autoconfigure.config.BootUiExposure;
 import io.github.jdubois.bootui.autoconfigure.web.HttpExchangesController;
 import io.github.jdubois.bootui.core.dto.ServiceMapReport;
+import io.github.jdubois.bootui.engine.cache.CacheActivityRecorder;
 import io.github.jdubois.bootui.engine.datasource.ConnectionPoolService;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
@@ -41,6 +42,7 @@ public class LiveServiceMapController {
             ObjectProvider<SqlTraceRecorder> sqlTrace,
             ObjectProvider<KafkaActivityRecorder> kafka,
             ObjectProvider<RabbitActivityRecorder> rabbit,
+            ObjectProvider<CacheActivityRecorder> cacheActivity,
             BootUiProperties properties,
             BootUiExposure exposure,
             ApplicationContext applicationContext) {
@@ -51,6 +53,7 @@ public class LiveServiceMapController {
                 sqlTrace,
                 kafka,
                 rabbit,
+                cacheActivity,
                 properties,
                 exposure,
                 className -> beanPresent(applicationContext, className));

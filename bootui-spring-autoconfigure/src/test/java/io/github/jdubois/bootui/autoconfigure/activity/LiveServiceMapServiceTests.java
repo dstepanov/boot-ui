@@ -14,6 +14,7 @@ import io.github.jdubois.bootui.core.dto.HttpExchangesReport;
 import io.github.jdubois.bootui.core.dto.PageMetadata;
 import io.github.jdubois.bootui.core.dto.ServiceMapNodeDto;
 import io.github.jdubois.bootui.core.dto.ServiceMapReport;
+import io.github.jdubois.bootui.engine.cache.CacheActivityRecorder;
 import io.github.jdubois.bootui.engine.datasource.ConnectionPoolService;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
@@ -258,6 +259,121 @@ class LiveServiceMapServiceTests {
         assertThat(report.application()).isNull();
     }
 
+    @Test
+    void mapsCacheAccessesFromTheLiveRecorderWhenThePanelAndRecorderAreEnabled() {
+        CacheActivityRecorder cache = new CacheActivityRecorder(true, 500);
+        cache.markInstrumentedManager();
+        cache.recordHit("cacheManager", "products", "product-1");
+        cache.recordMiss("cacheManager", "products", "product-2");
+
+        ServiceMapReport report = service(
+                        new BootUiProperties(),
+                        restRecorder(),
+                        new KafkaActivityRecorder(false, false, 10, 16),
+                        new RabbitActivityRecorder(false, false, 10, 32),
+                        null,
+                        null,
+                        true,
+                        true,
+                        cache)
+                .serviceMap();
+
+        assertThat(report.sources()).contains("Cache");
+        ServiceMapNodeDto node = report.nodes().stream()
+                .filter(candidate -> "CACHE".equals(candidate.protocol()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(node.label()).isEqualTo("cacheManager / products");
+        assertThat(node.interactions()).isEqualTo(2);
+        assertThat(node.sourceRoute()).isEqualTo("/cache");
+    }
+
+    @Test
+    void omitsCacheEvidenceWhenTheDedicatedCachePanelIsDisabled() {
+        CacheActivityRecorder cache = new CacheActivityRecorder(true, 500);
+        cache.markInstrumentedManager();
+        cache.recordHit("cacheManager", "products", "product-1");
+
+        BootUiProperties properties = new BootUiProperties();
+        properties.panel(BootUiPanels.CACHE).setEnabled(false);
+
+        ServiceMapReport report = service(
+                        properties,
+                        restRecorder(),
+                        new KafkaActivityRecorder(false, false, 10, 16),
+                        new RabbitActivityRecorder(false, false, 10, 32),
+                        null,
+                        null,
+                        true,
+                        true,
+                        cache)
+                .serviceMap();
+
+        assertThat(report.sources()).doesNotContain("Cache");
+        assertThat(report.nodes()).extracting(ServiceMapNodeDto::protocol).doesNotContain("CACHE");
+    }
+
+    @Test
+    void omitsCacheEvidenceWhenTheRecorderItselfIsDisabled() {
+        // bootui.cache.activity-capture-enabled=false: the recorder exists but never captures, exactly
+        // like an application that turned capture off while leaving the panel itself enabled.
+        CacheActivityRecorder disabledRecorder = new CacheActivityRecorder(false, 500);
+        disabledRecorder.recordHit("cacheManager", "products", "product-1");
+
+        ServiceMapReport report = service(
+                        new BootUiProperties(),
+                        restRecorder(),
+                        new KafkaActivityRecorder(false, false, 10, 16),
+                        new RabbitActivityRecorder(false, false, 10, 32),
+                        null,
+                        null,
+                        true,
+                        true,
+                        disabledRecorder)
+                .serviceMap();
+
+        assertThat(report.sources()).doesNotContain("Cache");
+        assertThat(report.nodes()).extracting(ServiceMapNodeDto::protocol).doesNotContain("CACHE");
+    }
+
+    @Test
+    void omitsCacheEvidenceWhenNoCacheManagerBeanIsPresentAtAll() {
+        // ObjectProvider#getIfAvailable() returns null when CacheActivityRecorder's own
+        // @ConditionalOnClass(CacheManager) gate never matched - the common case for an application with
+        // no Spring Cache abstraction on the classpath at all.
+        ServiceMapReport report = service(
+                        new BootUiProperties(),
+                        restRecorder(),
+                        new KafkaActivityRecorder(false, false, 10, 16),
+                        new RabbitActivityRecorder(false, false, 10, 32),
+                        null,
+                        null)
+                .serviceMap();
+
+        assertThat(report.sources()).doesNotContain("Cache");
+        assertThat(report.nodes()).extracting(ServiceMapNodeDto::protocol).doesNotContain("CACHE");
+    }
+
+    @Test
+    void omitsCacheSourceWhenRecorderIsEnabledButNoCacheManagerWasInstrumented() {
+        CacheActivityRecorder cache = new CacheActivityRecorder(true, 500);
+
+        ServiceMapReport report = service(
+                        new BootUiProperties(),
+                        restRecorder(),
+                        new KafkaActivityRecorder(false, false, 10, 16),
+                        new RabbitActivityRecorder(false, false, 10, 32),
+                        null,
+                        null,
+                        true,
+                        true,
+                        cache)
+                .serviceMap();
+
+        assertThat(report.sources()).doesNotContain("Cache");
+        assertThat(report.nodes()).extracting(ServiceMapNodeDto::protocol).doesNotContain("CACHE");
+    }
+
     // ── Fixtures ─────────────────────────────────────────────────────────────────────────────────
 
     private LiveServiceMapService service(
@@ -279,6 +395,20 @@ class LiveServiceMapServiceTests {
             HttpExchangesController exchanges,
             boolean kafkaTemplatePresent,
             boolean rabbitTemplatePresent) {
+        return service(
+                properties, rest, kafka, rabbit, pools, exchanges, kafkaTemplatePresent, rabbitTemplatePresent, null);
+    }
+
+    private LiveServiceMapService service(
+            BootUiProperties properties,
+            RestClientTraceRecorder rest,
+            KafkaActivityRecorder kafka,
+            RabbitActivityRecorder rabbit,
+            ConnectionPoolService pools,
+            HttpExchangesController exchanges,
+            boolean kafkaTemplatePresent,
+            boolean rabbitTemplatePresent,
+            CacheActivityRecorder cache) {
         return new LiveServiceMapService(
                 provider(exchanges),
                 provider(rest),
@@ -286,6 +416,7 @@ class LiveServiceMapServiceTests {
                 provider((SqlTraceRecorder) null),
                 provider(kafka),
                 provider(rabbit),
+                provider(cache),
                 properties,
                 new BootUiExposure(properties),
                 className -> switch (className) {

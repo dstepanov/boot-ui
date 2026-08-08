@@ -266,14 +266,11 @@ application's own `WebClient` calls are captured and merged here as well. Correl
 and REST-client entries — the same shared-engine rule SQL/exceptions/security already use on WebFlux and Quarkus —
 because Reactor Netty has no thread-per-request model to correlate by (a request isn't served start-to-finish on one
 dedicated worker thread), so the servlet adapter's thread-based/time-window correlation tiers, including its
-serving-thread fallback for `CACHE` (the same one it uses for `SQL`), do not apply. It is still narrower than on
-Quarkus in one respect: the HTTP exchange capture shared with the servlet adapter does not stamp the active tracing
-span's id at capture time the way Quarkus's Vert.x filter does, so a request only carries a trace id when the inbound
-call itself propagates one (for example a `traceparent` header from an upstream caller), not merely because
-`micrometer-tracing`/OTLP is configured server-side; SQL, exception, security, cache, and REST-client trace ids all
-fall back to the same SLF4J MDC value the servlet adapter already uses, whose propagation across Reactor's
-event-loop→worker-thread hop for blocking calls is best-effort rather than guaranteed. When a shared trace id is
-present on both sides, matching signals nest under the request exactly as on Quarkus; without one, every signal
+serving-thread fallback for `CACHE` (the same one it uses for `SQL`), do not apply. Both Spring adapters stamp the
+server-created trace id onto Actuator's trace-id-less HTTP exchange model through the same bounded
+`HttpExchangeTraceRegistry`: MVC reads the SLF4J MDC value already used by its SQL/cache/REST capture, while WebFlux
+reads the active OpenTelemetry span across Reactor hops. When a shared trace id is present on both sides, matching
+signals nest under the request exactly as on Quarkus; without one, every signal
 still appears in the feed, just flat/top-level rather than nested per-request. The per-request **profiler** drawer is
 available too, in the same reduced, trace-id-only form as Quarkus: it correlates by exact trace id when the request
 has one, and honestly reports itself unavailable rather than fabricating a partial profile when it does not. N+1
@@ -297,9 +294,19 @@ Nothing new is instrumented and nothing is contacted. The map is assembled entir
 already fill: completed inbound requests (HTTP Exchanges), outbound HTTP calls grouped to a `scheme://host[:port]`
 origin (REST Client), configured JDBC pools with a target that the map independently strips of JDBC user-info and
 driver parameters even under full value exposure, retained SQL
-statements (SQL Trace), Kafka **producer** topics, and RabbitMQ **publisher** exchange/routing destinations. Opening the
+statements (SQL Trace), cache accesses grouped by cache manager/cache name (Cache — see below), Kafka **producer**
+topics, and RabbitMQ **publisher** exchange/routing destinations. Opening the
 map performs no network call, probe, DNS lookup, connection attempt, or scan. Consumed Kafka records and consumed AMQP
 messages are inbound work this application performs, so they are deliberately never drawn as outbound dependencies.
+
+**Cache is a first-class dependency on Spring MVC and Spring WebFlux when at least one `CacheManager` was successfully
+instrumented.** The same recorder behind the Cache panel and Live Activity's `CACHE` entries feeds a `CACHE`-protocol
+node here too, filterable and iconed like every other dependency, grouped by cache manager and cache name — never the
+accessed key or value — and showing the same `HIT`/`MISS`/`PUT`/`EVICT`/`CLEAR` operations. An enabled recorder without
+an instrumented manager does not advertise a source that cannot receive runtime evidence. Selecting a cache node
+deep-links into the Cache panel. A cache `MISS` is a normal, expected outcome, never a retained failure. Quarkus
+honestly reports no cache dependency at all here: `quarkus-cache`'s built-in interceptors leave no comparable
+interception seam, the same reason its Live Activity feed has no `CACHE` entries either.
 
 The map separates what is **configured** from what has been **observed**, and never collapses the two: a declared
 datasource with no traffic is drawn with a dashed outline and reads "configured, no recent evidence" rather than
@@ -327,8 +334,18 @@ Motion is evidence, not decoration. The map refreshes off the same Server-Sent E
 short particle only when a **stable** edge — one present both before and after the refresh — carries an interaction id
 the previous snapshot did not. A first load animates nothing, a brand-new dependency simply appears, and an idle
 application is completely still. Bursts are coalesced to a small per-edge count and a hard concurrent cap rather than
-queued, so motion can never lag behind reality. Slow interactions pulse amber and failures use a restrained red;
-everything the motion conveys is also readable statically from the counts, the edge styling, and the detail panel.
+queued, so motion can never lag behind reality.
+
+When freshly animated interactions share a non-null opaque flow id, the inbound pulse starts immediately and downstream
+pulses replay only after it would have arrived at the application, in retained completion-time order with a small,
+bounded stagger. A downstream pulse whose current batch carries no retained inbound item fires immediately rather than
+waiting for evidence that may already have scrolled out of the retained tail; uncorrelated pulses are never delayed.
+Sequencing changes only the pacing of already-completed evidence, never the evidence itself or the queue's existing
+concurrency and per-edge bounds.
+
+Slow interactions pulse a calm amber for longer than normal completions or failures, with a restrained trailing halo,
+so timing carries meaning without relying on color alone. Everything the motion conveys is also readable statically
+from the counts, the edge styling, the detail panel, and the live-region narration.
 Under `prefers-reduced-motion`, particles are replaced by a brief static edge highlight plus a polite live-region
 sentence naming what changed. The whole map is keyboard navigable (arrow keys move between nodes, Enter or Space
 selects), carries a hidden textual list of every node and relationship for screen readers, and supports protocol and

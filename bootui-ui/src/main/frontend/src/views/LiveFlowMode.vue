@@ -18,7 +18,9 @@ import {
   externalEndpointId,
   filterServiceMap,
   layoutServiceMap,
-  normalizeServiceMap
+  normalizeServiceMap,
+  pulseTone,
+  sequenceFlowPulses
 } from '../utils/serviceMap.js'
 
 const props = defineProps({
@@ -31,7 +33,7 @@ const props = defineProps({
   paused: {type: Boolean, default: false}
 })
 
-const PROTOCOL_OPTIONS = ['HTTP_INBOUND', 'HTTP', 'JDBC', 'KAFKA', 'RABBITMQ']
+const PROTOCOL_OPTIONS = ['HTTP_INBOUND', 'CACHE', 'HTTP', 'JDBC', 'KAFKA', 'RABBITMQ']
 const MIN_ZOOM = 0.6
 const MAX_ZOOM = 1.6
 const ZOOM_STEP = 0.2
@@ -131,6 +133,12 @@ async function loadServiceMap() {
  *
  * Nothing animates on a first load, on a brand-new edge, or when no new interaction id arrived — so an
  * idle application shows a completely still map, and a busy one shows a small, bounded burst.
+ *
+ * Full motion sequences causally-related pulses before they are queued (`sequenceFlowPulses`): inbound
+ * HTTP starts first; downstream completions sharing the flow then start in retained timestamp order.
+ * Reduced motion deliberately skips sequencing — there is no travel to pace, so every changed edge is
+ * emphasized immediately, without the causal stagger's delay, and the polite announcement below already
+ * narrates the same causal story in full sentences instead.
  */
 function applyNewEvidence(next) {
   const fresh = diffFlowPulses(previousEdges, next.edges)
@@ -141,7 +149,7 @@ function applyNewEvidence(next) {
     for (const pulse of fresh) highlightEdge(pulse.edgeId)
     return
   }
-  queue.enqueue(fresh)
+  queue.enqueue(sequenceFlowPulses(fresh))
 }
 
 /** The reduced-motion equivalent of a pulse: a brief, static emphasis on the edge that changed. */
@@ -173,12 +181,19 @@ function pulseGeometry(pulse) {
       '--flow-y1': `${edge.y1}px`,
       '--flow-x2': `${edge.x2}px`,
       '--flow-y2': `${edge.y2}px`,
-      '--flow-duration': `${PULSE_DURATION_MS}ms`
+      // Each pulse carries its own tone-specific duration (slow is unmistakably the longest) and its own
+      // sequencing delay (0 unless it is a downstream leg of a causally-sequenced flow). The CSS keyframe
+      // below keeps a delayed pulse fully invisible for the entire delay via `animation-fill-mode: both`,
+      // so it never flashes into view at the wrong moment.
+      '--flow-duration': `${pulse.durationMs ?? PULSE_DURATION_MS}ms`,
+      '--flow-delay': `${pulse.startDelayMs ?? 0}ms`
     }
   }
 }
 
 const visiblePulses = computed(() => pulses.value.map(pulseGeometry).filter(Boolean))
+/** The subset of visible pulses that also render a restrained trailing halo (slow tone only). */
+const visibleSlowPulses = computed(() => visiblePulses.value.filter((pulse) => pulse.tone === 'slow'))
 
 function isHighlighted(edgeId) {
   return highlightedEdges.value.has(edgeId)
@@ -424,6 +439,15 @@ watch(selectedId, async (id) => {
           </g>
 
           <g aria-hidden="true" class="flow-pulses">
+            <!-- Slow pulses alone get a restrained, low-opacity trailing halo on the exact same path and
+                 timing as their comet head, so "slow" reads as unmistakable without ever flashing. -->
+            <circle
+              v-for="pulse in visibleSlowPulses"
+              :key="`${pulse.key}-trail`"
+              class="flow-pulse-trail"
+              :style="pulse.style"
+              r="8"
+            />
             <circle
               v-for="pulse in visiblePulses"
               :key="pulse.key"
@@ -552,8 +576,16 @@ watch(selectedId, async (id) => {
         <ul v-if="selectedEdge?.recentInteractions?.length" class="flow-recent">
           <li v-for="interaction in selectedEdge.recentInteractions" :key="interaction.id">
             <span class="flow-recent__op">{{ interaction.operation }}</span>
-            <span :class="['flow-recent__outcome', {'flow-recent__outcome--failed': interaction.outcome === 'FAILED'}]">
-              {{ interaction.outcome === 'FAILED' ? 'failed' : 'ok' }}
+            <span
+              :class="[
+                'flow-recent__outcome',
+                {
+                  'flow-recent__outcome--failed': interaction.outcome === 'FAILED',
+                  'flow-recent__outcome--slow': interaction.outcome !== 'FAILED' && pulseTone(interaction) === 'slow'
+                }
+              ]"
+            >
+              {{ interaction.outcome === 'FAILED' ? 'failed' : pulseTone(interaction) === 'slow' ? 'slow' : 'ok' }}
             </span>
             <span v-if="interaction.durationMs != null" class="flow-recent__duration"
               >{{ formatNumber(interaction.durationMs) }} ms</span
@@ -717,13 +749,28 @@ watch(selectedId, async (id) => {
 }
 
 /* ── Pulses ────────────────────────────────────────────────────────────────── */
+/* A pulse's `--flow-delay` (see `pulseGeometry`) is 0 unless `sequenceFlowPulses` staggered it as a
+   downstream leg of a causal flow. `animation-fill-mode: both` applies the 0% keyframe - positioned at
+   the source, fully transparent - for that entire delay, so a sequenced pulse never flashes into view at
+   the wrong moment; it only ever becomes visible once its own travel actually begins. One fixed keyframe,
+   a single non-repeating pass, and a linear timing function keep every tone free of bounce, looping, or
+   drift - motion here only ever explains causality, once, then stops. */
 .flow-pulse {
   fill: var(--bootui-green);
-  animation: flow-travel var(--flow-duration) linear 1;
+  opacity: 0;
+  animation-name: flow-travel;
+  animation-duration: var(--flow-duration);
+  animation-delay: var(--flow-delay, 0ms);
+  animation-timing-function: linear;
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
 }
 
 .flow-pulse--slow {
   fill: var(--bootui-warning-text-strong);
+  /* A soft amber glow makes the slow tone unmistakable at a glance, distinct in both themes since it
+     inherits the theme's own accessible warning token - never a flat color swap alone. */
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--bootui-warning-text-strong) 60%, transparent));
 }
 
 .flow-pulse--failed {
@@ -732,12 +779,52 @@ watch(selectedId, async (id) => {
   stroke-width: 2;
 }
 
+/* The slow tone's restrained trailing halo: a larger, softer ring following the exact same path and
+   timing as its comet head (see the template), peaking at a low, calm opacity rather than a bright flash. */
+.flow-pulse-trail {
+  fill: none;
+  stroke: var(--bootui-warning-text-strong);
+  stroke-width: 1.5;
+  opacity: 0;
+  animation-name: flow-travel-trail;
+  animation-duration: var(--flow-duration);
+  animation-delay: var(--flow-delay, 0ms);
+  animation-timing-function: linear;
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+}
+
 @keyframes flow-travel {
-  from {
+  0% {
     transform: translate(var(--flow-x1), var(--flow-y1));
+    opacity: 0;
   }
-  to {
+  8% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
     transform: translate(var(--flow-x2), var(--flow-y2));
+    opacity: 0;
+  }
+}
+
+@keyframes flow-travel-trail {
+  0% {
+    transform: translate(var(--flow-x1), var(--flow-y1));
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.35;
+  }
+  90% {
+    opacity: 0.35;
+  }
+  100% {
+    transform: translate(var(--flow-x2), var(--flow-y2));
+    opacity: 0;
   }
 }
 
@@ -926,6 +1013,13 @@ watch(selectedId, async (id) => {
   color: var(--bootui-danger-text);
 }
 
+/* Non-color label to match: "slow" is always spelled out here, in `describeFlowSequence`'s narration, and
+   in the map's amber comet - never conveyed by color alone. The accessible warning token already differs
+   per theme (see docs/design), so this reads clearly in both. */
+.flow-recent__outcome--slow {
+  color: var(--bootui-warning-text-strong);
+}
+
 .flow-detail__link {
   display: inline-block;
   font-size: 0.85rem;
@@ -984,9 +1078,11 @@ watch(selectedId, async (id) => {
 }
 
 /* Reduced motion is handled in script by replacing pulses with a brief static edge highlight and a
-   polite live-region update; this rule is the belt-and-braces guarantee that nothing animates. */
+   polite live-region update; this rule is the belt-and-braces guarantee that nothing animates - no
+   travel, no delayed appearance, no trail. */
 @media (prefers-reduced-motion: reduce) {
-  .flow-pulse {
+  .flow-pulse,
+  .flow-pulse-trail {
     animation: none;
     display: none;
   }

@@ -6,9 +6,12 @@ import io.github.jdubois.bootui.core.dto.HikariPoolDto;
 import io.github.jdubois.bootui.core.dto.HttpExchangeDto;
 import io.github.jdubois.bootui.core.dto.RestClientTraceEntryDto;
 import io.github.jdubois.bootui.core.dto.ServiceMapEdgeDto;
+import io.github.jdubois.bootui.core.dto.ServiceMapInteractionDto;
 import io.github.jdubois.bootui.core.dto.ServiceMapNodeDto;
 import io.github.jdubois.bootui.core.dto.ServiceMapReport;
 import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
+import io.github.jdubois.bootui.engine.cache.CacheActivityEvent;
+import io.github.jdubois.bootui.engine.cache.CacheActivityOperation;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
 import java.time.Instant;
@@ -152,6 +155,8 @@ class ServiceMapAssemblerTests {
                 List.of(pool("dataSource", "HikariPool-1", "jdbc:postgresql://localhost:5432/shop")),
                 false,
                 List.of(),
+                List.of(),
+                false,
                 List.of(),
                 false,
                 List.of(),
@@ -348,13 +353,18 @@ class ServiceMapAssemblerTests {
                 false,
                 List.of(kafka(1, 100, KafkaActivityRecorder.Direction.PRODUCE, "orders", true)),
                 false,
-                List.of(rabbit(1, 100, RabbitActivityRecorder.Direction.PUBLISH, "orders", "created", true)));
+                List.of(rabbit(1, 100, RabbitActivityRecorder.Direction.PUBLISH, "orders", "created", true)),
+                false,
+                List.of(cacheEvent(1, 100, "cacheManager", "products", CacheActivityOperation.HIT, null)));
 
         ServiceMapReport report = assembler.assemble(disabled, 5L);
 
         assertThat(report.available()).isFalse();
         assertThat(report.nodes()).isEmpty();
-        assertThat(report.toString()).doesNotContain("api.example.com").doesNotContain("orders");
+        assertThat(report.toString())
+                .doesNotContain("api.example.com")
+                .doesNotContain("orders")
+                .doesNotContain("products");
     }
 
     @Test
@@ -480,6 +490,228 @@ class ServiceMapAssemblerTests {
         assertThat(report.warnings()).anyMatch(warning -> warning.contains("no exchange or routing key"));
     }
 
+    // ── Cache protocol ───────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void groupsCacheAccessesBySafeCacheManagerAndCacheNameIdentity() {
+        ServiceMapReport report = assembler.assemble(sources()
+                .cache(cacheEvent(1, 100, "cacheManager", "products", CacheActivityOperation.HIT, null))
+                .cache(cacheEvent(2, 200, "cacheManager", "products", CacheActivityOperation.MISS, null))
+                .cache(cacheEvent(3, 300, "cacheManager", "orders", CacheActivityOperation.HIT, null))
+                .cache(cacheEvent(4, 400, "reportingManager", "products", CacheActivityOperation.HIT, null))
+                .build());
+
+        assertThat(report.nodes()).extracting(ServiceMapNodeDto::protocol).containsOnly("CACHE");
+        assertThat(report.nodes()).hasSize(3);
+        ServiceMapNodeDto products = node(report, cacheId("cacheManager", "products"));
+        assertThat(products.label()).isEqualTo("cacheManager / products");
+        assertThat(products.interactions()).isEqualTo(2);
+        assertThat(node(report, cacheId("cacheManager", "orders")).interactions())
+                .isOne();
+        // A same-named cache under a different manager is a distinct node, never folded together.
+        assertThat(node(report, cacheId("reportingManager", "products")).interactions())
+                .isOne();
+        assertThat(report.sources()).contains("Cache");
+    }
+
+    @Test
+    void mapsAllFiveCacheOperationsAsSafeCoarseLabelsWithNoRawKeyOrValue() {
+        ServiceMapReport report = assembler.assemble(sources()
+                .cache(cacheEvent(1, 100, "cacheManager", "products", CacheActivityOperation.HIT, null))
+                .cache(cacheEvent(2, 200, "cacheManager", "products", CacheActivityOperation.MISS, null))
+                .cache(cacheEvent(3, 300, "cacheManager", "products", CacheActivityOperation.PUT, null))
+                .cache(cacheEvent(4, 400, "cacheManager", "products", CacheActivityOperation.EVICT, null))
+                .cache(cacheEvent(5, 500, "cacheManager", "products", CacheActivityOperation.CLEAR, null))
+                .build());
+
+        ServiceMapEdgeDto edge =
+                edge(report, ServiceMapAssembler.APPLICATION_NODE_ID, cacheId("cacheManager", "products"));
+        assertThat(edge.recentInteractions())
+                .extracting(ServiceMapInteractionDto::operation)
+                .containsExactlyInAnyOrder("HIT", "MISS", "PUT", "EVICT", "CLEAR");
+        // Fixture events all carry the same distinctive key hash; proving it never reaches the report is
+        // what proves no key (or a fortiori no value) is ever mapped.
+        assertThat(report.toString()).doesNotContain("deadbeefcafebabe");
+    }
+
+    @Test
+    void neverTreatsACacheMissAsARetainedFailureSinceItIsANormalOutcome() {
+        ServiceMapReport report = assembler.assemble(sources()
+                .cache(cacheEvent(1, 100, "cacheManager", "products", CacheActivityOperation.MISS, null))
+                .cache(cacheEvent(2, 200, "cacheManager", "products", CacheActivityOperation.MISS, null))
+                .build());
+
+        ServiceMapNodeDto node = node(report, cacheId("cacheManager", "products"));
+        assertThat(node.failures()).isZero();
+        assertThat(node.outcome()).isEqualTo("OBSERVED_OK");
+    }
+
+    @Test
+    void cacheDependenciesAreObservedOnlyAndDeepLinkToTheCachePanel() {
+        ServiceMapReport report = assembler.assemble(sources()
+                .cache(cacheEvent(1, 100, "cacheManager", "products", CacheActivityOperation.HIT, null))
+                .build());
+
+        ServiceMapNodeDto node = node(report, cacheId("cacheManager", "products"));
+        assertThat(node.configured()).isFalse();
+        assertThat(node.observed()).isTrue();
+        assertThat(node.sourceRoute()).isEqualTo("/cache");
+        assertThat(node.sourceLabel()).isEqualTo("Cache");
+        assertThat(node.distinctOperations()).isEqualTo(1);
+    }
+
+    @Test
+    void omitsCacheAccessesWithNoCacheNameAndWarnsVisibly() {
+        ServiceMapReport report = assembler.assemble(sources()
+                .cache(cacheEvent(1, 100, "cacheManager", "  ", CacheActivityOperation.HIT, null))
+                .build());
+
+        assertThat(report.nodes()).isEmpty();
+        assertThat(report.warnings()).anyMatch(warning -> warning.contains("carried no cache name"));
+    }
+
+    @Test
+    void reportsNoCacheSourceWhenTheRecorderContributesNoEvents() {
+        ServiceMapSources cacheAvailableButEmpty = new ServiceMapSources(
+                true,
+                List.of(exchange("1", 100, "GET", 200)),
+                false,
+                List.of(),
+                false,
+                List.of(),
+                false,
+                List.of(),
+                List.of(),
+                false,
+                List.of(),
+                false,
+                List.of(),
+                true,
+                List.of());
+
+        ServiceMapReport report = assembler.assemble(cacheAvailableButEmpty);
+
+        assertThat(report.sources()).doesNotContain("Cache");
+        assertThat(report.nodes()).extracting(ServiceMapNodeDto::protocol).doesNotContain("CACHE");
+    }
+
+    @Test
+    void cacheInteractionsRespectTheSharedRecentInteractionCap() {
+        SourcesBuilder builder = sources();
+        for (int index = 0; index < ServiceMapLimits.MAX_RECENT_INTERACTIONS + 4; index++) {
+            builder.cache(
+                    cacheEvent(index, 1_000L + index, "cacheManager", "products", CacheActivityOperation.HIT, null));
+        }
+
+        ServiceMapReport report = assembler.assemble(builder.build());
+        ServiceMapEdgeDto edge =
+                edge(report, ServiceMapAssembler.APPLICATION_NODE_ID, cacheId("cacheManager", "products"));
+
+        assertThat(edge.interactions()).isEqualTo(ServiceMapLimits.MAX_RECENT_INTERACTIONS + 4);
+        assertThat(edge.recentInteractions()).hasSize(ServiceMapLimits.MAX_RECENT_INTERACTIONS);
+    }
+
+    // ── Flow correlation ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void sharesTheSameOpaqueFlowIdAcrossInboundSqlRestAndCacheOnTheSameTrace() {
+        String traceId = "00000000000000000000000000000001";
+        ServiceMapReport report = assembler.assemble(sources()
+                .inbound(exchange("1", 100, "GET", 200, traceId))
+                .sql(statement(1, 150, "SELECT", true, 4, traceId))
+                .http(call(1, 180, "GET", "https://api.example.com/x", 200, true, traceId))
+                .cache(cacheEvent(1, 120, "cacheManager", "products", CacheActivityOperation.HIT, traceId))
+                .build());
+
+        String inboundFlow = onlyInteraction(
+                        edge(report, ServiceMapAssembler.INBOUND_NODE_ID, ServiceMapAssembler.APPLICATION_NODE_ID))
+                .flowId();
+        String sqlFlow = onlyInteraction(edge(
+                        report, ServiceMapAssembler.APPLICATION_NODE_ID, ServiceMapAssembler.SQL_AGGREGATE_NODE_ID))
+                .flowId();
+        String httpFlow = onlyInteraction(
+                        edge(report, ServiceMapAssembler.APPLICATION_NODE_ID, httpId("https://api.example.com")))
+                .flowId();
+        String cacheFlow = onlyInteraction(
+                        edge(report, ServiceMapAssembler.APPLICATION_NODE_ID, cacheId("cacheManager", "products")))
+                .flowId();
+
+        assertThat(inboundFlow).isNotNull();
+        assertThat(sqlFlow).isEqualTo(inboundFlow);
+        assertThat(httpFlow).isEqualTo(inboundFlow);
+        assertThat(cacheFlow).isEqualTo(inboundFlow);
+    }
+
+    @Test
+    void flowIdIsNullWhenNoTraceWasActive() {
+        ServiceMapReport report = assembler.assemble(
+                sources().inbound(exchange("1", 100, "GET", 200, null)).build());
+
+        String flowId = onlyInteraction(
+                        edge(report, ServiceMapAssembler.INBOUND_NODE_ID, ServiceMapAssembler.APPLICATION_NODE_ID))
+                .flowId();
+
+        assertThat(flowId).isNull();
+    }
+
+    @Test
+    void blankTraceIdAlsoYieldsANullFlowIdRatherThanASyntheticOne() {
+        ServiceMapReport report = assembler.assemble(
+                sources().inbound(exchange("1", 100, "GET", 200, "   ")).build());
+
+        String flowId = onlyInteraction(
+                        edge(report, ServiceMapAssembler.INBOUND_NODE_ID, ServiceMapAssembler.APPLICATION_NODE_ID))
+                .flowId();
+
+        assertThat(flowId).isNull();
+    }
+
+    @Test
+    void neverExposesTheRawTraceIdAndDifferentTracesProduceDifferentFlowIds() {
+        String firstTrace = "very-identifiable-trace-id-alpha";
+        String secondTrace = "very-identifiable-trace-id-beta";
+        ServiceMapReport report = assembler.assemble(sources()
+                .inbound(exchange("1", 100, "GET", 200, firstTrace))
+                .inbound(exchange("2", 200, "GET", 200, secondTrace))
+                .build());
+
+        List<ServiceMapInteractionDto> interactions = edge(
+                        report, ServiceMapAssembler.INBOUND_NODE_ID, ServiceMapAssembler.APPLICATION_NODE_ID)
+                .recentInteractions();
+        assertThat(interactions).hasSize(2);
+        String firstFlowId = interactions.stream()
+                .filter(i -> i.id().equals("inbound:1"))
+                .findFirst()
+                .orElseThrow()
+                .flowId();
+        String secondFlowId = interactions.stream()
+                .filter(i -> i.id().equals("inbound:2"))
+                .findFirst()
+                .orElseThrow()
+                .flowId();
+
+        assertThat(firstFlowId).isNotNull().isNotEqualTo(secondFlowId);
+        assertThat(firstFlowId).isNotEqualTo(firstTrace);
+        assertThat(secondFlowId).isNotEqualTo(secondTrace);
+        assertThat(report.toString()).doesNotContain(firstTrace).doesNotContain(secondTrace);
+    }
+
+    @Test
+    void messagingInteractionsNeverCarryAFlowIdSinceTheyCarryNoTraceIdAtCaptureTime() {
+        ServiceMapReport report = assembler.assemble(sources()
+                .kafka(kafka(1, 100, KafkaActivityRecorder.Direction.PRODUCE, "orders", true))
+                .rabbit(rabbit(1, 100, RabbitActivityRecorder.Direction.PUBLISH, "billing", "charged", true))
+                .build());
+
+        assertThat(onlyInteraction(edge(report, ServiceMapAssembler.APPLICATION_NODE_ID, kafkaId("orders")))
+                        .flowId())
+                .isNull();
+        assertThat(onlyInteraction(
+                                edge(report, ServiceMapAssembler.APPLICATION_NODE_ID, rabbitId("billing", "charged")))
+                        .flowId())
+                .isNull();
+    }
+
     // ── Fixtures ─────────────────────────────────────────────────────────────────────────────────
 
     private static ServiceMapNodeDto node(ServiceMapReport report, String id) {
@@ -499,6 +731,14 @@ class ServiceMapAssemblerTests {
         return edge.get();
     }
 
+    /** Convenience for flow-correlation tests that only ever put one interaction on an edge. */
+    private static ServiceMapInteractionDto onlyInteraction(ServiceMapEdgeDto edge) {
+        assertThat(edge.recentInteractions())
+                .as("interactions on edge %s", edge.id())
+                .hasSize(1);
+        return edge.recentInteractions().get(0);
+    }
+
     private static String httpId(String origin) {
         return ServiceMapIdentities.stableId("http:", origin);
     }
@@ -515,7 +755,15 @@ class ServiceMapAssemblerTests {
         return ServiceMapIdentities.stableId("jdbc:pool:", String.join("\u0000", beanName, poolName, target));
     }
 
+    private static String cacheId(String managerName, String cacheName) {
+        return ServiceMapIdentities.stableId("cache:", (managerName == null ? "" : managerName) + "\u0000" + cacheName);
+    }
+
     private static HttpExchangeDto exchange(String id, long timestamp, String method, int status) {
+        return exchange(id, timestamp, method, status, null);
+    }
+
+    private static HttpExchangeDto exchange(String id, long timestamp, String method, int status, String traceId) {
         return new HttpExchangeDto(
                 id,
                 Instant.ofEpochMilli(timestamp),
@@ -530,13 +778,18 @@ class ServiceMapAssemblerTests {
                 "127.0.0.1",
                 null,
                 null,
-                null,
+                traceId,
                 List.of(),
                 List.of());
     }
 
     private static RestClientTraceEntryDto call(
             long id, long timestamp, String method, String uri, Integer status, boolean success) {
+        return call(id, timestamp, method, uri, status, success, null);
+    }
+
+    private static RestClientTraceEntryDto call(
+            long id, long timestamp, String method, String uri, Integer status, boolean success, String traceId) {
         return new RestClientTraceEntryDto(
                 id,
                 timestamp,
@@ -551,7 +804,7 @@ class ServiceMapAssemblerTests {
                 false,
                 "RestClient",
                 Map.of(),
-                null,
+                traceId,
                 "main",
                 null);
     }
@@ -579,6 +832,11 @@ class ServiceMapAssemblerTests {
 
     private static SqlTraceEntryDto statement(
             long id, long timestamp, String category, boolean success, long durationMillis) {
+        return statement(id, timestamp, category, success, durationMillis, null);
+    }
+
+    private static SqlTraceEntryDto statement(
+            long id, long timestamp, String category, boolean success, long durationMillis, String traceId) {
         return new SqlTraceEntryDto(
                 id,
                 timestamp,
@@ -594,7 +852,7 @@ class ServiceMapAssemblerTests {
                 "main",
                 false,
                 List.of(),
-                null,
+                traceId,
                 null);
     }
 
@@ -615,6 +873,19 @@ class ServiceMapAssemblerTests {
                 id, timestamp, direction, exchange, routingKey, null, 3L, success, null, null);
     }
 
+    private static CacheActivityEvent cacheEvent(
+            long seq,
+            long timestamp,
+            String managerName,
+            String cacheName,
+            CacheActivityOperation operation,
+            String traceId) {
+        // keyHash is deliberately non-null and distinctive in fixtures so tests can prove it never
+        // reaches the assembled report; thread is a fixed placeholder since it carries no map meaning.
+        return new CacheActivityEvent(
+                seq, timestamp, managerName, cacheName, operation, "deadbeefcafebabe", traceId, "main");
+    }
+
     private static SourcesBuilder sources() {
         return new SourcesBuilder();
     }
@@ -629,6 +900,7 @@ class ServiceMapAssemblerTests {
         private final List<String> sqlDataSources = new ArrayList<>();
         private final List<KafkaActivityRecorder.CapturedMessage> kafka = new ArrayList<>();
         private final List<RabbitActivityRecorder.CapturedMessage> rabbit = new ArrayList<>();
+        private final List<CacheActivityEvent> cache = new ArrayList<>();
 
         private SourcesBuilder inbound(HttpExchangeDto exchange) {
             inbound.add(exchange);
@@ -665,11 +937,30 @@ class ServiceMapAssemblerTests {
             return this;
         }
 
+        private SourcesBuilder cache(CacheActivityEvent event) {
+            cache.add(event);
+            return this;
+        }
+
         // Every source declared through this builder is treated as an enabled, contributing panel; the
         // disabled case is asserted explicitly by its own test.
         private ServiceMapSources build() {
             return new ServiceMapSources(
-                    true, inbound, true, http, true, pools, true, sql, sqlDataSources, true, kafka, true, rabbit);
+                    true,
+                    inbound,
+                    true,
+                    http,
+                    true,
+                    pools,
+                    true,
+                    sql,
+                    sqlDataSources,
+                    true,
+                    kafka,
+                    true,
+                    rabbit,
+                    true,
+                    cache);
         }
     }
 }

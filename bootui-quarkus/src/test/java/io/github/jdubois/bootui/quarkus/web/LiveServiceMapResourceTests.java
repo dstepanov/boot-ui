@@ -193,6 +193,30 @@ class LiveServiceMapResourceTests {
         assertThat(report.warnings()).noneMatch(warning -> warning.contains("summarized"));
     }
 
+    @Test
+    void honestlyReportsCacheAsUnavailableSinceThisRuntimeHasNoCaptureSeam() {
+        // Quarkus has no CacheActivityRecorder-equivalent bean at all (see this resource's own javadoc),
+        // so the service map must never draw a CACHE dependency here no matter what else is available.
+        HttpExchangeBuffer buffer = new HttpExchangeBuffer(10);
+        buffer.record(captured("GET", "http://localhost:8080/orders", 200));
+
+        ServiceMapReport report = resource(
+                        available(
+                                QuarkusPanelAvailability.REST_CLIENT_TRACE_PRESENT_KEY,
+                                QuarkusPanelAvailability.KAFKA_PRESENT_KEY,
+                                QuarkusPanelAvailability.RABBIT_PRESENT_KEY,
+                                QuarkusPanelAvailability.CONNECTION_POOLS_PRESENT_KEY),
+                        buffer,
+                        restRecorder(),
+                        new KafkaActivityRecorder(true, true, 10, 16),
+                        new RabbitActivityRecorder(true, false, 10, 32),
+                        pools("jdbc:postgresql://localhost:5432/shop"))
+                .serviceMap();
+
+        assertThat(report.nodes()).extracting(ServiceMapNodeDto::protocol).doesNotContain("CACHE");
+        assertThat(report.sources()).doesNotContain("Cache");
+    }
+
     // ── Fixtures ─────────────────────────────────────────────────────────────────────────────────
 
     private LiveServiceMapResource resource(

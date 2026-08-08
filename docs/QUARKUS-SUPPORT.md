@@ -296,7 +296,19 @@ three runtimes. Each source is gated on both `QuarkusPanelAvailability.isPanelAv
 panel that is unavailable on this runtime or switched off by the live access policy contributes nothing rather than
 appearing as a dependency with no traffic; an unsatisfied `SqlTraceRecorder` (no Agroal datasource) simply yields no
 statement evidence. The resource is registered through `BootUiQuarkusProcessor.addBeanClasses(...)` like every other
-runtime resource, is strictly read-only, and performs no network call, probe, or scan.
+runtime resource, is strictly read-only, and performs no network call, probe, or scan. `sources()` always passes
+`cacheAvailable: false` with an empty event list — this runtime has no `CacheActivityRecorder`-equivalent bean at all,
+for the identical reason its Live Activity feed carries no `CACHE` entries (`quarkus-cache`'s built-in interceptors
+leave no comparable interception seam) — so the map never draws a cache dependency it cannot honestly back with
+evidence.
+
+**The map's opaque `ServiceMapInteractionDto.flowId` needed no Quarkus-specific work either, and comes almost for
+free.** `ServiceMapAssembler` derives it one-way from whatever distributed-trace id was already captured on the
+`HttpExchangeBuffer`/`RestClientTraceRecorder`/`SqlTraceRecorder` entries this resource reads — the same
+capability-gated `QuarkusOtelTraceIdProvider` stamping described above for the Live Activity feed. So wherever
+`quarkus-opentelemetry` is present, an inbound request, its SQL, and any outbound REST call sharing one trace already
+correlate into one flow on this map with no additional code; only cache participates on Spring MVC/WebFlux alone,
+since Quarkus captures no cache evidence to correlate in the first place.
 
 **Two Live Activity SSE source-subscription gaps are now closed.** `LiveActivityResource#stream` previously fanned in
 the HTTP exchange buffer, scheduled-task runs, Kafka, RabbitMQ, captured email, and REST Client calls, but neither the

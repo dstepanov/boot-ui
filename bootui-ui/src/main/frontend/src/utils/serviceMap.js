@@ -14,6 +14,14 @@
  *
  * A first load therefore produces no motion, a brand-new dependency appears without a pulse, and an
  * idle application stays completely still.
+ *
+ * Causal sequencing builds on that model rather than replacing it: when several fresh pulses share the
+ * server-derived, opaque `flowId` (see `sequenceFlowPulses`), they are evidence of one request's actual
+ * path through the application. Inbound HTTP arrives first; downstream completions then replay in their
+ * retained timestamp order (with cache before JDBC/HTTP only as the deterministic same-millisecond
+ * tie-break), so their *start* reads as one causal story instead of simultaneous, unrelated blips. Motion
+ * still only ever depicts evidence that already completed; sequencing never changes the evidence, only
+ * how its replay is paced.
  */
 
 export const PROTOCOL_HTTP_INBOUND = 'HTTP_INBOUND'
@@ -21,6 +29,7 @@ export const PROTOCOL_HTTP = 'HTTP'
 export const PROTOCOL_JDBC = 'JDBC'
 export const PROTOCOL_KAFKA = 'KAFKA'
 export const PROTOCOL_RABBITMQ = 'RABBITMQ'
+export const PROTOCOL_CACHE = 'CACHE'
 
 export const PROTOCOL_LABELS = {
   APPLICATION: 'Application',
@@ -28,7 +37,8 @@ export const PROTOCOL_LABELS = {
   [PROTOCOL_HTTP]: 'HTTP',
   [PROTOCOL_JDBC]: 'JDBC',
   [PROTOCOL_KAFKA]: 'Kafka',
-  [PROTOCOL_RABBITMQ]: 'RabbitMQ'
+  [PROTOCOL_RABBITMQ]: 'RabbitMQ',
+  [PROTOCOL_CACHE]: 'Cache'
 }
 
 export const PROTOCOL_ICONS = {
@@ -37,7 +47,8 @@ export const PROTOCOL_ICONS = {
   [PROTOCOL_HTTP]: 'bi-globe2',
   [PROTOCOL_JDBC]: 'bi-database',
   [PROTOCOL_KAFKA]: 'bi-broadcast-pin',
-  [PROTOCOL_RABBITMQ]: 'bi-diagram-3'
+  [PROTOCOL_RABBITMQ]: 'bi-diagram-3',
+  [PROTOCOL_CACHE]: 'bi-lightning-charge'
 }
 
 /**
@@ -62,8 +73,49 @@ export const SLOW_INTERACTION_MS = 500
 /** Bounds on motion, so a traffic burst can never turn the map into a fireworks display. */
 export const MAX_CONCURRENT_PULSES = 6
 export const MAX_PULSES_PER_EDGE = 2
-export const PULSE_DURATION_MS = 900
 export const REDUCED_MOTION_HIGHLIGHT_MS = 1200
+
+/**
+ * Per-tone pulse travel durations. Slow is deliberately the longest and most unmistakable (a calm amber
+ * comet, never a flash), failed is a shorter, firmer beat, and a normal completion is the briskest of the
+ * three - the timing itself is part of what makes "slow" legible without relying on color alone.
+ */
+export const PULSE_DURATION_OK_MS = 750
+export const PULSE_DURATION_SLOW_MS = 1350
+export const PULSE_DURATION_FAILED_MS = 1000
+/** Back-compat alias equal to the normal-tone duration; existing call sites keep working unchanged. */
+export const PULSE_DURATION_MS = PULSE_DURATION_OK_MS
+
+/** The travel duration for one pulse, keyed by the tone `pulseTone` classified it into. */
+export function pulseDurationMs(tone) {
+  if (tone === 'slow') return PULSE_DURATION_SLOW_MS
+  if (tone === 'failed') return PULSE_DURATION_FAILED_MS
+  return PULSE_DURATION_OK_MS
+}
+
+/**
+ * Deterministic protocol precedence for interactions whose retained completion timestamps are identical.
+ * Inbound is always first; cache precedes JDBC/HTTP only for a same-millisecond tie. The timestamp remains
+ * authoritative so the replay never invents a cache-before-database order that the completed evidence does
+ * not support. Kafka/RabbitMQ never carry a flowId, so they do not reach this lookup in practice.
+ */
+function flowStage(protocol) {
+  if (protocol === PROTOCOL_HTTP_INBOUND) return 0
+  if (protocol === PROTOCOL_CACHE) return 1
+  return 2
+}
+
+/** Truthful replay order: inbound first, then observed completion time, then a stable protocol tie-break. */
+function compareFlowPulses(a, b) {
+  const stageDifference = flowStage(a?.protocol) - flowStage(b?.protocol)
+  if (flowStage(a?.protocol) === 0 || flowStage(b?.protocol) === 0) return stageDifference
+  const timestampDifference = (a?.interaction?.timestamp ?? 0) - (b?.interaction?.timestamp ?? 0)
+  return timestampDifference || stageDifference || String(a?.id ?? '').localeCompare(String(b?.id ?? ''))
+}
+
+/** Small, bounded stagger between same-flow downstream pulses so a fan-out reads as distinguishable beats. */
+export const FLOW_STAGE_STAGGER_MS = 90
+export const MAX_FLOW_STAGGER_STEPS = 3
 
 /** Normalizes a server report into the shape the map renders, tolerating partial payloads. */
 export function normalizeServiceMap(report) {
@@ -218,7 +270,9 @@ export function pulseTone(interaction) {
  * Finds the completed interactions that are new since the previous snapshot.
  *
  * Only stable edges are considered, and only the capped interaction tail is compared, so the amount of
- * motion is bounded by the contract itself rather than by how much traffic the application handled.
+ * motion is bounded by the contract itself rather than by how much traffic the application handled. Each
+ * pulse carries the edge's `protocol` (used to order a causal sequence) and a per-tone `durationMs` (see
+ * `pulseDurationMs`), both consumed by `sequenceFlowPulses` and the queue below.
  */
 export function diffFlowPulses(previousEdges, nextEdges, {maxPerEdge = MAX_PULSES_PER_EDGE} = {}) {
   if (!Array.isArray(previousEdges) || !previousEdges.length || !Array.isArray(nextEdges)) return []
@@ -231,13 +285,16 @@ export function diffFlowPulses(previousEdges, nextEdges, {maxPerEdge = MAX_PULSE
     const seen = new Set((previous.recentInteractions ?? []).map((interaction) => interaction.id))
     const fresh = (edge.recentInteractions ?? []).filter((interaction) => !seen.has(interaction.id))
     for (const interaction of fresh.slice(0, maxPerEdge)) {
+      const tone = pulseTone(interaction)
       pulses.push({
         id: `${edge.id}#${interaction.id}`,
         edgeId: edge.id,
         direction: edge.direction,
         fromId: edge.fromId,
         toId: edge.toId,
-        tone: pulseTone(interaction),
+        protocol: edge.protocol,
+        tone,
+        durationMs: pulseDurationMs(tone),
         interaction
       })
     }
@@ -248,6 +305,96 @@ export function diffFlowPulses(previousEdges, nextEdges, {maxPerEdge = MAX_PULSE
 /** Returns the non-application endpoint represented by a directional service-map edge. */
 export function externalEndpointId(edge) {
   return edge?.direction === 'INBOUND' ? edge.fromId : edge?.toId
+}
+
+/**
+ * Sequences a batch of freshly diffed pulses into a causal story, per flow.
+ *
+ * Pulses that share a server-derived `interaction.flowId` are evidence of one request's actual path
+ * through the application. Inbound HTTP reaches the app first. Downstream interactions replay in ascending
+ * retained completion-time order, using cache-before-JDBC/HTTP only as a deterministic tie-break when
+ * timestamps are equal - the truthful order documented in `docs/SPECIFICATION.md`. Exactly one inbound
+ * pulse *retained in this very batch* is required to anchor that sequence: everything downstream of it
+ * starts once it has finished arriving (its own `durationMs`), then downstream pulses are staggered by a
+ * small, bounded step so several of them do not all start in the same instant.
+ *
+ * Every other pulse is untouched:
+ *
+ *   - a pulse with no `flowId` is not part of any flow and is never delayed;
+ *   - a flow whose batch carries no inbound pulse (the common case once the inbound leg has already
+ *     scrolled out of the retained tail) never delays its downstream pulses either - they fire
+ *     immediately rather than waiting for an inbound arrival this batch will never carry;
+ *   - a flow with multiple inbound pulses is ambiguous and remains entirely immediate rather than choosing
+ *     an arbitrary inbound pulse and inventing causal delays;
+ *   - a flow's own inbound pulse always starts immediately, since it is the first stage.
+ *
+ * Returns the same pulses, each with a `startDelayMs` (`0` unless actually sequenced) that the caller uses
+ * to pace admission into the animation queue.
+ */
+export function sequenceFlowPulses(
+  pulses,
+  {stageDelayMs = null, staggerMs = FLOW_STAGE_STAGGER_MS, maxStaggerSteps = MAX_FLOW_STAGGER_STEPS} = {}
+) {
+  if (!Array.isArray(pulses) || !pulses.length) return Array.isArray(pulses) ? pulses : []
+
+  const groups = new Map()
+  for (const pulse of pulses) {
+    const flowId = pulse?.interaction?.flowId
+    if (!flowId) continue
+    if (!groups.has(flowId)) groups.set(flowId, [])
+    groups.get(flowId).push(pulse)
+  }
+
+  const delayById = new Map()
+  for (const group of groups.values()) {
+    const inboundPulses = group.filter((pulse) => pulse.direction === 'INBOUND')
+    if (inboundPulses.length !== 1) continue
+    const [inbound] = inboundPulses
+    const arrival = stageDelayMs ?? inbound.durationMs ?? PULSE_DURATION_OK_MS
+    const downstream = [...group].filter((pulse) => pulse !== inbound).sort(compareFlowPulses)
+    downstream.forEach((pulse, index) => {
+      delayById.set(pulse.id, arrival + staggerMs * Math.min(index, maxStaggerSteps))
+    })
+  }
+
+  return pulses.map((pulse) => ({...pulse, startDelayMs: delayById.get(pulse.id) ?? 0}))
+}
+
+/** Renders one causal step for `describeFlowSequence`'s complete flow narration. */
+function describeFlowStep(pulse, nodesById) {
+  const endpointId = externalEndpointId(pulse)
+  const label = nodesById?.get?.(endpointId)?.label ?? endpointId
+  const operation = pulse.interaction?.operation ?? ''
+  const slow = pulseTone(pulse.interaction) === 'slow' ? ' slow' : ''
+  const failed = pulse.interaction?.outcome === 'FAILED' ? ' failed' : ''
+  const duration = pulse.interaction?.durationMs != null ? ` (${pulse.interaction.durationMs} ms)` : ''
+  return `${label} ${operation}${slow}${failed}${duration}`.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Narrates every qualifying flow's complete causal chain, for screen-reader users who cannot see the
+ * sequenced motion. A "slow" step is called out by name - never by color alone - matching the same
+ * non-color labelling used in the map's node detail view.
+ *
+ * Only flows with at least two pulses in this batch produce a sentence: a single event alone is not a
+ * "flow" worth narrating and is already covered by the generic summary in `describeNewEvidence`.
+ */
+export function describeFlowSequence(pulses, nodesById) {
+  if (!Array.isArray(pulses) || !pulses.length) return []
+  const groups = new Map()
+  for (const pulse of pulses) {
+    const flowId = pulse?.interaction?.flowId
+    if (!flowId) continue
+    if (!groups.has(flowId)) groups.set(flowId, [])
+    groups.get(flowId).push(pulse)
+  }
+  const sentences = []
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    const ordered = [...group].sort(compareFlowPulses)
+    sentences.push(`Flow: ${ordered.map((pulse) => describeFlowStep(pulse, nodesById)).join(' → ')}.`)
+  }
+  return sentences
 }
 
 /** A short, human sentence describing new evidence, for the map's polite live region. */
@@ -265,8 +412,15 @@ export function describeNewEvidence(pulses, nodesById) {
     parts.push(`${count} on ${label}`)
   }
   const failures = pulses.filter((pulse) => pulse.tone === 'failed').length
-  const suffix = failures ? `, including ${failures} failed` : ''
-  return `New completed interactions: ${parts.join(', ')}${suffix}.`
+  const slow = pulses.filter((pulse) => pulse.tone === 'slow').length
+  // Non-color callouts: "slow" and "failed" are always named, never implied by amber/red alone.
+  const notes = []
+  if (failures) notes.push(`${failures} failed`)
+  if (slow) notes.push(`${slow} slow`)
+  const suffix = notes.length ? `, including ${notes.join(', ')}` : ''
+  const generic = `New completed interactions: ${parts.join(', ')}${suffix}.`
+  const flowSentences = describeFlowSequence(pulses, nodesById)
+  return [...flowSentences, generic].join(' ')
 }
 
 /**
@@ -274,11 +428,16 @@ export function describeNewEvidence(pulses, nodesById) {
  *
  * Bursts are coalesced rather than buffered: anything over {@link MAX_CONCURRENT_PULSES} in flight is
  * dropped instead of queued, so motion can never lag behind reality or keep running after traffic
- * stops. Each accepted pulse releases itself after `duration`.
+ * stops. Each accepted pulse is admitted to `active` immediately (so the concurrency cap is reserved and
+ * `active()` stays an honest picture of everything in flight, sequenced or not) and releases itself after
+ * its own `startDelayMs + durationMs` - the delay itself is a purely visual concern the CSS layer owns
+ * (the pulse renders invisible for its `startDelayMs`, matching `sequenceFlowPulses`'s causal pacing)
+ * rather than a second bookkeeping phase in here, so the queue's bounds and "no stale backlog" guarantee
+ * never depend on whether any given pulse happens to be sequenced.
  */
 export function createFlowQueue({
   maxConcurrent = MAX_CONCURRENT_PULSES,
-  duration = PULSE_DURATION_MS,
+  duration = PULSE_DURATION_OK_MS,
   schedule = (callback, delay) => setTimeout(callback, delay),
   cancel = (handle) => clearTimeout(handle)
 } = {}) {
@@ -313,9 +472,11 @@ export function createFlowQueue({
       if (!accepted.length) return []
       active = [...active, ...accepted]
       for (const pulse of accepted) {
+        const startDelayMs = Math.max(0, pulse.startDelayMs ?? 0)
+        const pulseDuration = pulse.durationMs ?? duration
         timers.set(
           pulse.id,
-          schedule(() => release(pulse.id), duration)
+          schedule(() => release(pulse.id), startDelayMs + pulseDuration)
         )
       }
       notify()

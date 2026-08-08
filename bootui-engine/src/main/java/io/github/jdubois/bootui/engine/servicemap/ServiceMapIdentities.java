@@ -15,6 +15,10 @@ import java.util.Locale;
  * carry a secret or identify a specific request — user-info credentials, paths, query strings, and
  * fragments. When a value cannot be parsed into a safe identity, the identity is absent rather than
  * approximated from the raw text.</p>
+ *
+ * <p>It also owns the one place a captured distributed-trace id is touched at all: {@link #flowId} reduces
+ * it to an opaque, one-way correlation token for {@code ServiceMapInteractionDto#flowId}, so the raw trace
+ * id itself never reaches this contract.</p>
  */
 public final class ServiceMapIdentities {
 
@@ -148,6 +152,36 @@ public final class ServiceMapIdentities {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(identity.getBytes(StandardCharsets.UTF_8));
             return prefix + HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is required by the Java platform", ex);
+        }
+    }
+
+    /** Length of the opaque {@link #flowId} digest: short enough to stay cheap, long enough (64 bits) that a
+     *  local dev tool's trace volume will never collide in practice. */
+    private static final int FLOW_ID_HEX_LENGTH = 16;
+
+    /**
+     * Derives the Live Flow map's opaque, one-way flow correlation id from a captured distributed-trace id.
+     *
+     * <p>This is the only place a trace id is ever touched for the service map: the result is a stable
+     * SHA-256-derived digest, never the trace id itself, so this contract cannot leak a raw identifier that
+     * some other system (an APM, a log aggregator) might treat as sensitive. Two interactions hash to the
+     * same flowId if and only if they shared the exact same trace id, which is all the browser needs to
+     * sequence causally-related evidence — it never needs to know or reconstruct the original id.</p>
+     *
+     * @param traceId the distributed-trace id active when an interaction completed, or {@code null}/blank
+     * @return the opaque flow id, or {@code null} when {@code traceId} is blank so an uncorrelated
+     *     interaction (for example, one captured with no tracer configured) never gets a synthetic flow
+     */
+    static String flowId(String traceId) {
+        String value = blankToNull(traceId);
+        if (value == null) {
+            return null;
+        }
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest, 0, FLOW_ID_HEX_LENGTH / 2);
         } catch (NoSuchAlgorithmException ex) {
             throw new IllegalStateException("SHA-256 is required by the Java platform", ex);
         }

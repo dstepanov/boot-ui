@@ -38,6 +38,14 @@ import java.util.List;
  * <p>It lives under the {@code /activity} path because Live Flow is a mode of the Live Activity panel, which
  * also means the shared panel enable/read-only policy and the Vert.x safety filter already cover it. The
  * endpoint is strictly read-only and performs no network call, probe, or scan.</p>
+ *
+ * <p><strong>Cache is honestly reported as unavailable here.</strong> Quarkus has no {@code
+ * CacheActivityRecorder}-equivalent bean at all — {@code quarkus-cache}'s built-in interceptors cast the
+ * resolved cache to an internal, non-public type, leaving no comparable interception seam (see
+ * {@code docs/QUARKUS-SUPPORT.md}), exactly as for the Live Activity feed's {@code CACHE} entry type. Rather
+ * than inventing a substitute capture path, {@link #sources()} always passes {@code cacheAvailable: false}
+ * with an empty event list, so this adapter's map never draws a cache dependency it cannot honestly back with
+ * evidence.</p>
  */
 @Path("/bootui/api/activity")
 public class LiveServiceMapResource {
@@ -108,7 +116,10 @@ public class LiveServiceMapResource {
                 kafkaAvailable,
                 kafkaAvailable ? kafkaRecorder.recent() : List.of(),
                 rabbitAvailable,
-                rabbitAvailable ? rabbitRecorder.recent() : List.of());
+                rabbitAvailable ? rabbitRecorder.recent() : List.of(),
+                // Quarkus never captures cache accesses (see this class's javadoc): no invented evidence.
+                false,
+                List.of());
     }
 
     /** Completed incoming requests, self-filtered and masked exactly as the HTTP Exchanges panel serves them. */

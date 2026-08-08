@@ -956,6 +956,16 @@ public abstract class AbstractBootUiApiConformanceTest {
                 if (!Set.of("OK", "FAILED").contains(interaction.path("outcome").asText())) {
                     failures.add(id + " carries an interaction with a non-contractual outcome");
                 }
+                // flowId is nullable-opaque: present only as text or JSON null, and it must never simply
+                // echo the interaction id (a canary against a future regression that forgets to hash it).
+                JsonNode flowId = interaction.path("flowId");
+                if (!flowId.isNull() && !flowId.isTextual()) {
+                    failures.add(id + " carries a flowId that is neither null nor text");
+                }
+                if (flowId.isTextual()
+                        && flowId.asText().equals(interaction.path("id").asText())) {
+                    failures.add(id + " carries a flowId equal to the interaction id");
+                }
             }
         }
 

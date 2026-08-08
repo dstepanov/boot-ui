@@ -194,12 +194,22 @@ not served start-to-finish on one dedicated worker thread.
 
 Live Activity's **Live flow** service map (`GET {api}/activity/service-map`) needed no reactive-specific work at all.
 `LiveServiceMapController` injects only beans both stacks register — the shared `HttpExchangesController` plus the
-engine's `ConnectionPoolService`, `SqlTraceRecorder`, `RestClientTraceRecorder`, `KafkaActivityRecorder`, and
-`RabbitActivityRecorder` — and returns a stable core DTO, so one class is registered in both `BootUiAutoConfiguration`
-and `BootUiReactiveAutoConfiguration` and Spring MVC and WebFlux serve a byte-identical map. All interpretation
-(identity normalization, configured-versus-observed state, conservative SQL attribution, and cardinality bounds) lives
+engine's `ConnectionPoolService`, `SqlTraceRecorder`, `RestClientTraceRecorder`, `KafkaActivityRecorder`,
+`RabbitActivityRecorder`, and `CacheActivityRecorder` — and returns a stable core DTO, so one class is registered in
+both `BootUiAutoConfiguration` and `BootUiReactiveAutoConfiguration` and Spring MVC and WebFlux serve a byte-identical
+map, including its cache dependency and opaque flow correlation. All interpretation (identity normalization,
+configured-versus-observed state, conservative SQL attribution, and cardinality bounds) lives
 in the framework-neutral `ServiceMapAssembler`. The map refreshes off the same `ReactiveBootUiChangeStream` SSE tick the
-feed already uses; it performs no additional polling and contacts nothing.
+feed already uses; it performs no additional polling and contacts nothing. Cache is reported as an available source only
+after the shared post-processor successfully instruments at least one `CacheManager`, so an enabled but disconnected
+recorder never overstates runtime support.
+
+The map's opaque `ServiceMapInteractionDto.flowId` — derived one-way from whatever trace id was active when an
+interaction completed — needed no reactive-specific work either. `BootUiReactiveAutoConfiguration` already installs
+the same `ReactiveOtelTraceIdProvider` on the HTTP exchange, SQL, REST-client, and cache recorders (the REST-client and
+cache wiring landed alongside their own capture support, in addition to the four capture points called out below), and
+`ServiceMapAssembler` only ever reads whatever trace id those recorders already captured, so causal flow correlation
+on this adapter is byte-identical to Spring MVC and Quarkus wherever OpenTelemetry is configured.
 
 `ReactiveActivitySignalFilter` takes an `ObjectProvider<ReactiveLiveActivityController>` rather than a direct
 reference: `WebFilter` beans are eagerly resolved by WebFlux at startup to build the filter chain, so a direct

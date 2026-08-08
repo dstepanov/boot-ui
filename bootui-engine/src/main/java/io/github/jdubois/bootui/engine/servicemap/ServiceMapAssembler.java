@@ -9,6 +9,7 @@ import io.github.jdubois.bootui.core.dto.ServiceMapNodeDto;
 import io.github.jdubois.bootui.core.dto.ServiceMapReport;
 import io.github.jdubois.bootui.core.dto.ServiceMapTruncationDto;
 import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
+import io.github.jdubois.bootui.engine.cache.CacheActivityEvent;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
@@ -39,7 +40,22 @@ import java.util.Set;
  *   <li>Kafka <em>producer</em> records group by topic; RabbitMQ <em>publisher</em> records group by
  *       exchange/routing destination. Consumption is inbound work, so it is never drawn as an outbound
  *       dependency.</li>
+ *   <li>Cache accesses (hit/miss/put/evict/clear) group by the safe cache-manager/cache-name identity that
+ *       already backs the Cache panel. Only where a Spring adapter's {@code CacheActivityRecorder} is
+ *       actually capturing evidence — Quarkus has no comparable interception seam for {@code quarkus-cache},
+ *       so it always reports {@code cacheAvailable: false} here, exactly as it does for the Live Activity
+ *       feed's {@code CACHE} entry type.</li>
  * </ul>
+ *
+ * <h2>Flow correlation</h2>
+ *
+ * <p>Every completed interaction that carries a distributed-trace id (inbound HTTP, SQL, outbound REST, and
+ * cache) is stamped with an opaque {@code flowId} derived one-way from that trace id
+ * ({@link ServiceMapIdentities#flowId}), so the browser can recognize interactions on different edges as one
+ * causal flow through the application and sequence their motion accordingly. The raw trace id is never
+ * carried by this contract. A blank trace id yields a {@code null} flowId. Messaging (Kafka, RabbitMQ)
+ * carries no trace id at capture time, so it is never correlated into a flow — it remains exactly as
+ * uncorrelated here as it is everywhere else in BootUI.</p>
  *
  * <h2>Honesty rules</h2>
  *
@@ -75,6 +91,7 @@ public final class ServiceMapAssembler {
     static final String PROTOCOL_JDBC = "JDBC";
     static final String PROTOCOL_KAFKA = "KAFKA";
     static final String PROTOCOL_RABBITMQ = "RABBITMQ";
+    static final String PROTOCOL_CACHE = "CACHE";
 
     static final String OUTCOME_NO_EVIDENCE = "NO_EVIDENCE";
     static final String OUTCOME_OBSERVED_OK = "OBSERVED_OK";
@@ -85,7 +102,8 @@ public final class ServiceMapAssembler {
 
     private static final String UNAVAILABLE_REASON =
             "No service map source is available. Enable HTTP exchange recording, REST client tracing, "
-                    + "connection pool reporting, SQL tracing, Kafka capture, or RabbitMQ capture to populate this map.";
+                    + "connection pool reporting, SQL tracing, Kafka capture, RabbitMQ capture, or cache activity "
+                    + "capture to populate this map.";
 
     /** Assembles one map. Callers may invoke this per request; it holds no state between calls. */
     public ServiceMapReport assemble(ServiceMapSources sources) {
@@ -103,7 +121,8 @@ public final class ServiceMapAssembler {
                 || evidence.jdbcPoolsAvailable()
                 || evidence.sqlAvailable()
                 || evidence.kafkaAvailable()
-                || evidence.rabbitAvailable();
+                || evidence.rabbitAvailable()
+                || evidence.cacheAvailable();
         if (!anySourceAvailable) {
             return new ServiceMapReport(
                     false,
@@ -121,6 +140,7 @@ public final class ServiceMapAssembler {
         Map<String, NodeBuilder> dependencies = new LinkedHashMap<>();
         collectOutboundHttp(evidence, dependencies, contributingSources, warnings);
         collectJdbc(evidence, dependencies, contributingSources, warnings);
+        collectCache(evidence, dependencies, contributingSources, warnings);
         collectKafka(evidence, dependencies, contributingSources, warnings);
         collectRabbit(evidence, dependencies, contributingSources, warnings);
 
@@ -210,7 +230,8 @@ public final class ServiceMapAssembler {
                     exchange.timestamp().toEpochMilli(),
                     safeMethod(exchange.method()),
                     failed,
-                    exchange.durationMs());
+                    exchange.durationMs(),
+                    exchange.traceId());
         }
         if (node.interactions == 0) {
             return null;
@@ -255,7 +276,12 @@ public final class ServiceMapAssembler {
             // is a failure too. Both are retained evidence, not a live health signal.
             boolean failed = !call.success() || (call.status() != null && call.status() >= 400);
             node.observe(
-                    "http:" + call.id(), call.timestamp(), safeMethod(call.method()), failed, call.durationMillis());
+                    "http:" + call.id(),
+                    call.timestamp(),
+                    safeMethod(call.method()),
+                    failed,
+                    call.durationMillis(),
+                    call.traceId());
             contributed = true;
         }
         if (contributed) {
@@ -369,7 +395,8 @@ public final class ServiceMapAssembler {
                     statement.timestamp(),
                     safeCategory(statement.category()),
                     !statement.success(),
-                    statement.durationMillis());
+                    statement.durationMillis(),
+                    statement.traceId());
         }
         contributingSources.add("SQL Trace");
     }
@@ -377,6 +404,72 @@ public final class ServiceMapAssembler {
     private static boolean dataSourceMatchesPool(String dataSourceName, HikariPoolDto pool) {
         String traced = ServiceMapIdentities.blankToNull(dataSourceName);
         return traced != null && (traced.equals(pool.beanName()) || traced.equals(pool.poolName()));
+    }
+
+    // ── Cache ────────────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Folds captured cache accesses (hit/miss/put/evict/clear) into one dependency node per safe
+     * cache-manager/cache-name identity — the same coarse grouping the Cache panel itself uses, never the
+     * accessed key or value.
+     *
+     * <p>Evidence is observed-only: {@link ServiceMapSources#cacheEvents()} carries only what a
+     * {@code CacheActivityRecorder} actually captured, never a declared-but-untouched cache list, so a
+     * cache node is {@code configured: false} exactly like the Kafka/RabbitMQ dependencies above unless a
+     * future source hands this assembler real, independent configuration evidence. A cache access has no
+     * failure concept of its own — a {@code MISS} is a normal, expected outcome, not a retained failure —
+     * so every cache interaction folds in as successful evidence.</p>
+     */
+    private void collectCache(
+            ServiceMapSources evidence,
+            Map<String, NodeBuilder> dependencies,
+            List<String> contributingSources,
+            List<String> warnings) {
+        if (!evidence.cacheAvailable() || evidence.cacheEvents().isEmpty()) {
+            return;
+        }
+        int unidentified = 0;
+        boolean contributed = false;
+        for (CacheActivityEvent event : evidence.cacheEvents()) {
+            if (event == null) {
+                continue;
+            }
+            String managerName = ServiceMapIdentities.blankToNull(event.managerName());
+            String cacheName = ServiceMapIdentities.blankToNull(event.cacheName());
+            if (cacheName == null) {
+                unidentified++;
+                continue;
+            }
+            String identity = (managerName == null ? "" : managerName) + "\u0000" + cacheName;
+            String label = managerName == null ? cacheName : managerName + " / " + cacheName;
+            NodeBuilder node = dependencies.computeIfAbsent(
+                    ServiceMapIdentities.stableId("cache:", identity),
+                    id -> new NodeBuilder(
+                                    id,
+                                    KIND_DEPENDENCY,
+                                    PROTOCOL_CACHE,
+                                    ServiceMapIdentities.truncate(label),
+                                    "Cache access",
+                                    false)
+                            .source(BootUiPanels.CACHE, "/cache", "Cache")
+                            .note("Observed cache access only. Keys and values are never mapped, only the "
+                                    + "coarse hit/miss/put/evict/clear operation."));
+            node.observe(
+                    "cache:" + event.seq(),
+                    event.timestampMillis(),
+                    event.operation().name(),
+                    false,
+                    null,
+                    event.traceId());
+            contributed = true;
+        }
+        if (contributed) {
+            contributingSources.add("Cache");
+        }
+        if (unidentified > 0) {
+            warnings.add(unidentified + " cache access" + (unidentified == 1 ? "" : "es")
+                    + " carried no cache name and " + (unidentified == 1 ? "is" : "are") + " not mapped.");
+        }
     }
 
     // ── Messaging ────────────────────────────────────────────────────────────────────────────────
@@ -407,12 +500,15 @@ public final class ServiceMapAssembler {
                     id -> new NodeBuilder(id, KIND_DEPENDENCY, PROTOCOL_KAFKA, label, "Produced topic", false)
                             .source(BootUiPanels.KAFKA, "/kafka", "Kafka")
                             .note("Producer evidence only. Consumed records are inbound work, not a dependency."));
+            // Kafka's CapturedMessage carries no trace id at capture time, so it never joins a flow -
+            // exactly as uncorrelated everywhere else messaging appears in BootUI.
             node.observe(
                     "kafka:" + message.id(),
                     message.timestamp(),
                     "PRODUCE",
                     !message.success(),
-                    message.durationMillis());
+                    message.durationMillis(),
+                    null);
             contributed = true;
         }
         if (contributed) {
@@ -451,12 +547,15 @@ public final class ServiceMapAssembler {
                     id -> new NodeBuilder(id, KIND_DEPENDENCY, PROTOCOL_RABBITMQ, label, "Publish destination", false)
                             .source(BootUiPanels.RABBITMQ, "/rabbitmq", "RabbitMQ")
                             .note("Publisher evidence only. Consumed messages are inbound work, not a dependency."));
+            // RabbitMQ's CapturedMessage carries no trace id at capture time either, so it never joins
+            // a flow, matching Kafka above.
             node.observe(
                     "rabbitmq:" + message.id(),
                     message.timestamp(),
                     "PUBLISH",
                     !message.success(),
-                    message.durationMillis());
+                    message.durationMillis(),
+                    null);
             contributed = true;
         }
         if (contributed) {
@@ -549,6 +648,23 @@ public final class ServiceMapAssembler {
         }
 
         private void observe(String interactionId, long timestamp, String operation, boolean failed, Long durationMs) {
+            observe(interactionId, timestamp, operation, failed, durationMs, null);
+        }
+
+        /**
+         * Records one completed interaction, stamping it with the opaque {@code flowId} derived from
+         * {@code traceId} (see {@link ServiceMapIdentities#flowId}) so the browser can recognize this
+         * interaction as part of the same causal flow as others sharing that trace. {@code traceId} is
+         * {@code null} for sources that never carry one (Kafka, RabbitMQ), which is why the single-argument
+         * overload above exists for them.
+         */
+        private void observe(
+                String interactionId,
+                long timestamp,
+                String operation,
+                boolean failed,
+                Long durationMs,
+                String traceId) {
             interactions++;
             if (failed) {
                 failures++;
@@ -558,7 +674,12 @@ public final class ServiceMapAssembler {
             }
             operations.add(operation);
             recent.add(new ServiceMapInteractionDto(
-                    interactionId, timestamp, operation, failed ? "FAILED" : "OK", durationMs));
+                    interactionId,
+                    timestamp,
+                    operation,
+                    failed ? "FAILED" : "OK",
+                    durationMs,
+                    ServiceMapIdentities.flowId(traceId)));
         }
 
         private String outcome() {
@@ -593,7 +714,8 @@ public final class ServiceMapAssembler {
         private boolean supportsDistinctOperations() {
             return PROTOCOL_HTTP.equals(protocol)
                     || PROTOCOL_HTTP_INBOUND.equals(protocol)
-                    || PROTOCOL_JDBC.equals(protocol);
+                    || PROTOCOL_JDBC.equals(protocol)
+                    || PROTOCOL_CACHE.equals(protocol);
         }
 
         private ServiceMapEdgeDto toEdge(String fromId, String toId, String direction) {

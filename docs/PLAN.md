@@ -498,6 +498,49 @@ Architecture and sequencing:
 - Keep graph layout in the Vue client and report assembly, grouping, sorting, bounds, and interpretation in the engine.
   Do not introduce a graph database or a new visualization dependency unless native SVG proves insufficient.
 
+**Later increment — opaque flow correlation, Cache as a first-class dependency, and causal motion sequencing.** The
+map's animation originally treated every stable edge's new evidence as an independent blip; it had no notion that an
+inbound request, a cache access, a SQL statement, and an outbound call could be evidence of the very same request's
+path through the application. This increment closes that gap without adding any new capture:
+
+- `ServiceMapAssembler` now derives an opaque `ServiceMapInteractionDto.flowId` from whatever distributed-trace id
+  (already captured by the HTTP Exchanges, SQL Trace, REST Client, and Cache recorders) was active when each
+  interaction completed — one-way SHA-256 (`ServiceMapIdentities.flowId`), never the raw trace id, and `null` for a
+  blank/absent trace or for Kafka/RabbitMQ (which never carry a trace id at capture time and stay uncorrelated).
+  Interactions sharing a trace share a `flowId`, letting the client recognize one causal flow across edges instead of
+  treating every edge as unrelated.
+- **Cache joins the map as a first-class dependency (Spring MVC and Spring WebFlux only).** The same
+  `CacheActivityRecorder` behind the Cache panel and Live Activity's `CACHE` entries now also feeds
+  `ServiceMapSources.cacheEvents`, gated identically (Cache panel enabled *and* the recorder itself capturing).
+  Accesses group by the safe cache-manager/cache-name identity — never the accessed key or value — and surface the
+  same `HIT`/`MISS`/`PUT`/`EVICT`/`CLEAR` operations Live Activity already shows. Cache dependencies are
+  observed-only (`configured: false`), the same honesty rule Kafka/RabbitMQ dependencies use, since no independent
+  cache-configuration evidence is wired in yet. A `MISS` is never a retained failure, since it is a normal outcome.
+  Quarkus continues to honestly report `cacheAvailable: false` — it has no comparable interception seam for
+  `quarkus-cache` (see `docs/QUARKUS-SUPPORT.md`) — with no invented capture path. One notable side effect: because
+  `ServiceMapAssembler` is fully shared, Quarkus's and Spring WebFlux's existing OpenTelemetry-backed trace id
+  stamping on HTTP/SQL/REST capture already gives both adapters the same `flowId` correlation for those three
+  sources at no extra cost; only cache participates on Spring MVC/WebFlux alone.
+- **A new pure `sequenceFlowPulses` helper (`bootui-ui`)** paces a batch of freshly diffed pulses: within a shared,
+  non-null `flowId`, the inbound leg always starts immediately and downstream pulses start only once that inbound pulse
+  would have finished arriving at the application. Downstream completions replay in ascending retained timestamp order
+  (cache precedes JDBC/outbound HTTP only as an equal-millisecond tie-break), so the UI never invents an execution order,
+  and further downstream pulses in the same flow are staggered by a small, bounded step. Pulses with no `flowId`, and any
+  flow whose current batch carries no retained inbound pulse, are left untouched — they animate immediately exactly
+  as before, so an orphaned downstream pulse never waits for an inbound arrival that batch will never carry. The
+  animation queue's existing concurrency and per-edge caps apply unchanged regardless of sequencing, so a
+  causally-sequenced burst can never exceed the same bounds an unrelated one would.
+- **Slow interactions are now unmistakable by timing, not color alone:** duration itself now differs by tone — a calm
+  amber pulse (with a restrained trailing halo) for a slow completion runs 1200–1500ms, a normal completion
+  650–850ms, and a failure 900–1100ms — and a non-color "slow" text label appears in the node detail view and in
+  live-region announcements alongside the existing amber/red styling. A sequenced pulse's CSS keyframe keeps it fully
+  transparent for its entire delay (`animation-fill-mode: both`), so it never flashes into view before its causal
+  predecessor has arrived; every pulse still plays exactly once, linearly, with no bounce, loop, or drift.
+- Reduced motion is deliberately unchanged in timing: it never sequences or delays anything (there is no travel to
+  pace), so every changed edge is still emphasized immediately. Its live-region announcement was extended with a
+  `describeFlowSequence` narration so a screen-reader user gets the same causal story — "Flow: &lt;inbound&gt; →
+  &lt;cache&gt; → &lt;outbound&gt;" — that sighted users read from the sequenced motion.
+
 Complexity and risks:
 
 - **Estimated complexity: medium for the MVC MVP; medium-high for a shared production feature.** Aggregation is

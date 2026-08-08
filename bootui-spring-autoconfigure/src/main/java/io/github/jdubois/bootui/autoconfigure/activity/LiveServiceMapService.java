@@ -10,6 +10,8 @@ import io.github.jdubois.bootui.core.dto.HttpExchangesReport;
 import io.github.jdubois.bootui.core.dto.RestClientTraceEntryDto;
 import io.github.jdubois.bootui.core.dto.ServiceMapReport;
 import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
+import io.github.jdubois.bootui.engine.cache.CacheActivityEvent;
+import io.github.jdubois.bootui.engine.cache.CacheActivityRecorder;
 import io.github.jdubois.bootui.engine.datasource.ConnectionPoolService;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
@@ -28,11 +30,15 @@ import org.springframework.beans.factory.ObjectProvider;
  *
  * <p>Deliberately identical on the servlet and reactive stacks: it reads only beans both stacks register
  * (the shared HTTP Exchanges controller and the engine's pool service and capture recorders), so Spring MVC
- * and Spring WebFlux produce the same map from the same evidence with no stack-specific branch.</p>
+ * and Spring WebFlux produce the same map from the same evidence with no stack-specific branch. That
+ * includes the {@link CacheActivityRecorder} — declared once in the shared {@code BootUiEngineConfiguration}
+ * for both stacks — so cache dependencies and their opaque flow correlation behave identically on Spring MVC
+ * and Spring WebFlux; Quarkus has no equivalent recorder and reports {@code cacheAvailable: false}.</p>
  *
  * <p>This class adds no instrumentation, performs no external call, and never re-masks or re-shapes what a
  * source already produced. Every source is gated on its own panel being enabled <em>and</em> its capture
- * actually feeding, so a disabled panel contributes nothing rather than appearing as a silent dependency.</p>
+ * actually able to feed it, so a disabled panel or an uninstrumented recorder contributes nothing
+ * rather than appearing as a silent dependency.</p>
  */
 public class LiveServiceMapService {
 
@@ -42,6 +48,7 @@ public class LiveServiceMapService {
     private final ObjectProvider<SqlTraceRecorder> sqlTrace;
     private final ObjectProvider<KafkaActivityRecorder> kafka;
     private final ObjectProvider<RabbitActivityRecorder> rabbit;
+    private final ObjectProvider<CacheActivityRecorder> cacheActivity;
     private final BootUiProperties properties;
     private final BootUiExposure exposure;
     private final Predicate<String> beanTypePresent;
@@ -54,6 +61,7 @@ public class LiveServiceMapService {
             ObjectProvider<SqlTraceRecorder> sqlTrace,
             ObjectProvider<KafkaActivityRecorder> kafka,
             ObjectProvider<RabbitActivityRecorder> rabbit,
+            ObjectProvider<CacheActivityRecorder> cacheActivity,
             BootUiProperties properties,
             BootUiExposure exposure,
             Predicate<String> beanTypePresent) {
@@ -63,6 +71,7 @@ public class LiveServiceMapService {
         this.sqlTrace = sqlTrace;
         this.kafka = kafka;
         this.rabbit = rabbit;
+        this.cacheActivity = cacheActivity;
         this.properties = properties;
         this.exposure = exposure;
         this.beanTypePresent = beanTypePresent;
@@ -85,6 +94,7 @@ public class LiveServiceMapService {
         List<String> tracedDataSources = sqlRecorder == null ? List.of() : sqlRecorder.dataSourceNames();
         KafkaActivityRecorder kafkaRecorder = kafkaRecorder();
         RabbitActivityRecorder rabbitRecorder = rabbitRecorder();
+        List<CacheActivityEvent> cacheEvents = cacheEvents();
 
         return new ServiceMapSources(
                 inbound != null,
@@ -99,7 +109,9 @@ public class LiveServiceMapService {
                 kafkaRecorder != null,
                 kafkaRecorder == null ? List.of() : kafkaRecorder.recent(),
                 rabbitRecorder != null,
-                rabbitRecorder == null ? List.of() : rabbitRecorder.recent());
+                rabbitRecorder == null ? List.of() : rabbitRecorder.recent(),
+                cacheEvents != null,
+                cacheEvents == null ? List.of() : cacheEvents);
     }
 
     /** Completed incoming requests, already self-filtered and masked by the HTTP Exchanges panel. */
@@ -172,5 +184,23 @@ public class LiveServiceMapService {
         }
         RabbitActivityRecorder recorder = rabbit.getIfAvailable();
         return recorder != null && recorder.isEnabled() ? recorder : null;
+    }
+
+    /**
+     * Captured cache accesses, gathered only when the dedicated Cache panel is enabled <em>and</em> its
+     * {@link CacheActivityRecorder} is itself capturing through at least one successfully instrumented
+     * manager. Returns {@code null} when any gate is closed, so the assembler reports the source as
+     * entirely absent; returns the recorder's own (possibly empty) bounded buffer otherwise, so an
+     * instrumented-but-so-far-silent recorder still counts as an available source with no traffic yet.
+     */
+    private List<CacheActivityEvent> cacheEvents() {
+        if (!properties.isPanelEnabled(BootUiPanels.CACHE)) {
+            return null;
+        }
+        CacheActivityRecorder recorder = cacheActivity.getIfAvailable();
+        if (recorder == null || !recorder.isEnabled() || !recorder.hasInstrumentedManager()) {
+            return null;
+        }
+        return recorder.recentEvents();
     }
 }

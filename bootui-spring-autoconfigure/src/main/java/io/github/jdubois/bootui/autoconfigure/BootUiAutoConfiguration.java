@@ -582,6 +582,11 @@ public class BootUiAutoConfiguration {
     }
 
     @Bean
+    public HttpExchangeTraceRegistry bootUiHttpExchangeTraceRegistry(BootUiProperties properties) {
+        return new HttpExchangeTraceRegistry(properties.getHttpExchanges().getMaxExchanges());
+    }
+
+    @Bean
     public SecurityEventCorrelationRegistry bootUiSecurityEventCorrelationRegistry(BootUiProperties properties) {
         return new SecurityEventCorrelationRegistry(properties.getActivity().getMaxEntries());
     }
@@ -746,9 +751,9 @@ public class BootUiAutoConfiguration {
 
     @Bean
     public FilterRegistrationBean<RequestCorrelationFilter> bootUiRequestCorrelationFilterRegistration(
-            RequestCorrelationRegistry registry, BootUiProperties properties) {
-        FilterRegistrationBean<RequestCorrelationFilter> registration =
-                new FilterRegistrationBean<>(new RequestCorrelationFilter(registry, properties.getPath()));
+            RequestCorrelationRegistry registry, HttpExchangeTraceRegistry traceRegistry, BootUiProperties properties) {
+        FilterRegistrationBean<RequestCorrelationFilter> registration = new FilterRegistrationBean<>(
+                new RequestCorrelationFilter(registry, traceRegistry, properties.getPath()));
         registration.addUrlPatterns("/*");
         registration.setOrder(org.springframework.core.Ordered.HIGHEST_PRECEDENCE + 100);
         registration.setName("bootUiRequestCorrelationFilter");

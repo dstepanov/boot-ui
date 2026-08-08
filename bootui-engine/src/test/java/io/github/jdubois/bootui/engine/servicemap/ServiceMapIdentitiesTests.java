@@ -99,4 +99,32 @@ class ServiceMapIdentitiesTests {
                 .hasSize(ServiceMapIdentities.MAX_IDENTITY_LENGTH)
                 .endsWith("…");
     }
+
+    @Test
+    void flowIdIsNullForABlankOrAbsentTraceId() {
+        assertThat(ServiceMapIdentities.flowId(null)).isNull();
+        assertThat(ServiceMapIdentities.flowId("")).isNull();
+        assertThat(ServiceMapIdentities.flowId("   ")).isNull();
+    }
+
+    @Test
+    void flowIdIsStableAndNeverEqualToTheRawTraceId() {
+        String traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
+
+        String first = ServiceMapIdentities.flowId(traceId);
+        String second = ServiceMapIdentities.flowId(traceId);
+
+        assertThat(first).isNotNull().isNotEqualTo(traceId).doesNotContain(traceId);
+        assertThat(second).isEqualTo(first);
+    }
+
+    @Test
+    void flowIdDiffersForDifferentTraceIdsAndIgnoresIncidentalWhitespace() {
+        String flowA = ServiceMapIdentities.flowId("trace-a");
+        String flowB = ServiceMapIdentities.flowId("trace-b");
+        String flowATrimmed = ServiceMapIdentities.flowId("  trace-a  ");
+
+        assertThat(flowA).isNotEqualTo(flowB);
+        assertThat(flowATrimmed).isEqualTo(flowA);
+    }
 }

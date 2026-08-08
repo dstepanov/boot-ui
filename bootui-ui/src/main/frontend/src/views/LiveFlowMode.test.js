@@ -2,6 +2,7 @@ import {flushPromises, mount} from '@vue/test-utils'
 import {afterEach, describe, expect, it, vi} from 'vitest'
 
 import LiveFlowMode from './LiveFlowMode.vue'
+import {MAX_CONCURRENT_PULSES, PULSE_DURATION_OK_MS} from '../utils/serviceMap.js'
 
 function node(overrides = {}) {
   return {
@@ -300,6 +301,41 @@ describe('LiveFlowMode', () => {
     expect(wrapper.text()).toContain('No mapped dependency matches these filters')
   })
 
+  it('renders a cache dependency, filters to it via the protocol dropdown, and shows its evidence', async () => {
+    const cacheNode = node({
+      id: 'cache:1',
+      protocol: 'CACHE',
+      label: 'cacheManager / products',
+      detail: 'Cache access',
+      sourcePanelId: 'cache',
+      sourceRoute: '/cache',
+      sourceLabel: 'Cache',
+      note: 'Observed cache access only. Keys and values are never mapped, only the coarse operation.'
+    })
+    const cacheEdge = edge({
+      id: 'app->cache:1',
+      toId: 'cache:1',
+      protocol: 'CACHE',
+      recentInteractions: [{id: 'cache:1', timestamp: 1700000000000, operation: 'HIT', outcome: 'OK', durationMs: null}]
+    })
+    vi.stubGlobal('fetch', stubFetch(serviceMap({nodes: [node(), cacheNode], edges: [edge(), cacheEdge]})))
+    stubMatchMedia(false)
+
+    wrapper = mountFlow()
+    await flushPromises()
+
+    expect(wrapper.find('.flow-node--cache').exists()).toBe(true)
+
+    await wrapper.find('#flow-protocol').setValue('CACHE')
+    expect(wrapper.findAll('.flow-node--http')).toHaveLength(0)
+    expect(wrapper.findAll('.flow-node--cache')).toHaveLength(1)
+
+    await wrapper.find('.flow-node--cache').trigger('click')
+    expect(wrapper.find('.flow-detail').text()).toContain('cacheManager / products')
+    expect(wrapper.find('.flow-detail').text()).toContain('Keys and values are never mapped')
+    expect(wrapper.find('.flow-detail__link').text()).toContain('Cache')
+  })
+
   it('never animates on a first load', async () => {
     vi.stubGlobal('fetch', stubFetch(serviceMap()))
     stubMatchMedia(false)
@@ -384,6 +420,169 @@ describe('LiveFlowMode', () => {
     await wrapper.setProps({refreshTick: 2})
     await flushPromises()
     expect(wrapper.findAll('.flow-pulse')).toHaveLength(1)
+  })
+
+  /** Two edges - a retained inbound lane and a cache dependency - sharing the flow's evidence trail. */
+  function sequencedFlowMap(recentInboundInteractions, recentCacheInteractions) {
+    const inboundNode = node({
+      id: 'inbound:http',
+      kind: 'INBOUND',
+      protocol: 'HTTP_INBOUND',
+      label: 'Local HTTP clients'
+    })
+    const cacheNode = node({id: 'cache:1', protocol: 'CACHE', label: 'cacheManager / products'})
+    const inboundEdge = edge({
+      id: 'inbound:http->app',
+      fromId: 'inbound:http',
+      toId: 'app',
+      protocol: 'HTTP_INBOUND',
+      direction: 'INBOUND',
+      recentInteractions: recentInboundInteractions
+    })
+    const cacheEdge = edge({
+      id: 'app->cache:1',
+      toId: 'cache:1',
+      protocol: 'CACHE',
+      recentInteractions: recentCacheInteractions
+    })
+    return serviceMap({nodes: [inboundNode, cacheNode], edges: [inboundEdge, cacheEdge]})
+  }
+
+  it('sequences a shared flow so the downstream cache pulse starts only after the inbound pulse would arrive', async () => {
+    const initial = sequencedFlowMap([], [])
+    const next = sequencedFlowMap(
+      [{id: 'inbound:1', timestamp: 1700000001000, operation: 'GET', outcome: 'OK', durationMs: 12, flowId: 'flow-1'}],
+      [{id: 'cache:1', timestamp: 1700000001000, operation: 'HIT', outcome: 'OK', durationMs: null, flowId: 'flow-1'}]
+    )
+    vi.stubGlobal('fetch', stubFetch(initial, next))
+    stubMatchMedia(false)
+
+    wrapper = mountFlow({props: {refreshTick: 0}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await flushPromises()
+
+    const pulses = wrapper.findAll('.flow-pulse')
+    expect(pulses).toHaveLength(2)
+    // Inbound is the flow's first stage and always starts immediately; cache only starts once the
+    // inbound pulse would have finished arriving at the application - its own travel duration later.
+    // A delayed pulse's CSS keyframe keeps it fully transparent for its `--flow-delay`, so it never
+    // flashes into view before its causal predecessor has actually arrived.
+    expect(pulses[0].attributes('style')).toContain('--flow-delay: 0ms')
+    expect(pulses[1].attributes('style')).toContain(`--flow-delay: ${PULSE_DURATION_OK_MS}ms`)
+  })
+
+  it('never sequences (never delays) a downstream pulse when its batch carries no inbound pulse', async () => {
+    const initial = sequencedFlowMap(
+      [{id: 'inbound:1', timestamp: 1700000000000, operation: 'GET', outcome: 'OK', durationMs: 12, flowId: 'flow-1'}],
+      []
+    )
+    const next = sequencedFlowMap(
+      // Same inbound interaction id already seen: nothing new on that edge this tick.
+      [{id: 'inbound:1', timestamp: 1700000000000, operation: 'GET', outcome: 'OK', durationMs: 12, flowId: 'flow-1'}],
+      [{id: 'cache:1', timestamp: 1700000001000, operation: 'HIT', outcome: 'OK', durationMs: null, flowId: 'flow-1'}]
+    )
+    vi.stubGlobal('fetch', stubFetch(initial, next))
+    stubMatchMedia(false)
+
+    wrapper = mountFlow({props: {refreshTick: 0}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await flushPromises()
+
+    const pulses = wrapper.findAll('.flow-pulse')
+    expect(pulses).toHaveLength(1)
+    expect(pulses[0].attributes('style')).toContain('--flow-delay: 0ms')
+  })
+
+  it('narrates the complete causal flow in the polite live region even under reduced motion', async () => {
+    const initial = sequencedFlowMap([], [])
+    const next = sequencedFlowMap(
+      [
+        {id: 'inbound:1', timestamp: 1700000001000, operation: 'GET', outcome: 'OK', durationMs: null, flowId: 'flow-1'}
+      ],
+      [{id: 'cache:1', timestamp: 1700000001000, operation: 'HIT', outcome: 'OK', durationMs: null, flowId: 'flow-1'}]
+    )
+    vi.stubGlobal('fetch', stubFetch(initial, next))
+    stubMatchMedia(true)
+
+    wrapper = mountFlow({props: {refreshTick: 0}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await flushPromises()
+
+    // Reduced motion never sequences/delays - the map only replaces travel with a static edge highlight -
+    // but the announcement still tells the complete causal story in one sentence.
+    expect(wrapper.findAll('.flow-pulse')).toHaveLength(0)
+    const message = wrapper.find('[aria-live="polite"]').text()
+    expect(message).toContain('Flow: Local HTTP clients GET')
+    expect(message).toContain('cacheManager / products HIT')
+  })
+
+  it('keeps the animation queue bounded even when a fan-out burst shares one causally-sequenced flow', async () => {
+    // Each downstream dependency is its own edge (the per-edge fresh-pulse cap would otherwise mask the
+    // queue's own concurrency bound), all correlated to the same inbound leg by one shared flowId.
+    const downstreamCount = MAX_CONCURRENT_PULSES + 4
+    const inboundNode = node({
+      id: 'inbound:http',
+      kind: 'INBOUND',
+      protocol: 'HTTP_INBOUND',
+      label: 'Local HTTP clients'
+    })
+    const inboundEdge = (recentInteractions) =>
+      edge({
+        id: 'inbound:http->app',
+        fromId: 'inbound:http',
+        toId: 'app',
+        protocol: 'HTTP_INBOUND',
+        direction: 'INBOUND',
+        recentInteractions
+      })
+    const downstreamNodes = Array.from({length: downstreamCount}, (unused, index) =>
+      node({id: `jdbc:${index}`, protocol: 'JDBC', label: `pool-${index}`})
+    )
+    const downstreamEdges = (fresh) =>
+      Array.from({length: downstreamCount}, (unused, index) =>
+        edge({
+          id: `app->jdbc:${index}`,
+          toId: `jdbc:${index}`,
+          protocol: 'JDBC',
+          recentInteractions: fresh
+            ? [
+                {
+                  id: `sql:${index}`,
+                  timestamp: 1700000001000 + index,
+                  operation: 'SELECT',
+                  outcome: 'OK',
+                  durationMs: 4,
+                  flowId: 'flow-1'
+                }
+              ]
+            : []
+        })
+      )
+    const initial = serviceMap({
+      nodes: [inboundNode, ...downstreamNodes],
+      edges: [inboundEdge([]), ...downstreamEdges(false)]
+    })
+    const next = serviceMap({
+      nodes: [inboundNode, ...downstreamNodes],
+      edges: [
+        inboundEdge([
+          {id: 'inbound:1', timestamp: 1700000001000, operation: 'GET', outcome: 'OK', durationMs: 12, flowId: 'flow-1'}
+        ]),
+        ...downstreamEdges(true)
+      ]
+    })
+    vi.stubGlobal('fetch', stubFetch(initial, next))
+    stubMatchMedia(false)
+
+    wrapper = mountFlow({props: {refreshTick: 0}})
+    await flushPromises()
+    await wrapper.setProps({refreshTick: 1})
+    await flushPromises()
+
+    expect(wrapper.findAll('.flow-pulse').length).toBeLessThanOrEqual(MAX_CONCURRENT_PULSES)
   })
 
   it('reports truncation visibly instead of silently dropping dependencies', async () => {

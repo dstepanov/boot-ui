@@ -4,6 +4,7 @@ import io.github.jdubois.bootui.core.dto.HikariPoolDto;
 import io.github.jdubois.bootui.core.dto.HttpExchangeDto;
 import io.github.jdubois.bootui.core.dto.RestClientTraceEntryDto;
 import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
+import io.github.jdubois.bootui.engine.cache.CacheActivityEvent;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
 import java.util.List;
@@ -34,6 +35,11 @@ import java.util.List;
  * @param kafkaMessages captured Kafka messages; only producer records become outbound dependencies
  * @param rabbitAvailable whether the RabbitMQ panel contributed
  * @param rabbitMessages captured AMQP messages; only publisher records become outbound dependencies
+ * @param cacheAvailable whether the Cache panel is enabled and its {@code CacheActivityRecorder} is
+ *     actually capturing evidence on this adapter; always {@code false} on Quarkus, which has no
+ *     interception seam for {@code quarkus-cache}
+ * @param cacheEvents captured cache accesses (hit/miss/put/evict/clear), already bounded by the
+ *     recorder's own ring buffer; never carries a raw key or value
  */
 public record ServiceMapSources(
         boolean inboundAvailable,
@@ -48,7 +54,9 @@ public record ServiceMapSources(
         boolean kafkaAvailable,
         List<KafkaActivityRecorder.CapturedMessage> kafkaMessages,
         boolean rabbitAvailable,
-        List<RabbitActivityRecorder.CapturedMessage> rabbitMessages) {
+        List<RabbitActivityRecorder.CapturedMessage> rabbitMessages,
+        boolean cacheAvailable,
+        List<CacheActivityEvent> cacheEvents) {
 
     public ServiceMapSources {
         inboundExchanges = inboundExchanges == null ? List.of() : List.copyOf(inboundExchanges);
@@ -58,12 +66,46 @@ public record ServiceMapSources(
         sqlDataSourceNames = sqlDataSourceNames == null ? List.of() : List.copyOf(sqlDataSourceNames);
         kafkaMessages = kafkaMessages == null ? List.of() : List.copyOf(kafkaMessages);
         rabbitMessages = rabbitMessages == null ? List.of() : List.copyOf(rabbitMessages);
+        cacheEvents = cacheEvents == null ? List.of() : List.copyOf(cacheEvents);
+    }
+
+    /** Binary/source-compatible constructor for adapters compiled before cache evidence was added. */
+    public ServiceMapSources(
+            boolean inboundAvailable,
+            List<HttpExchangeDto> inboundExchanges,
+            boolean restClientAvailable,
+            List<RestClientTraceEntryDto> restClientCalls,
+            boolean jdbcPoolsAvailable,
+            List<HikariPoolDto> jdbcPools,
+            boolean sqlAvailable,
+            List<SqlTraceEntryDto> sqlStatements,
+            List<String> sqlDataSourceNames,
+            boolean kafkaAvailable,
+            List<KafkaActivityRecorder.CapturedMessage> kafkaMessages,
+            boolean rabbitAvailable,
+            List<RabbitActivityRecorder.CapturedMessage> rabbitMessages) {
+        this(
+                inboundAvailable,
+                inboundExchanges,
+                restClientAvailable,
+                restClientCalls,
+                jdbcPoolsAvailable,
+                jdbcPools,
+                sqlAvailable,
+                sqlStatements,
+                sqlDataSourceNames,
+                kafkaAvailable,
+                kafkaMessages,
+                rabbitAvailable,
+                rabbitMessages,
+                false,
+                List.of());
     }
 
     /** An entirely absent evidence set, used when every source panel is disabled or unavailable. */
     public static ServiceMapSources empty() {
         return new ServiceMapSources(
                 false, List.of(), false, List.of(), false, List.of(), false, List.of(), List.of(), false, List.of(),
-                false, List.of());
+                false, List.of(), false, List.of());
     }
 }
