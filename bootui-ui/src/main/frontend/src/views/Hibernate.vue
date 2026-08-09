@@ -3,7 +3,7 @@ import {computed, ref} from 'vue'
 import {getJson} from '../api.js'
 import {useAdvisorPanel} from '../utils/useAdvisorPanel.js'
 import {useAutoRefresh} from '../utils/useAutoRefresh.js'
-import {formatNumber} from '../utils/format.js'
+import {formatNumber, formatRelative} from '../utils/format.js'
 import {describeLoadError} from '../utils/loadError.js'
 import {panelProps} from '../utils/panelState.js'
 import AdvisorSummary from './components/AdvisorSummary.vue'
@@ -38,6 +38,9 @@ async function fetchStatistics() {
 }
 
 const statisticsTabActive = computed(() => tab.value === 'statistics')
+const statisticsLastFetchedText = computed(() =>
+  statisticsLastFetched.value ? `Updated ${formatRelative(statisticsLastFetched.value)}` : null
+)
 
 const {
   autoRefresh: statisticsAutoRefresh,
@@ -308,6 +311,7 @@ function showStatistics() {
           Live counters from Hibernate's <code>Statistics</code> API for the application's <code>SessionFactory</code>.
         </div>
         <div class="d-flex align-items-center gap-2">
+          <span v-if="statisticsLastFetchedText" class="text-muted small">{{ statisticsLastFetchedText }}</span>
           <button
             class="btn btn-sm btn-outline-secondary"
             type="button"
@@ -448,27 +452,20 @@ function showStatistics() {
                   >
                     {{ statistics.statistics.queryExecutionMaxTimeQueryString }}
                   </li>
-                  <li
-                    v-if="statistics.statistics.queryCacheEnabled"
-                    class="list-group-item d-flex justify-content-between"
-                  >
-                    <span>Query cache hits</span>
-                    <span class="font-monospace">{{ formatNumber(statistics.statistics.queryCacheHitCount) }}</span>
-                  </li>
-                  <li
-                    v-if="statistics.statistics.queryCacheEnabled"
-                    class="list-group-item d-flex justify-content-between"
-                  >
-                    <span>Query cache misses</span>
-                    <span class="font-monospace">{{ formatNumber(statistics.statistics.queryCacheMissCount) }}</span>
-                  </li>
-                  <li
-                    v-if="statistics.statistics.queryCacheEnabled"
-                    class="list-group-item d-flex justify-content-between"
-                  >
-                    <span>Query cache puts</span>
-                    <span class="font-monospace">{{ formatNumber(statistics.statistics.queryCachePutCount) }}</span>
-                  </li>
+                  <template v-if="statistics.statistics.queryCacheEnabled">
+                    <li class="list-group-item d-flex justify-content-between">
+                      <span>Query cache hits</span>
+                      <span class="font-monospace">{{ formatNumber(statistics.statistics.queryCacheHitCount) }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                      <span>Query cache misses</span>
+                      <span class="font-monospace">{{ formatNumber(statistics.statistics.queryCacheMissCount) }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between">
+                      <span>Query cache puts</span>
+                      <span class="font-monospace">{{ formatNumber(statistics.statistics.queryCachePutCount) }}</span>
+                    </li>
+                  </template>
                   <li v-else class="list-group-item text-muted small">
                     Query cache is not in use — no query has been marked cacheable yet, or it is disabled.
                   </li>
