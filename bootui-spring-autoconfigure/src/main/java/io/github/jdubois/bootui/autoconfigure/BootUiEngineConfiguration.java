@@ -15,6 +15,7 @@ import io.github.jdubois.bootui.autoconfigure.health.SpringHealthGuidance;
 import io.github.jdubois.bootui.autoconfigure.health.SpringHealthProvider;
 import io.github.jdubois.bootui.autoconfigure.hibernate.SpringHibernateDiscovery;
 import io.github.jdubois.bootui.autoconfigure.hibernate.SpringHibernatePropertyLookup;
+import io.github.jdubois.bootui.autoconfigure.hibernate.SpringHibernateStatisticsProvider;
 import io.github.jdubois.bootui.autoconfigure.idle.IdleReclaimable;
 import io.github.jdubois.bootui.autoconfigure.jms.JmsListenerCaptureBeanPostProcessor;
 import io.github.jdubois.bootui.autoconfigure.jms.JmsProducerCaptureBeanPostProcessor;
@@ -54,6 +55,7 @@ import io.github.jdubois.bootui.engine.health.HealthService;
 import io.github.jdubois.bootui.engine.heapdump.HeapDumpService;
 import io.github.jdubois.bootui.engine.heapdump.HeapDumpSettings;
 import io.github.jdubois.bootui.engine.hibernate.HibernateScanner;
+import io.github.jdubois.bootui.engine.hibernate.HibernateStatisticsService;
 import io.github.jdubois.bootui.engine.jms.JmsActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.liquibase.LiquibaseService;
@@ -416,6 +418,23 @@ public class BootUiEngineConfiguration {
                             environment, SpringHibernatePropertyLookup.isServletWebApplication(applicationContext)),
                     () -> List.of(environment.getActiveProfiles()),
                     Clock.systemUTC());
+        }
+
+        /**
+         * The Hibernate Session Monitoring panel service, additive to the static Hibernate Advisor above.
+         * Gated identically (JPA + Hibernate on the classpath): the {@code org.hibernate.SessionFactory}
+         * /{@code org.hibernate.stat.Statistics}-typed {@link SpringHibernateStatisticsProvider} lives only
+         * in this nested, conditional configuration, so those Hibernate ORM types are never linked in a
+         * Hibernate-absent application (R2). The engine {@code HibernateStatisticsService} owns the neutral
+         * shaping (unavailable-report gating, DTO mapping); the provider owns resolving the
+         * {@code EntityManagerFactory} bean and reading its live statistics.
+         */
+        @Bean
+        @Lazy
+        @ConditionalOnMissingBean
+        HibernateStatisticsService bootUiHibernateStatisticsService(
+                ObjectProvider<EntityManagerFactory> entityManagerFactories) {
+            return new HibernateStatisticsService(new SpringHibernateStatisticsProvider(entityManagerFactories));
         }
     }
 

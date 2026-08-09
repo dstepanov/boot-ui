@@ -26,6 +26,7 @@ import io.github.jdubois.bootui.engine.heapdump.HeapDumpSettings;
 import io.github.jdubois.bootui.engine.hibernate.EntityDiscovery;
 import io.github.jdubois.bootui.engine.hibernate.EntityDiscoverySource;
 import io.github.jdubois.bootui.engine.hibernate.HibernateScanner;
+import io.github.jdubois.bootui.engine.hibernate.HibernateStatisticsService;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.liquibase.LiquibaseService;
 import io.github.jdubois.bootui.engine.loggers.LoggersService;
@@ -67,6 +68,7 @@ import io.github.jdubois.bootui.spi.CacheProvider;
 import io.github.jdubois.bootui.spi.ConnectionPoolProvider;
 import io.github.jdubois.bootui.spi.FlywayProvider;
 import io.github.jdubois.bootui.spi.HealthProvider;
+import io.github.jdubois.bootui.spi.HibernateStatisticsProvider;
 import io.github.jdubois.bootui.spi.LiquibaseProvider;
 import io.github.jdubois.bootui.spi.LoggerProvider;
 import io.github.jdubois.bootui.spi.TraceIdProvider;
@@ -731,6 +733,22 @@ public class BootUiEngineProducer {
         }
         return HibernateScanner.using(
                 discovery, new QuarkusHibernatePropertyLookup(config), () -> activeProfiles(config), Clock.systemUTC());
+    }
+
+    /**
+     * The Hibernate Session Monitoring panel service, additive to the Hibernate Advisor above. Produced
+     * <em>unconditionally</em> because it holds no Hibernate ORM type directly: the {@code SessionFactory}/
+     * {@code Statistics}-importing {@link HibernateStatisticsProvider} lives behind the gated
+     * {@link BootUiHibernateProducer#hibernateStatisticsProvider} bean, wired only when the
+     * {@code HIBERNATE_ORM} capability is present (R2, mirroring {@link #hibernateScanner} exactly). When
+     * that provider is unsatisfied the engine is given a {@code null} provider, so
+     * {@code GET /hibernate/statistics} renders the panel unavailable instead of failing.
+     */
+    @Produces
+    @Singleton
+    public HibernateStatisticsService hibernateStatisticsService(Instance<HibernateStatisticsProvider> providers) {
+        HibernateStatisticsProvider provider = providers.isUnsatisfied() ? null : providers.get();
+        return new HibernateStatisticsService(provider);
     }
 
     /**

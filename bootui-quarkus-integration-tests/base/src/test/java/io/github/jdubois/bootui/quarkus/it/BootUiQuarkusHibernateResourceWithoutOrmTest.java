@@ -87,4 +87,23 @@ class BootUiQuarkusHibernateResourceWithoutOrmTest {
                 .as("no entities are analysed without Hibernate ORM")
                 .isEqualTo(0);
     }
+
+    @Test
+    void hibernateStatisticsPanelIsUnavailableWithoutHibernateOrm() {
+        Response statistics = probe().get("/bootui/api/hibernate/statistics");
+        assertThat(statistics.status())
+                .as("GET /bootui/api/hibernate/statistics status")
+                .isEqualTo(200);
+        JsonNode body = statistics.json();
+        assertThat(body.path("available").asBoolean(true))
+                .as("the Session Monitoring panel is unavailable without a Hibernate SessionFactory")
+                .isFalse();
+        assertThat(body.path("unavailableReason").asText(null))
+                .as("the unavailable reason explains why, without failing the request")
+                .isNotBlank();
+        assertThat(body.path("statistics").isMissingNode()
+                        || body.path("statistics").isNull())
+                .as("no statistics payload is served when unavailable")
+                .isTrue();
+    }
 }

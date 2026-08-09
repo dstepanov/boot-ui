@@ -2,6 +2,8 @@ package io.github.jdubois.bootui.quarkus;
 
 import io.github.jdubois.bootui.engine.hibernate.EntityDiscoverySource;
 import io.github.jdubois.bootui.quarkus.hibernate.QuarkusEntityDiscovery;
+import io.github.jdubois.bootui.quarkus.hibernate.QuarkusHibernateStatisticsProvider;
+import io.github.jdubois.bootui.spi.HibernateStatisticsProvider;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
@@ -9,8 +11,10 @@ import jakarta.inject.Singleton;
 import jakarta.persistence.EntityManagerFactory;
 
 /**
- * Hibernate ORM entity-discovery wiring for the Quarkus adapter: produces the JPA-free
- * {@link EntityDiscoverySource} the engine {@code HibernateScanner} reads, backed by the application's
+ * Hibernate ORM entity-discovery and session-statistics wiring for the Quarkus adapter: produces the
+ * JPA-free {@link EntityDiscoverySource} the engine {@code HibernateScanner} reads, and the
+ * {@link HibernateStatisticsProvider} the engine {@code HibernateStatisticsService} reads for the
+ * additive Hibernate Session Monitoring panel — both backed by the application's
  * {@link EntityManagerFactory} beans.
  *
  * <p><strong>It is deliberately not annotated with a CDI scope, and the deployment processor excludes it from
@@ -26,7 +30,9 @@ import jakarta.persistence.EntityManagerFactory;
  * units are all discovered, and resolved <em>live</em> on every scan through {@link QuarkusEntityDiscovery}
  * (which de-duplicates them by identity). When Hibernate ORM is absent there is no {@code EntityDiscoverySource}
  * bean, so the always-produced {@code HibernateScanner} (see {@link BootUiEngineProducer}) is given a supplier
- * that yields an empty discovery and renders the panel as not-configured.</p>
+ * that yields an empty discovery and renders the panel as not-configured. Likewise, when no
+ * {@link HibernateStatisticsProvider} bean exists, the always-produced {@code HibernateStatisticsService}
+ * renders the Session Monitoring panel unavailable instead of failing.</p>
  */
 public class BootUiHibernateProducer {
 
@@ -35,5 +41,12 @@ public class BootUiHibernateProducer {
     public EntityDiscoverySource hibernateEntityDiscoverySource(
             @Any Instance<EntityManagerFactory> entityManagerFactories) {
         return () -> QuarkusEntityDiscovery.discover(entityManagerFactories);
+    }
+
+    @Produces
+    @Singleton
+    public HibernateStatisticsProvider hibernateStatisticsProvider(
+            @Any Instance<EntityManagerFactory> entityManagerFactories) {
+        return new QuarkusHibernateStatisticsProvider(entityManagerFactories);
     }
 }

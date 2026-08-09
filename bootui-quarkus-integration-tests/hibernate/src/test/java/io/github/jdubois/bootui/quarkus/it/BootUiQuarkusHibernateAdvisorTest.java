@@ -114,6 +114,25 @@ class BootUiQuarkusHibernateAdvisorTest {
                 .isEqualTo("SCANNED");
     }
 
+    @Test
+    void hibernateStatisticsPanelIsAvailableWhenOrmStatisticsAreEnabled() {
+        // quarkus.hibernate-orm.statistics=true (application.properties) enables Statistics collection, so
+        // the additive Session Monitoring panel must report available rather than the "enable statistics"
+        // unavailable state.
+        Response statistics = probe().get("/bootui/api/hibernate/statistics");
+        assertThat(statistics.status()).as("GET /bootui/api/hibernate/statistics status").isEqualTo(200);
+        JsonNode body = statistics.json();
+        assertThat(body.path("available").asBoolean(false))
+                .as("statistics must be available since quarkus.hibernate-orm.statistics=true")
+                .isTrue();
+        assertThat(body.path("statistics").isMissingNode())
+                .as("the statistics payload must be present when available")
+                .isFalse();
+        assertThat(body.path("statistics").path("sessionOpenCount").isNumber())
+                .as("sessionOpenCount must be a numeric counter")
+                .isTrue();
+    }
+
     private static List<String> ruleIds(JsonNode resultsNode) {
         List<String> ids = new ArrayList<>();
         if (resultsNode != null && resultsNode.isArray()) {
