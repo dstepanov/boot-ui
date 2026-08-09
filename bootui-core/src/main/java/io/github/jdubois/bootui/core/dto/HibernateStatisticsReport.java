@@ -1,7 +1,7 @@
 package io.github.jdubois.bootui.core.dto;
 
 /**
- * Top-level report for the Hibernate Session Monitoring panel.
+ * Top-level report for the Hibernate Statistics panel.
  *
  * <p>{@code available} is {@code true} only when a Hibernate {@code SessionFactory} was resolved
  * <em>and</em> {@code hibernate.generate_statistics} (or the Spring/Quarkus equivalent) is enabled;

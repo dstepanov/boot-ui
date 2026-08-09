@@ -19,7 +19,7 @@ import org.springframework.beans.factory.ObjectProvider;
  * {@code org.hibernate.stat.Statistics} onto the framework-neutral {@link HibernateStatisticsSnapshot}.
  *
  * <p>Only the first resolved {@code EntityManagerFactory} is inspected — multiple persistence units are a
- * known limitation of this iteration (see the Hibernate Session Monitoring panel documentation). The
+ * known limitation of this iteration (see the Hibernate Statistics panel documentation). The
  * {@code SessionFactory} is resolved <em>live</em> on every call rather than cached, so it always reflects
  * the current bean (matching the Cache panel's provider convention).</p>
  */
@@ -78,10 +78,19 @@ public final class SpringHibernateStatisticsProvider implements HibernateStatist
                     || statistics.getQueryCachePutCount() > 0;
             secondLevelCacheEnabled = statistics.getSecondLevelCacheRegionNames().length > 0;
         }
+        // getSecondLevelCacheRegionNames() returns both entity/collection ("domain data") regions and the
+        // query-result-cache region (e.g. "default-query-results-region"); getDomainDataRegionStatistics
+        // throws IllegalArgumentException for the latter, so skip regions that aren't domain data — the
+        // query cache's own hit/miss/put counters are already reported above via queryCacheHitCount etc.
         String[] regionNames = statistics.getSecondLevelCacheRegionNames();
         List<HibernateCacheRegionSnapshot> regions = new ArrayList<>(regionNames.length);
         for (String regionName : regionNames) {
-            CacheRegionStatistics regionStatistics = statistics.getDomainDataRegionStatistics(regionName);
+            CacheRegionStatistics regionStatistics;
+            try {
+                regionStatistics = statistics.getDomainDataRegionStatistics(regionName);
+            } catch (IllegalArgumentException ex) {
+                continue;
+            }
             regions.add(new HibernateCacheRegionSnapshot(
                     regionName,
                     regionStatistics.getHitCount(),

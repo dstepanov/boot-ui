@@ -1,10 +1,8 @@
 package io.github.jdubois.bootui.autoconfigure.hibernate;
 
 import io.github.jdubois.bootui.core.dto.HibernateReport;
-import io.github.jdubois.bootui.core.dto.HibernateStatisticsReport;
 import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
 import io.github.jdubois.bootui.engine.hibernate.HibernateScanner;
-import io.github.jdubois.bootui.engine.hibernate.HibernateStatisticsService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,17 +10,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Serves the Hibernate Advisor and Hibernate Session Monitoring panels.
+ * Serves the Hibernate Advisor panel.
  *
  * <p>{@code GET} returns the last advisor report (initially "not scanned"); {@code POST /scan} reads the
  * Hibernate/JPA metamodel and evaluates a bounded, static ruleset against mapped application
  * entities. The scan logic lives in the engine {@link HibernateScanner}; this controller only caches
  * the last report and applies the adapter's dismissed-rule ids.</p>
  *
- * <p>{@code GET /statistics} additively serves the Hibernate Session Monitoring panel: a live read of the
- * host application's Hibernate {@code SessionFactory} statistics, shaped by the engine
- * {@link HibernateStatisticsService}. It reports the panel unavailable (rather than faking data) when no
- * {@code SessionFactory} is reachable or {@code hibernate.generate_statistics} is disabled.</p>
+ * <p>The Hibernate Statistics panel (live {@code SessionFactory} statistics) is a separate
+ * Database-group panel served by {@link HibernateStatisticsController}, not this advisor.</p>
  */
 @RestController
 @ConditionalOnClass(name = {"jakarta.persistence.EntityManagerFactory", "org.hibernate.SessionFactory"})
@@ -33,17 +29,11 @@ public class HibernateController {
 
     private final DismissedRulesStore dismissedRules;
 
-    private final HibernateStatisticsService statisticsService;
-
     private volatile HibernateReport lastReport;
 
-    public HibernateController(
-            HibernateScanner scanner,
-            DismissedRulesStore dismissedRules,
-            HibernateStatisticsService statisticsService) {
+    public HibernateController(HibernateScanner scanner, DismissedRulesStore dismissedRules) {
         this.scanner = scanner;
         this.dismissedRules = dismissedRules;
-        this.statisticsService = statisticsService;
         this.lastReport = scanner.initialReport();
     }
 
@@ -57,10 +47,5 @@ public class HibernateController {
         HibernateReport report = scanner.scan();
         lastReport = report;
         return scanner.applyDismissals(report, dismissedRules.load());
-    }
-
-    @GetMapping("/statistics")
-    public HibernateStatisticsReport statistics() {
-        return statisticsService.report();
     }
 }

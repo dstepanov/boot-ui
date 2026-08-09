@@ -185,6 +185,7 @@ public class PanelsController {
                         java.lang.management.ManagementFactory.getThreadMXBean() != null,
                         "ThreadMXBean is not available on this JVM");
             case BootUiPanels.HIBERNATE -> availability(hibernateAvailable(), hibernateUnavailableReason());
+            case BootUiPanels.HIBERNATE_STATISTICS -> availability(hibernateAvailable(), hibernateUnavailableReason());
             case BootUiPanels.DATABASE_CONNECTION_POOLS -> availability(hikariAvailable(), hikariUnavailableReason());
             case BootUiPanels.FLYWAY -> availability(flywayAvailable(), flywayUnavailableReason());
             case BootUiPanels.LIQUIBASE -> availability(liquibaseAvailable(), liquibaseUnavailableReason());

@@ -1352,8 +1352,6 @@ Data sources:
 - JPA `EntityManagerFactory` metamodel when Hibernate ORM is present.
 - Spring Data repository metadata for query and paging heuristics.
 - Selected Spring Boot and Hibernate configuration properties.
-- `org.hibernate.stat.Statistics`, read from the resolved `SessionFactory`, for the additive Session Statistics tab
-  described below.
 
 Features:
 
@@ -1362,30 +1360,17 @@ Features:
   cache risks.
 - Show scanned entity packages, rule counts, mapped-entity counts, sample evidence, and remediation guidance.
 - Cache the latest report until the next explicit scan.
-- **Session Statistics (Session Monitoring)**: an additive tab that displays a live, read-only snapshot of
-  Hibernate's own runtime `Statistics` for the resolved `SessionFactory` — session/transaction counts, entity and
-  collection load/fetch/insert/update/delete counts, query execution counts, and query-cache/second-level-cache
-  hit/miss/put counters (including per-region breakdowns) when those caches are enabled.
 
 Availability:
 
 - The advisor scan requires JPA/Hibernate ORM on the classpath and a resolvable entity metamodel.
-- The Session Statistics tab additionally requires `hibernate.generate_statistics` (or the Quarkus
-  `quarkus.hibernate-orm.statistics` equivalent) to be enabled; when either the `SessionFactory` cannot be resolved
-  or statistics are disabled, the API reports `available: false` with a human-readable `unavailableReason` instead
-  of an error, and the UI shows a clear "enable statistics" message rather than fabricating data.
 
 Out of scope for the current release surface:
 
 - Executing SQL, invoking repositories, changing mappings, or rewriting queries from the UI.
 - Replacing project-specific performance tests, query plans, or code reviews.
-- Resetting or clearing Hibernate's `Statistics` counters from the UI or API — the Session Statistics tab is
-  strictly read-only reporting.
-- Per-entity-class or per-query drill-down beyond what `org.hibernate.stat.Statistics` itself exposes.
-- Multi-persistence-unit applications: only the first resolved `EntityManagerFactory`/`SessionFactory` is inspected
-  for Session Statistics; this is a known limitation for a future iteration.
-- Filtering Session Statistics by `bootui.monitoring.exclude-self`: these counters are process-global on the
-  `SessionFactory`, not attributable to an individual caller, so self-filtering does not apply here.
+- Live runtime session/query-cache statistics: see the standalone Hibernate Statistics panel (Database section,
+  `docs/SPECIFICATION.md` § "Hibernate Statistics Panel" below).
 
 Acceptance criteria:
 
@@ -1393,10 +1378,53 @@ Acceptance criteria:
 - Opening the panel never executes application queries or mutates persistence metadata.
 - The scan action is blocked by global read-only mode and `bootui.panels.hibernate.read-only`.
 - Findings are presented as heuristic review prompts, not definitive performance verdicts.
-- The Session Statistics tab never resets or mutates Hibernate's `Statistics`, and reports a clear unavailable
-  state — not an error — when `hibernate.generate_statistics` is disabled or no `SessionFactory` can be resolved.
-- Spring MVC, Spring WebFlux, and Quarkus report equivalent Session Statistics data through the same
-  `/bootui/api/hibernate/statistics` contract wherever Hibernate ORM is present.
+
+### 5.17.1.1 Hibernate Statistics Panel
+
+Purpose: answer "What is Hibernate's `SessionFactory` doing right now — session/transaction volume, entity and
+collection activity, query execution, and cache effectiveness?"
+
+This is a standalone, Database-section runtime-monitoring panel, separate from the Hibernate Advisor panel above: it
+reports live counters rather than static findings, so it does not fit the advisor's "run checks, report findings"
+workflow.
+
+Data sources:
+
+- `org.hibernate.stat.Statistics`, read from the resolved `SessionFactory`.
+
+Features:
+
+- Displays a live, read-only snapshot of Hibernate's own runtime `Statistics` for the resolved `SessionFactory` —
+  session/transaction counts, entity and collection load/fetch/insert/update/delete counts, query execution counts,
+  and query-cache/second-level-cache hit/miss/put counters (including per-region breakdowns) when those caches are
+  enabled.
+- Supports manual refresh and optional auto-refresh, consistent with other Database-section runtime panels.
+
+Availability:
+
+- Requires JPA/Hibernate ORM on the classpath and a resolvable `SessionFactory` (same manifest availability as the
+  Hibernate Advisor panel).
+- Additionally requires `hibernate.generate_statistics` (or the Quarkus `quarkus.hibernate-orm.statistics`
+  equivalent) to be enabled; when statistics are disabled, the API reports `available: false` with a
+  human-readable `unavailableReason` instead of an error, and the UI shows a clear "enable statistics" message
+  rather than fabricating data.
+
+Out of scope for the current release surface:
+
+- Resetting or clearing Hibernate's `Statistics` counters from the UI or API — this panel is strictly read-only
+  reporting.
+- Per-entity-class or per-query drill-down beyond what `org.hibernate.stat.Statistics` itself exposes.
+- Multi-persistence-unit applications: only the first resolved `EntityManagerFactory`/`SessionFactory` is
+  inspected; this is a known limitation for a future iteration.
+- Filtering by `bootui.monitoring.exclude-self`: these counters are process-global on the `SessionFactory`, not
+  attributable to an individual caller, so self-filtering does not apply here.
+
+Acceptance criteria:
+
+- The panel never resets or mutates Hibernate's `Statistics`, and reports a clear unavailable state — not an
+  error — when `hibernate.generate_statistics` is disabled or no `SessionFactory` can be resolved.
+- Spring MVC, Spring WebFlux, and Quarkus report equivalent statistics data through the same
+  `/bootui/api/hibernate-statistics` contract wherever Hibernate ORM is present.
 
 ### 5.17.2 Flyway Panel
 
@@ -1721,7 +1749,7 @@ Initial endpoints:
 | `/bootui/api/data/repositories/{name}`       | GET    | Spring Data repository detail with query methods                                       |
 | `/bootui/api/hibernate`              | GET    | Latest Hibernate/JPA advisor report                                                    |
 | `/bootui/api/hibernate/scan`         | POST   | Run explicit read-only Hibernate/JPA advisor checks                                    |
-| `/bootui/api/hibernate/statistics`   | GET    | Live read-only Hibernate `SessionFactory` statistics (Session Monitoring)              |
+| `/bootui/api/hibernate-statistics`   | GET    | Live read-only Hibernate `SessionFactory` statistics (Hibernate Statistics panel)      |
 | `/bootui/api/architecture`                   | GET    | Latest Architecture scan report                                                        |
 | `/bootui/api/architecture/scan`              | POST   | Run explicit ArchUnit hygiene checks                                                   |
 | `/bootui/api/rest-api`                   | GET    | Latest REST API Advisor scan report                                                    |
@@ -1980,6 +2008,7 @@ Top-level navigation:
 - Database:
   - Database Connection Pools.
   - SQL Trace.
+  - Hibernate Statistics.
   - Spring Data.
   - Flyway.
   - Liquibase.

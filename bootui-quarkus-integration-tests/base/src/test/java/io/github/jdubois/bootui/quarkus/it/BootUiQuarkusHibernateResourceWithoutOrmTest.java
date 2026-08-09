@@ -42,9 +42,13 @@ class BootUiQuarkusHibernateResourceWithoutOrmTest {
         assertThat(panels.status()).as("GET /bootui/api/panels status").isEqualTo(200);
 
         JsonNode hibernate = null;
+        JsonNode hibernateStatistics = null;
         for (JsonNode panel : panels.json().path("panels")) {
             if ("hibernate".equals(panel.path("id").asText(null))) {
                 hibernate = panel;
+            }
+            if ("hibernate-statistics".equals(panel.path("id").asText(null))) {
+                hibernateStatistics = panel;
             }
         }
         assertThat(hibernate)
@@ -54,6 +58,15 @@ class BootUiQuarkusHibernateResourceWithoutOrmTest {
                 .as("the Hibernate panel is unavailable when quarkus-hibernate-orm is absent")
                 .isFalse();
         assertThat(hibernate.path("unavailableReason").asText(null))
+                .as("the unavailable reason names the extension to add, not the generic 'not yet' reason")
+                .contains("quarkus-hibernate-orm");
+        assertThat(hibernateStatistics)
+                .as("the Hibernate Statistics panel is present in the manifest")
+                .isNotNull();
+        assertThat(hibernateStatistics.path("available").asBoolean(true))
+                .as("the Hibernate Statistics panel is unavailable when quarkus-hibernate-orm is absent")
+                .isFalse();
+        assertThat(hibernateStatistics.path("unavailableReason").asText(null))
                 .as("the unavailable reason names the extension to add, not the generic 'not yet' reason")
                 .contains("quarkus-hibernate-orm");
     }
@@ -90,9 +103,9 @@ class BootUiQuarkusHibernateResourceWithoutOrmTest {
 
     @Test
     void hibernateStatisticsPanelIsUnavailableWithoutHibernateOrm() {
-        Response statistics = probe().get("/bootui/api/hibernate/statistics");
+        Response statistics = probe().get("/bootui/api/hibernate-statistics");
         assertThat(statistics.status())
-                .as("GET /bootui/api/hibernate/statistics status")
+                .as("GET /bootui/api/hibernate-statistics status")
                 .isEqualTo(200);
         JsonNode body = statistics.json();
         assertThat(body.path("available").asBoolean(true))

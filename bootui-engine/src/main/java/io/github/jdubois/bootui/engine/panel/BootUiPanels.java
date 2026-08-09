@@ -41,6 +41,7 @@ public final class BootUiPanels {
     public static final String LIQUIBASE = "liquibase";
     public static final String DATABASE_CONNECTION_POOLS = "database-connection-pools";
     public static final String HIBERNATE = "hibernate";
+    public static final String HIBERNATE_STATISTICS = "hibernate-statistics";
     public static final String CACHE = "cache";
     public static final String SPRING_SECURITY = "spring-security";
     public static final String SECURITY = "security";
@@ -102,6 +103,7 @@ public final class BootUiPanels {
             new Panel(DATABASE_CONNECTION_POOLS, "Database Connection Pools", false, "/database-connection-pools"),
             new Panel(DATA, "Spring Data", false, "/data"),
             new Panel(HIBERNATE, "Hibernate", true, "/hibernate"),
+            new Panel(HIBERNATE_STATISTICS, "Hibernate Statistics", false, "/hibernate-statistics"),
             new Panel(CACHE, "Cache", true, "/cache"),
             new Panel(TRACES, "Traces", true, "/traces"),
             new Panel(LOG_TAIL, "Log Tail", false, "/log-tail"),

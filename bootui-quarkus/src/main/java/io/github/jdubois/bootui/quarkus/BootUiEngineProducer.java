@@ -736,13 +736,13 @@ public class BootUiEngineProducer {
     }
 
     /**
-     * The Hibernate Session Monitoring panel service, additive to the Hibernate Advisor above. Produced
-     * <em>unconditionally</em> because it holds no Hibernate ORM type directly: the {@code SessionFactory}/
-     * {@code Statistics}-importing {@link HibernateStatisticsProvider} lives behind the gated
-     * {@link BootUiHibernateProducer#hibernateStatisticsProvider} bean, wired only when the
+     * The standalone Hibernate Statistics (Database group) panel service, independent of the Hibernate
+     * Advisor above. Produced <em>unconditionally</em> because it holds no Hibernate ORM type directly: the
+     * {@code SessionFactory}/{@code Statistics}-importing {@link HibernateStatisticsProvider} lives behind
+     * the gated {@link BootUiHibernateProducer#hibernateStatisticsProvider} bean, wired only when the
      * {@code HIBERNATE_ORM} capability is present (R2, mirroring {@link #hibernateScanner} exactly). When
      * that provider is unsatisfied the engine is given a {@code null} provider, so
-     * {@code GET /hibernate/statistics} renders the panel unavailable instead of failing.
+     * {@code GET /hibernate-statistics} renders the panel unavailable instead of failing.
      */
     @Produces
     @Singleton

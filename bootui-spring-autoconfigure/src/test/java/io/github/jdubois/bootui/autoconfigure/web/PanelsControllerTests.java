@@ -125,6 +125,11 @@ class PanelsControllerTests {
                             // this plain GenericApplicationContext test's classpath; only the EntityManagerFactory
                             // bean is genuinely absent here.
                             .value("No EntityManagerFactory beans are available"))
+                    .andExpect(jsonPath(panelPath(BootUiPanels.HIBERNATE_STATISTICS) + ".available")
+                            .value(false))
+                    .andExpect(jsonPath(panelPath(BootUiPanels.HIBERNATE_STATISTICS) + ".unavailableReason")
+                            // Same availability check as the Hibernate advisor panel above.
+                            .value("No EntityManagerFactory beans are available"))
                     .andExpect(jsonPath(panelPath(BootUiPanels.HTTP_EXCHANGES) + ".available")
                             .value(false))
                     .andExpect(jsonPath(panelPath(BootUiPanels.HTTP_EXCHANGES) + ".unavailableReason")

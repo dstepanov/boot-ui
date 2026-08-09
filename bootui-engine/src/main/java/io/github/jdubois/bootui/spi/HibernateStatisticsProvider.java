@@ -1,7 +1,7 @@
 package io.github.jdubois.bootui.spi;
 
 /**
- * Framework-neutral seam behind the Hibernate Session Monitoring panel: reports whether a Hibernate
+ * Framework-neutral seam behind the Hibernate Statistics panel: reports whether a Hibernate
  * {@code SessionFactory} is reachable, whether it has statistics collection enabled, and — only when both
  * are true — a live {@link HibernateStatisticsSnapshot} read from {@code org.hibernate.stat.Statistics}.
  *

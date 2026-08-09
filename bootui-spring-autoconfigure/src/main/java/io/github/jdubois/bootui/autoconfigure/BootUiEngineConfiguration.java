@@ -421,7 +421,7 @@ public class BootUiEngineConfiguration {
         }
 
         /**
-         * The Hibernate Session Monitoring panel service, additive to the static Hibernate Advisor above.
+         * The Hibernate Statistics panel service, additive to the static Hibernate Advisor above.
          * Gated identically (JPA + Hibernate on the classpath): the {@code org.hibernate.SessionFactory}
          * /{@code org.hibernate.stat.Statistics}-typed {@link SpringHibernateStatisticsProvider} lives only
          * in this nested, conditional configuration, so those Hibernate ORM types are never linked in a

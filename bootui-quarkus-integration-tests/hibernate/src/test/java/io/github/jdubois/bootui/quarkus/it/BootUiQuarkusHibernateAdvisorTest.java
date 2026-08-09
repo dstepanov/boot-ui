@@ -119,8 +119,8 @@ class BootUiQuarkusHibernateAdvisorTest {
         // quarkus.hibernate-orm.statistics=true (application.properties) enables Statistics collection, so
         // the additive Session Monitoring panel must report available rather than the "enable statistics"
         // unavailable state.
-        Response statistics = probe().get("/bootui/api/hibernate/statistics");
-        assertThat(statistics.status()).as("GET /bootui/api/hibernate/statistics status").isEqualTo(200);
+        Response statistics = probe().get("/bootui/api/hibernate-statistics");
+        assertThat(statistics.status()).as("GET /bootui/api/hibernate-statistics status").isEqualTo(200);
         JsonNode body = statistics.json();
         assertThat(body.path("available").asBoolean(false))
                 .as("statistics must be available since quarkus.hibernate-orm.statistics=true")

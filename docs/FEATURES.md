@@ -502,33 +502,6 @@ check is skipped rather than reported.
 
 ![BootUI Hibernate panel](./images/bootui-hibernate.webp)
 
-#### Session Statistics (Session Monitoring)
-
-Additive to the static advisor scan above, the Hibernate panel's **Session Statistics** tab exposes a live,
-read-only snapshot of Hibernate's own `org.hibernate.stat.Statistics` for the application's `SessionFactory`:
-session/transaction counts (opened/closed sessions, flushes, connections, transactions, successful transactions),
-entity and collection load/fetch/insert/update/delete/recreate/remove counts, query execution counts (and the
-slowest recorded query), and — when enabled — query-cache and second-level-cache hit/miss/put counters, including
-per-region second-level cache breakdowns.
-
-- **Availability gating**: the tab requires both a resolvable Hibernate `SessionFactory` (via
-  `EntityManagerFactory#unwrap(SessionFactory.class)`) **and** `hibernate.generate_statistics` (or the Quarkus
-  `quarkus.hibernate-orm.statistics` equivalent, translated by the same `HibernatePropertyLookup` abstraction the
-  advisor scan uses) enabled. When either condition is not met, the tab shows a clear inline message rather than
-  faking data, pointing at the property to set — this is the same HIB-CONFIG-007 recommendation the static advisor
-  already makes (see [HIBERNATE-CHECKS.md](HIBERNATE-CHECKS.md)).
-- **Strictly read-only**: the panel has no reset/clear action for these counters (unlike the Cache panel's clear
-  actions) — it is purely observational, refreshing on the same auto-refresh pattern as the Cache panel.
-- **Out of scope for this iteration**: no per-entity or per-query drill-down beyond what `Statistics` itself
-  exposes (e.g. no per-entity-class breakdown, no query-by-query cache stats); only the **first** resolved
-  `EntityManagerFactory`/`SessionFactory` is inspected, so multi-persistence-unit applications only see statistics
-  for one persistence unit — a known limitation for a future iteration.
-- **Not filtered by `bootui.monitoring.exclude-self`**: Hibernate statistics are process-global counters on the
-  `SessionFactory`, not per-request/per-caller data, so there is nothing to attribute to "self" the way HTTP
-  exchange or SQL-trace filtering does. BootUI's own entity-metamodel introspection for the advisor scan does not
-  open sessions or transactions, so it does not inflate these counters in practice, but this is a documented
-  limitation rather than an enforced filter.
-
 ### Memory
 
 The Memory panel runs an explicit, read-only scan over the live JVM management beans (heap and memory pools,
@@ -1099,6 +1072,39 @@ full-fidelity; for ORM SQL the per-statement duration, affected-row count, and b
 cleanly while never leaking ORM parameter values. Both feeders are wired in dev/test only and never in production.
 
 ![BootUI SQL Trace panel](./images/bootui-sql-trace.webp)
+
+### Hibernate Statistics
+
+The Hibernate Statistics panel is a standalone, Database-section runtime-monitoring panel that exposes a live,
+read-only snapshot of Hibernate's own `org.hibernate.stat.Statistics` for the application's `SessionFactory`:
+session/transaction counts (opened/closed sessions, flushes, connections, transactions, successful transactions),
+entity and collection load/fetch/insert/update/delete/recreate/remove counts, query execution counts (and the
+slowest recorded query), and — when enabled — query-cache and second-level-cache hit/miss/put counters, including
+per-region second-level cache breakdowns. It is deliberately separate from the Hibernate Advisor panel: the advisor
+runs static, on-demand checks and reports findings, while this panel is a continuously-refreshing runtime monitor,
+closer in spirit to Database Connection Pools or SQL Trace than to an advisor.
+
+- **Availability gating**: the panel requires both a resolvable Hibernate `SessionFactory` (via
+  `EntityManagerFactory#unwrap(SessionFactory.class)`) **and** `hibernate.generate_statistics` (or the Quarkus
+  `quarkus.hibernate-orm.statistics` equivalent, translated by the same `HibernatePropertyLookup` abstraction the
+  advisor scan uses) enabled. When either condition is not met, the panel shows a clear inline message rather than
+  faking data, pointing at the property to set — this is the same HIB-CONFIG-007 recommendation the static advisor
+  already makes (see [HIBERNATE-CHECKS.md](HIBERNATE-CHECKS.md)).
+- **Strictly read-only**: the panel has no reset/clear action for these counters (unlike the Cache panel's clear
+  actions) — it is purely observational, refreshing on the same auto-refresh pattern as the Cache panel.
+- **Out of scope for this iteration**: no per-entity or per-query drill-down beyond what `Statistics` itself
+  exposes (e.g. no per-entity-class breakdown, no query-by-query cache stats); only the **first** resolved
+  `EntityManagerFactory`/`SessionFactory` is inspected, so multi-persistence-unit applications only see statistics
+  for one persistence unit — a known limitation for a future iteration.
+- **Not filtered by `bootui.monitoring.exclude-self`**: Hibernate statistics are process-global counters on the
+  `SessionFactory`, not per-request/per-caller data, so there is nothing to attribute to "self" the way HTTP
+  exchange or SQL-trace filtering does. BootUI's own entity-metamodel introspection for the advisor scan does not
+  open sessions or transactions, so it does not inflate these counters in practice, but this is a documented
+  limitation rather than an enforced filter.
+
+On Quarkus the panel is identical, running over the same framework-neutral `HibernateStatisticsService` and report
+contract, backed by a `HibernateStatisticsProvider` gated on the same Hibernate ORM capability as the Hibernate
+advisor panel.
 
 ### Spring Data
 

@@ -9,7 +9,7 @@ import java.util.List;
  * enabled.
  *
  * <p>This is strictly a read-only reporting surface: it carries no reset/clear action, and single
- * persistence-unit applications are the supported shape (see the Hibernate Session Monitoring panel
+ * persistence-unit applications are the supported shape (see the Hibernate Statistics panel
  * documentation for the multi-persistence-unit limitation).</p>
  */
 public record HibernateStatisticsDto(

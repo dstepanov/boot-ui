@@ -717,9 +717,9 @@ and caching rules still run on Quarkus against the live JPA metamodel.
 - **Quarkus**: `hibernate.generate_statistics` maps to `quarkus.hibernate-orm.statistics` via
   `QuarkusHibernatePropertyLookup`, so this rule no longer false-positives when statistics are enabled with the
   native Quarkus property name.
-- **UI consumer**: the Hibernate panel's "Session Statistics" tab reads these same live counters once enabled — see
-  `docs/FEATURES.md` and `docs/SPECIFICATION.md` §5.17.1 for the Session Monitoring sub-feature this recommendation
-  now unlocks.
+- **UI consumer**: the standalone Hibernate Statistics panel (Database group) reads these same live counters once
+  enabled — see `docs/FEATURES.md` and `docs/SPECIFICATION.md` §5.17.1.1 for the panel this recommendation now
+  unlocks.
 
 ### HIB-CONFIG-008 - Connection providers should disable auto-commit explicitly
 

@@ -8,6 +8,7 @@ import io.github.jdubois.bootui.autoconfigure.crac.CracController;
 import io.github.jdubois.bootui.autoconfigure.exceptions.BootUiExceptionLogAppender;
 import io.github.jdubois.bootui.autoconfigure.graalvm.GraalVmController;
 import io.github.jdubois.bootui.autoconfigure.hibernate.HibernateController;
+import io.github.jdubois.bootui.autoconfigure.hibernate.HibernateStatisticsController;
 import io.github.jdubois.bootui.autoconfigure.jms.JmsController;
 import io.github.jdubois.bootui.autoconfigure.kafka.KafkaController;
 import io.github.jdubois.bootui.autoconfigure.mail.BootUiMailSenderBeanPostProcessor;
@@ -220,6 +221,7 @@ import tools.jackson.databind.ObjectMapper;
     StartupController.class,
     DataController.class,
     HibernateController.class,
+    HibernateStatisticsController.class,
     FlywayController.class,
     LiquibaseController.class,
     DatabaseConnectionPoolsController.class,
@@ -277,6 +279,7 @@ public class BootUiReactiveAutoConfiguration {
             RestApiController.class.getName(),
             BeansController.class.getName(),
             HibernateController.class.getName(),
+            HibernateStatisticsController.class.getName(),
             SpringCacheController.class.getName(),
             ConditionsController.class.getName(),
             ConfigController.class.getName(),

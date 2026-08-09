@@ -92,6 +92,13 @@ public final class BootUiApiContractCatalog {
             inventory("database-connection-pools", "/database-connection-pools/pools", "hikariPresent", "pools"),
             advisor("hibernate", "/hibernate", "results"),
             read(
+                    "hibernate-statistics",
+                    "/hibernate-statistics",
+                    fields(
+                            "available", JsonType.BOOLEAN,
+                            "unavailableReason", JsonType.NULLABLE_STRING,
+                            "statistics", JsonType.NULLABLE_OBJECT)),
+            read(
                     "cache",
                     "/cache",
                     fields(

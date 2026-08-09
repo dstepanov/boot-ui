@@ -8,7 +8,7 @@ import io.github.jdubois.bootui.spi.HibernateStatisticsProvider;
 import io.github.jdubois.bootui.spi.HibernateStatisticsSnapshot;
 
 /**
- * Framework-neutral logic behind the Hibernate Session Monitoring panel, additive to the static Hibernate
+ * Framework-neutral logic behind the Hibernate Statistics panel, additive to the static Hibernate
  * Advisor ({@link HibernateScanner}).
  *
  * <p>This service owns nothing but shaping: it asks a {@link HibernateStatisticsProvider} whether a

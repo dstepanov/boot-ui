@@ -14,7 +14,7 @@ import jakarta.persistence.EntityManagerFactory;
  * Hibernate ORM entity-discovery and session-statistics wiring for the Quarkus adapter: produces the
  * JPA-free {@link EntityDiscoverySource} the engine {@code HibernateScanner} reads, and the
  * {@link HibernateStatisticsProvider} the engine {@code HibernateStatisticsService} reads for the
- * additive Hibernate Session Monitoring panel — both backed by the application's
+ * additive Hibernate Statistics panel — both backed by the application's
  * {@link EntityManagerFactory} beans.
  *
  * <p><strong>It is deliberately not annotated with a CDI scope, and the deployment processor excludes it from
@@ -32,7 +32,7 @@ import jakarta.persistence.EntityManagerFactory;
  * bean, so the always-produced {@code HibernateScanner} (see {@link BootUiEngineProducer}) is given a supplier
  * that yields an empty discovery and renders the panel as not-configured. Likewise, when no
  * {@link HibernateStatisticsProvider} bean exists, the always-produced {@code HibernateStatisticsService}
- * renders the Session Monitoring panel unavailable instead of failing.</p>
+ * renders the Hibernate Statistics panel unavailable instead of failing.</p>
  */
 public class BootUiHibernateProducer {
 
