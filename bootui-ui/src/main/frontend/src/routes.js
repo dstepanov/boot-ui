@@ -510,6 +510,28 @@ export const routes = [
     }
   },
   {
+    path: '/transactions',
+    name: 'transactions',
+    component: Transactions,
+    meta: {
+      group: groups.database,
+      icon: 'bi-diagram-3-fill',
+      title: 'Transactions',
+      shortcut: 'tx',
+      keywords: [
+        'transaction',
+        'transactional',
+        'propagation',
+        'isolation',
+        'commit',
+        'rollback',
+        'platformtransactionmanager',
+        'transaction boundaries',
+        'nested transactions'
+      ]
+    }
+  },
+  {
     path: '/sql-trace',
     name: 'sql-trace',
     component: SqlTrace,
@@ -541,28 +563,6 @@ export const routes = [
         'collections',
         'sessions',
         'monitoring'
-      ]
-    }
-  },
-  {
-    path: '/transactions',
-    name: 'transactions',
-    component: Transactions,
-    meta: {
-      group: groups.database,
-      icon: 'bi-diagram-3-fill',
-      title: 'Transactions',
-      shortcut: 'tx',
-      keywords: [
-        'transaction',
-        'transactional',
-        'propagation',
-        'isolation',
-        'commit',
-        'rollback',
-        'platformtransactionmanager',
-        'transaction boundaries',
-        'nested transactions'
       ]
     }
   },
