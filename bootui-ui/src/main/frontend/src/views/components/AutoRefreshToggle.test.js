@@ -24,11 +24,13 @@ describe('AutoRefreshToggle', () => {
     expect(wrapper.find('.auto-refresh-dot--reconnecting').exists()).toBe(true)
   })
 
-  it('shows an unavailable stream and emits retry from the same control', async () => {
+  it('shows unavailable updates as a quiet status capsule and emits retry', async () => {
     const wrapper = render('unavailable')
 
-    expect(wrapper.text()).toContain('Auto-refresh')
-    expect(wrapper.text()).toContain('Stream unavailable')
+    expect(wrapper.text()).toContain('Updates paused')
+    expect(wrapper.find('.auto-refresh-paused').exists()).toBe(true)
+    expect(wrapper.find('.auto-refresh-dot--unavailable').exists()).toBe(true)
+    expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
 
     await wrapper.get('button[aria-label="Retry auto-refresh stream connection now"]').trigger('click')
 
@@ -48,12 +50,12 @@ describe('AutoRefreshToggle', () => {
     expect(liveRegion.text()).toContain('connected')
   })
 
-  it('still emits switch changes independently of stream status', async () => {
+  it('still emits switch changes independently of reconnecting status', async () => {
     const onUpdateModelValue = vi.fn()
     const wrapper = mount(AutoRefreshToggle, {
       props: {
         modelValue: true,
-        connectionState: 'unavailable',
+        connectionState: 'reconnecting',
         'onUpdate:modelValue': onUpdateModelValue
       }
     })

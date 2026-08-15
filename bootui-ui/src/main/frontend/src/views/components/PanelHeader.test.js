@@ -76,7 +76,8 @@ describe('PanelHeader', () => {
       }
     })
 
-    expect(wrapper.find('.auto-refresh-control').text()).toContain('Stream unavailable')
+    expect(wrapper.find('.auto-refresh-control').text()).toContain('Updates paused')
+    expect(wrapper.find('.auto-refresh-paused').exists()).toBe(true)
     expect(wrapper.find('.stream-status-indicator').exists()).toBe(false)
 
     await wrapper.get('button[aria-label="Retry auto-refresh stream connection now"]').trigger('click')

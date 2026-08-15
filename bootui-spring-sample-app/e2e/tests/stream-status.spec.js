@@ -89,7 +89,7 @@ async function latestStreamUrl(page) {
 async function readStatusStyles(page) {
   return page.locator('.auto-refresh-control').evaluate((control) => {
     const retryButton = control.querySelector('.auto-refresh-retry')
-    const label = control.querySelector('.auto-refresh-status--unavailable')
+    const label = control.querySelector('.auto-refresh-paused-label')
     const dot = control.querySelector('.auto-refresh-dot--unavailable')
     if (!(retryButton instanceof HTMLElement) || !(label instanceof HTMLElement) || !(dot instanceof HTMLElement)) {
       throw new Error('Stream status elements are missing')
@@ -191,7 +191,7 @@ test.describe('stream connection status', () => {
     }
 
     await emitLatestStreamEvent(page, 'error')
-    await expect(page.locator('.auto-refresh-control')).toContainText('Stream unavailable')
+    await expect(page.locator('.auto-refresh-control')).toContainText('Updates paused')
 
     const retry = page.getByRole('button', {name: 'Retry auto-refresh stream connection now'})
     await retry.focus()
