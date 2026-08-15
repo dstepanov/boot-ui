@@ -658,11 +658,10 @@ subqueries, or multiple roots may be skipped rather than inferred incorrectly.
 
 ### HIB-CONFIG-001 - Open Session in View should be disabled
 
-- **Severity**: INFO when inferred from Spring Boot's absent-property default; MEDIUM for explicit `true`; HIGH for
-  explicit `true` under a production-like profile
+- **Severity**: MEDIUM; HIGH under a production-like profile
 - **Inspects**: adapter-provided servlet applicability, `spring.jpa.open-in-view`, and active Spring profiles.
 - **Fires when**: the application is a Spring servlet web application and the property is `true` or absent, matching
-  Spring Boot's servlet default.
+  Spring Boot's servlet default. This mirrors `SPRING-JPA-001` so both advisor panels assign the same severity.
 - **Why it matters**: lazy loading after the service transaction has completed can hide missing fetch plans and move data
   access into the web layer.
 - **Recommendation**: set `spring.jpa.open-in-view=false` and fetch data inside transactional service boundaries.

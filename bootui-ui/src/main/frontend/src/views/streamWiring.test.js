@@ -113,7 +113,8 @@ describe('streaming panel SSE wiring', () => {
     await nextTick()
 
     const retry = wrapper.get('.auto-refresh-retry')
-    expect(retry.text()).toBe('Retry now')
+    expect(wrapper.get('.auto-refresh-paused').text()).toContain('Updates paused')
+    expect(retry.attributes('aria-label')).toBe('Retry auto-refresh stream connection now')
     expect(instances).toHaveLength(5)
 
     await retry.trigger('click')

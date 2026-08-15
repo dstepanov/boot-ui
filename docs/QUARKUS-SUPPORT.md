@@ -41,7 +41,7 @@ The repository already separates "what the data means" (framework-neutral) from 
 | The DTO layer has **zero** Spring coupling        | `bootui-core`: 220 Java files, 209 DTOs, `0` files import `org.springframework`                                                                                                                         |
 | The UI is already framework-agnostic              | `bootui-ui` uses only relative `fetch('api/…')` calls; no framework knowledge                                                                                                                           |
 | The UI already gates panels on backend capability | `App.vue` fetches `/bootui/api/panels`, builds a `panelLookup`, and renders unavailable panels into a separate group                                                                                    |
-| The advisor **engines** are almost Spring-free    | Spring imports per package: architecture `2/12`, memory `1/10`, restapi `2/14`, pentesting `2/16`, hibernate `3/10`. The Spring files are the **controller** and base-package discovery — not the rules |
+| The advisor **engines** are framework-neutral    | `bootui-engine` advisor packages contain no Spring imports; framework collection and base-package discovery live in the adapters                                                                        |
 | Hibernate analysis already uses neutral APIs      | `HibernateScanner` consumes `jakarta.persistence.EntityManagerFactory` / `Metamodel`, which Quarkus also provides                                                                                       |
 | Safety decision logic is already Spring-free      | `CidrRange` and `ContainerGatewayDetector` carry no Spring dependency; only `LocalhostOnlyFilter` / `PanelAccessFilter` bind to `jakarta.servlet`                                                       |
 | Several data sources are framework-neutral today  | OSV scanner, OTLP receiver + `TelemetryStore`, `DependencyCatalog` (reads `META-INF/maven/*/pom.properties` + `java.class.path`), JVM MXBean readers, GitHub `HttpClient`, Copilot/Claude log readers   |
@@ -174,12 +174,13 @@ those fields so the same UI build renders the correct sidebar and status on each
 Logic lives entirely in `bootui-core` + `bootui-engine`; the Quarkus adapter adds at most a trivial supplier.
 
 `Memory` · `Live Memory` · `JVM Tuning` · `Heap Dump` · `Threads` (pure JVM MXBeans) · `Metrics` (Micrometer — same API)
-· `Hibernate` advisor (Hibernate ORM + `jakarta.persistence`; rules port directly) · `Hibernate Statistics` (standalone
-Database-section panel over `org.hibernate.stat.Statistics`, gated on the same Hibernate ORM capability as the advisor;
-its explicit runtime-enable action has the same read-only and cross-site-write protection as Spring) ·
-`Vulnerabilities` (classpath Maven metadata + OSV) · `Pentesting` · `HTTP Probe` (local HTTP probing) ·
-`AI Framework` · `Traces` (OTLP — a standard; Quarkus/LangChain4j export it) · `GitHub` (`HttpClient`) · `Copilot` ·
-`Claude Code` (read `~/.copilot` / `~/.claude`) · `MCP Server` (**Implemented** — full JSON-RPC bridge: the shared engine `McpDispatcher` owns method routing/gating/tool
+· `Hibernate` advisor (same 72-rule registry/report contract; mapping and configuration rules port, while Spring Data
+query rules skip when repository metadata is unavailable) · `Hibernate Statistics` (standalone Database-section panel
+over `org.hibernate.stat.Statistics`, gated on the same Hibernate ORM capability as the advisor; its explicit
+runtime-enable action has the same read-only and cross-site-write protection as Spring) · `Vulnerabilities` (classpath
+Maven metadata + OSV) · `Pentesting` · `HTTP Probe` (local HTTP probing) · `AI Framework` · `Traces` (OTLP — a standard;
+Quarkus/LangChain4j export it) · `GitHub` (`HttpClient`) · `Copilot` · `Claude Code` (read `~/.copilot` / `~/.claude`) ·
+`MCP Server` (**Implemented** — full JSON-RPC bridge: the shared engine `McpDispatcher` owns method routing/gating/tool
 lookup, a thin Jackson-2 `QuarkusMcpEnvelope` codec + `QuarkusMcpTools` catalog + working enable toggle sit behind the
 `LocalhostGuard` write floor) · `Dev Services` (**Implemented** — a Quarkus-native concept; build-time
 `DevServicesResultBuildItem` snapshot captured via recorder + synthetic bean, masked config, logs/restart unavailable;
@@ -204,9 +205,9 @@ Diff` (**Implemented** — → SmallRye Config; groups active `%profile.`-prefix
 read, BootUI's own routes filtered out at build time) · `Flyway` (→ `quarkus-flyway`) · `Liquibase` (**Implemented** — → `quarkus-liquibase`;
 discovered via `LiquibaseFactoryUtil.getActiveLiquibaseFactories()`, the shared `RanChangeSet` history read + `update`
 action behind the same DTO contract) · `Scheduled Tasks`
-(→ `quarkus-scheduler`) · `Architecture` advisor (ArchUnit engine + rules run unmodified; Spring-stereotype rules
-simply match no classes and degrade to a no-op pass, while a few rules are already dual-framework via the shared
-`jakarta.*` annotations) · `Beans` (**Implemented** — → Arc/CDI `BeanManager.getBeans(...)`, with resolved injection edges
+(→ `quarkus-scheduler`) · `Architecture` advisor (shared ArchUnit registry; generic rules run unchanged, Spring-only
+annotation rules no-op, and Jakarta-based/platform-sensitive rules use Quarkus semantics) · `Beans`
+(**Implemented** — → Arc/CDI `BeanManager.getBeans(...)`, with resolved injection edges
 captured after Arc build-time validation and overlaid on the retained runtime inventory; defining resources and Spring
 Conditions evidence remain unavailable) · `Overview` (panel available; the scoring dashboard
 aggregates the advisor endpoints client-side, and `GET /bootui/api/overview` reports the Quarkus version + shell chrome).

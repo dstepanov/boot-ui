@@ -143,7 +143,7 @@ The panel is always available (the JVM always exposes memory and thread beans). 
 - **Recommendation**: Increase -XX:CompressedClassSpaceSize (or reduce dynamic class generation); also set -XX:MaxMetaspaceSize so broader Metaspace growth is bounded.
 - **Learn more**: <https://docs.oracle.com/en/java/javase/21/vm/class-metadata.html>
 
-### MEM-POOL-006 - JIT compiler is disabled or capped below full optimization
+### MEM-POOL-006 - JIT compiler is disabled or capped below full optimisation
 
 - **Severity**: LOW
 - **Detects**: `-Xint` (fully interpreted mode), `-XX:-UseCompiler` (JIT disabled), or `-XX:TieredStopAtLevel<4` (JIT capped before C2 full optimization) in the JVM input arguments. These flags are used for debugging and profiling but left in production significantly reduce throughput and increase CPU usage, which can manifest as elevated heap pressure due to longer-living objects.
