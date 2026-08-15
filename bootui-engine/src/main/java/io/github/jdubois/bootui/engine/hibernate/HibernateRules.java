@@ -795,9 +795,7 @@ final class OpenInViewRule extends AbstractHibernateRule {
                 ? "spring.jpa.open-in-view is not set and defaults to enabled, keeping a persistence context open"
                         + " for the entire web request."
                 : "spring.jpa.open-in-view=true keeps a persistence context open for the entire web request.";
-        String severity = value == null
-                ? HibernateRuleSupport.INFO
-                : context.isProductionProfileActive() ? HibernateRuleSupport.HIGH : HibernateRuleSupport.MEDIUM;
+        String severity = context.isProductionProfileActive() ? HibernateRuleSupport.HIGH : HibernateRuleSupport.MEDIUM;
         return violation(severity, detail);
     }
 }

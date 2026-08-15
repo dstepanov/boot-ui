@@ -16,9 +16,11 @@ OIDC checks aggregate the active default tenant and active named tenants; a tena
 `quarkus.oidc[.<tenant>].tenant-enabled=false` is excluded.
 
 This is the Quarkus replacement for the Spring ruleset in [SECURITY-CHECKS.md](SECURITY-CHECKS.md):
-the panel and DTO are shared, but the rules are framework-specific (Elytron/OIDC vs Spring Security),
-so there is no overlap. Spring-only concepts (filter chains, `FilterChainProxy`, method-security
-proxies) are simply not evaluated here, and Quarkus-only concepts below are not evaluated on Spring.
+the panel and DTO are shared, but the framework-specific registries are mutually exclusive
+(Elytron/OIDC vs Spring Security). Equivalent authentication, authorization, transport, and CORS risks
+intentionally have framework-native rules on both stacks; Spring-only concepts (filter chains,
+`FilterChainProxy`, method-security proxies) are not evaluated here, and Quarkus-only concepts below
+are not evaluated on Spring.
 
 ## Availability and bounds
 
@@ -165,7 +167,7 @@ default TLS-registry keystore shape (`quarkus.tls.key-store.pem|p12|jks.*`), and
 `quarkus.http.tls-configuration-name` selects that bucket. A client-only named bucket no longer hides this
 finding. Acceptable behind a verified terminating proxy.
 
-### QS-TLS-003 - Outbound TLS certificate validation disabled (HIGH)
+### QS-TLS-003 - TLS certificate validation disabled (HIGH)
 `trust-all=true` is set on the default TLS registry bucket (`quarkus.tls.trust-all`) **or any named bucket**
 (`quarkus.tls.<name>.trust-all`), disabling peer certificate validation wherever that bucket is used and
 enabling man-in-the-middle attacks. Remove `trust-all`; import the peer's CA into a trust-store instead.
@@ -288,7 +290,7 @@ production, or protect it via the management interface / a permission policy.
 
 ## OIDC
 
-### QS-OIDC-001 - OIDC service without token audience validation (HIGH)
+### QS-OIDC-001 - OIDC without token audience validation (HIGH)
 OIDC is configured for a default or named `service`/`hybrid` token-consuming tenant without that tenant's
 `quarkus.oidc[.<tenant>].token.audience`, so an access token minted for a different service by the same trusted
 provider can be accepted. Set the tenant's token audience to this resource server's expected audience. Pure

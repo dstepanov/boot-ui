@@ -15,9 +15,11 @@ never intercepts live traffic, exposes config values, or modifies the applicatio
 review prompts; the right remediation depends on the application.
 
 This is the Quarkus replacement for the Spring ruleset in [SPRING-CHECKS.md](SPRING-CHECKS.md): the panel
-and DTO are shared, but the rules are framework-specific (CDI/Arc, MicroProfile Config vs Spring beans), so
-there is no overlap. The panel keeps the shared id `spring` and endpoint `/bootui/api/spring`; on Quarkus
-the UI relabels it "Quarkus".
+and DTO are shared, but the framework-specific registries are mutually exclusive (CDI/Arc and MicroProfile
+Config replace Spring beans and `Environment`). Equivalent risks intentionally parallel sibling advisors:
+`QA-PROD-002` mirrors Hibernate schema-safety checks, and `QA-CFG-002` mirrors Hibernate production SQL-logging
+checks, so either independently browsable domain surfaces the same configuration risk. The panel keeps the
+shared id `spring` and endpoint `/bootui/api/spring`; on Quarkus the UI relabels it "Quarkus".
 
 ## Availability and bounds
 
@@ -178,7 +180,7 @@ shutdown.
 
 ## Performance
 
-### QA-PERF-002 - Virtual-thread pinning via synchronized (HIGH)
+### QA-PERF-002 - Virtual-thread pinning via synchronized (JEP 491) (HIGH)
 **Quarkus/JDK-specific — no Spring equivalent.** One or more methods that run on a virtual thread — via a
 method-level `@RunOnVirtualThread`, or because their declaring class carries a class-level
 `@RunOnVirtualThread` (which makes every method in that class run on a virtual thread) — are also declared

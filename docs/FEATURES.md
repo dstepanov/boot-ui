@@ -457,9 +457,9 @@ violating rules, sorted by severity and violation count. See
 > `ClassFileImporter`, which is incompatible with a native executable; the panel is automatically hidden when the
 > application is detected to be running as a native image.
 
-On Quarkus the panel is identical, running the same shared ArchUnit ruleset and on-demand scan over the same report
-contract — the framework-agnostic hygiene rules apply unchanged, while the Spring-stereotype rules simply find no
-matching classes on a Quarkus application. Framework-sensitive proxy rules receive the active platform explicitly:
+On Quarkus the panel runs the same shared ArchUnit ruleset and on-demand scan over the same report contract. Generic
+hygiene rules apply unchanged; Spring-only annotation rules find no matching classes, while Jakarta-based rules and
+framework-sensitive proxy rules evaluate with Quarkus-specific semantics. Proxy rules receive the active platform explicitly:
 the Spring self-invocation rule is skipped because Arc supports intercepted self-invocation, while proxy visibility
 follows Arc's support for static interception and final-method transformation instead of applying Spring's proxy
 restrictions. On Spring, protected and package-private methods are accepted for Spring Boot's default class-based
@@ -542,10 +542,11 @@ generators, collection fetch pagination, unsafe cascades, cache misconfiguration
 is framed as a review prompt, not a verdict: it never intercepts queries, invokes repositories, executes SQL, or modifies
 mappings. See [HIBERNATE-CHECKS.md](HIBERNATE-CHECKS.md) for the full rule catalogue and remediation links.
 
-On Quarkus the panel is identical, running the same shared rule engine over the same report contract when
-`quarkus-hibernate-orm` is present: entities are discovered from the live JPA `EntityManagerFactory` metamodel (across
-all persistence units, de-duplicated by identity), and most mapping/identifier/fetch rules apply unchanged. A few
-platform differences are worth noting. First, persistence configuration is read through a key-mapping layer
+On Quarkus the panel runs the same 72-rule registry and report contract when `quarkus-hibernate-orm` is present:
+entities are discovered from the live JPA `EntityManagerFactory` metamodel (across all persistence units, de-duplicated
+by identity), and most mapping/identifier/fetch rules apply unchanged. Spring Data query rules skip when repository
+metadata is unavailable instead of reporting a clean result. Other platform differences are worth noting. First,
+persistence configuration is read through a key-mapping layer
 (`QuarkusHibernatePropertyLookup`) that translates the Spring/native-Hibernate property names the rules expect onto
 their Quarkus equivalents — `ddl-auto`/`hbm2ddl.auto` → `quarkus.hibernate-orm.schema-management.strategy` (or the
 deprecated `quarkus.hibernate-orm.database.generation`, including the `drop-and-create` ↔ `create-drop` value alias),
@@ -1288,7 +1289,8 @@ referenced primary key's type, and a redundant unique index duplicating the prim
 proxy-aware datasource discovery as Database Connection Pools and SQL Trace, skipping Spring's delegating/routing
 `DataSource` wrappers so a wrapped datasource is never introspected twice. It never executes DDL, never queries
 application data, and fails closed with a stable empty report and an explanatory status when no `DataSource` bean is
-present or introspection fails.
+present or no datasource can be read. If only some datasources fail introspection, readable datasources are still
+evaluated and the report status is `PARTIAL`.
 
 For **PostgreSQL** and **MySQL** — the two most widely used relational databases among Java developers — a small amount
 of dialect-specific catalog augmentation runs in addition to the generic checks: PostgreSQL invalid/broken indexes
