@@ -6,10 +6,12 @@ import io.github.jdubois.bootui.engine.activity.ActivityPersistenceSettings;
 import io.github.jdubois.bootui.engine.activity.ActivityStoreFactory;
 import io.github.jdubois.bootui.engine.activity.SwitchableActivityStore;
 import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
+import io.github.jdubois.bootui.engine.architecture.ArchitecturePlatform;
 import io.github.jdubois.bootui.engine.architecture.ArchitectureScanner;
 import io.github.jdubois.bootui.engine.beans.BeansService;
 import io.github.jdubois.bootui.engine.cache.CacheService;
 import io.github.jdubois.bootui.engine.config.ConfigService;
+import io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorScanner;
 import io.github.jdubois.bootui.engine.datasource.ConnectionPoolService;
 import io.github.jdubois.bootui.engine.devservices.DevServicesReportService;
 import io.github.jdubois.bootui.engine.email.EmailCaptureService;
@@ -54,6 +56,7 @@ import io.github.jdubois.bootui.engine.web.HttpExchangeBuffer;
 import io.github.jdubois.bootui.engine.web.HttpProbeService;
 import io.github.jdubois.bootui.quarkus.beans.QuarkusBeanProvider;
 import io.github.jdubois.bootui.quarkus.config.QuarkusConfigProvider;
+import io.github.jdubois.bootui.quarkus.databaseadvisor.QuarkusDatabaseAdvisorDataSourceProvider;
 import io.github.jdubois.bootui.quarkus.health.QuarkusHealthGuidance;
 import io.github.jdubois.bootui.quarkus.hibernate.QuarkusHibernatePropertyLookup;
 import io.github.jdubois.bootui.quarkus.logging.QuarkusLoggerProvider;
@@ -77,6 +80,7 @@ import io.quarkus.runtime.LaunchMode;
 import io.smallrye.config.SmallRyeConfig;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
+import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -234,7 +238,9 @@ public class BootUiEngineProducer {
      * When {@code quarkus-mailer} <em>is</em> present, {@code QuarkusEmailCapture} (registered by the
      * deployment {@code registerEmail} build step) observes {@code io.quarkus.mailer.SentMail} and feeds this
      * service's {@link EmailStore}. Capacity bounds memory ({@code bootui.email.max-entries}, default 100,
-     * matching the Spring panel cap).
+     * matching the Spring panel cap), and each captured body is additionally bounded by
+     * {@code bootui.email.max-body-length} (default {@link EmailStore#DEFAULT_MAX_BODY_LENGTH}) so one
+     * oversized message cannot spike memory before the entry-count cap would evict it.
      *
      * <p>Unlike Spring's {@code bootui.email.dev-trap} (which intercepts <em>before</em> the send and can block
      * it), Quarkus fires {@code SentMail} <em>after</em> the send, so BootUI cannot trap the message. Instead the
@@ -254,11 +260,14 @@ public class BootUiEngineProducer {
             QuarkusExposurePolicy exposure, Config config, Instance<TraceIdProvider> traceIdProvider) {
         int maxEntries = config.getOptionalValue("bootui.email.max-entries", Integer.class)
                 .orElse(100);
+        int maxBodyLength = config.getOptionalValue("bootui.email.max-body-length", Integer.class)
+                .orElse(EmailStore.DEFAULT_MAX_BODY_LENGTH);
         boolean mock = config.getOptionalValue("quarkus.mailer.mock", Boolean.class)
                 .orElseGet(() -> LaunchMode.current().isDevOrTest());
         boolean maskContent = config.getOptionalValue("bootui.email.mask-content", Boolean.class)
                 .orElse(false);
-        EmailCaptureService service = new EmailCaptureService(new EmailStore(maxEntries), exposure, mock, maskContent);
+        EmailCaptureService service =
+                new EmailCaptureService(new EmailStore(maxEntries, maxBodyLength), exposure, mock, maskContent);
         if (traceIdProvider.isResolvable()) {
             service.setTraceIdProvider(traceIdProvider.get());
         }
@@ -555,7 +564,8 @@ public class BootUiEngineProducer {
     @Produces
     @Singleton
     public ArchitectureScanner architectureScanner(QuarkusBasePackageProvider basePackages) {
-        return ArchitectureScanner.usingClasspath(basePackages::basePackages, Clock.systemUTC());
+        return ArchitectureScanner.usingClasspath(
+                basePackages::basePackages, ArchitecturePlatform.QUARKUS, Clock.systemUTC());
     }
 
     /**
@@ -749,6 +759,31 @@ public class BootUiEngineProducer {
     public HibernateStatisticsService hibernateStatisticsService(Instance<HibernateStatisticsProvider> providers) {
         HibernateStatisticsProvider provider = providers.isUnsatisfied() ? null : providers.get();
         return new HibernateStatisticsService(provider);
+    }
+
+    /**
+     * The Database Advisor scanner. Produced <em>unconditionally</em> because {@code javax.sql.DataSource} is
+     * core JDK (unlike Hibernate's {@code EntityManagerFactory}): {@link QuarkusDatabaseAdvisorDataSourceProvider}
+     * is constructed directly here (never behind a capability-gated producer) and simply returns an empty list
+     * when {@code Instance<DataSource>} is unsatisfied, so the scan reports "no DataSource beans were found"
+     * instead of failing. The Hibernate cross-reference half reuses the same, already-gated
+     * {@link EntityDiscoverySource} as {@link #hibernateScanner}, so the check only activates when a Hibernate
+     * metamodel is also available.
+     */
+    @Produces
+    @Singleton
+    public DatabaseAdvisorScanner databaseAdvisorScanner(
+            @Any Instance<DataSource> dataSources, Instance<EntityDiscoverySource> entityDiscoverySources) {
+        QuarkusDatabaseAdvisorDataSourceProvider dataSourceProvider =
+                new QuarkusDatabaseAdvisorDataSourceProvider(dataSources);
+        Supplier<EntityDiscovery> discovery;
+        if (entityDiscoverySources.isUnsatisfied()) {
+            discovery = () -> EntityDiscovery.empty("Hibernate ORM is not configured on this Quarkus application.");
+        } else {
+            EntityDiscoverySource source = entityDiscoverySources.get();
+            discovery = source::discover;
+        }
+        return DatabaseAdvisorScanner.using(dataSourceProvider::dataSources, discovery, Clock.systemUTC());
     }
 
     /**

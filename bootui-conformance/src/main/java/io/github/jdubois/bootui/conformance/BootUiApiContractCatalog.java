@@ -91,6 +91,7 @@ public final class BootUiApiContractCatalog {
             inventory("liquibase", "/liquibase/changesets", "liquibasePresent", "databases"),
             inventory("database-connection-pools", "/database-connection-pools/pools", "hikariPresent", "pools"),
             advisor("hibernate", "/hibernate", "results"),
+            advisor("database-advisor", "/database-advisor", "results"),
             read(
                     "hibernate-statistics",
                     "/hibernate-statistics",
@@ -201,6 +202,7 @@ public final class BootUiApiContractCatalog {
             advisor("spring", "/spring", "results"),
             advisor("crac", "/crac", "findings"),
             capture("sql-trace", "/sql-trace", "entries"),
+            capture("transactions", "/transactions", "entries"),
             capture("rest-client-trace", "/rest-client-trace", "entries"),
             read(
                     "mcp-server",
@@ -274,6 +276,7 @@ public final class BootUiApiContractCatalog {
         all(actions, "security.scan", "security", "POST", "/security/scan");
         all(actions, "pentesting.scan", "pentesting", "POST", "/pentesting/scan");
         all(actions, "hibernate.scan", "hibernate", "POST", "/hibernate/scan");
+        all(actions, "database-advisor.scan", "database-advisor", "POST", "/database-advisor/scan");
         all(actions, "cache.clear", "cache", "POST", "/cache/clear");
         all(actions, "traces.clear", "traces", "DELETE", "/traces");
         all(actions, "exceptions.clear", "exceptions", "DELETE", "/exceptions");
@@ -297,6 +300,8 @@ public final class BootUiApiContractCatalog {
         spring(actions, "crac.install-all", "crac", "POST", "/crac/install/all");
         all(actions, "sql-trace.clear", "sql-trace", "POST", "/sql-trace/clear");
         all(actions, "sql-trace.recording", "sql-trace", "POST", "/sql-trace/recording");
+        spring(actions, "transactions.clear", "transactions", "POST", "/transactions/clear");
+        spring(actions, "transactions.recording", "transactions", "POST", "/transactions/recording");
         all(actions, "rest-client-trace.clear", "rest-client-trace", "POST", "/rest-client-trace/clear");
         all(actions, "rest-client-trace.recording", "rest-client-trace", "POST", "/rest-client-trace/recording");
         all(actions, "mcp-server.toggle", "mcp-server", "POST", "/mcp-server/toggle");

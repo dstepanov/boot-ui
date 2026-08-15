@@ -1,10 +1,12 @@
 package io.github.jdubois.bootui.autoconfigure;
 
+import io.github.jdubois.bootui.autoconfigure.activity.LiveServiceMapController;
 import io.github.jdubois.bootui.autoconfigure.architecture.ArchitectureController;
 import io.github.jdubois.bootui.autoconfigure.config.BootUiExposure;
 import io.github.jdubois.bootui.autoconfigure.config.BootUiPathPropertySource;
 import io.github.jdubois.bootui.autoconfigure.config.ConfigOverrideService;
 import io.github.jdubois.bootui.autoconfigure.crac.CracController;
+import io.github.jdubois.bootui.autoconfigure.databaseadvisor.DatabaseAdvisorController;
 import io.github.jdubois.bootui.autoconfigure.exceptions.BootUiExceptionLogAppender;
 import io.github.jdubois.bootui.autoconfigure.graalvm.GraalVmController;
 import io.github.jdubois.bootui.autoconfigure.hibernate.HibernateController;
@@ -47,9 +49,11 @@ import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveSecurityEventTrac
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveSecurityHeadersFilter;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveSecurityLogsController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveSqlTraceController;
+import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveTransactionsController;
 import io.github.jdubois.bootui.autoconfigure.restapi.RestApiController;
 import io.github.jdubois.bootui.autoconfigure.spring.SpringController;
 import io.github.jdubois.bootui.autoconfigure.sqltrace.SqlTraceDataSourceBeanPostProcessor;
+import io.github.jdubois.bootui.autoconfigure.transactions.BootUiTransactionManagerBeanPostProcessor;
 import io.github.jdubois.bootui.autoconfigure.web.*;
 import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
 import io.github.jdubois.bootui.engine.cache.CacheActivityRecorder;
@@ -60,6 +64,7 @@ import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.safety.ApiTokenAuthenticator;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
 import io.github.jdubois.bootui.engine.telemetry.TelemetryStore;
+import io.github.jdubois.bootui.engine.transactions.TransactionRecorder;
 import io.github.jdubois.bootui.spi.TraceIdProvider;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -225,6 +230,7 @@ import tools.jackson.databind.ObjectMapper;
     FlywayController.class,
     LiquibaseController.class,
     DatabaseConnectionPoolsController.class,
+    DatabaseAdvisorController.class,
     SpringCacheController.class,
     DevServicesController.class,
     VulnerabilitiesController.class,
@@ -254,9 +260,11 @@ import tools.jackson.databind.ObjectMapper;
     BootUiReactiveAutoConfiguration.ReactiveExceptionsConfiguration.class,
     ReactiveExceptionsController.class,
     ReactiveSqlTraceController.class,
+    ReactiveTransactionsController.class,
     ReactiveRestClientTraceController.class,
     ReactiveSecurityLogsController.class,
     ReactiveLiveActivityController.class,
+    LiveServiceMapController.class,
     EmailController.class,
     KafkaController.class,
     RabbitController.class,
@@ -293,6 +301,7 @@ public class BootUiReactiveAutoConfiguration {
             CracController.class.getName(),
             HealthController.class.getName(),
             DatabaseConnectionPoolsController.class.getName(),
+            DatabaseAdvisorController.class.getName(),
             HttpExchangesController.class.getName(),
             HttpProbeController.class.getName(),
             HeapDumpController.class.getName(),
@@ -315,9 +324,11 @@ public class BootUiReactiveAutoConfiguration {
             DismissedRulesController.class.getName(),
             ReactiveExceptionsController.class.getName(),
             ReactiveSqlTraceController.class.getName(),
+            ReactiveTransactionsController.class.getName(),
             ReactiveRestClientTraceController.class.getName(),
             ReactiveSecurityLogsController.class.getName(),
             ReactiveLiveActivityController.class.getName(),
+            LiveServiceMapController.class.getName(),
             ReactiveBootUiMcpController.class.getName(),
             ReactiveBootUiMcpServerController.class.getName(),
             EmailController.class.getName(),
@@ -381,7 +392,14 @@ public class BootUiReactiveAutoConfiguration {
                 ObjectProvider<PentestingController> pentesting,
                 ObjectProvider<RestApiController> restApi,
                 ObjectProvider<GraalVmController> graalvm,
-                ObjectProvider<CracController> crac) {
+                ObjectProvider<CracController> crac,
+                ObjectProvider<DatabaseAdvisorController> databaseAdvisor,
+                ObjectProvider<VulnerabilitiesController> vulnerabilities,
+                ObjectProvider<LoggersController> loggers,
+                ObjectProvider<ConditionsController> conditions,
+                ObjectProvider<ScheduledController> scheduled,
+                ObjectProvider<SpringCacheController> cache,
+                ObjectProvider<DatabaseConnectionPoolsController> connectionPools) {
             return new ReactiveBootUiMcpTools(
                     overview,
                     health,
@@ -403,7 +421,14 @@ public class BootUiReactiveAutoConfiguration {
                     pentesting,
                     restApi,
                     graalvm,
-                    crac);
+                    crac,
+                    databaseAdvisor,
+                    vulnerabilities,
+                    loggers,
+                    conditions,
+                    scheduled,
+                    cache,
+                    connectionPools);
         }
 
         @Bean
@@ -669,6 +694,37 @@ public class BootUiReactiveAutoConfiguration {
     static SqlTraceDataSourceBeanPostProcessor bootUiSqlTraceDataSourceBeanPostProcessor(
             ObjectProvider<SqlTraceRecorder> recorderProvider) {
         return new SqlTraceDataSourceBeanPostProcessor(recorderProvider);
+    }
+
+    /**
+     * Duplicates {@link BootUiAutoConfiguration#bootUiTransactionRecorder}: no stack-specific
+     * dependency. Needed by {@link ReactiveTransactionsController}. Deliberately does not also
+     * duplicate {@code bootUiTransactionRecorderIdleReclaimable} for the same reason {@code
+     * bootUiSqlTraceRecorder} above does not.
+     */
+    @Bean
+    public TransactionRecorder bootUiTransactionRecorder(
+            BootUiProperties properties, SqlTraceRecorder sqlTraceRecorder) {
+        BootUiProperties.Transactions transactions = properties.getTransactions();
+        boolean enabled = transactions.isEnabled() && properties.isPanelEnabled(BootUiPanels.TRANSACTIONS);
+        return new TransactionRecorder(
+                enabled,
+                transactions.isRecording(),
+                transactions.getMaxEntries(),
+                transactions.getSlowTransactionThresholdMillis(),
+                transactions.getConnectionHoldThresholdMillis(),
+                sqlTraceRecorder);
+    }
+
+    /**
+     * Duplicates {@link BootUiAutoConfiguration#bootUiTransactionManagerBeanPostProcessor}: no
+     * stack-specific dependency (registers a {@code TransactionExecutionListener} against {@code
+     * ConfigurableTransactionManager} beans directly). Must stay eager like its servlet counterpart.
+     */
+    @Bean
+    static BootUiTransactionManagerBeanPostProcessor bootUiTransactionManagerBeanPostProcessor(
+            ObjectProvider<TransactionRecorder> recorderProvider) {
+        return new BootUiTransactionManagerBeanPostProcessor(recorderProvider);
     }
 
     /**

@@ -8,6 +8,7 @@ import io.github.jdubois.bootui.autoconfigure.config.BootUiExposure;
 import io.github.jdubois.bootui.autoconfigure.config.SpringConfigProvider;
 import io.github.jdubois.bootui.autoconfigure.config.SpringMemoryRuntimeConfig;
 import io.github.jdubois.bootui.autoconfigure.crac.CracRuntimeInventoryCollector;
+import io.github.jdubois.bootui.autoconfigure.databaseadvisor.SpringDatabaseAdvisorDataSourceProvider;
 import io.github.jdubois.bootui.autoconfigure.datasource.SpringConnectionPoolProvider;
 import io.github.jdubois.bootui.autoconfigure.flyway.SpringFlywayProvider;
 import io.github.jdubois.bootui.autoconfigure.graalvm.HttpReachabilityMetadataRepository;
@@ -39,12 +40,14 @@ import io.github.jdubois.bootui.engine.activity.ActivityInstanceIds;
 import io.github.jdubois.bootui.engine.activity.ActivityPersistenceSettings;
 import io.github.jdubois.bootui.engine.activity.ActivityStoreFactory;
 import io.github.jdubois.bootui.engine.activity.SwitchableActivityStore;
+import io.github.jdubois.bootui.engine.architecture.ArchitecturePlatform;
 import io.github.jdubois.bootui.engine.architecture.ArchitectureScanner;
 import io.github.jdubois.bootui.engine.beans.BeansService;
 import io.github.jdubois.bootui.engine.cache.CacheActivityRecorder;
 import io.github.jdubois.bootui.engine.cache.CacheService;
 import io.github.jdubois.bootui.engine.config.ConfigService;
 import io.github.jdubois.bootui.engine.crac.CracReadinessScanner;
+import io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorScanner;
 import io.github.jdubois.bootui.engine.datasource.ConnectionPoolService;
 import io.github.jdubois.bootui.engine.email.EmailCaptureService;
 import io.github.jdubois.bootui.engine.email.EmailStore;
@@ -54,6 +57,8 @@ import io.github.jdubois.bootui.engine.graalvm.GraalVmReadinessScanner;
 import io.github.jdubois.bootui.engine.health.HealthService;
 import io.github.jdubois.bootui.engine.heapdump.HeapDumpService;
 import io.github.jdubois.bootui.engine.heapdump.HeapDumpSettings;
+import io.github.jdubois.bootui.engine.hibernate.EntityDiscovery;
+import io.github.jdubois.bootui.engine.hibernate.EntityDiscoverySource;
 import io.github.jdubois.bootui.engine.hibernate.HibernateScanner;
 import io.github.jdubois.bootui.engine.hibernate.HibernateStatisticsService;
 import io.github.jdubois.bootui.engine.jms.JmsActivityRecorder;
@@ -172,13 +177,36 @@ public class BootUiEngineConfiguration {
     ArchitectureScanner bootUiArchitectureScanner(BasePackageProvider basePackageProvider) {
         // Live policy: base packages are re-read on every scan via the BasePackageProvider SPI, and the
         // ArchUnit classpath import runs only on demand (POST /scan), never at bean construction.
-        return ArchitectureScanner.usingClasspath(basePackageProvider::basePackages, Clock.systemUTC());
+        return ArchitectureScanner.usingClasspath(
+                basePackageProvider::basePackages, ArchitecturePlatform.SPRING, Clock.systemUTC());
     }
 
     @Bean
     @Lazy
     @ConditionalOnMissingBean
-    RestApiScanner bootUiRestApiScanner(BasePackageProvider basePackageProvider) {
+    DatabaseAdvisorScanner bootUiDatabaseAdvisorScanner(
+            ObjectProvider<ListableBeanFactory> beanFactoryProvider,
+            ObjectProvider<EntityDiscoverySource> entityDiscoverySource) {
+        // javax.sql.DataSource is core JDK (unlike EntityManagerFactory), so DataSource discovery needs no
+        // @ConditionalOnClass gating; the Hibernate cross-reference half is optional and only resolved when
+        // the nested HibernateAdvisorConfiguration below is active, via the EntityDiscoverySource seam.
+        SpringDatabaseAdvisorDataSourceProvider dataSourceProvider =
+                new SpringDatabaseAdvisorDataSourceProvider(beanFactoryProvider);
+        return DatabaseAdvisorScanner.using(
+                dataSourceProvider::dataSources,
+                () -> {
+                    EntityDiscoverySource source = entityDiscoverySource.getIfAvailable();
+                    return source == null
+                            ? EntityDiscovery.empty("Hibernate/JPA metamodel not detected on the classpath.")
+                            : source.discover();
+                },
+                Clock.systemUTC());
+    }
+
+    @Bean
+    @Lazy
+    @ConditionalOnMissingBean
+    RestApiScanner bootUiRestApiScanner(BasePackageProvider basePackageProvider, Environment environment) {
         // Live policy: base packages are re-read on every scan via the shared BasePackageProvider SPI, the
         // OpenAPI annotation presence (Swagger's @Operation, honored by springdoc) is probed live, and the
         // ArchUnit import runs only on demand (POST /scan). The Quarkus adapter probes for the equivalent
@@ -187,6 +215,7 @@ public class BootUiEngineConfiguration {
                 basePackageProvider::basePackages,
                 () -> ClassUtils.isPresent(
                         "io.swagger.v3.oas.annotations.Operation", BootUiEngineConfiguration.class.getClassLoader()),
+                () -> isSpringMvcApiVersioningConfigured(environment),
                 Clock.systemUTC());
     }
 
@@ -214,8 +243,9 @@ public class BootUiEngineConfiguration {
     CracReadinessScanner bootUiCracReadinessScanner(
             BasePackageProvider basePackageProvider, ApplicationContext applicationContext) {
         // Reuses the shared BasePackageProvider SPI (live base packages) and reads a live runtime inventory of
-        // auto-configured resources (connection pools, cache managers) through the engine's CracRuntimeInventory
-        // supplier seam; this adapter supplies the Spring bean inspection so bootui-engine stays framework-neutral.
+        // auto-configured resources (connection pools, Hikari lifecycle evidence, local caches, and partial-lifecycle
+        // task executors) through the engine's CracRuntimeInventory supplier seam; this adapter supplies the Spring
+        // bean inspection so bootui-engine stays framework-neutral.
         // The ArchUnit import runs only on demand (POST /scan), never at bean construction.
         return CracReadinessScanner.usingClasspath(
                 basePackageProvider::basePackages,
@@ -238,8 +268,8 @@ public class BootUiEngineConfiguration {
         // The presence check must run BEFORE the .class literal below: referencing
         // RequestMappingInfoHandlerMapping.class unconditionally would resolve that constant-pool entry
         // as soon as this @Lazy factory method runs, throwing NoClassDefFoundError on such a classpath
-        // (confirmed against the reactive WebFlux sample app). Passing null here is safe -
-        // SpringPentestingObservationCollector treats an absent provider as an empty endpoint inventory.
+        // (confirmed against the reactive WebFlux sample app). Passing null here is safe:
+        // SpringPentestingObservationCollector marks the MVC endpoint inventory unavailable.
         ObjectProvider<RequestMappingInfoHandlerMapping> handlerMappingProvider = ClassUtils.isPresent(
                         "org.springframework.web.servlet.mvc.method.RequestMappingInfoHandlerMapping",
                         applicationContext.getClassLoader())
@@ -373,7 +403,7 @@ public class BootUiEngineConfiguration {
     EmailCaptureService bootUiEmailCaptureService(BootUiProperties properties, BootUiExposure exposure) {
         BootUiProperties.Email emailProperties = properties.getEmail();
         return new EmailCaptureService(
-                new EmailStore(emailProperties.getMaxEntries()),
+                new EmailStore(emailProperties.getMaxEntries(), emailProperties.getMaxBodyLength()),
                 exposure,
                 emailProperties.isDevTrap(),
                 emailProperties.isMaskContent());
@@ -435,6 +465,18 @@ public class BootUiEngineConfiguration {
         HibernateStatisticsService bootUiHibernateStatisticsService(
                 ObjectProvider<EntityManagerFactory> entityManagerFactories) {
             return new HibernateStatisticsService(new SpringHibernateStatisticsProvider(entityManagerFactories));
+        }
+
+        @Bean
+        @Lazy
+        @ConditionalOnMissingBean
+        EntityDiscoverySource bootUiEntityDiscoverySource(
+                ObjectProvider<EntityManagerFactory> entityManagerFactories,
+                ObjectProvider<ListableBeanFactory> beanFactories) {
+            // Shared with the Database Advisor: the same JPA metamodel read used by the Hibernate advisor,
+            // exposed through the pure-JDK EntityDiscoverySource seam so the always-active
+            // DatabaseAdvisorScanner (below) can consult it without linking jakarta.persistence types.
+            return () -> SpringHibernateDiscovery.discover(entityManagerFactories, beanFactories);
         }
     }
 
@@ -1030,5 +1072,19 @@ public class BootUiEngineConfiguration {
         } catch (NoUniqueBeanDefinitionException ex) {
             return dataSourceProvider.orderedStream().findFirst().orElse(null);
         }
+    }
+
+    private static boolean isSpringMvcApiVersioningConfigured(Environment environment) {
+        return hasTextProperty(environment, "spring.mvc.apiversion.supported")
+                || hasTextProperty(environment, "spring.mvc.apiversion.default")
+                || hasTextProperty(environment, "spring.mvc.apiversion.use.header")
+                || hasTextProperty(environment, "spring.mvc.apiversion.use.path")
+                || hasTextProperty(environment, "spring.mvc.apiversion.use.query-parameter")
+                || hasTextProperty(environment, "spring.mvc.apiversion.use.media-type");
+    }
+
+    private static boolean hasTextProperty(Environment environment, String name) {
+        String value = environment.getProperty(name);
+        return value != null && !value.isBlank();
     }
 }

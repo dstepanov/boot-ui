@@ -42,6 +42,7 @@ public final class BootUiPanels {
     public static final String DATABASE_CONNECTION_POOLS = "database-connection-pools";
     public static final String HIBERNATE = "hibernate";
     public static final String HIBERNATE_STATISTICS = "hibernate-statistics";
+    public static final String DATABASE_ADVISOR = "database-advisor";
     public static final String CACHE = "cache";
     public static final String SPRING_SECURITY = "spring-security";
     public static final String SECURITY = "security";
@@ -64,6 +65,7 @@ public final class BootUiPanels {
     public static final String SPRING = "spring";
     public static final String CRAC = "crac";
     public static final String SQL_TRACE = "sql-trace";
+    public static final String TRANSACTIONS = "transactions";
     public static final String REST_CLIENT_TRACE = "rest-client-trace";
     public static final String MCP_SERVER = "mcp-server";
     public static final String ACTIVITY = "activity";
@@ -104,6 +106,7 @@ public final class BootUiPanels {
             new Panel(DATA, "Spring Data", false, "/data"),
             new Panel(HIBERNATE, "Hibernate", true, "/hibernate"),
             new Panel(HIBERNATE_STATISTICS, "Hibernate Statistics", false, "/hibernate-statistics"),
+            new Panel(DATABASE_ADVISOR, "Database Advisor", true, "/database-advisor"),
             new Panel(CACHE, "Cache", true, "/cache"),
             new Panel(TRACES, "Traces", true, "/traces"),
             new Panel(LOG_TAIL, "Log Tail", false, "/log-tail"),
@@ -123,6 +126,7 @@ public final class BootUiPanels {
             new Panel(SPRING, "Spring", true, "/spring"),
             new Panel(CRAC, "CRaC", true, "/crac"),
             new Panel(SQL_TRACE, "SQL Trace", true, "/sql-trace"),
+            new Panel(TRANSACTIONS, "Transactions", true, "/transactions"),
             new Panel(REST_CLIENT_TRACE, "REST Client", true, "/rest-client-trace"),
             new Panel(AI, "AI Framework", false, "/ai"),
             new Panel(MCP_SERVER, "MCP Server", true, "/mcp-server"),

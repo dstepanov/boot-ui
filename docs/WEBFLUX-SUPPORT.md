@@ -14,8 +14,8 @@ reports, minus the one panel that stays unavailable for stack reasons described 
 that is available behaves identically to the servlet adapter**, behind the same shared `LocalhostGuard` write floor:
 Loggers (set level), HTTP Probe, Cache (clear), Flyway (migrate/clean), Liquibase (update), Heap Dump
 (capture/analyze/delete/download), Threads (download), Traces (clear), SQL Trace (toggle recording/clear),
-REST Client (clear/toggle recording), the advisor scans (Architecture, Spring, Hibernate, Pentesting, REST API,
-Security, Memory, Vulnerabilities/OSV), and Exceptions triage.
+Transactions (clear/toggle recording), REST Client (clear/toggle recording), the advisor scans (Architecture, Spring,
+Hibernate, Pentesting, REST API, Security, Memory, Vulnerabilities/OSV), and Exceptions triage.
 
 The adapter also shares the exact per-scanner single-flight contract with MVC and Quarkus. Overlapping expensive advisor
 actions fail fast with canonical JSON `409` rather than queueing on Netty or repeating work; Heap Dump
@@ -122,6 +122,10 @@ their Live Activity `MESSAGING` capture work identically to the servlet adapter 
 an imperative, blocking broker API, but its work runs on the application's JMS template/listener threads; the WebFlux
 panel only reads the shared in-memory recorder.
 
+CRaC uses the same framework-neutral scanner and Spring runtime inventory on MVC and WebFlux. Its pool inventory includes
+R2DBC factories, and its task/scheduling checks use Spring context APIs rather than servlet types. Generated assets still
+target a JVM process and Spring's checkpoint lifecycle; they do not imply Quarkus or native-image support.
+
 These controllers keep their synchronous servlet-facing signatures. On WebFlux, the centralized
 `ReactiveBootUiHandlerAdapter` dispatches their argument resolution and handler invocation on bounded-elastic threads,
 so controller-local scheduler annotations or endpoint allowlists are not required and new shared handlers cannot
@@ -129,8 +133,8 @@ accidentally inherit the Reactor Netty event loop.
 
 [^spring-advisor-reactive]: The `SpringController` wiring itself needed no adapter change, but the ruleset it runs
     (`SpringScanner`/`SpringRules`) is reactive-aware internally: it detects a WebFlux `ReactiveWebApplicationContext`
-    the same way `PanelsController.isReactive()` does, skips a servlet-only rule that does not apply
-    (`SPRING-WEB-007`, Tomcat thread cap), also matches `WebClient` beans for the HTTP-client-timeout rule
+    the same way `PanelsController.isReactive()` does, checks the active embedded server before evaluating
+    `SPRING-WEB-007` (the Tomcat thread cap, including reactive Tomcat), also matches `WebClient` beans for the HTTP-client-timeout rule
     (`SPRING-WEB-005`), points four rules' "Learn more" links at the reactive docs page instead of the servlet one,
     and adds two WebFlux-only rules (`SPRING-REACTIVE-001`, `SPRING-REACTIVE-002`) that are otherwise `SKIPPED`. See
     `docs/SPRING-CHECKS.md`.
@@ -141,14 +145,16 @@ accidentally inherit the Reactor Netty event loop.
 | -------------- | ---------------------------------------------------------------------------------------------------------- |
 | HTTP Exchanges | `ReactiveHttpExchangeRepositoryConfiguration` supplies Actuator's reactive `HttpExchangeRepository` bean instead of the servlet one — same DTO, same UI, same capture semantics |
 
-### 6.3 Rebuilt with a new reactive capture layer (7 panels)
+### 6.3 Rebuilt with a new reactive capture layer (8 panels)
 
 The DTO and UI are reused unchanged; only the capture/streaming source was rewritten because the servlet original
-depended on `SseEmitter` (SQL Trace, Log Tail, Security Logs, Exceptions, REST Client) or `HandlerExceptionResolver` (Exceptions):
+depended on `SseEmitter` (SQL Trace, Log Tail, Security Logs, Exceptions, REST Client, Transactions) or
+`HandlerExceptionResolver` (Exceptions):
 
 | Panel         | Reactive source                                                                                                                                                                        |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | SQL Trace     | `ReactiveSqlTraceController`, streaming over the new shared `ReactiveBootUiChangeStream` SSE primitive (`Flux<ServerSentEvent<T>>`), feeding the same `SqlTraceRecorder` engine class |
+| Transactions  | `ReactiveTransactionsController`, streaming over `ReactiveBootUiChangeStream`, feeding the same `TransactionRecorder` engine class. Capture itself is identical to the servlet adapter — `BootUiTransactionManagerBeanPostProcessor` registers a `TransactionExecutionListener` against every `ConfigurableTransactionManager` bean, which observes any blocking `PlatformTransactionManager` a WebFlux application still uses (e.g. JDBC repositories behind a thread-blocking data access layer). **Fidelity gap, accepted:** a WebFlux application backed only by a `ReactiveTransactionManager` (R2DBC) has no `ConfigurableTransactionManager` bean to observe — Spring's `TransactionExecutionListener` hook exists solely on the blocking SPI — so the panel reports the same "No PlatformTransactionManager bean is available" unavailable reason it would show if no transaction manager existed at all, rather than silently showing an empty table. |
 | Log Tail      | `ReactiveLogTailController` — same `LogTailBuffer`/Logback appender, SSE via `ReactiveBootUiChangeStream`               |
 | Security Logs | `ReactiveSecurityLogsController` over a fallback `InMemoryAuditEventRepository` (Spring's audit-event bus is itself framework-neutral, so no reactive-specific capture code was needed) |
 | Exceptions    | `ReactiveExceptionsController` + new `ReactiveBootUiExceptionHandler` (a `WebExceptionHandler` at `HIGHEST_PRECEDENCE`, replacing the servlet `HandlerExceptionResolver`); see the fidelity note below |
@@ -191,6 +197,25 @@ not served start-to-finish on one dedicated worker thread.
 | Panel         | Reactive source                                                                                                                                                                                     |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Live Activity | `ReactiveLiveActivityController`, merging `HttpExchangesController` (requests), `SqlTraceRecorder` (SQL), `ExceptionStore` (exceptions), `ReactiveSecurityLogsController` (security), `CacheActivityRecorder` (cache), `ScheduledTaskRunStore` (scheduled tasks), `KafkaActivityRecorder`/`RabbitActivityRecorder`/`JmsActivityRecorder` (messaging), `EmailCaptureService`/`EmailController` (mail), and `RestClientTraceRecorder` (REST/WebClient calls) via the shared engine `LiveActivityAssembler`/`RequestProfileAssembler` — the same classes the Quarkus adapter validated first; refreshed over `ReactiveBootUiChangeStream`, signaled by a new lightweight `ReactiveActivitySignalFilter` `WebFilter` after each non-BootUI request completes. |
+
+Live Activity's **Live flow** service map (`GET {api}/activity/service-map`) needed no reactive-specific work at all.
+`LiveServiceMapController` injects only beans both stacks register — the shared `HttpExchangesController` plus the
+engine's `ConnectionPoolService`, `SqlTraceRecorder`, `RestClientTraceRecorder`, `KafkaActivityRecorder`,
+`RabbitActivityRecorder`, and `CacheActivityRecorder` — and returns a stable core DTO, so one class is registered in
+both `BootUiAutoConfiguration` and `BootUiReactiveAutoConfiguration` and Spring MVC and WebFlux serve a byte-identical
+map, including its cache dependency and opaque flow correlation. All interpretation (identity normalization,
+configured-versus-observed state, conservative SQL attribution, and cardinality bounds) lives
+in the framework-neutral `ServiceMapAssembler`. The map refreshes off the same `ReactiveBootUiChangeStream` SSE tick the
+feed already uses; it performs no additional polling and contacts nothing. Cache is reported as an available source only
+after the shared post-processor successfully instruments at least one `CacheManager`, so an enabled but disconnected
+recorder never overstates runtime support.
+
+The map's opaque `ServiceMapInteractionDto.flowId` — derived one-way from whatever trace id was active when an
+interaction completed — needed no reactive-specific work either. `BootUiReactiveAutoConfiguration` already installs
+the same `ReactiveOtelTraceIdProvider` on the HTTP exchange, SQL, REST-client, and cache recorders (the REST-client and
+cache wiring landed alongside their own capture support, in addition to the four capture points called out below), and
+`ServiceMapAssembler` only ever reads whatever trace id those recorders already captured, so causal flow correlation
+on this adapter is byte-identical to Spring MVC and Quarkus wherever OpenTelemetry is configured.
 
 `ReactiveActivitySignalFilter` takes an `ObjectProvider<ReactiveLiveActivityController>` rather than a direct
 reference: `WebFilter` beans are eagerly resolved by WebFlux at startup to build the filter chain, so a direct
@@ -276,12 +301,35 @@ collection, chain match, and authorization simulation remains a Reactor `Mono`/`
 
 ### 6.6 Security advisor (`security`) — live on WebFlux
 
-The advisor uses a dedicated 25-rule reactive catalogue (`SEC-RXF-*`) over a neutral observation model collected from
+The advisor uses a dedicated 26-rule reactive catalogue (`SEC-RXF-*`) over a neutral observation model collected from
 the application's `SecurityWebFilterChain` configuration. It stays distinct from the raw `spring-security` panel:
 the raw panel explains the configured chains and mappings, while the advisor turns the observed posture into bounded,
 deterministic findings across authorization, CSRF, CORS, headers, Actuator exposure, OAuth2/JWT, configuration, and
 reactive session policy. BootUI's own permit-all chain is excluded from availability and analysis. See
 `docs/SECURITY-CHECKS.md` for the complete reactive catalogue.
+
+The catalogue is aligned with the Java 17 / Spring Boot 4.1.0 / Spring Security 7.1.0 baseline and deliberately
+describes only evidence the adapter can observe: installed filter/header-writer types, inspectable CORS maps, and host
+`Environment` properties. In particular, an installed `AuthorizationWebFilter` does not reveal whether
+its manager chose `permitAll`,
+`authenticated`, a role check, or custom logic; a decoder-local JWT validator is not inferred from unrelated validator
+beans; and management-path authorization, reverse-proxy TLS policy, handler-level CORS, and custom filters remain
+outside the snapshot. Unknown filter, header-writer, or CORS extraction skips dependent conclusions and produces a
+partial observation rather than being treated as an absent protection. Recursive composite header traversal is
+depth-bounded and reports incomplete evidence explicitly.
+
+Two unsupported checks were replaced without changing the 25-rule count: the non-existent reactive
+`spring.security.debug` switch and the unprovable global-bean audience-validator check gave way to host-configured
+Actuator `show-values=always` detection for web-exposed `env`/`configprops` endpoints and RFC 7662 plain-HTTP
+opaque-token introspection detection. Existing findings were narrowed where needed: credentialed CORS now targets the
+legal `allowedOriginPatterns="*"` case, CSP absence is a LOW contextual review (and report-only policies are called out
+as non-enforcing), static JWT keys are LOW rotation advice, HTTPS/Actuator findings avoid claiming knowledge of external
+deployment policy, and the mixed bearer/login rule uses WebFlux's real `NoOpServerSecurityContextRepository`
+remediation rather than servlet-only `SessionCreationPolicy`.
+
+A follow-up parity review brought the catalogue to 26 rules: `SEC-RXF-CSRF-001` and `SEC-RXF-SESSION-001` now also
+recognize `formLogin()` chains, not just OAuth2/OIDC login filters, and the new `SEC-RXF-CORS-003` flags broad
+`allowedOriginPatterns` (e.g. `https://*`) to match the servlet stack's `SEC-CORS-006`.
 
 ### 6.7 Not applicable (1 panel)
 
@@ -297,11 +345,15 @@ opposed to a unit-test classpath that always carries both `spring-webmvc` and `s
 `RequestMappingInfoHandlerMapping.class` unconditionally in an `@Lazy` `@Bean` method body. Resolving that
 class-literal constant-pool entry throws when `spring-webmvc` is genuinely absent. Fixed with a
 `ClassUtils.isPresent(...)` guard before the `.class` literal, passing `null` to
-`SpringPentestingObservationCollector` when absent (already null-safe: an absent provider renders an empty endpoint
-inventory, the same "deliberately empty inventory" pattern the Quarkus adapter's Pentesting port already uses). This
-is the same defensive pattern the rest of the codebase already uses for optional-dependency adapters — the reactive
-starter was simply the first Spring-side consumer where an MVC type can be genuinely absent from the classpath, not
-just absent as a bean.
+`SpringPentestingObservationCollector` when absent. The collector now records that MVC endpoint metadata is
+**unavailable**, rather than returning an empty inventory that could be mistaken for "inspected and no mappings."
+Pentesting still evaluates bounded Spring configuration/OAuth metadata plus at most one GET and one OPTIONS loopback
+response, but A01 servlet coverage is `NOT_APPLICABLE` and no-finding mixed-category coverage uses WebFlux-specific
+`INFO` wording. The reactive Security advisor owns `SecurityWebFilterChain`, reactive CORS, and route-policy review.
+The collector uses `spring.webflux.base-path` for the validated loopback target instead of the servlet-only
+`server.servlet.context-path`. This is the same defensive pattern the rest of the codebase uses for optional-dependency
+adapters — the reactive starter was simply the first Spring-side consumer where an MVC type can be genuinely absent
+from the classpath, not just absent as a bean.
 
 A second gap of the same *class* — availability manifest disagreeing with actual wiring — was caught the same way:
 `PanelsController` unconditionally reported `mcp-server` and `activity` as `available: true` on every platform, even

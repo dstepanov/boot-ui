@@ -8,7 +8,9 @@ const Health = () => import('./views/Health.vue')
 const HttpSessions = () => import('./views/HttpSessions.vue')
 const Loggers = () => import('./views/Loggers.vue')
 const DatabaseConnectionPools = () => import('./views/DatabaseConnectionPools.vue')
+const DatabaseAdvisor = () => import('./views/DatabaseAdvisor.vue')
 const SqlTrace = () => import('./views/SqlTrace.vue')
+const Transactions = () => import('./views/Transactions.vue')
 const RestClientTrace = () => import('./views/RestClientTrace.vue')
 const Data = () => import('./views/Data.vue')
 const Hibernate = () => import('./views/Hibernate.vue')
@@ -543,6 +545,28 @@ export const routes = [
     }
   },
   {
+    path: '/transactions',
+    name: 'transactions',
+    component: Transactions,
+    meta: {
+      group: groups.database,
+      icon: 'bi-diagram-3-fill',
+      title: 'Transactions',
+      shortcut: 'tx',
+      keywords: [
+        'transaction',
+        'transactional',
+        'propagation',
+        'isolation',
+        'commit',
+        'rollback',
+        'platformtransactionmanager',
+        'transaction boundaries',
+        'nested transactions'
+      ]
+    }
+  },
+  {
     path: '/data',
     name: 'data',
     component: Data,
@@ -576,6 +600,28 @@ export const routes = [
       title: 'Liquibase',
       shortcut: 'lb',
       keywords: ['migrations', 'changelog', 'changesets', 'schema', 'db migration']
+    }
+  },
+  {
+    path: '/database-advisor',
+    name: 'database-advisor',
+    component: DatabaseAdvisor,
+    meta: {
+      group: groups.database,
+      icon: 'bi-hdd-rack',
+      title: 'Database Advisor',
+      shortcut: 'da',
+      keywords: [
+        'schema',
+        'indexes',
+        'index',
+        'foreign key',
+        'primary key',
+        'postgres',
+        'mysql',
+        'discrepancy',
+        'jdbc metadata'
+      ]
     }
   },
   {
