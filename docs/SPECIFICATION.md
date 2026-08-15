@@ -842,7 +842,7 @@ Data sources:
 Features:
 
 - Show recent exchanges with timestamp, method, path, status, duration, response size when available, and trace id when a
-  common propagation header is present.
+  common propagation header or the server's active tracing context supplies one.
 - Show request and response headers in row details.
 - Provide server-side filtering by path/URL/trace id, method, and status class with bounded paging.
 - Hide BootUI self-requests by default through `bootui.monitoring.exclude-self`.
@@ -1068,6 +1068,125 @@ Acceptance criteria:
   `ScheduledTaskObservationContext`; instead `QuarkusScheduledTaskRunRecorder` observes the CDI
   `SuccessfulExecution`/`FailedExecution` events the scheduler always fires, gated on the `SCHEDULER` capability
   (`quarkus-scheduler` is a `provided`-scope, R2-excluded dependency, mirroring `QuarkusSecurityEventCapture`).
+
+#### 5.14.2.1 Live Flow service map (Live Activity mode)
+
+Purpose: answer "what external systems does this running application depend on, and what evidence has BootUI recently
+observed for each relationship?" without introducing distributed tracing infrastructure, network discovery, or active
+health probes. Delivered as a second mode of the Live Activity panel, not as a separate panel, because it is a second
+reading of the same already-captured evidence.
+
+Contract: `GET {api}/activity/service-map` on Spring MVC, Spring WebFlux, and Quarkus, returning `ServiceMapReport`
+(`available`, `unavailableReason`, `generatedAt`, `application`, `nodes`, `edges`, `truncation`, `sources`, `warnings`).
+Because it lives under `/activity`, the Live Activity panel's own enable/read-only policy and the shared
+localhost/Host/cross-site-write guard already cover it with no extra registration.
+
+Data sources — reused only, never newly instrumented:
+
+- Completed inbound requests from the HTTP Exchanges buffer, folded into one generic `INBOUND` lane. Per-caller nodes
+  are deliberately not derived: a remote address is neither a stable identity nor safe to display here.
+- Outbound HTTP calls from the REST Client recorder, grouped to a `scheme://host[:port]` origin.
+- Configured JDBC pools from the Connection Pools service. The map independently strips JDBC authority
+  user-info, Oracle driver-style credentials, and driver parameter tails even when full value exposure is enabled.
+- Retained JDBC statements from the SQL Trace recorder, reduced to their coarse category.
+- Kafka **producer** records grouped by topic and RabbitMQ **publisher** records grouped by exchange/routing
+  destination. Consumed records and messages are inbound work and are never modelled as outbound dependencies.
+- Cache accesses (`HIT`/`MISS`/`PUT`/`EVICT`/`CLEAR`) from the same `CacheActivityRecorder` the Cache panel and Live
+  Activity's `CACHE` entries already read, grouped by the safe cache-manager/cache-name identity — never the accessed
+  key or value. Gathered only when the Cache panel is enabled, the recorder is itself capturing, and at least one
+  `CacheManager` was successfully instrumented, on Spring MVC and Spring WebFlux; Quarkus has no comparable interception
+  seam (see `docs/QUARKUS-SUPPORT.md`) and always reports `cacheAvailable: false` here, exactly as it does for the Live
+  Activity feed.
+
+Assembly is framework- and JSON-free (`ServiceMapAssembler` in `bootui-engine`); each adapter only gathers evidence from
+beans it already owns and passes a neutral `ServiceMapSources` record, so all three runtimes serve a byte-identical
+contract.
+
+Interpretation rules:
+
+- `configured` and `observed` are reported separately on every node and are never collapsed, so absence of traffic is
+  never presented as absence of a dependency. Cache dependencies are always `configured: false` in this contract: only
+  observed capture evidence feeds them today, the same honesty rule Kafka and RabbitMQ dependencies already follow.
+- `outcome` is one of `NO_EVIDENCE`, `OBSERVED_OK`, or `RETAINED_FAILURES`, and describes retained evidence only. It is
+  never a health check of the remote system. A cache `MISS` is never counted as a failure — it is a normal, expected
+  outcome — so a cache dependency's `outcome` can only ever be `NO_EVIDENCE` or `OBSERVED_OK`.
+- Statement evidence is attributed to a pool only when exactly one pool is configured and exactly one traced datasource
+  has a matching name. Otherwise statements are summarized on a separate aggregate node, the pools stay
+  configured-only, and the reason is surfaced as a warning. A statement-to-pool relationship is never fabricated.
+- `distinctOperations` is `null` where the source cannot report one honestly rather than defaulting to a meaningless
+  count.
+- Evidence whose identity cannot be reduced safely is omitted with a warning, never shown under a guessed identity.
+
+Flow correlation:
+
+- `ServiceMapInteractionDto.flowId` is a nullable, opaque, one-way SHA-256-derived identifier
+  (`ServiceMapIdentities.flowId`) computed from whatever distributed-trace id was active when an inbound HTTP request,
+  a SQL statement, an outbound REST call, or a cache access completed. Interactions sharing the same trace id — the
+  same request's actual path through the application — share the same `flowId`, so the client can recognize and
+  sequence them as one causal flow; the raw trace id itself never reaches this contract, and a blank/absent trace id
+  yields `flowId: null` rather than a synthetic one. Kafka and RabbitMQ interactions carry no trace id at capture time
+  and are therefore never correlated into a flow — they remain exactly as uncorrelated here as everywhere else in
+  BootUI's Live Activity model.
+
+Bounds and motion:
+
+- Dependencies are capped at 28 and each edge carries at most 6 retained interactions. Configured dependencies rank
+  ahead of purely observed ones so a burst of one-off origins cannot push a declared database off the map. Any omission
+  is reported through `truncation` and a warning.
+- The client lays the map out as a bounded hybrid left-to-right topology: inbound HTTP lane, central application hub,
+  then an airy right-facing fan through six dependencies or a two-column rack above that threshold. The fan uses a fixed
+  288-pixel radius and 72-pixel vertical pitch, producing an 800–844-pixel-wide typical map with readable connector
+  travel. The dense rack increases the application gap to 72 pixels, column gap to 32 pixels, and row pitch to 72 pixels;
+  it is bounded at 1,040 logical SVG pixels wide and 1,046 pixels tall at the 28-dependency cap inside the stage's
+  scroll area. Fan connectors use smooth cubic paths; dense routes use deterministic shortest clear paths around node
+  rectangles. Every pulse and slow trail uses CSS Motion Path with the visible connector's exact path.
+- `ServiceMapInteractionDto.id` is derived from the originating buffer's monotonic sequence, so it is stable across
+  refreshes. The client animates a short particle only when a **stable** edge (present in both the previous and the next
+  snapshot) carries an interaction id the previous snapshot did not. A first load, a newly appearing dependency, and an
+  idle application therefore produce no motion at all. Bursts are coalesced to a small per-edge count and a hard
+  concurrent cap rather than queued.
+- When freshly animated interactions share a non-null `flowId`, the client sequences their motion into a causal story
+  rather than animating unrelated-looking simultaneous blips: an inbound-HTTP pulse always starts first, and downstream
+  pulses start only once that inbound pulse would have finished arriving at the application. Downstream evidence then
+  replays in ascending retained completion-time order; cache precedes JDBC/outbound HTTP only as a deterministic
+  same-millisecond tie-break, so the UI never invents an order the completed evidence does not support. Further
+  same-flow downstream pulses are staggered by a small, bounded step so a fan-out still reads as distinguishable beats
+  rather than one instant flash. A downstream pulse whose batch carries no retained inbound
+  pulse for its flow — the common case once the inbound leg has already scrolled out of the retained tail — fires
+  immediately rather than waiting for an inbound arrival that batch will never carry, and a pulse with no `flowId` is
+  never delayed at all. Sequencing only ever paces *when* already-completed evidence is shown; it never delays a
+  pulse's underlying evidence from appearing at all, and the animation queue's existing concurrency cap and per-edge
+  cap apply identically whether or not a pulse happens to be sequenced.
+- Slow interactions pulse a calm, unmistakable amber with a restrained trailing halo — 1200–1500ms, longer than a
+  normal completion (650–850ms) or a failure (900–1100ms) — so timing itself, not color alone, carries the "slow"
+  meaning. During exactly the same delayed animation window, its causal target carries a temporary amber ring and a
+  `SLOW · <duration>` chip; failure uses a temporary red ring and `ERROR` chip. Inbound evidence targets the application,
+  while outbound evidence targets the remote dependency; overlapping failure takes visual precedence over slow without
+  clearing the slow window early. Retained failures never permanently color topology nodes or edges — they remain in
+  counts, details, recent rows, accessible text, and source links. No pulse flashes, bounces, loops, or drifts: each plays
+  exactly once, linearly, and a sequenced pulse and its target signal stay hidden for their entire causal delay. Motion
+  uses CSS `offset-path`/`offset-distance`, whose delay starts when the dynamic pulse mounts in the supported Chromium
+  browser, rather than SMIL `begin` timestamps tied to the document timeline.
+
+Acceptance criteria:
+
+- Rendering the map performs no network call, probe, DNS lookup, connection attempt, scan, or new interception, and adds
+  no instrumentation.
+- No secret, remote HTTP path/query value/user-info/fragment, message payload, message key, cache key/value, SQL text,
+  bound parameter, unmasked JDBC credential, or raw distributed-trace id reaches the response.
+- Dependencies are grouped by their complete sanitized identity. Public node ids are stable SHA-256-derived opaque
+  values, while only display labels are truncated, so long identities with a shared prefix remain separate.
+- Evidence from a source panel that is disabled or unavailable on the running adapter never reaches the map, and when no
+  source is available the report is `available: false` with a clear reason rather than an empty graph.
+- The rendered graph is bounded before serialization and every omission is visible.
+- The map is usable by keyboard and screen reader (focusable nodes, arrow-key traversal, an accessible detail view, and
+  a hidden textual list of every node and relationship) and honors `prefers-reduced-motion` by replacing motion with a
+  brief, immediate static target/edge highlight (never delayed or sequenced) plus a polite live-region update that
+  narrates slow/failure duration and a sequenced flow's complete causal story in one sentence.
+- Pausing cancels every pulse, target state, reduced-motion highlight, announcement, and associated timer. A response
+  already in flight may refresh the retained report while paused, but becomes the new comparison baseline without
+  scheduling or replaying its evidence after resume.
+- Spring MVC, Spring WebFlux, and Quarkus serve the same shape, verified by the shared conformance suite.
 
 ### 5.14.3 Traces Panel
 
