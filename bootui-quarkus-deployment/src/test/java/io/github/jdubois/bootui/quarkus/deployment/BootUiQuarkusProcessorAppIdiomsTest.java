@@ -7,17 +7,23 @@ import io.quarkus.deployment.Capability;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import jakarta.ws.rs.HttpMethod;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.UriInfo;
 import java.io.IOException;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.Indexer;
@@ -85,6 +91,29 @@ class BootUiQuarkusProcessorAppIdiomsTest {
         assertThat(BootUiQuarkusProcessor.isReactive(classType("java.lang.String")))
                 .isFalse();
         assertThat(BootUiQuarkusProcessor.isReactive(null)).isFalse();
+    }
+
+    @Test
+    void hasRestApiEndpointRecognizesCustomJaxRsHttpMethodAnnotations() throws IOException {
+        Index index = indexOf(Purge.class, PurgeResource.class);
+
+        assertThat(BootUiQuarkusProcessor.hasRestApiEndpoint(index)).isTrue();
+    }
+
+    @Test
+    void hasRestApiEndpointResolvesCustomVerbAnnotationsFromTheCombinedIndex() throws IOException {
+        Index applicationIndex = indexOf(DependencyPurgeResource.class);
+        Index annotationIndex = indexOf(DependencyPurge.class);
+
+        assertThat(BootUiQuarkusProcessor.hasRestApiEndpoint(applicationIndex, annotationIndex))
+                .isTrue();
+    }
+
+    @Test
+    void hasRestApiEndpointExcludesOutboundRestClientInterfaces() throws IOException {
+        Index index = indexOf(RegisterRestClient.class, RestClientOnly.class);
+
+        assertThat(BootUiQuarkusProcessor.hasRestApiEndpoint(index)).isFalse();
     }
 
     @Test
@@ -216,6 +245,35 @@ class BootUiQuarkusProcessorAppIdiomsTest {
 
     static class PlainBean {
         public String publicMutableField;
+    }
+
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @HttpMethod("PURGE")
+    @interface Purge {}
+
+    @Path("/widgets")
+    static class PurgeResource {
+        @Purge
+        void purge() {}
+    }
+
+    @Target(ElementType.METHOD)
+    @Retention(RetentionPolicy.RUNTIME)
+    @HttpMethod("PURGE")
+    @interface DependencyPurge {}
+
+    @Path("/widgets")
+    static class DependencyPurgeResource {
+        @DependencyPurge
+        void purge() {}
+    }
+
+    @RegisterRestClient
+    @Path("/outbound")
+    static class RestClientOnly {
+        @jakarta.ws.rs.GET
+        void read() {}
     }
 
     @Path("/default-scope")
