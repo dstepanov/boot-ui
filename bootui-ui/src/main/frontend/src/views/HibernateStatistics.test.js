@@ -11,6 +11,7 @@ function jsonResponse(body) {
 function disabledStatistics(overrides = {}) {
   return {
     available: false,
+    enableAvailable: true,
     unavailableReason: 'hibernate.generate_statistics is disabled.',
     statistics: null,
     ...overrides
@@ -20,6 +21,7 @@ function disabledStatistics(overrides = {}) {
 function enabledStatistics(overrides = {}) {
   return {
     available: true,
+    enableAvailable: false,
     unavailableReason: null,
     statistics: {
       sessionOpenCount: 12,
@@ -59,6 +61,7 @@ describe('HibernateStatistics panel', () => {
   let wrapper
 
   afterEach(() => {
+    document.cookie = 'XSRF-TOKEN=; Max-Age=0; path=/'
     wrapper?.unmount()
     wrapper = null
     vi.unstubAllGlobals()
@@ -97,6 +100,50 @@ describe('HibernateStatistics panel', () => {
     expect(wrapper.text()).toContain('hibernate.generate_statistics is disabled.')
     expect(wrapper.text()).toContain('hibernate.generate_statistics=true')
     expect(wrapper.text()).toContain('quarkus.hibernate-orm.statistics=true')
+    expect(wrapper.get('#enable-hibernate-statistics').text()).toContain('Enable for this runtime')
+  })
+
+  it('enables statistics for the current runtime only after an explicit click', async () => {
+    document.cookie = 'XSRF-TOKEN=test-token; path=/'
+    const fetchMock = vi.fn((url, init) => {
+      if (url === 'api/hibernate-statistics/enable') {
+        return jsonResponse(enabledStatistics())
+      }
+      return jsonResponse(disabledStatistics())
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    wrapper = mount(HibernateStatistics)
+    await flushPromises()
+
+    await wrapper.get('#enable-hibernate-statistics').trigger('click')
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenCalledWith('api/hibernate-statistics/enable', expect.objectContaining({method: 'POST'}))
+    expect(wrapper.text()).toContain('Hibernate statistics enabled for this runtime')
+    expect(wrapper.text()).toContain('Sessions & transactions')
+  })
+
+  it('disables runtime activation when the panel is read-only', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => jsonResponse(disabledStatistics()))
+    )
+    wrapper = mount(HibernateStatistics, {
+      props: {
+        panel: {
+          id: 'hibernate-statistics',
+          enabled: true,
+          available: true,
+          readOnly: true,
+          readOnlyReason: 'Panel is read-only.'
+        }
+      }
+    })
+    await flushPromises()
+
+    expect(wrapper.get('#enable-hibernate-statistics').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('Runtime activation is disabled')
+    expect(wrapper.text()).toContain('Panel is read-only.')
   })
 
   it('shows grouped session, entity, collection, query, and second-level cache statistics when available', async () => {

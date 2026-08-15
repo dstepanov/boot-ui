@@ -3,6 +3,7 @@ package io.github.jdubois.bootui.autoconfigure.hibernate;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
@@ -27,6 +28,7 @@ class HibernateStatisticsControllerTests {
         when(statisticsService.report())
                 .thenReturn(new HibernateStatisticsReport(
                         true,
+                        false,
                         null,
                         new HibernateStatisticsDto(
                                 10,
@@ -72,7 +74,10 @@ class HibernateStatisticsControllerTests {
         HibernateStatisticsService statisticsService = mock(HibernateStatisticsService.class);
         when(statisticsService.report())
                 .thenReturn(new HibernateStatisticsReport(
-                        false, "Hibernate statistics are disabled. Set hibernate.generate_statistics=true.", null));
+                        false,
+                        true,
+                        "Hibernate statistics are disabled. Set hibernate.generate_statistics=true.",
+                        null));
 
         MockMvc mvc = standaloneSetup(new HibernateStatisticsController(statisticsService))
                 .build();
@@ -81,5 +86,23 @@ class HibernateStatisticsControllerTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.available").value(false))
                 .andExpect(jsonPath("$.statistics").doesNotExist());
+    }
+
+    @Test
+    void enableDelegatesToEngineService() throws Exception {
+        HibernateStatisticsService statisticsService = mock(HibernateStatisticsService.class);
+        when(statisticsService.enable())
+                .thenReturn(new HibernateStatisticsReport(
+                        false,
+                        true,
+                        "Hibernate statistics are disabled. Set hibernate.generate_statistics=true.",
+                        null));
+
+        MockMvc mvc = standaloneSetup(new HibernateStatisticsController(statisticsService))
+                .build();
+
+        mvc.perform(post("/bootui/api/hibernate-statistics/enable"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enableAvailable").value(true));
     }
 }

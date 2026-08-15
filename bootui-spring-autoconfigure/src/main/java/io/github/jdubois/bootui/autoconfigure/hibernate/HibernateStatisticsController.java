@@ -4,6 +4,7 @@ import io.github.jdubois.bootui.core.dto.HibernateStatisticsReport;
 import io.github.jdubois.bootui.engine.hibernate.HibernateStatisticsService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -14,8 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>{@code GET} is a thin transport adapter over the shared engine {@link HibernateStatisticsService}, which
  * reads the host application's Hibernate {@code SessionFactory} statistics. It reports the panel unavailable
  * (rather than faking data) when no {@code SessionFactory} is reachable or {@code hibernate.generate_statistics}
- * is disabled. It is strictly read-only: there is no reset/clear action, since resetting Hibernate's live
- * statistics is a mutating action out of scope for this panel.</p>
+ * is disabled. {@code POST /enable} explicitly enables collection for the current runtime; it does not
+ * persist configuration or reset counters.</p>
  */
 @RestController
 @ConditionalOnClass(name = {"jakarta.persistence.EntityManagerFactory", "org.hibernate.SessionFactory"})
@@ -31,5 +32,10 @@ public class HibernateStatisticsController {
     @GetMapping
     public HibernateStatisticsReport statistics() {
         return statisticsService.report();
+    }
+
+    @PostMapping("/enable")
+    public HibernateStatisticsReport enable() {
+        return statisticsService.enable();
     }
 }

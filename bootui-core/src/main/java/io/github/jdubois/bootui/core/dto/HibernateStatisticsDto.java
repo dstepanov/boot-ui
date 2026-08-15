@@ -8,9 +8,9 @@ import java.util.List;
  * ratios), read from {@code org.hibernate.stat.Statistics} when {@code hibernate.generate_statistics} is
  * enabled.
  *
- * <p>This is strictly a read-only reporting surface: it carries no reset/clear action, and single
- * persistence-unit applications are the supported shape (see the Hibernate Statistics panel
- * documentation for the multi-persistence-unit limitation).</p>
+ * <p>The statistics payload is read-only and carries no reset/clear action. The panel may explicitly enable
+ * collection for the current runtime before reading it. Single persistence-unit applications are the
+ * supported shape (see the panel documentation for the multi-persistence-unit limitation).</p>
  */
 public record HibernateStatisticsDto(
         long sessionOpenCount,

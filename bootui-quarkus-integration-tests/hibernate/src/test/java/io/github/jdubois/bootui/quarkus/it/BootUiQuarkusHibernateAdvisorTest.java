@@ -7,10 +7,14 @@ import io.github.jdubois.bootui.conformance.BootUiHttpProbe;
 import io.github.jdubois.bootui.conformance.BootUiHttpProbe.Response;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManagerFactory;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -36,6 +40,9 @@ class BootUiQuarkusHibernateAdvisorTest {
 
     @TestHTTPResource
     URL baseUrl;
+
+    @Inject
+    EntityManagerFactory entityManagerFactory;
 
     private BootUiHttpProbe probe() {
         return new BootUiHttpProbe(baseUrl.toExternalForm());
@@ -129,7 +136,9 @@ class BootUiQuarkusHibernateAdvisorTest {
         // the additive Session Monitoring panel must report available rather than the "enable statistics"
         // unavailable state.
         Response statistics = probe().get("/bootui/api/hibernate-statistics");
-        assertThat(statistics.status()).as("GET /bootui/api/hibernate-statistics status").isEqualTo(200);
+        assertThat(statistics.status())
+                .as("GET /bootui/api/hibernate-statistics status")
+                .isEqualTo(200);
         JsonNode body = statistics.json();
         assertThat(body.path("available").asBoolean(false))
                 .as("statistics must be available since quarkus.hibernate-orm.statistics=true")
@@ -140,6 +149,26 @@ class BootUiQuarkusHibernateAdvisorTest {
         assertThat(body.path("statistics").path("sessionOpenCount").isNumber())
                 .as("sessionOpenCount must be a numeric counter")
                 .isTrue();
+    }
+
+    @Test
+    void hibernateStatisticsCanBeEnabledForTheCurrentRuntime() {
+        Statistics liveStatistics =
+                entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        liveStatistics.setStatisticsEnabled(false);
+        try {
+            Response disabled = probe().get("/bootui/api/hibernate-statistics");
+            assertThat(disabled.status()).isEqualTo(200);
+            assertThat(disabled.json().path("available").asBoolean(true)).isFalse();
+            assertThat(disabled.json().path("enableAvailable").asBoolean(false)).isTrue();
+
+            Response enabled = probe().post("/bootui/api/hibernate-statistics/enable", JSON_HEADERS);
+            assertThat(enabled.status()).isEqualTo(200);
+            assertThat(enabled.json().path("available").asBoolean(false)).isTrue();
+            assertThat(liveStatistics.isStatisticsEnabled()).isTrue();
+        } finally {
+            liveStatistics.setStatisticsEnabled(true);
+        }
     }
 
     private static List<String> ruleIds(JsonNode resultsNode) {

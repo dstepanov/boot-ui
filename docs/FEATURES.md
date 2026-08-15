@@ -1195,14 +1195,15 @@ per-region second-level cache breakdowns. It is deliberately separate from the H
 runs static, on-demand checks and reports findings, while this panel is a continuously-refreshing runtime monitor,
 closer in spirit to Database Connection Pools or SQL Trace than to an advisor.
 
-- **Availability gating**: the panel requires both a resolvable Hibernate `SessionFactory` (via
-  `EntityManagerFactory#unwrap(SessionFactory.class)`) **and** `hibernate.generate_statistics` (or the Quarkus
-  `quarkus.hibernate-orm.statistics` equivalent, translated by the same `HibernatePropertyLookup` abstraction the
-  advisor scan uses) enabled. When either condition is not met, the panel shows a clear inline message rather than
-  faking data, pointing at the property to set — this is the same HIB-CONFIG-007 recommendation the static advisor
-  already makes (see [HIBERNATE-CHECKS.md](HIBERNATE-CHECKS.md)).
-- **Strictly read-only**: the panel has no reset/clear action for these counters (unlike the Cache panel's clear
-  actions) — it is purely observational, refreshing on the same auto-refresh pattern as the Cache panel.
+- **Availability gating**: the panel requires a resolvable Hibernate `SessionFactory` (via
+  `EntityManagerFactory#unwrap(SessionFactory.class)`). When statistics collection is disabled, the panel offers an
+  explicit **Enable for this runtime** action. It calls `Statistics#setStatisticsEnabled(true)`, starts collecting from
+  that moment, and does not rewrite application configuration. The persistent startup alternatives remain
+  `hibernate.generate_statistics=true` and `quarkus.hibernate-orm.statistics=true`; this is the same HIB-CONFIG-007
+  recommendation the static advisor makes (see [HIBERNATE-CHECKS.md](HIBERNATE-CHECKS.md)).
+- **Read-mostly**: the only mutation enables future collection for the current runtime and is covered by BootUI's
+  localhost, cross-site-write, and panel read-only policy. There is no reset/clear action, so BootUI never discards
+  Hibernate's counters.
 - **Out of scope for this iteration**: no per-entity or per-query drill-down beyond what `Statistics` itself
   exposes (e.g. no per-entity-class breakdown, no query-by-query cache stats); only the **first** resolved
   `EntityManagerFactory`/`SessionFactory` is inspected, so multi-persistence-unit applications only see statistics

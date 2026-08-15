@@ -5,6 +5,7 @@ import io.github.jdubois.bootui.engine.hibernate.HibernateStatisticsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
@@ -16,7 +17,8 @@ import jakarta.ws.rs.core.MediaType;
  *
  * <p>A thin transport adapter over the shared engine {@link HibernateStatisticsService}, which reports the
  * panel unavailable (rather than faking data) when no {@code SessionFactory} is reachable or
- * {@code hibernate.generate_statistics} is disabled.</p>
+ * {@code hibernate.generate_statistics} is disabled. {@code POST /enable} explicitly enables collection
+ * for the current runtime without persisting configuration or resetting counters.</p>
  *
  * <p>The resource is produced <em>unconditionally</em> and the engine {@code HibernateStatisticsService} is
  * always wired (it holds no {@code jakarta.persistence} type): when {@code quarkus-hibernate-orm} is absent
@@ -39,5 +41,12 @@ public class HibernateStatisticsResource {
     @Produces(MediaType.APPLICATION_JSON)
     public HibernateStatisticsReport statistics() {
         return statisticsService.report();
+    }
+
+    @POST
+    @Path("/enable")
+    @Produces(MediaType.APPLICATION_JSON)
+    public HibernateStatisticsReport enable() {
+        return statisticsService.enable();
     }
 }

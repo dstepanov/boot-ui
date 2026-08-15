@@ -5,15 +5,21 @@ import {formatNumber} from '../utils/format.js'
 import {describeLoadError} from '../utils/loadError.js'
 import {panelProps, usePanelState} from '../utils/panelState.js'
 import {useAutoRefresh} from '../utils/useAutoRefresh.js'
+import {useFlashMessage} from '../utils/useFlashMessage.js'
+import FlashBanner from './components/FlashBanner.vue'
 import PanelHeader from './components/PanelHeader.vue'
 import PanelSkeleton from './components/PanelSkeleton.vue'
+import ReadOnlyNotice from './components/ReadOnlyNotice.vue'
+import SpinnerButton from './components/SpinnerButton.vue'
 
 const props = defineProps(panelProps)
-const {manifestAvailable, manifestUnavailableReason} = usePanelState(props)
+const {readOnly, readOnlyReason, manifestAvailable, manifestUnavailableReason} = usePanelState(props)
 
 const report = ref(null)
 const error = ref(null)
 const lastFetched = ref(null)
+const enabling = ref(false)
+const {message: banner, flash, clear} = useFlashMessage(8000)
 
 async function fetchStatistics() {
   if (!manifestAvailable.value) return
@@ -33,10 +39,28 @@ const {autoRefresh, loading, initialLoading, load} = useAutoRefresh(fetchStatist
 
 const statistics = computed(() => report.value?.statistics ?? null)
 const available = computed(() => manifestAvailable.value && report.value?.available !== false)
+const enableAvailable = computed(() => manifestAvailable.value && report.value?.enableAvailable === true)
 const unavailableReason = computed(() => {
   if (!manifestAvailable.value) return manifestUnavailableReason.value
   return report.value?.unavailableReason || 'Hibernate session statistics are unavailable.'
 })
+
+async function enableStatistics() {
+  if (readOnly.value) {
+    flash(readOnlyReason.value, 'warning')
+    return
+  }
+  enabling.value = true
+  try {
+    report.value = await getJson('api/hibernate-statistics/enable', {method: 'POST'})
+    lastFetched.value = Date.now()
+    flash('Hibernate statistics enabled for this runtime. Counters start collecting now.', 'success')
+  } catch (e) {
+    flash(describeLoadError(e, 'Could not enable Hibernate statistics'), 'danger')
+  } finally {
+    enabling.value = false
+  }
+}
 </script>
 
 <template>
@@ -54,14 +78,37 @@ const unavailableReason = computed(() => {
       @refresh="load"
     />
 
+    <FlashBanner :message="banner" with-icon @dismiss="clear" />
+
+    <ReadOnlyNotice v-if="readOnly && enableAvailable" :reason="readOnlyReason">
+      Runtime activation is disabled.
+    </ReadOnlyNotice>
+
     <PanelSkeleton v-if="initialLoading && manifestAvailable" />
 
     <template v-else-if="!manifestAvailable || report">
       <div v-if="!available" class="alert alert-secondary">
         <strong>Session statistics are unavailable.</strong>
         {{ unavailableReason }}
-        Set <code>hibernate.generate_statistics=true</code> (Spring) or
-        <code>quarkus.hibernate-orm.statistics=true</code> (Quarkus) to enable this panel.
+        <div v-if="enableAvailable" class="mt-3 d-flex flex-wrap align-items-center gap-3">
+          <SpinnerButton
+            id="enable-hibernate-statistics"
+            :loading="enabling"
+            :disabled="readOnly || enabling"
+            class="btn btn-primary"
+            icon="bi-play-circle"
+            label="Enable for this runtime"
+            loading-label="Enabling…"
+            @click="enableStatistics"
+          />
+          <span class="small text-muted">
+            Collection starts now and lasts until this application stops. Configuration files are not changed.
+          </span>
+        </div>
+        <div class="small mt-3">
+          To collect from startup, set <code>hibernate.generate_statistics=true</code> (Spring) or
+          <code>quarkus.hibernate-orm.statistics=true</code> (Quarkus).
+        </div>
       </div>
 
       <template v-else>

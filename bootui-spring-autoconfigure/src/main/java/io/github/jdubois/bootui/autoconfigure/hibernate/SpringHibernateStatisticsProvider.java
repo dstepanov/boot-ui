@@ -43,6 +43,15 @@ public final class SpringHibernateStatisticsProvider implements HibernateStatist
     }
 
     @Override
+    public void enableStatistics() {
+        SessionFactory sessionFactory = sessionFactory();
+        if (sessionFactory == null) {
+            throw new IllegalStateException("No Hibernate SessionFactory could be resolved.");
+        }
+        sessionFactory.getStatistics().setStatisticsEnabled(true);
+    }
+
+    @Override
     public HibernateStatisticsSnapshot snapshot() {
         SessionFactory sessionFactory = sessionFactory();
         return sessionFactory == null ? null : map(sessionFactory);

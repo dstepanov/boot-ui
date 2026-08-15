@@ -175,8 +175,9 @@ Logic lives entirely in `bootui-core` + `bootui-engine`; the Quarkus adapter add
 
 `Memory` · `Live Memory` · `JVM Tuning` · `Heap Dump` · `Threads` (pure JVM MXBeans) · `Metrics` (Micrometer — same API)
 · `Hibernate` advisor (Hibernate ORM + `jakarta.persistence`; rules port directly) · `Hibernate Statistics` (standalone
-Database-section panel over `org.hibernate.stat.Statistics`, gated on the same Hibernate ORM capability as the
-advisor) · `Vulnerabilities` (classpath Maven metadata + OSV) · `Pentesting` · `HTTP Probe` (local HTTP probing) ·
+Database-section panel over `org.hibernate.stat.Statistics`, gated on the same Hibernate ORM capability as the advisor;
+its explicit runtime-enable action has the same read-only and cross-site-write protection as Spring) ·
+`Vulnerabilities` (classpath Maven metadata + OSV) · `Pentesting` · `HTTP Probe` (local HTTP probing) ·
 `AI Framework` · `Traces` (OTLP — a standard; Quarkus/LangChain4j export it) · `GitHub` (`HttpClient`) · `Copilot` ·
 `Claude Code` (read `~/.copilot` / `~/.claude`) · `MCP Server` (**Implemented** — full JSON-RPC bridge: the shared engine `McpDispatcher` owns method routing/gating/tool
 lookup, a thin Jackson-2 `QuarkusMcpEnvelope` codec + `QuarkusMcpTools` catalog + working enable toggle sit behind the

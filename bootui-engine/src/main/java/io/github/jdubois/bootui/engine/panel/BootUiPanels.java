@@ -105,7 +105,7 @@ public final class BootUiPanels {
             new Panel(DATABASE_CONNECTION_POOLS, "Database Connection Pools", false, "/database-connection-pools"),
             new Panel(DATA, "Spring Data", false, "/data"),
             new Panel(HIBERNATE, "Hibernate", true, "/hibernate"),
-            new Panel(HIBERNATE_STATISTICS, "Hibernate Statistics", false, "/hibernate-statistics"),
+            new Panel(HIBERNATE_STATISTICS, "Hibernate Statistics", true, "/hibernate-statistics"),
             new Panel(DATABASE_ADVISOR, "Database Advisor", true, "/database-advisor"),
             new Panel(CACHE, "Cache", true, "/cache"),
             new Panel(TRACES, "Traces", true, "/traces"),

@@ -15,11 +15,11 @@ import io.github.jdubois.bootui.spi.HibernateStatisticsSnapshot;
  * {@code SessionFactory} is reachable and has statistics collection enabled, and maps its
  * {@link HibernateStatisticsSnapshot} 1:1 onto the public {@link HibernateStatisticsDto}. When no
  * {@code SessionFactory} is available, or statistics collection is disabled, it serves a clear
- * unavailable report rather than fabricating data — the panel then tells the user to enable
- * {@code hibernate.generate_statistics}.</p>
+ * unavailable report rather than fabricating data. In the disabled-statistics state it also exposes an
+ * explicit runtime-enable action.</p>
  *
- * <p>Strictly read-only: there is deliberately no reset/clear action here, since resetting Hibernate's
- * live statistics is a mutating action out of scope for this panel.</p>
+ * <p>The action only enables future collection on the current {@code SessionFactory}; it does not persist
+ * configuration or reset existing counters.</p>
  */
 public final class HibernateStatisticsService {
 
@@ -40,12 +40,21 @@ public final class HibernateStatisticsService {
     /** The statistics report: unavailable with a reason, or a live snapshot mapped onto the public DTO. */
     public HibernateStatisticsReport report() {
         if (provider == null || !provider.available()) {
-            return new HibernateStatisticsReport(false, NO_SESSION_FACTORY_REASON, null);
+            return new HibernateStatisticsReport(false, false, NO_SESSION_FACTORY_REASON, null);
         }
         if (!provider.statisticsEnabled()) {
-            return new HibernateStatisticsReport(false, STATISTICS_DISABLED_REASON, null);
+            return new HibernateStatisticsReport(false, true, STATISTICS_DISABLED_REASON, null);
         }
-        return new HibernateStatisticsReport(true, null, toDto(provider.snapshot()));
+        return new HibernateStatisticsReport(true, false, null, toDto(provider.snapshot()));
+    }
+
+    /** Enables statistics collection for the current runtime and returns the resulting live report. */
+    public HibernateStatisticsReport enable() {
+        if (provider == null || !provider.available()) {
+            return new HibernateStatisticsReport(false, false, NO_SESSION_FACTORY_REASON, null);
+        }
+        provider.enableStatistics();
+        return report();
     }
 
     private static HibernateStatisticsDto toDto(HibernateStatisticsSnapshot snapshot) {

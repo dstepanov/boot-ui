@@ -12,7 +12,7 @@ reactive analog genuinely exists, and an honest "not yet ported" / "not applicab
 The WebFlux adapter serves the large majority of the panel surface — the same 53-panel manifest the servlet adapter
 reports, minus the one panel that stays unavailable for stack reasons described below. **Every action-capable panel
 that is available behaves identically to the servlet adapter**, behind the same shared `LocalhostGuard` write floor:
-Loggers (set level), HTTP Probe, Cache (clear), Flyway (migrate/clean), Liquibase (update), Heap Dump
+Loggers (set level), HTTP Probe, Cache (clear), Hibernate Statistics (runtime enable), Flyway (migrate/clean), Liquibase (update), Heap Dump
 (capture/analyze/delete/download), Threads (download), Traces (clear), SQL Trace (toggle recording/clear),
 Transactions (clear/toggle recording), REST Client (clear/toggle recording), the advisor scans (Architecture, Spring,
 Hibernate, Pentesting, REST API, Security, Memory, Vulnerabilities/OSV), and Exceptions triage.

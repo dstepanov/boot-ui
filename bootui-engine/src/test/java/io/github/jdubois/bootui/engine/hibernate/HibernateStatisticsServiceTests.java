@@ -50,6 +50,7 @@ class HibernateStatisticsServiceTests {
         HibernateStatisticsReport report = new HibernateStatisticsService(null).report();
 
         assertThat(report.available()).isFalse();
+        assertThat(report.enableAvailable()).isFalse();
         assertThat(report.statistics()).isNull();
         assertThat(report.unavailableReason()).isNotBlank();
     }
@@ -61,6 +62,7 @@ class HibernateStatisticsServiceTests {
         HibernateStatisticsReport report = new HibernateStatisticsService(provider).report();
 
         assertThat(report.available()).isFalse();
+        assertThat(report.enableAvailable()).isFalse();
         assertThat(report.statistics()).isNull();
         assertThat(report.unavailableReason()).contains("SessionFactory");
     }
@@ -72,6 +74,7 @@ class HibernateStatisticsServiceTests {
         HibernateStatisticsReport report = new HibernateStatisticsService(provider).report();
 
         assertThat(report.available()).isFalse();
+        assertThat(report.enableAvailable()).isTrue();
         assertThat(report.statistics()).isNull();
         assertThat(report.unavailableReason()).contains("generate_statistics");
     }
@@ -83,6 +86,7 @@ class HibernateStatisticsServiceTests {
         HibernateStatisticsReport report = new HibernateStatisticsService(provider).report();
 
         assertThat(report.available()).isTrue();
+        assertThat(report.enableAvailable()).isFalse();
         assertThat(report.unavailableReason()).isNull();
         assertThat(report.statistics().sessionOpenCount()).isEqualTo(10);
         assertThat(report.statistics().sessionCloseCount()).isEqualTo(9);
@@ -122,6 +126,19 @@ class HibernateStatisticsServiceTests {
                 .isEqualTo(6);
     }
 
+    @Test
+    void enablesStatisticsForCurrentRuntimeAndReturnsLiveReport() {
+        MutableProvider provider = new MutableProvider();
+        HibernateStatisticsService service = new HibernateStatisticsService(provider);
+
+        HibernateStatisticsReport report = service.enable();
+
+        assertThat(provider.enableCalls).isEqualTo(1);
+        assertThat(report.available()).isTrue();
+        assertThat(report.enableAvailable()).isFalse();
+        assertThat(report.statistics().sessionOpenCount()).isEqualTo(10);
+    }
+
     private record StubProvider(boolean available, boolean statisticsEnabled, HibernateStatisticsSnapshot snapshot)
             implements HibernateStatisticsProvider {
 
@@ -136,8 +153,38 @@ class HibernateStatisticsServiceTests {
         }
 
         @Override
+        public void enableStatistics() {}
+
+        @Override
         public HibernateStatisticsSnapshot snapshot() {
             return snapshot;
+        }
+    }
+
+    private static final class MutableProvider implements HibernateStatisticsProvider {
+
+        private boolean statisticsEnabled;
+        private int enableCalls;
+
+        @Override
+        public boolean available() {
+            return true;
+        }
+
+        @Override
+        public boolean statisticsEnabled() {
+            return statisticsEnabled;
+        }
+
+        @Override
+        public void enableStatistics() {
+            statisticsEnabled = true;
+            enableCalls++;
+        }
+
+        @Override
+        public HibernateStatisticsSnapshot snapshot() {
+            return SNAPSHOT;
         }
     }
 }

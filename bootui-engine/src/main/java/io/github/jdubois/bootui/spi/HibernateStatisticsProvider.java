@@ -10,8 +10,8 @@ package io.github.jdubois.bootui.spi;
  * {@code EntityManagerFactory} CDI bean the same way. Multiple persistence units are a known limitation:
  * only the first resolved {@code SessionFactory} is reported (see the panel documentation).</p>
  *
- * <p>This seam is strictly read-only: there is deliberately no reset/clear method, since Hibernate
- * statistics reset is a mutating action out of scope for this panel.</p>
+ * <p>The seam can enable collection for the current runtime after an explicit user action. It deliberately
+ * has no reset/clear method, so existing counters are never discarded.</p>
  */
 public interface HibernateStatisticsProvider {
 
@@ -29,6 +29,12 @@ public interface HibernateStatisticsProvider {
      * Spring/Quarkus equivalent) is turned on. Only called when {@link #available()} is {@code true}.
      */
     boolean statisticsEnabled();
+
+    /**
+     * Enables statistics collection on the resolved {@code SessionFactory} for the current runtime. Only
+     * called after an explicit, policy-guarded user action when {@link #available()} is {@code true}.
+     */
+    void enableStatistics();
 
     /**
      * Reads a live snapshot of the current statistics. Only called when {@link #available()} and

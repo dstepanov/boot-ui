@@ -97,6 +97,7 @@ public final class BootUiApiContractCatalog {
                     "/hibernate-statistics",
                     fields(
                             "available", JsonType.BOOLEAN,
+                            "enableAvailable", JsonType.BOOLEAN,
                             "unavailableReason", JsonType.NULLABLE_STRING,
                             "statistics", JsonType.NULLABLE_OBJECT)),
             read(
@@ -276,6 +277,7 @@ public final class BootUiApiContractCatalog {
         all(actions, "security.scan", "security", "POST", "/security/scan");
         all(actions, "pentesting.scan", "pentesting", "POST", "/pentesting/scan");
         all(actions, "hibernate.scan", "hibernate", "POST", "/hibernate/scan");
+        all(actions, "hibernate-statistics.enable", "hibernate-statistics", "POST", "/hibernate-statistics/enable");
         all(actions, "database-advisor.scan", "database-advisor", "POST", "/database-advisor/scan");
         all(actions, "cache.clear", "cache", "POST", "/cache/clear");
         all(actions, "traces.clear", "traces", "DELETE", "/traces");

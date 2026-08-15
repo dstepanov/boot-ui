@@ -1549,11 +1549,14 @@ Data sources:
 
 Features:
 
-- Displays a live, read-only snapshot of Hibernate's own runtime `Statistics` for the resolved `SessionFactory` —
+- Displays a live snapshot of Hibernate's own runtime `Statistics` for the resolved `SessionFactory` —
   session/transaction counts, entity and collection load/fetch/insert/update/delete counts, query execution counts,
   and query-cache/second-level-cache hit/miss/put counters (including per-region breakdowns) when those caches are
   enabled.
 - Supports manual refresh and optional auto-refresh, consistent with other Database-section runtime panels.
+- When collection is disabled, offers an explicit, policy-guarded runtime action that calls
+  `Statistics#setStatisticsEnabled(true)`. Collection begins at that moment and application configuration is not
+  persisted or rewritten.
 
 Availability:
 
@@ -1561,13 +1564,12 @@ Availability:
   Hibernate Advisor panel).
 - Additionally requires `hibernate.generate_statistics` (or the Quarkus `quarkus.hibernate-orm.statistics`
   equivalent) to be enabled; when statistics are disabled, the API reports `available: false` with a
-  human-readable `unavailableReason` instead of an error, and the UI shows a clear "enable statistics" message
-  rather than fabricating data.
+  human-readable `unavailableReason` and `enableAvailable: true` instead of an error. The UI offers runtime
+  activation rather than fabricating data.
 
 Out of scope for the current release surface:
 
-- Resetting or clearing Hibernate's `Statistics` counters from the UI or API — this panel is strictly read-only
-  reporting.
+- Resetting or clearing Hibernate's `Statistics` counters from the UI or API.
 - Per-entity-class or per-query drill-down beyond what `org.hibernate.stat.Statistics` itself exposes.
 - Multi-persistence-unit applications: only the first resolved `EntityManagerFactory`/`SessionFactory` is
   inspected; this is a known limitation for a future iteration.
@@ -1576,8 +1578,9 @@ Out of scope for the current release surface:
 
 Acceptance criteria:
 
-- The panel never resets or mutates Hibernate's `Statistics`, and reports a clear unavailable state — not an
-  error — when `hibernate.generate_statistics` is disabled or no `SessionFactory` can be resolved.
+- The panel never resets Hibernate's counters. Runtime activation happens only through explicit
+  `POST /bootui/api/hibernate-statistics/enable`, is blocked by read-only policy, and does not persist configuration.
+- When no `SessionFactory` can be resolved, the panel reports a clear unavailable state and does not offer activation.
 - Spring MVC, Spring WebFlux, and Quarkus report equivalent statistics data through the same
   `/bootui/api/hibernate-statistics` contract wherever Hibernate ORM is present.
 
@@ -1905,6 +1908,7 @@ Initial endpoints:
 | `/bootui/api/hibernate`              | GET    | Latest Hibernate/JPA advisor report                                                    |
 | `/bootui/api/hibernate/scan`         | POST   | Run explicit read-only Hibernate/JPA advisor checks                                    |
 | `/bootui/api/hibernate-statistics`   | GET    | Live read-only Hibernate `SessionFactory` statistics (Hibernate Statistics panel)      |
+| `/bootui/api/hibernate-statistics/enable` | POST | Enable Hibernate statistics collection for the current runtime                         |
 | `/bootui/api/architecture`                   | GET    | Latest Architecture scan report                                                        |
 | `/bootui/api/architecture/scan`              | POST   | Run explicit ArchUnit hygiene checks                                                   |
 | `/bootui/api/rest-api`                   | GET    | Latest REST API Advisor scan report                                                    |
