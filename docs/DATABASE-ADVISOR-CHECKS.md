@@ -11,8 +11,9 @@ The checks are deterministic, low-false-positive structural checks, not query/wo
 
 The panel is available whenever at least one application `DataSource` bean is discovered (reusing the same
 proxy-aware datasource discovery as Database Connection Pools and SQL Trace, so a wrapped/routing `DataSource` is
-never introspected twice). If no `DataSource` bean is present, or introspection fails, BootUI returns a stable empty
-report with an explanatory status rather than failing.
+never introspected twice). If no `DataSource` bean is present, or no datasource can be read, BootUI returns a stable
+empty report with an explanatory status rather than failing. If only some datasources fail introspection, readable
+datasources are still evaluated and the report status is `PARTIAL`.
 
 The PostgreSQL and MySQL dialect-specific rules are skipped (not silently dropped) when no datasource of that dialect
 is detected, and both dialect-specific queries fail soft on restricted privileges rather than propagating. The

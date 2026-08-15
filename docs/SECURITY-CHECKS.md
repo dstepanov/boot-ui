@@ -514,14 +514,14 @@ review closed two MVC/WebFlux parity gaps, bringing the total to 26: `SEC-RXF-CS
 also recognize `formLogin()` chains (previously only OAuth2/OIDC login filters were detected), and the new
 `SEC-RXF-CORS-003` flags broad `allowedOriginPatterns` (e.g. `https://*`) to match the servlet stack's `SEC-CORS-006`.
 
-### SEC-RXF-AUTHZ-001 - Reactive chain has no AuthorizationWebFilter
+### SEC-RXF-AUTHZ-001 - Every reactive filter chain should enforce authorization
 
 - **Severity**: HIGH
 - **Detects**: A chain whose filters were successfully observed installs no `AuthorizationWebFilter`.
 - **Recommendation**: Configure `authorizeExchange(...)` on every chain that handles application traffic; verify custom filters separately.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/authorization/authorize-http-requests.html>
 
-### SEC-RXF-AUTHZ-002 - Catch-all authentication chain has no AuthorizationWebFilter
+### SEC-RXF-AUTHZ-002 - Catch-all reactive chains with authentication should install authorization
 
 - **Severity**: HIGH
 - **Detects**: A catch-all chain installs authentication filters but no `AuthorizationWebFilter`.
@@ -531,35 +531,35 @@ also recognize `formLogin()` chains (previously only OAuth2/OIDC login filters w
 `anyExchange().permitAll()` still installs an `AuthorizationWebFilter`; runtime filter inspection therefore does not
 claim to distinguish `permitAll`, `authenticated`, role-based, or custom authorization decisions.
 
-### SEC-RXF-AUTHZ-003 - All observed chains omit authentication and authorization filters
+### SEC-RXF-AUTHZ-003 - Reactive applications should not omit both authentication and authorization
 
 - **Severity**: HIGH
 - **Detects**: Every fully observed application chain omits both `AuthorizationWebFilter` and authentication filters.
 - **Recommendation**: Define authentication and authorization rules for non-public endpoints, or verify equivalent custom filters.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/authorization/authorize-http-requests.html>
 
-### SEC-RXF-CSRF-001 - Observed OAuth2/OIDC or formLogin() chain missing CsrfWebFilter
+### SEC-RXF-CSRF-001 - Reactive OAuth2/OIDC or formLogin() chains should enable CSRF protection
 
 - **Severity**: HIGH
 - **Detects**: A chain with an observed OAuth2/OIDC login filter or a `formLogin()` authentication converter has no `CsrfWebFilter`.
 - **Recommendation**: Keep CSRF enabled for browser login chains; configure the appropriate reactive token repository.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/exploits/csrf.html>
 
-### SEC-RXF-CSRF-002 - No reactive chain installs CsrfWebFilter
+### SEC-RXF-CSRF-002 - CSRF should not be globally disabled in reactive applications
 
 - **Severity**: MEDIUM
 - **Detects**: No registered `SecurityWebFilterChain` installs a `CsrfWebFilter`.
 - **Recommendation**: For non-stateless applications add `.csrf(Customizer.withDefaults())`.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/exploits/csrf.html>
 
-### SEC-RXF-CORS-001 - Reactive CORS allows wildcard origin
+### SEC-RXF-CORS-001 - CORS should not allow wildcard origins in reactive applications
 
 - **Severity**: MEDIUM
 - **Detects**: An inspectable reactive `CorsConfigurationSource` uses the exact `*` value in `allowedOrigins` or `allowedOriginPatterns`.
 - **Recommendation**: Restrict `allowedOrigins` to explicit, trusted domains.
 - **Learn more**: <https://docs.spring.io/spring-framework/reference/web/webflux-cors.html>
 
-### SEC-RXF-CORS-002 - Reactive CORS allows every origin pattern with credentials
+### SEC-RXF-CORS-002 - Credentialed reactive CORS must not trust every origin pattern
 
 - **Severity**: HIGH
 - **Detects**: The legal `allowedOriginPatterns="*"` plus `allowCredentials=true` combination, which reflects arbitrary origins while allowing credentials.
@@ -576,28 +576,28 @@ Spring separately rejects `allowedOrigins="*"` with credentials; that invalid co
 - **Recommendation**: Replace broad patterns with the exact origins (or tightly-scoped subdomain wildcards such as `https://*.example.com`) the application trusts; broad patterns combined with credentials let untrusted sites make authenticated cross-site calls.
 - **Learn more**: <https://docs.spring.io/spring-framework/reference/web/webflux-cors.html>
 
-### SEC-RXF-HEAD-001 - Reactive chain missing HSTS header writer
+### SEC-RXF-HEAD-001 - HSTS header should be configured for reactive applications over TLS
 
 - **Severity**: MEDIUM
 - **Detects**: TLS is observable and a chain has `HttpHeaderWriterWebFilter` but no HSTS writer.
 - **Recommendation**: Keep Spring Security's `StrictTransportSecurityServerHttpHeadersWriter` defaults.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/exploits/headers.html#webflux-headers-hsts>
 
-### SEC-RXF-HEAD-002 - Reactive chain missing X-Frame-Options header writer
+### SEC-RXF-HEAD-002 - X-Frame-Options header should be set in reactive chains
 
 - **Severity**: MEDIUM
 - **Detects**: A chain has Spring Security header writers but neither a frame-options writer nor an enforcing CSP `frame-ancestors` directive.
 - **Recommendation**: Keep `XFrameOptionsServerHttpHeadersWriter` or enforce an appropriate CSP `frame-ancestors` policy.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/exploits/headers.html#webflux-headers-frame-options>
 
-### SEC-RXF-HEAD-003 - Reactive chain missing X-Content-Type-Options header writer
+### SEC-RXF-HEAD-003 - X-Content-Type-Options should be set in reactive chains
 
 - **Severity**: LOW
 - **Detects**: No content-type-options writer is installed.
 - **Recommendation**: Add a `ContentTypeOptionsServerHttpHeadersWriter`.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/exploits/headers.html#webflux-headers-content-type-options>
 
-### SEC-RXF-HEAD-004 - Reactive Content-Security-Policy needs review
+### SEC-RXF-HEAD-004 - Review Content-Security-Policy enforcement for reactive browser chains
 
 - **Severity**: LOW
 - **Detects**: A chain with Spring Security header writers has no CSP or configures only `Content-Security-Policy-Report-Only`.
@@ -607,35 +607,35 @@ Spring separately rejects `allowedOrigins="*"` with credentials; that invalid co
 Spring Security intentionally supplies no CSP default because a reasonable policy depends on application context, so
 this is low-severity browser hardening advice rather than a framework-misconfiguration verdict.
 
-### SEC-RXF-HEAD-005 - Reactive security headers entirely disabled
+### SEC-RXF-HEAD-005 - Security headers should not be disabled in reactive chains
 
 - **Severity**: HIGH
 - **Detects**: Authentication/authorization filters are active but Spring Security installs no `HttpHeaderWriterWebFilter`.
 - **Recommendation**: Enable default headers via `.headers(Customizer.withDefaults())`.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/exploits/headers.html>
 
-### SEC-RXF-HEAD-006 - Reactive HSTS max-age is below Spring Security's default
+### SEC-RXF-HEAD-006 - Review HSTS max-age values below Spring Security's one-year default
 
 - **Severity**: LOW
 - **Detects**: HSTS max-age is below Spring Security's one-year default (31,536,000 seconds).
 - **Recommendation**: Use shorter rollout values only intentionally; RFC 6797 does not define a universal one-year minimum.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/exploits/headers.html#webflux-headers-hsts>
 
-### SEC-RXF-ACT-001 - Actuator exposes all endpoints with wildcard include
+### SEC-RXF-ACT-001 - Actuator endpoints should not be exposed with a wildcard
 
 - **Severity**: HIGH
 - **Detects**: `management.endpoints.web.exposure.include=*` without any exclude.
 - **Recommendation**: List only needed endpoints, add excludes, and review Boot 4 `management.endpoint.<id>.access`.
 - **Learn more**: <https://docs.spring.io/spring-boot/reference/actuator/endpoints.html#actuator.endpoints.exposing>
 
-### SEC-RXF-ACT-002 - Actuator exposes sensitive endpoints
+### SEC-RXF-ACT-002 - Sensitive Actuator endpoints should be explicitly reviewed
 
 - **Severity**: MEDIUM
 - **Detects**: Exposure configuration includes one or more sensitive endpoint IDs after exclusions.
 - **Recommendation**: Review endpoint enablement/access and protect the management path or isolate its port.
 - **Learn more**: <https://docs.spring.io/spring-boot/reference/actuator/endpoints.html#actuator.endpoints.security>
 
-### SEC-RXF-ACT-003 - Broad Actuator exposure has no observed authorization filter
+### SEC-RXF-ACT-003 - Review authorization for broad reactive Actuator exposure
 
 - **Severity**: MEDIUM
 - **Detects**: Actuator web exposure goes beyond health/info while every observed application chain omits `AuthorizationWebFilter`.
@@ -645,14 +645,14 @@ this is low-severity browser hardening advice rather than a framework-misconfigu
 This rule does not claim a custom management path or separate management context is unprotected; chain-to-path
 authorization is not exposed as stable runtime metadata.
 
-### SEC-RXF-ACT-004 - Sensitive Actuator endpoints on main server port
+### SEC-RXF-ACT-004 - Consider isolating Actuator endpoints on a separate management port
 
 - **Severity**: INFO
 - **Detects**: Exposure goes beyond health/info and `management.server.port` is unset.
 - **Recommendation**: Set `management.server.port` to isolate management traffic.
 - **Learn more**: <https://docs.spring.io/spring-boot/reference/actuator/monitoring.html#actuator.monitoring.customizing-management-server-port>
 
-### SEC-RXF-ACT-005 - Reactive Actuator values are always unsanitized
+### SEC-RXF-ACT-005 - Reactive Actuator env/configprops values must stay sanitized
 
 - **Severity**: HIGH
 - **Detects**: A web-exposed `env` or `configprops` endpoint whose host configuration sets the corresponding
@@ -660,49 +660,49 @@ authorization is not exposed as stable runtime metadata.
 - **Recommendation**: Keep values at `never` or `when-authorized` so Actuator sanitization remains active.
 - **Learn more**: <https://docs.spring.io/spring-boot/reference/actuator/endpoints.html#actuator.endpoints.sanitization>
 
-### SEC-RXF-OAUTH2-002 - Reactive JWT decoder uses a static public key
+### SEC-RXF-OAUTH2-002 - Review rotation for reactive JWT static public keys
 
 - **Severity**: LOW
 - **Detects**: The supported `spring.security.oauth2.resourceserver.jwt.public-key-location` configuration is active.
 - **Recommendation**: Document manual key rotation, or use a trusted issuer/JWKS endpoint for automatic rotation.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html>
 
-### SEC-RXF-OAUTH2-003 - Reactive JWT metadata URL is plain HTTP
+### SEC-RXF-OAUTH2-003 - JWT issuer URI and JWKS URI should use HTTPS in reactive applications
 
 - **Severity**: HIGH
 - **Detects**: In a production profile, the `spring.security.oauth2.resourceserver.jwt.issuer-uri` or JWK-set URI is `http://` rather than `https://`.
 - **Recommendation**: Use HTTPS to prevent token metadata from being intercepted or tampered.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html>
 
-### SEC-RXF-OAUTH2-004 - Reactive opaque-token introspection URL is plain HTTP
+### SEC-RXF-OAUTH2-004 - Opaque-token introspection must use HTTPS in reactive production applications
 
 - **Severity**: HIGH
 - **Detects**: A production profile configures `spring.security.oauth2.resourceserver.opaquetoken.introspection-uri` with `http://`.
 - **Recommendation**: Use HTTPS and validate the authorization server certificate.
 - **Learn more**: <https://www.rfc-editor.org/rfc/rfc7662.html#section-4>
 
-### SEC-RXF-CONFIG-002 - Reactive production HTTPS cannot be confirmed
+### SEC-RXF-CONFIG-002 - Review HTTPS enforcement for reactive production applications
 
 - **Severity**: MEDIUM
 - **Detects**: A production profile where BootUI cannot observe server TLS, trusted forwarded headers, or `HttpsRedirectWebFilter`.
 - **Recommendation**: Confirm upstream TLS, configure trusted forwarded-header handling, or add reactive HTTPS redirect policy.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/exploits/https.html>
 
-### SEC-RXF-CONFIG-003 - Hardcoded credentials in application properties
+### SEC-RXF-CONFIG-003 - Credentials or secrets should not be hardcoded in application properties
 
 - **Severity**: HIGH
 - **Detects**: Property keys whose names suggest credentials or secrets hold literal string values rather than placeholder references.
 - **Recommendation**: Move secrets to environment variables, a secrets manager, Spring Cloud Vault, or another externalization mechanism.
 - **Learn more**: <https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html>
 
-### SEC-RXF-CONFIG-004 - Spring Security DEBUG/TRACE logging in production
+### SEC-RXF-CONFIG-004 - Spring Security DEBUG or TRACE logging should not run in production
 
 - **Severity**: MEDIUM
 - **Detects**: `logging.level.org.springframework.security` (or the `.web` fallback) is `DEBUG` or `TRACE` while a production profile is active.
 - **Recommendation**: Keep `org.springframework.security` logging at INFO or WARN in production.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/index.html>
 
-### SEC-RXF-SESSION-001 - Reactive chain mixes bearer-token and browser login filters
+### SEC-RXF-SESSION-001 - Review reactive chains that mix bearer-token and browser login filters
 
 - **Severity**: LOW
 - **Detects**: One chain combines Spring Security's bearer-token converter with an observed OAuth2/OIDC login, authorization-code client, or `formLogin()` filter.

@@ -314,7 +314,7 @@ class HibernateRulesTests {
         HibernateRuleResultDto result = new OpenInViewRule().evaluate(context(environment));
 
         assertThat(result.status()).isEqualTo(HibernateRuleSupport.VIOLATION);
-        assertThat(result.severity()).isEqualTo(HibernateRuleSupport.INFO);
+        assertThat(result.severity()).isEqualTo(HibernateRuleSupport.MEDIUM);
     }
 
     @Test
@@ -333,6 +333,18 @@ class HibernateRulesTests {
         TestEnvironment environment = new TestEnvironment()
                 .withProperty(HibernateScanner.OPEN_IN_VIEW_APPLICABLE_PROPERTY, "true")
                 .withProperty("spring.jpa.open-in-view", "true");
+        environment.setActiveProfiles("prod");
+
+        HibernateRuleResultDto result = new OpenInViewRule().evaluate(context(environment));
+
+        assertThat(result.status()).isEqualTo(HibernateRuleSupport.VIOLATION);
+        assertThat(result.severity()).isEqualTo(HibernateRuleSupport.HIGH);
+    }
+
+    @Test
+    void openInViewRuleEscalatesUnsetBootDefaultToHighInProduction() {
+        TestEnvironment environment =
+                new TestEnvironment().withProperty(HibernateScanner.OPEN_IN_VIEW_APPLICABLE_PROPERTY, "true");
         environment.setActiveProfiles("prod");
 
         HibernateRuleResultDto result = new OpenInViewRule().evaluate(context(environment));
