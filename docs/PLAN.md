@@ -4,12 +4,12 @@
 
 BootUI adds a safe, local-only developer console to a running application, shipping on **Spring Boot 4 (servlet and
 WebFlux starters) and Quarkus (an extension)** from one shared, framework-neutral engine that serves the same Vue UI and
-the same `/bootui/api/**` contract on every runtime. The released surface covers 53 panels across runtime introspection,
+the same `/bootui/api/**` contract on every runtime. The released surface covers 54 panels across runtime introspection,
 configuration, database migrations, services, diagnostics, project health, and developer tooling. The previous merged
-workstream — Live Activity correlation and event capture, the Beans dependency graph, the Email panel, and the
-**Transactions** panel — is complete. The next planned panel is a read-only **MongoDB** operational view, scoped in
-§3.5. The **Local Service Map** (§3.6) has shipped — not as a panel of its own, but as the **Live flow** mode of the
-existing Live Activity panel, on all three runtimes.
+workstream — Live Activity correlation and event capture, the Beans dependency graph, the Email panel, the
+**Transactions** panel, and the **Database Advisor** panel — is complete. The next planned panel is a read-only
+**MongoDB** operational view, scoped in §3.5. The **Local Service Map** (§3.6) has shipped — not as a panel of its own,
+but as the **Live flow** mode of the existing Live Activity panel, on all three runtimes.
 
 The priorities for every item below remain unchanged:
 

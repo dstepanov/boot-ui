@@ -11,6 +11,7 @@ import io.github.jdubois.bootui.quarkus.web.BeansResource;
 import io.github.jdubois.bootui.quarkus.web.CacheResource;
 import io.github.jdubois.bootui.quarkus.web.ConfigResource;
 import io.github.jdubois.bootui.quarkus.web.ConnectionPoolsResource;
+import io.github.jdubois.bootui.quarkus.web.DatabaseAdvisorResource;
 import io.github.jdubois.bootui.quarkus.web.ExceptionsResource;
 import io.github.jdubois.bootui.quarkus.web.HealthResource;
 import io.github.jdubois.bootui.quarkus.web.HibernateResource;
@@ -89,6 +90,7 @@ public class QuarkusMcpTools {
             BeansResource beans,
             MappingsResource mappings,
             OverviewResource overview,
+            DatabaseAdvisorResource databaseAdvisor,
             VulnerabilitiesResource vulnerabilities,
             LoggersResource loggers,
             ScheduledResource scheduled,
@@ -121,6 +123,14 @@ public class QuarkusMcpTools {
                         McpToolDescriptions.quarkus("hibernate_scan"),
                         BootUiPanels.HIBERNATE,
                         args -> hibernate.scan()));
+        addIfAvailable(
+                registry,
+                availability,
+                action(
+                        "database_advisor_scan",
+                        McpToolDescriptions.quarkus("database_advisor_scan"),
+                        BootUiPanels.DATABASE_ADVISOR,
+                        args -> databaseAdvisor.scan()));
         addIfAvailable(
                 registry,
                 availability,

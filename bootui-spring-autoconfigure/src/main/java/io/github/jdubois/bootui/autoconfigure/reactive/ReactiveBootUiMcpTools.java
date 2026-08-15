@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.autoconfigure.reactive;
 
 import io.github.jdubois.bootui.autoconfigure.architecture.ArchitectureController;
 import io.github.jdubois.bootui.autoconfigure.crac.CracController;
+import io.github.jdubois.bootui.autoconfigure.databaseadvisor.DatabaseAdvisorController;
 import io.github.jdubois.bootui.autoconfigure.graalvm.GraalVmController;
 import io.github.jdubois.bootui.autoconfigure.hibernate.HibernateController;
 import io.github.jdubois.bootui.autoconfigure.memory.MemoryController;
@@ -63,6 +64,7 @@ public class ReactiveBootUiMcpTools {
             ObjectProvider<RestApiController> restApi,
             ObjectProvider<GraalVmController> graalvm,
             ObjectProvider<CracController> crac,
+            ObjectProvider<DatabaseAdvisorController> databaseAdvisor,
             ObjectProvider<VulnerabilitiesController> vulnerabilities,
             ObjectProvider<LoggersController> loggers,
             ObjectProvider<ConditionsController> conditions,
@@ -90,6 +92,7 @@ public class ReactiveBootUiMcpTools {
         RestApiController restApiBean = restApi.getIfAvailable();
         GraalVmController graalvmBean = graalvm.getIfAvailable();
         CracController cracBean = crac.getIfAvailable();
+        DatabaseAdvisorController databaseAdvisorBean = databaseAdvisor.getIfAvailable();
         VulnerabilitiesController vulnerabilitiesBean = vulnerabilities.getIfAvailable();
         LoggersController loggersBean = loggers.getIfAvailable();
         ConditionsController conditionsBean = conditions.getIfAvailable();
@@ -158,6 +161,13 @@ public class ReactiveBootUiMcpTools {
         if (cracBean != null) {
             registry.add(action(
                     "crac_scan", McpToolDescriptions.spring("crac_scan"), BootUiPanels.CRAC, args -> cracBean.scan()));
+        }
+        if (databaseAdvisorBean != null) {
+            registry.add(action(
+                    "database_advisor_scan",
+                    McpToolDescriptions.spring("database_advisor_scan"),
+                    BootUiPanels.DATABASE_ADVISOR,
+                    args -> databaseAdvisorBean.scan()));
         }
         if (vulnerabilitiesBean != null) {
             registry.add(action(

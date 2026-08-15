@@ -8,6 +8,7 @@ import io.github.jdubois.bootui.autoconfigure.config.BootUiExposure;
 import io.github.jdubois.bootui.autoconfigure.config.SpringConfigProvider;
 import io.github.jdubois.bootui.autoconfigure.config.SpringMemoryRuntimeConfig;
 import io.github.jdubois.bootui.autoconfigure.crac.CracRuntimeInventoryCollector;
+import io.github.jdubois.bootui.autoconfigure.databaseadvisor.SpringDatabaseAdvisorDataSourceProvider;
 import io.github.jdubois.bootui.autoconfigure.datasource.SpringConnectionPoolProvider;
 import io.github.jdubois.bootui.autoconfigure.flyway.SpringFlywayProvider;
 import io.github.jdubois.bootui.autoconfigure.graalvm.HttpReachabilityMetadataRepository;
@@ -45,6 +46,7 @@ import io.github.jdubois.bootui.engine.cache.CacheActivityRecorder;
 import io.github.jdubois.bootui.engine.cache.CacheService;
 import io.github.jdubois.bootui.engine.config.ConfigService;
 import io.github.jdubois.bootui.engine.crac.CracReadinessScanner;
+import io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorScanner;
 import io.github.jdubois.bootui.engine.datasource.ConnectionPoolService;
 import io.github.jdubois.bootui.engine.email.EmailCaptureService;
 import io.github.jdubois.bootui.engine.email.EmailStore;
@@ -54,6 +56,8 @@ import io.github.jdubois.bootui.engine.graalvm.GraalVmReadinessScanner;
 import io.github.jdubois.bootui.engine.health.HealthService;
 import io.github.jdubois.bootui.engine.heapdump.HeapDumpService;
 import io.github.jdubois.bootui.engine.heapdump.HeapDumpSettings;
+import io.github.jdubois.bootui.engine.hibernate.EntityDiscovery;
+import io.github.jdubois.bootui.engine.hibernate.EntityDiscoverySource;
 import io.github.jdubois.bootui.engine.hibernate.HibernateScanner;
 import io.github.jdubois.bootui.engine.jms.JmsActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
@@ -173,6 +177,28 @@ public class BootUiEngineConfiguration {
         // ArchUnit classpath import runs only on demand (POST /scan), never at bean construction.
         return ArchitectureScanner.usingClasspath(
                 basePackageProvider::basePackages, ArchitecturePlatform.SPRING, Clock.systemUTC());
+    }
+
+    @Bean
+    @Lazy
+    @ConditionalOnMissingBean
+    DatabaseAdvisorScanner bootUiDatabaseAdvisorScanner(
+            ObjectProvider<ListableBeanFactory> beanFactoryProvider,
+            ObjectProvider<EntityDiscoverySource> entityDiscoverySource) {
+        // javax.sql.DataSource is core JDK (unlike EntityManagerFactory), so DataSource discovery needs no
+        // @ConditionalOnClass gating; the Hibernate cross-reference half is optional and only resolved when
+        // the nested HibernateAdvisorConfiguration below is active, via the EntityDiscoverySource seam.
+        SpringDatabaseAdvisorDataSourceProvider dataSourceProvider =
+                new SpringDatabaseAdvisorDataSourceProvider(beanFactoryProvider);
+        return DatabaseAdvisorScanner.using(
+                dataSourceProvider::dataSources,
+                () -> {
+                    EntityDiscoverySource source = entityDiscoverySource.getIfAvailable();
+                    return source == null
+                            ? EntityDiscovery.empty("Hibernate/JPA metamodel not detected on the classpath.")
+                            : source.discover();
+                },
+                Clock.systemUTC());
     }
 
     @Bean
@@ -419,6 +445,18 @@ public class BootUiEngineConfiguration {
                             environment, SpringHibernatePropertyLookup.isServletWebApplication(applicationContext)),
                     () -> List.of(environment.getActiveProfiles()),
                     Clock.systemUTC());
+        }
+
+        @Bean
+        @Lazy
+        @ConditionalOnMissingBean
+        EntityDiscoverySource bootUiEntityDiscoverySource(
+                ObjectProvider<EntityManagerFactory> entityManagerFactories,
+                ObjectProvider<ListableBeanFactory> beanFactories) {
+            // Shared with the Database Advisor: the same JPA metamodel read used by the Hibernate advisor,
+            // exposed through the pure-JDK EntityDiscoverySource seam so the always-active
+            // DatabaseAdvisorScanner (below) can consult it without linking jakarta.persistence types.
+            return () -> SpringHibernateDiscovery.discover(entityManagerFactories, beanFactories);
         }
     }
 

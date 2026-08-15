@@ -6,6 +6,7 @@ import io.github.jdubois.bootui.autoconfigure.config.BootUiExposure;
 import io.github.jdubois.bootui.autoconfigure.config.BootUiPathPropertySource;
 import io.github.jdubois.bootui.autoconfigure.config.ConfigOverrideService;
 import io.github.jdubois.bootui.autoconfigure.crac.CracController;
+import io.github.jdubois.bootui.autoconfigure.databaseadvisor.DatabaseAdvisorController;
 import io.github.jdubois.bootui.autoconfigure.exceptions.BootUiExceptionLogAppender;
 import io.github.jdubois.bootui.autoconfigure.graalvm.GraalVmController;
 import io.github.jdubois.bootui.autoconfigure.hibernate.HibernateController;
@@ -227,6 +228,7 @@ import tools.jackson.databind.ObjectMapper;
     FlywayController.class,
     LiquibaseController.class,
     DatabaseConnectionPoolsController.class,
+    DatabaseAdvisorController.class,
     SpringCacheController.class,
     DevServicesController.class,
     VulnerabilitiesController.class,
@@ -296,6 +298,7 @@ public class BootUiReactiveAutoConfiguration {
             CracController.class.getName(),
             HealthController.class.getName(),
             DatabaseConnectionPoolsController.class.getName(),
+            DatabaseAdvisorController.class.getName(),
             HttpExchangesController.class.getName(),
             HttpProbeController.class.getName(),
             HeapDumpController.class.getName(),
@@ -387,6 +390,7 @@ public class BootUiReactiveAutoConfiguration {
                 ObjectProvider<RestApiController> restApi,
                 ObjectProvider<GraalVmController> graalvm,
                 ObjectProvider<CracController> crac,
+                ObjectProvider<DatabaseAdvisorController> databaseAdvisor,
                 ObjectProvider<VulnerabilitiesController> vulnerabilities,
                 ObjectProvider<LoggersController> loggers,
                 ObjectProvider<ConditionsController> conditions,
@@ -415,6 +419,7 @@ public class BootUiReactiveAutoConfiguration {
                     restApi,
                     graalvm,
                     crac,
+                    databaseAdvisor,
                     vulnerabilities,
                     loggers,
                     conditions,
