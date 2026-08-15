@@ -18,7 +18,6 @@ const announcement = ref('')
 
 const statusText = computed(() => {
   if (props.connectionState === 'reconnecting') return 'Reconnecting\u2026'
-  if (props.connectionState === 'unavailable') return 'Stream unavailable'
   return null
 })
 
@@ -44,8 +43,24 @@ function updateValue(event) {
 </script>
 
 <template>
-  <div class="auto-refresh-control" :title="title">
-    <div class="form-check form-switch mb-0 auto-refresh-toggle">
+  <div
+    class="auto-refresh-control"
+    :title="connectionState === 'unavailable' ? 'Auto-refresh is paused while the stream is unavailable' : title"
+  >
+    <div v-if="connectionState === 'unavailable'" class="auto-refresh-paused">
+      <span class="auto-refresh-dot auto-refresh-dot--unavailable" aria-hidden="true"></span>
+      <span class="auto-refresh-paused-label small">Updates paused</span>
+      <button
+        class="auto-refresh-retry"
+        type="button"
+        aria-label="Retry auto-refresh stream connection now"
+        title="Try reconnecting"
+        @click="emit('retry')"
+      >
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div v-else class="form-check form-switch mb-0 auto-refresh-toggle">
       <input
         :id="inputId"
         :checked="modelValue"
@@ -59,8 +74,7 @@ function updateValue(event) {
           class="auto-refresh-dot"
           :class="{
             'auto-refresh-dot--live': modelValue && (!connectionState || connectionState === 'connected'),
-            'auto-refresh-dot--reconnecting': modelValue && connectionState === 'reconnecting',
-            'auto-refresh-dot--unavailable': modelValue && connectionState === 'unavailable'
+            'auto-refresh-dot--reconnecting': modelValue && connectionState === 'reconnecting'
           }"
           aria-hidden="true"
         ></span>
@@ -70,15 +84,6 @@ function updateValue(event) {
     <span v-if="statusText" class="auto-refresh-status small" :class="`auto-refresh-status--${connectionState}`">
       {{ statusText }}
     </span>
-    <button
-      v-if="connectionState === 'unavailable'"
-      class="auto-refresh-retry small"
-      type="button"
-      aria-label="Retry auto-refresh stream connection now"
-      @click="emit('retry')"
-    >
-      Retry now
-    </button>
     <span role="status" aria-live="polite" aria-atomic="true" class="visually-hidden">{{ announcement }}</span>
   </div>
 </template>
@@ -95,6 +100,24 @@ function updateValue(event) {
   align-items: center;
   display: inline-flex;
   gap: 0.35rem;
+}
+
+.auto-refresh-paused {
+  align-items: center;
+  background: color-mix(in srgb, var(--bootui-surface, #ffffff) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bootui-text-subtle, #5b6b80) 25%, transparent);
+  border-radius: var(--bootui-radius-pill, 999px);
+  box-shadow: var(--bootui-shadow-sm, 0 0.25rem 0.75rem rgba(15, 23, 42, 0.05));
+  display: inline-flex;
+  gap: 0.45rem;
+  min-height: 2.125rem;
+  padding: 0.2rem 0.25rem 0.2rem 0.65rem;
+}
+
+.auto-refresh-paused-label {
+  color: var(--bootui-text, #152033);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .auto-refresh-dot {
@@ -117,7 +140,7 @@ function updateValue(event) {
 }
 
 .auto-refresh-dot--unavailable {
-  background: var(--bootui-danger, #dc3545);
+  background: var(--bootui-warning-text, #997404);
 }
 
 .auto-refresh-status {
@@ -129,25 +152,25 @@ function updateValue(event) {
   color: var(--bootui-warning-text-strong, #6f5300);
 }
 
-.auto-refresh-status--unavailable {
-  color: var(--bootui-text, #152033);
-}
-
 .auto-refresh-retry {
-  background: none;
+  align-items: center;
+  background: color-mix(in srgb, var(--bootui-blue, #0d6efd) 8%, transparent);
   border: none;
-  border-radius: var(--bootui-radius-xs, 0.35rem);
+  border-radius: var(--bootui-radius-pill, 999px);
   color: var(--bootui-blue, #0d6efd);
   cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 1rem;
   font-weight: 600;
-  padding: 0.1rem;
-  text-decoration: underline;
-  text-underline-offset: 0.12em;
-  white-space: nowrap;
+  height: 1.625rem;
+  justify-content: center;
+  padding: 0;
+  width: 1.625rem;
 }
 
 .auto-refresh-retry:hover {
-  text-decoration-thickness: 2px;
+  background: color-mix(in srgb, var(--bootui-blue, #0d6efd) 14%, transparent);
 }
 
 .auto-refresh-retry:focus-visible {
