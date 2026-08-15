@@ -297,12 +297,35 @@ collection, chain match, and authorization simulation remains a Reactor `Mono`/`
 
 ### 6.6 Security advisor (`security`) — live on WebFlux
 
-The advisor uses a dedicated 25-rule reactive catalogue (`SEC-RXF-*`) over a neutral observation model collected from
+The advisor uses a dedicated 26-rule reactive catalogue (`SEC-RXF-*`) over a neutral observation model collected from
 the application's `SecurityWebFilterChain` configuration. It stays distinct from the raw `spring-security` panel:
 the raw panel explains the configured chains and mappings, while the advisor turns the observed posture into bounded,
 deterministic findings across authorization, CSRF, CORS, headers, Actuator exposure, OAuth2/JWT, configuration, and
 reactive session policy. BootUI's own permit-all chain is excluded from availability and analysis. See
 `docs/SECURITY-CHECKS.md` for the complete reactive catalogue.
+
+The catalogue is aligned with the Java 17 / Spring Boot 4.1.0 / Spring Security 7.1.0 baseline and deliberately
+describes only evidence the adapter can observe: installed filter/header-writer types, inspectable CORS maps, and host
+`Environment` properties. In particular, an installed `AuthorizationWebFilter` does not reveal whether
+its manager chose `permitAll`,
+`authenticated`, a role check, or custom logic; a decoder-local JWT validator is not inferred from unrelated validator
+beans; and management-path authorization, reverse-proxy TLS policy, handler-level CORS, and custom filters remain
+outside the snapshot. Unknown filter, header-writer, or CORS extraction skips dependent conclusions and produces a
+partial observation rather than being treated as an absent protection. Recursive composite header traversal is
+depth-bounded and reports incomplete evidence explicitly.
+
+Two unsupported checks were replaced without changing the 25-rule count: the non-existent reactive
+`spring.security.debug` switch and the unprovable global-bean audience-validator check gave way to host-configured
+Actuator `show-values=always` detection for web-exposed `env`/`configprops` endpoints and RFC 7662 plain-HTTP
+opaque-token introspection detection. Existing findings were narrowed where needed: credentialed CORS now targets the
+legal `allowedOriginPatterns="*"` case, CSP absence is a LOW contextual review (and report-only policies are called out
+as non-enforcing), static JWT keys are LOW rotation advice, HTTPS/Actuator findings avoid claiming knowledge of external
+deployment policy, and the mixed bearer/login rule uses WebFlux's real `NoOpServerSecurityContextRepository`
+remediation rather than servlet-only `SessionCreationPolicy`.
+
+A follow-up parity review brought the catalogue to 26 rules: `SEC-RXF-CSRF-001` and `SEC-RXF-SESSION-001` now also
+recognize `formLogin()` chains, not just OAuth2/OIDC login filters, and the new `SEC-RXF-CORS-003` flags broad
+`allowedOriginPatterns` (e.g. `https://*`) to match the servlet stack's `SEC-CORS-006`.
 
 ### 6.7 Not applicable (1 panel)
 
