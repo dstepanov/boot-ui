@@ -45,6 +45,8 @@ import io.github.jdubois.bootui.autoconfigure.spring.SpringController;
 import io.github.jdubois.bootui.autoconfigure.sqltrace.SqlTraceController;
 import io.github.jdubois.bootui.autoconfigure.sqltrace.SqlTraceDataSourceBeanPostProcessor;
 import io.github.jdubois.bootui.autoconfigure.sqltrace.SqlTraceRuntimeHints;
+import io.github.jdubois.bootui.autoconfigure.transactions.BootUiTransactionManagerBeanPostProcessor;
+import io.github.jdubois.bootui.autoconfigure.transactions.TransactionsController;
 import io.github.jdubois.bootui.autoconfigure.web.*;
 import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
@@ -52,6 +54,7 @@ import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.safety.ApiTokenAuthenticator;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
 import io.github.jdubois.bootui.engine.telemetry.TelemetryStore;
+import io.github.jdubois.bootui.engine.transactions.TransactionRecorder;
 import java.nio.file.Paths;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -168,6 +171,7 @@ import tools.jackson.databind.ObjectMapper;
     RabbitController.class,
     JmsController.class,
     SqlTraceController.class,
+    TransactionsController.class,
     RestClientTraceController.class,
     ThreadDumpController.class,
     MemoryController.class,
@@ -207,6 +211,7 @@ public class BootUiAutoConfiguration {
             RabbitController.class.getName(),
             JmsController.class.getName(),
             SqlTraceController.class.getName(),
+            TransactionsController.class.getName(),
             RestClientTraceController.class.getName(),
             HealthController.class.getName(),
             DatabaseConnectionPoolsController.class.getName(),
@@ -643,6 +648,53 @@ public class BootUiAutoConfiguration {
     static SqlTraceDataSourceBeanPostProcessor bootUiSqlTraceDataSourceBeanPostProcessor(
             org.springframework.beans.factory.ObjectProvider<SqlTraceRecorder> recorderProvider) {
         return new SqlTraceDataSourceBeanPostProcessor(recorderProvider);
+    }
+
+    /**
+     * Correlates the Transactions panel to SQL Trace's already-captured executions (see {@link
+     * TransactionRecorder}'s class Javadoc), so it must be created after {@code
+     * bootUiSqlTraceRecorder}. Depending on the {@code SqlTraceRecorder} bean rather than injecting it
+     * as an {@code ObjectProvider} is deliberate: both beans are always registered by this
+     * auto-configuration, so there is no "may be absent" case to defer.
+     */
+    @Bean
+    public TransactionRecorder bootUiTransactionRecorder(
+            BootUiProperties properties, SqlTraceRecorder sqlTraceRecorder) {
+        BootUiProperties.Transactions transactions = properties.getTransactions();
+        boolean enabled = transactions.isEnabled() && properties.isPanelEnabled(BootUiPanels.TRANSACTIONS);
+        return new TransactionRecorder(
+                enabled,
+                transactions.isRecording(),
+                transactions.getMaxEntries(),
+                transactions.getSlowTransactionThresholdMillis(),
+                transactions.getConnectionHoldThresholdMillis(),
+                sqlTraceRecorder);
+    }
+
+    /**
+     * Bridges the framework-neutral {@link TransactionRecorder} (implements {@code
+     * spi.IdleReclaimable}) to BootUI's Spring idle-reclaim mechanism, exactly as {@code
+     * bootUiSqlTraceRecorderIdleReclaimable} does for SQL Trace.
+     */
+    @Bean
+    public IdleReclaimable bootUiTransactionRecorderIdleReclaimable(TransactionRecorder recorder) {
+        return new IdleReclaimable() {
+            @Override
+            public void suspendForIdle() {
+                recorder.suspendForIdle();
+            }
+
+            @Override
+            public void resumeFromIdle() {
+                recorder.resumeFromIdle();
+            }
+        };
+    }
+
+    @Bean
+    static BootUiTransactionManagerBeanPostProcessor bootUiTransactionManagerBeanPostProcessor(
+            org.springframework.beans.factory.ObjectProvider<TransactionRecorder> recorderProvider) {
+        return new BootUiTransactionManagerBeanPostProcessor(recorderProvider);
     }
 
     /**

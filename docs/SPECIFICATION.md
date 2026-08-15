@@ -2101,6 +2101,7 @@ Top-level navigation:
 - Database:
   - Database Connection Pools.
   - SQL Trace.
+  - Transactions.
   - Spring Data.
   - Flyway.
   - Liquibase.
