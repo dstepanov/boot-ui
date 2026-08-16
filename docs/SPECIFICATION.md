@@ -2091,6 +2091,7 @@ Top-level navigation:
   - Architecture.
   - REST API.
   - Spring.
+  - Database.
   - Hibernate.
   - Memory.
   - Security.
@@ -2121,7 +2122,6 @@ Top-level navigation:
   - Spring Data.
   - Flyway.
   - Liquibase.
-  - Database Advisor.
 - Security:
   - Spring Security.
   - Security Logs.

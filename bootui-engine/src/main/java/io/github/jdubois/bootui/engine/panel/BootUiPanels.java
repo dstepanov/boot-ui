@@ -105,7 +105,7 @@ public final class BootUiPanels {
             new Panel(TRANSACTIONS, "Transactions", true, "/transactions"),
             new Panel(DATA, "Spring Data", false, "/data"),
             new Panel(HIBERNATE, "Hibernate", true, "/hibernate"),
-            new Panel(DATABASE_ADVISOR, "Database Advisor", true, "/database-advisor"),
+            new Panel(DATABASE_ADVISOR, "Database", true, "/database-advisor"),
             new Panel(CACHE, "Cache", true, "/cache"),
             new Panel(TRACES, "Traces", true, "/traces"),
             new Panel(LOG_TAIL, "Log Tail", false, "/log-tail"),

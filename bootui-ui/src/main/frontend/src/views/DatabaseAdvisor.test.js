@@ -100,7 +100,7 @@ describe('DatabaseAdvisor', () => {
       advisorReport([ruleResult('DB-SCHEMA-001', 'Passing primary key rule', 'MEDIUM', 'PASS')], 0)
     )
 
-    expect(wrapper.text()).toContain('No Database Advisor findings')
+    expect(wrapper.text()).toContain('No Database findings')
     expect(wrapper.text()).not.toContain('Passing primary key rule')
   })
 })

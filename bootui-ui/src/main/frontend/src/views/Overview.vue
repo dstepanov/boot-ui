@@ -42,7 +42,7 @@ function displayTitle(def) {
 // Severity-based scanners share the same {severityCounts, scan.status} contract.
 // GitHub renders as the first grid card, so the scanner order below lays out the
 // remaining cards into a 3-column grid: Architecture, Memory, REST API / Spring,
-// Hibernate, Security / Pentesting, Vulnerabilities.
+// Database, Hibernate, Security / Pentesting, Vulnerabilities.
 const scannerDefs = [
   {
     id: 'architecture',
@@ -82,6 +82,15 @@ const scannerDefs = [
     reportEndpoint: 'api/spring'
   },
   {
+    id: 'database-advisor',
+    title: 'Database',
+    icon: 'bi-hdd-rack',
+    tone: 'info',
+    to: '/database-advisor',
+    endpoint: 'api/database-advisor/scan',
+    reportEndpoint: 'api/database-advisor'
+  },
+  {
     id: 'hibernate',
     title: 'Hibernate',
     icon: 'bi-database-gear',
@@ -89,15 +98,6 @@ const scannerDefs = [
     to: '/hibernate',
     endpoint: 'api/hibernate/scan',
     reportEndpoint: 'api/hibernate'
-  },
-  {
-    id: 'database-advisor',
-    title: 'Database Advisor',
-    icon: 'bi-hdd-rack',
-    tone: 'info',
-    to: '/database-advisor',
-    endpoint: 'api/database-advisor/scan',
-    reportEndpoint: 'api/database-advisor'
   },
   {
     id: 'security',
