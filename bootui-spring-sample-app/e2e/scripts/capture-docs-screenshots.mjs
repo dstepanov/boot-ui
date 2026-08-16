@@ -52,7 +52,8 @@ const quarkusUnavailablePanels = new Set([
   'devtools',
   'jms',
   'email',
-  'rest-client-trace'
+  'rest-client-trace',
+  'transactions'
 ])
 
 const panelOrder = [
@@ -74,7 +75,9 @@ const panelOrder = [
   ['conditions', 'Conditions'],
   ['mappings', 'Mappings'],
   ['database-connection-pools', 'Database Connection Pools'],
+  ['transactions', 'Transactions'],
   ['sql-trace', 'SQL Trace'],
+  ['hibernate-statistics', 'Hibernate Statistics'],
   ['data', 'Spring Data'],
   ['hibernate', 'Hibernate'],
   ['flyway', 'Flyway'],
@@ -100,6 +103,7 @@ const panelOrder = [
   ['jms', 'JMS'],
   ['architecture', 'Architecture'],
   ['rest-api', 'REST API'],
+  ['database-advisor', 'Database'],
   ['mcp-server', 'MCP Server'],
   ['devtools', 'DevTools'],
   ['dev-services', 'Dev Services'],
@@ -3920,6 +3924,215 @@ const activityProfile = {
   ]
 }
 
+const databaseAdvisor = {
+  localOnly: true,
+  disclaimer:
+    'Database checks inspect schema metadata only. Review findings against your application workload before changing indexes or mappings.',
+  dataSourceNames: ['dataSource (HikariPool-1)'],
+  tablesAnalyzed: 14,
+  rulesEvaluated: 15,
+  violationsFound: 3,
+  severityCounts: [
+    {severity: 'HIGH', count: 1},
+    {severity: 'MEDIUM', count: 1},
+    {severity: 'LOW', count: 1},
+    {severity: 'INFO', count: 0}
+  ],
+  scan: {
+    analyzer: 'BootUI Database Advisor',
+    status: 'SCANNED',
+    message: 'Database Advisor completed.',
+    scannedAt: nowMillis - 42_000,
+    rulesEvaluated: 15,
+    entitiesAnalyzed: 14,
+    violationsFound: 3
+  },
+  results: [
+    {
+      id: 'DB-HIB-001',
+      name: 'Mapped foreign key column has no physical index',
+      category: 'Hibernate cross-reference',
+      severity: 'HIGH',
+      description:
+        'Cross-references mapped @ManyToOne/@OneToOne @JoinColumn foreign keys against the physical schema indexes.',
+      status: 'VIOLATION',
+      violationCount: 1,
+      sampleViolations: ['Entity OrderItem maps ORDER_ID, but table ORDER_ITEMS has no index beginning with ORDER_ID.'],
+      recommendation: 'Add a database index through a migration whose leading column is ORDER_ID.',
+      learnMoreUrl: 'https://vladmihalcea.com/how-to-map-a-onetomany-jpa-and-hibernate-association/'
+    },
+    {
+      id: 'DB-SCHEMA-001',
+      name: 'Tables without a primary key',
+      category: 'Physical schema',
+      severity: 'MEDIUM',
+      description: 'Detects tables reported by JDBC metadata with no primary key columns.',
+      status: 'VIOLATION',
+      violationCount: 2,
+      sampleViolations: [
+        'dataSource: table PUBLIC.SAMPLE_ADVISOR_ORDERS_TAGS has no primary key.',
+        'dataSource: table PUBLIC.SAMPLE_APP_PREFERENCES_ENABLED_FEATURES has no primary key.'
+      ],
+      recommendation: 'Declare a natural or surrogate primary key on every table.',
+      learnMoreUrl: 'https://en.wikipedia.org/wiki/Primary_key'
+    },
+    {
+      id: 'DB-SCHEMA-003',
+      name: 'Duplicate/redundant indexes',
+      category: 'Physical schema',
+      severity: 'LOW',
+      description: 'Detects indexes whose column lists are exact duplicates or share the same leading columns.',
+      status: 'VIOLATION',
+      violationCount: 1,
+      sampleViolations: ['Index IDX_PRODUCTS_SKU duplicates the leading columns of UK_PRODUCTS_SKU.'],
+      recommendation: 'Confirm query plans, then remove the redundant index.',
+      learnMoreUrl: 'https://use-the-index-luke.com/sql/dml'
+    }
+  ]
+}
+
+const hibernateStatistics = {
+  available: true,
+  enableAvailable: false,
+  unavailableReason: null,
+  statistics: {
+    sessionOpenCount: 48,
+    sessionCloseCount: 48,
+    flushCount: 31,
+    connectCount: 44,
+    transactionCount: 37,
+    successfulTransactionCount: 35,
+    entityLoadCount: 286,
+    entityFetchCount: 18,
+    entityInsertCount: 12,
+    entityUpdateCount: 9,
+    entityDeleteCount: 2,
+    collectionLoadCount: 73,
+    collectionFetchCount: 11,
+    collectionRecreateCount: 6,
+    collectionUpdateCount: 4,
+    collectionRemoveCount: 1,
+    queryExecutionCount: 164,
+    queryExecutionMaxTime: 86,
+    queryExecutionMaxTimeQueryString:
+      'select p from Product p left join fetch p.tags where p.active = true order by p.name',
+    queryCacheEnabled: true,
+    queryCacheHitCount: 42,
+    queryCacheMissCount: 8,
+    queryCachePutCount: 8,
+    secondLevelCacheEnabled: true,
+    secondLevelCacheHitCount: 91,
+    secondLevelCacheMissCount: 14,
+    secondLevelCachePutCount: 14,
+    secondLevelCacheRegions: [
+      {regionName: 'io.github.jdubois.bootui.sample.domain.Product', hitCount: 68, missCount: 9, putCount: 9},
+      {regionName: 'io.github.jdubois.bootui.sample.domain.Category', hitCount: 23, missCount: 5, putCount: 5}
+    ]
+  }
+}
+
+const transactions = {
+  available: true,
+  unavailableReason: null,
+  capturing: true,
+  bufferSize: 200,
+  totalCaptured: 37,
+  slowTransactionThresholdMillis: 200,
+  connectionHoldThresholdMillis: 500,
+  stats: {
+    totalTransactions: 4,
+    totalDurationMillis: 644,
+    maxDurationMillis: 428,
+    avgDurationMillis: 161,
+    slowTransactions: 1,
+    connectionHeldTransactions: 0,
+    committedCount: 3,
+    rolledBackCount: 1,
+    unknownCount: 0,
+    nestedCount: 1,
+    evicted: 0
+  },
+  entries: [
+    {
+      id: 404,
+      methodName: 'SampleTransactionScenarios.rollBack',
+      propagation: 'NEW',
+      isolation: 'READ_COMMITTED',
+      status: 'ROLLED_BACK',
+      startTimestamp: nowMillis - 18_000,
+      endTimestamp: nowMillis - 17_884,
+      durationMillis: 116,
+      parentId: null,
+      thread: 'http-nio-8080-exec-7',
+      traceId,
+      sqlStatementCount: 2,
+      connectionCount: 1,
+      readOnly: false,
+      slow: false,
+      connectionHeld: false,
+      errorMessage: 'Sample rollback requested'
+    },
+    {
+      id: 403,
+      methodName: 'SampleTransactionScenarios.slowCommit',
+      propagation: 'NEW',
+      isolation: 'READ_COMMITTED',
+      status: 'COMMITTED',
+      startTimestamp: nowMillis - 31_000,
+      endTimestamp: nowMillis - 30_572,
+      durationMillis: 428,
+      parentId: null,
+      thread: 'http-nio-8080-exec-5',
+      traceId: 'fedcba9876543210fedcba9876543210',
+      sqlStatementCount: 4,
+      connectionCount: 1,
+      readOnly: false,
+      slow: true,
+      connectionHeld: false,
+      errorMessage: null
+    },
+    {
+      id: 402,
+      methodName: 'SampleTransactionScenarios.nestedCommit',
+      propagation: 'NEW',
+      isolation: 'READ_COMMITTED',
+      status: 'COMMITTED',
+      startTimestamp: nowMillis - 45_000,
+      endTimestamp: nowMillis - 44_912,
+      durationMillis: 88,
+      parentId: null,
+      thread: 'http-nio-8080-exec-3',
+      traceId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      sqlStatementCount: 3,
+      connectionCount: 1,
+      readOnly: false,
+      slow: false,
+      connectionHeld: false,
+      errorMessage: null
+    },
+    {
+      id: 401,
+      methodName: 'SampleCatalog.updateInventory',
+      propagation: 'PARTICIPATING',
+      isolation: 'READ_COMMITTED',
+      status: 'COMMITTED',
+      startTimestamp: nowMillis - 44_980,
+      endTimestamp: nowMillis - 44_968,
+      durationMillis: 12,
+      parentId: 402,
+      thread: 'http-nio-8080-exec-3',
+      traceId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      sqlStatementCount: 1,
+      connectionCount: 1,
+      readOnly: false,
+      slow: false,
+      connectionHeld: false,
+      errorMessage: null
+    }
+  ],
+  warnings: []
+}
+
 const screenshots = [
   [
     'overview',
@@ -4001,6 +4214,16 @@ const screenshots = [
     }
   ],
   [
+    'transactions',
+    'Transactions',
+    'bootui-transactions.webp',
+    async (page) => {
+      await page.getByText('SampleTransactionScenarios.slowCommit').waitFor()
+      await page.getByText('SampleCatalog.updateInventory').waitFor()
+      await page.getByText('ROLLED_BACK').waitFor()
+    }
+  ],
+  [
     'sql-trace',
     'SQL Trace',
     'bootui-sql-trace.webp',
@@ -4012,6 +4235,16 @@ const screenshots = [
     }
   ],
   [
+    'hibernate-statistics',
+    'Hibernate Statistics',
+    'bootui-hibernate-statistics.webp',
+    async (page) => {
+      await page.getByText('Sessions & transactions').waitFor()
+      await page.getByText('Second-level cache', {exact: true}).waitFor()
+      await page.getByText('io.github.jdubois.bootui.sample.domain.Product').waitFor()
+    }
+  ],
+  [
     'data',
     'Spring Data',
     'bootui-data.webp',
@@ -4019,6 +4252,15 @@ const screenshots = [
       await page.getByText('ProductRepository').waitFor()
       await page.getByRole('button', {name: /ProductRepository/}).click()
       await page.getByText('findByActiveTrueOrderByNameAsc').waitFor()
+    }
+  ],
+  [
+    'database-advisor',
+    'Database',
+    'bootui-database-advisor.webp',
+    async (page) => {
+      await page.getByText('Tables without a primary key').waitFor()
+      await page.getByText('Mapped foreign key column has no physical index').waitFor()
     }
   ],
   ['hibernate', 'Hibernate', 'bootui-hibernate.webp', waitForText('FetchType.EAGER')],
@@ -4694,8 +4936,12 @@ async function handleApiRoute(route) {
   if (endpoint === 'scheduled') return fulfillJson(route, scheduled)
   if (endpoint === 'data/repositories') return fulfillJson(route, dataReport)
   if (endpoint.startsWith('data/repositories/')) return fulfillJson(route, dataDetail)
+  if (endpoint === 'database-advisor' || endpoint === 'database-advisor/scan')
+    return fulfillJson(route, databaseAdvisor)
   if (endpoint === 'hibernate') return fulfillJson(route, hibernate)
   if (endpoint === 'hibernate/scan') return fulfillJson(route, hibernate)
+  if (endpoint === 'hibernate-statistics' || endpoint === 'hibernate-statistics/enable')
+    return fulfillJson(route, hibernateStatistics)
   if (endpoint === 'flyway/migrations') return fulfillJson(route, flyway)
   if (endpoint === 'flyway/migrate')
     return fulfillJson(route, {status: 'success', message: 'Applied 2 pending Flyway migration(s).'})
@@ -4710,6 +4956,8 @@ async function handleApiRoute(route) {
   }
   if (endpoint === 'sql-trace' || endpoint === 'sql-trace/clear' || endpoint === 'sql-trace/recording')
     return fulfillJson(route, sqlTrace)
+  if (endpoint === 'transactions' || endpoint === 'transactions/clear' || endpoint === 'transactions/recording')
+    return fulfillJson(route, transactions)
   if (endpoint.startsWith('heap-dump')) return fulfillJson(route, heapDump)
   if (endpoint === 'cache') return fulfillJson(route, cache)
   if (endpoint === 'spring-security') return fulfillJson(route, springSecurity)

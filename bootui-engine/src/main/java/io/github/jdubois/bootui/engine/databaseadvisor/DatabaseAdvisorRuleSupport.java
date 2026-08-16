@@ -1,6 +1,7 @@
 package io.github.jdubois.bootui.engine.databaseadvisor;
 
 import io.github.jdubois.bootui.core.dto.DatabaseAdvisorRuleResultDto;
+import io.github.jdubois.bootui.engine.support.CredentialRedaction;
 import io.github.jdubois.bootui.engine.support.DetailText;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,7 +58,7 @@ final class DatabaseAdvisorRuleSupport {
     }
 
     static String detail(String value) {
-        return DetailText.sanitize(value);
+        return DetailText.sanitize(CredentialRedaction.redact(value));
     }
 
     private static List<String> samples(List<String> details) {

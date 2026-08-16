@@ -1,19 +1,28 @@
 package io.github.jdubois.bootui.engine.databaseadvisor;
 
-import io.github.jdubois.bootui.core.dto.DatabaseAdvisorRuleResultDto;
 import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedColumnFacts;
 import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedEntityFacts;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Cross-references a mapped {@code @Column(length=...)} against the physical column's reported size: when
- * the entity permits a longer string than the physical column can hold, an insert/update either silently
- * truncates the value (on a lenient database) or fails outright with a data-truncation/constraint-violation
- * error — a surprise the compile-time entity mapping gives no hint of. Only string/char-family physical
- * columns are compared, since {@code length} is not meaningful for other JDBC type families.
+ * Cross-references an explicitly declared {@code @Column(length=...)} against the physical column's reported
+ * size: when the entity permits a longer string than the column can hold, an insert either silently truncates
+ * (on a lenient database) or fails with a data-truncation error.
+ *
+ * <p>Two sources of false positives are removed. Only an <em>explicitly declared</em> length is compared —
+ * JPA's invisible default of 255 is not a statement of intent, and comparing it flagged every deliberately
+ * narrow column. And only columns with a genuinely bounded physical size are compared: an {@code @Lob}, a
+ * {@code text}/{@code clob} column, or any column whose driver reports no usable size (PostgreSQL reports
+ * {@code 2147483647} for unbounded {@code text}) is skipped rather than measured against a number that does
+ * not mean what it looks like.</p>
  */
-final class HibernateColumnLengthMismatchRule extends AbstractDatabaseAdvisorRule {
+final class HibernateColumnLengthMismatchRule extends AbstractHibernateCrossReferenceRule {
+
+    /**
+     * Sizes at or above this are the drivers' way of saying "unbounded" for text/CLOB columns, not a real
+     * declared width.
+     */
+    private static final int UNBOUNDED_SIZE = 1_000_000;
 
     HibernateColumnLengthMismatchRule() {
         super(new DatabaseAdvisorRuleDefinition(
@@ -21,8 +30,9 @@ final class HibernateColumnLengthMismatchRule extends AbstractDatabaseAdvisorRul
                 "Mapped column length longer than the physical column size",
                 DatabaseAdvisorCategory.HIBERNATE_MAPPING,
                 DatabaseAdvisorRuleSupport.MEDIUM,
-                "Cross-references mapped @Column(length=...) attributes (default 255) against the physical "
-                        + "string/char column's reported size.",
+                "Cross-references explicitly declared @Column(length=...) attributes against the physical "
+                        + "string/char column's reported size. Attributes without an explicit length, @Lob "
+                        + "attributes, and columns with no bounded physical size are not compared.",
                 "Align the entity's @Column(length=...) with the physical column size, or widen the physical "
                         + "column via a migration. A mapping that permits more characters than the database column "
                         + "can hold either silently truncates input or fails with a data-truncation error, "
@@ -31,50 +41,29 @@ final class HibernateColumnLengthMismatchRule extends AbstractDatabaseAdvisorRul
     }
 
     @Override
-    DatabaseAdvisorRuleResultDto evaluateRule(DatabaseAdvisorContext context) {
-        if (!context.hibernateAvailable()) {
-            return skipped("No EntityManagerFactory/Hibernate metamodel is available to cross-reference.");
+    void checkEntity(SchemaSnapshot schema, TableModel table, MappedEntityFacts entity, List<String> details) {
+        for (MappedColumnFacts column : entity.columns()) {
+            checkColumn(schema, table, column, details);
         }
-        if (context.availableSchemas().isEmpty()) {
-            return skipped("No physical schema could be read to cross-reference against.");
-        }
-        List<String> details = new ArrayList<>();
-        for (MappedEntityFacts entity : context.hibernateEntities()) {
-            if (entity.explicitTableName() == null) {
-                continue;
-            }
-            TableModel table = findTable(context, entity.explicitTableName());
-            if (table == null) {
-                continue;
-            }
-            for (MappedColumnFacts column : entity.columns()) {
-                checkColumn(entity, column, table, details);
-            }
-        }
-        return violation(details);
     }
 
-    private void checkColumn(
-            MappedEntityFacts entity, MappedColumnFacts column, TableModel table, List<String> details) {
-        ColumnModel physical = table.column(column.columnName());
-        if (physical == null || JdbcTypeFamily.ofJdbcType(physical.typeName()) != JdbcTypeFamily.STRING) {
+    private void checkColumn(SchemaSnapshot schema, TableModel table, MappedColumnFacts column, List<String> details) {
+        Integer declaredLength = column.declaredLength();
+        if (declaredLength == null || column.lob()) {
             return;
         }
-        if (physical.size() >= 0 && physical.size() < column.columnLength()) {
-            details.add(column.attributeDescription() + " declares @Column(length=" + column.columnLength()
-                    + "), which is longer than physical column " + entity.explicitTableName() + "."
-                    + column.columnName() + " (" + physical.typeName() + "(" + physical.size()
-                    + ")), a truncation risk.");
+        ColumnModel physical = table.column(column.columnName());
+        if (physical == null || JdbcTypeFamily.of(physical) != JdbcTypeFamily.STRING) {
+            return;
         }
-    }
-
-    private TableModel findTable(DatabaseAdvisorContext context, String tableName) {
-        for (SchemaSnapshot schema : context.availableSchemas()) {
-            TableModel table = schema.table(tableName);
-            if (table != null) {
-                return table;
-            }
+        Integer size = physical.size();
+        if (size == null || size <= 0 || size >= UNBOUNDED_SIZE) {
+            return;
         }
-        return null;
+        if (size < declaredLength) {
+            details.add(schema.dataSourceName() + ": " + column.attributeDescription() + " declares @Column(length="
+                    + declaredLength + "), which is longer than physical column " + table.qualifiedName() + "."
+                    + column.columnName() + " (" + physical.describeType() + "), a truncation risk.");
+        }
     }
 }

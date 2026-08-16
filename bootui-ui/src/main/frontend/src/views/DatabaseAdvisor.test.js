@@ -18,14 +18,30 @@ function ruleResult(id, name, severity, status, violationCount = 0) {
   }
 }
 
-function advisorReport(results, violationsFound = results.filter((result) => result.status === 'VIOLATION').length) {
+function advisorReport(results, overrides = {}) {
+  const violationsFound = overrides.violationsFound ?? results.filter((result) => result.status === 'VIOLATION').length
   return {
     localOnly: true,
     disclaimer: 'Database Advisor disclaimer.',
     dataSourceNames: ['default'],
+    dataSources: [
+      {
+        name: 'default',
+        product: 'PostgreSQL 16.1',
+        dialect: 'PostgreSQL',
+        identifierCase: 'LOWER',
+        status: 'AVAILABLE',
+        message: null,
+        tablesAnalyzed: 5,
+        truncated: false
+      }
+    ],
     tablesAnalyzed: 5,
     rulesEvaluated: 8,
     violationsFound,
+    rulesSkipped: 0,
+    rulesErrored: 0,
+    truncated: false,
     severityCounts: [
       {severity: 'HIGH', count: severityCount(results, 'HIGH')},
       {severity: 'MEDIUM', count: severityCount(results, 'MEDIUM')},
@@ -38,10 +54,12 @@ function advisorReport(results, violationsFound = results.filter((result) => res
       message: 'Database Advisor completed.',
       scannedAt: 1_700_000_000_000,
       rulesEvaluated: 8,
-      entitiesAnalyzed: 5,
+      tablesAnalyzed: 5,
       violationsFound
     },
-    results
+    results,
+    diagnostics: [],
+    ...overrides
   }
 }
 
@@ -65,11 +83,14 @@ describe('DatabaseAdvisor', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders the datasources card', async () => {
+  it('renders the datasources card with product and read status', async () => {
     const wrapper = await mountWithReport(advisorReport([]))
 
     expect(wrapper.text()).toContain('Datasources')
     expect(wrapper.text()).toContain('default')
+    expect(wrapper.text()).toContain('PostgreSQL 16.1')
+    expect(wrapper.text()).toContain('lower-case identifiers')
+    expect(wrapper.text()).toContain('Read')
   })
 
   it('shows only advisor findings sorted by importance', async () => {
@@ -97,10 +118,96 @@ describe('DatabaseAdvisor', () => {
 
   it('shows an empty findings state when every evaluated rule passes', async () => {
     const wrapper = await mountWithReport(
-      advisorReport([ruleResult('DB-SCHEMA-001', 'Passing primary key rule', 'MEDIUM', 'PASS')], 0)
+      advisorReport([ruleResult('DB-SCHEMA-001', 'Passing primary key rule', 'MEDIUM', 'PASS')])
     )
 
     expect(wrapper.text()).toContain('No Database findings')
     expect(wrapper.text()).not.toContain('Passing primary key rule')
+  })
+
+  it('reports an unreadable datasource without counting it as a finding', async () => {
+    const wrapper = await mountWithReport(
+      advisorReport([], {
+        dataSourceNames: ['primary', 'reporting'],
+        dataSources: [
+          {
+            name: 'primary',
+            product: 'PostgreSQL 16.1',
+            dialect: 'PostgreSQL',
+            status: 'AVAILABLE',
+            message: null,
+            tablesAnalyzed: 5,
+            truncated: false
+          },
+          {
+            name: 'reporting',
+            product: null,
+            dialect: 'Generic JDBC',
+            status: 'FAILED',
+            message: 'connection refused',
+            tablesAnalyzed: 0,
+            truncated: false
+          }
+        ],
+        scan: {
+          analyzer: 'BootUI Database Advisor',
+          status: 'PARTIAL',
+          message: 'Database Advisor completed. 1 datasource(s) could not be read.',
+          scannedAt: 1_700_000_000_000,
+          rulesEvaluated: 8,
+          tablesAnalyzed: 5,
+          violationsFound: 0
+        },
+        diagnostics: [{source: 'reporting', level: 'ERROR', message: 'connection refused'}]
+      })
+    )
+
+    expect(wrapper.text()).toContain('Partial scan')
+    expect(wrapper.text()).toContain('Incomplete scan.')
+    expect(wrapper.text()).toContain('1 datasource could not be read')
+    expect(wrapper.text()).toContain('Unreadable')
+    expect(wrapper.text()).toContain('No Database findings')
+  })
+
+  it('surfaces truncation and skipped/errored rules as diagnostics on demand', async () => {
+    const wrapper = await mountWithReport(
+      advisorReport([], {
+        truncated: true,
+        rulesSkipped: 3,
+        rulesErrored: 1,
+        dataSources: [
+          {
+            name: 'default',
+            product: 'MySQL 8.4',
+            dialect: 'MySQL',
+            status: 'PARTIAL',
+            message: 'Only the first 300 tables were analyzed.',
+            tablesAnalyzed: 300,
+            truncated: true
+          }
+        ],
+        diagnostics: [
+          {source: 'default', level: 'WARNING', message: 'Only the first 300 tables were analyzed.'},
+          {source: 'DB-PG-001', level: 'INFO', message: 'No PostgreSQL datasource was detected.'},
+          {source: 'DB-HIB-003', level: 'WARNING', message: 'Rule could not be evaluated: boom'}
+        ]
+      })
+    )
+
+    expect(wrapper.text()).toContain('Truncated')
+    expect(wrapper.text()).toContain('a scan bound was reached')
+    expect(wrapper.text()).toContain('1 rule failed to evaluate')
+    expect(wrapper.text()).toContain('Scan diagnostics')
+    expect(wrapper.text()).toContain('3 notes')
+    expect(wrapper.text()).toContain('Rules not run')
+    expect(wrapper.text()).not.toContain('No PostgreSQL datasource was detected.')
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Show diagnostics')
+      .trigger('click')
+
+    expect(wrapper.text()).toContain('No PostgreSQL datasource was detected.')
+    expect(wrapper.text()).toContain('Rule could not be evaluated: boom')
   })
 })

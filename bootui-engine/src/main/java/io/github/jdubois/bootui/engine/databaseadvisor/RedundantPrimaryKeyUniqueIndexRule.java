@@ -2,18 +2,19 @@ package io.github.jdubois.bootui.engine.databaseadvisor;
 
 import io.github.jdubois.bootui.core.dto.DatabaseAdvisorRuleResultDto;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
- * An explicit unique index whose column list exactly matches the primary key's columns duplicates the
- * uniqueness guarantee (and storage/maintenance cost) the primary key's own backing index already
- * provides. Only fires when at least two such indexes exist on the table — the primary key's own
- * automatically-created backing index is expected to match its own columns, so a lone match is normal, not
- * redundant.
+ * An explicit unique index that duplicates the primary key: same columns, in the same order, enforcing the
+ * same guarantee the primary key's own backing index already provides.
+ *
+ * <p>The previous implementation compared column <em>sets</em> and assumed "the first of several matches is
+ * the primary key's own index", which both missed the ordering requirement (a unique index on
+ * {@code (b, a)} is a different access path from a primary key on {@code (a, b)}) and could name the real
+ * primary key index as the redundant one. This version identifies the backing index explicitly — by the
+ * {@code PK_NAME} the driver reports, falling back to the unique index covering exactly the primary key
+ * columns in order — and only reports the other matches. Partial and expression indexes are excluded: they do
+ * not enforce the same constraint.</p>
  */
 final class RedundantPrimaryKeyUniqueIndexRule extends AbstractDatabaseAdvisorRule {
 
@@ -23,12 +24,12 @@ final class RedundantPrimaryKeyUniqueIndexRule extends AbstractDatabaseAdvisorRu
                 "Redundant unique index duplicating the primary key",
                 DatabaseAdvisorCategory.SCHEMA,
                 DatabaseAdvisorRuleSupport.LOW,
-                "Detects explicit unique indexes whose column list exactly matches the table's primary key "
-                        + "columns, in addition to the primary key's own backing index.",
+                "Detects unique indexes covering exactly the primary key's columns in the same order, other than "
+                        + "the primary key's own backing index. Partial and expression indexes are excluded.",
                 "Every additional unique index slows down INSERT/UPDATE/DELETE and consumes storage. When a "
-                        + "unique index's column list exactly matches the primary key's columns, it duplicates a "
-                        + "uniqueness guarantee the primary key's own backing index already enforces and can "
-                        + "usually be dropped.",
+                        + "unique index's columns exactly match the primary key's, it duplicates a guarantee the "
+                        + "primary key's own backing index already enforces and can usually be dropped — after "
+                        + "checking that no foreign key or application code references it by name.",
                 "https://use-the-index-luke.com/sql/dml"));
     }
 
@@ -36,7 +37,10 @@ final class RedundantPrimaryKeyUniqueIndexRule extends AbstractDatabaseAdvisorRu
     DatabaseAdvisorRuleResultDto evaluateRule(DatabaseAdvisorContext context) {
         List<String> details = new ArrayList<>();
         for (SchemaSnapshot schema : context.availableSchemas()) {
-            for (TableModel table : schema.tables()) {
+            for (TableModel table : DatabaseAdvisorContext.analyzableTables(schema)) {
+                if (!table.metadata().indexesRead() || !table.metadata().primaryKeyRead()) {
+                    continue;
+                }
                 checkTable(schema, table, details);
             }
         }
@@ -44,27 +48,20 @@ final class RedundantPrimaryKeyUniqueIndexRule extends AbstractDatabaseAdvisorRu
     }
 
     private void checkTable(SchemaSnapshot schema, TableModel table, List<String> details) {
-        if (table.primaryKeyColumns().isEmpty()) {
+        List<String> primaryKeyColumns = table.primaryKeyColumns();
+        if (primaryKeyColumns.isEmpty()) {
             return;
         }
-        Set<String> primaryKeyColumns = normalized(table.primaryKeyColumns());
-        List<IndexModel> matching = table.indexes().stream()
-                .filter(index -> index.unique() && normalized(index.columns()).equals(primaryKeyColumns))
-                .sorted(Comparator.comparing(IndexModel::name, Comparator.nullsLast(Comparator.naturalOrder())))
-                .toList();
-        if (matching.size() < 2) {
-            return;
+        IndexModel backingIndex = table.primaryKeyBackingIndex();
+        for (IndexModel index : table.indexes()) {
+            if (index == backingIndex || !index.unique() || index.partial() || index.hasExpressionKeyPart()) {
+                continue;
+            }
+            if (index.coversExactlyInOrder(primaryKeyColumns)) {
+                details.add(schema.dataSourceName() + ": " + table.qualifiedName() + " unique index " + index.name()
+                        + " " + index.describeKeyParts() + " duplicates the primary key columns "
+                        + primaryKeyColumns + ".");
+            }
         }
-        // The first match is treated as the primary key's own backing index; every additional match
-        // redundantly duplicates it.
-        for (IndexModel redundant : matching.subList(1, matching.size())) {
-            details.add(schema.dataSourceName() + ": " + table.qualifiedName() + " index " + redundant.name() + " "
-                    + redundant.columns() + " duplicates the primary key columns " + table.primaryKeyColumns()
-                    + ".");
-        }
-    }
-
-    private Set<String> normalized(List<String> columns) {
-        return columns.stream().map(column -> column.toLowerCase(Locale.ROOT)).collect(Collectors.toSet());
     }
 }

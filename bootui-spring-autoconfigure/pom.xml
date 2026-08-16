@@ -246,9 +246,25 @@
             <artifactId>testcontainers-postgresql</artifactId>
             <scope>test</scope>
         </dependency>
+        <!--
+          Test-scope only: PostgresDatabaseAdvisorLiveTests and MariaDbDatabaseAdvisorLiveTests exercise the
+          Database Advisor's vendor catalog augmentation against real servers, because partition/sequence
+          ownership (PostgreSQL) and the information_schema column set (MySQL 8.0's IS_VISIBLE versus
+          MariaDB 10.6's IGNORED) cannot be proven against a hand-built model. Both skip without Docker.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-mariadb</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mariadb.jdbc</groupId>
+            <artifactId>mariadb-java-client</artifactId>
             <scope>test</scope>
         </dependency>
 
