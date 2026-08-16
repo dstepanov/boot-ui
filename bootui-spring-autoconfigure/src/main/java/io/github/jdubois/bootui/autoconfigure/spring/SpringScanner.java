@@ -8,6 +8,7 @@ import io.github.jdubois.bootui.core.dto.SpringScanStatusDto;
 import io.github.jdubois.bootui.core.dto.SpringSeverityCountDto;
 import io.github.jdubois.bootui.engine.action.ActionOperations;
 import io.github.jdubois.bootui.engine.action.SingleFlightAction;
+import io.github.jdubois.bootui.engine.support.SeverityOrder;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -261,13 +262,12 @@ final class SpringScanner {
     }
 
     private List<SpringSeverityCountDto> severityCounts(List<SpringRuleResultDto> results) {
-        Map<String, Integer> counts = new LinkedHashMap<>();
-        for (String severity : SEVERITIES) {
-            counts.put(severity, 0);
-        }
-        for (SpringRuleResultDto result : results) {
-            counts.computeIfPresent(result.severity(), (ignored, count) -> count + 1);
-        }
+        Map<String, Integer> counts = SeverityOrder.occurrenceCounts(
+                SEVERITIES,
+                results,
+                ignored -> true,
+                SpringRuleResultDto::severity,
+                SpringRuleResultDto::violationCount);
         return counts.entrySet().stream()
                 .map(entry -> new SpringSeverityCountDto(entry.getKey(), entry.getValue()))
                 .toList();

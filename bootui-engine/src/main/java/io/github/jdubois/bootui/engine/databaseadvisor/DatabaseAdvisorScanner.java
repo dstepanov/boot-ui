@@ -198,8 +198,11 @@ public final class DatabaseAdvisorScanner {
     }
 
     private List<DatabaseAdvisorSeverityCountDto> severityCounts(List<DatabaseAdvisorRuleResultDto> results) {
-        Map<String, Integer> counts = SeverityOrder.counts(
-                results, DatabaseAdvisorScanner::isViolation, DatabaseAdvisorRuleResultDto::severity);
+        Map<String, Integer> counts = SeverityOrder.occurrenceCounts(
+                results,
+                DatabaseAdvisorScanner::isViolation,
+                DatabaseAdvisorRuleResultDto::severity,
+                DatabaseAdvisorRuleResultDto::violationCount);
         return counts.entrySet().stream()
                 .map(entry -> new DatabaseAdvisorSeverityCountDto(entry.getKey(), entry.getValue()))
                 .toList();

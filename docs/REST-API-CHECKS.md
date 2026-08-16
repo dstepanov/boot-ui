@@ -76,6 +76,9 @@ Swagger/springdoc-openapi (`io.swagger.v3.oas.annotations`) on Spring, or MicroP
 recognizes both Swagger and MicroProfile annotation forms when that platform's documentation integration is available;
 otherwise the rules are skipped without emitting a finding.
 
+The advisor score applies the shared severity penalty to every concrete finding, not just once per violated rule.
+Dismissed rules remove all of their findings from the score.
+
 ---
 
 ## Routing & HTTP method mapping

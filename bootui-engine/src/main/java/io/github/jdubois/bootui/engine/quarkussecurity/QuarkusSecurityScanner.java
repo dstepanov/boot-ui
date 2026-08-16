@@ -135,7 +135,8 @@ public final class QuarkusSecurityScanner {
     }
 
     private List<SecuritySeverityCountDto> severityCounts(List<SecurityRuleResultDto> results) {
-        Map<String, Integer> counts = SeverityOrder.counts(results, SecurityRuleResultDto::severity);
+        Map<String, Integer> counts = SeverityOrder.occurrenceCounts(
+                results, SecurityRuleResultDto::severity, SecurityRuleResultDto::violationCount);
         return counts.entrySet().stream()
                 .map(entry -> new SecuritySeverityCountDto(entry.getKey(), entry.getValue()))
                 .toList();

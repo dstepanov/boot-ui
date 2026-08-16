@@ -9,6 +9,7 @@ import io.github.jdubois.bootui.core.dto.SecurityScanStatusDto;
 import io.github.jdubois.bootui.core.dto.SecuritySeverityCountDto;
 import io.github.jdubois.bootui.engine.action.ActionOperations;
 import io.github.jdubois.bootui.engine.action.SingleFlightAction;
+import io.github.jdubois.bootui.engine.support.SeverityOrder;
 import jakarta.servlet.Filter;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Field;
@@ -19,7 +20,6 @@ import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -966,15 +966,12 @@ final class SecurityScanner {
     // ── Aggregation ──────────────────────────────────────────────────────────────
 
     private List<SecuritySeverityCountDto> severityCounts(List<SecurityRuleResultDto> results) {
-        Map<String, Integer> counts = new LinkedHashMap<>();
-        for (String severity : SEVERITIES) {
-            counts.put(severity, 0);
-        }
-        for (SecurityRuleResultDto result : results) {
-            if (isViolation(result)) {
-                counts.computeIfPresent(result.severity(), (ignored, count) -> count + 1);
-            }
-        }
+        Map<String, Integer> counts = SeverityOrder.occurrenceCounts(
+                SEVERITIES,
+                results,
+                SecurityScanner::isViolation,
+                SecurityRuleResultDto::severity,
+                SecurityRuleResultDto::violationCount);
         return counts.entrySet().stream()
                 .map(entry -> new SecuritySeverityCountDto(entry.getKey(), entry.getValue()))
                 .toList();

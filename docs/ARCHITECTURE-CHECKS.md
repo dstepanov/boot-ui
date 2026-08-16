@@ -70,6 +70,9 @@ The scan evaluates every registered rule, but the Rule results panel only lists 
 are ordered by importance (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`), then by the number of violating instances, and
 include up to a handful of sample detail lines from ArchUnit.
 
+The advisor score applies the shared severity penalty to every concrete violating instance, not just once per rule.
+Dismissed rules remove all of their instances from the score.
+
 ---
 
 ## Package structure

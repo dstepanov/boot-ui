@@ -1,6 +1,7 @@
 package io.github.jdubois.bootui.engine.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import java.util.List;
 import java.util.Map;
@@ -90,4 +91,29 @@ class SeverityOrderTests {
 
         assertThat(counts).containsExactly(Map.entry("CRITICAL", 1), Map.entry("UNKNOWN", 2));
     }
+
+    @Test
+    void occurrenceCountsTalliesEveryConcreteFindingReportedByARule() {
+        List<RuleResult> results = List.of(
+                new RuleResult("HIGH", 8, true), new RuleResult("MEDIUM", 2, true), new RuleResult("LOW", 4, false));
+
+        Map<String, Integer> counts = SeverityOrder.occurrenceCounts(
+                results, RuleResult::countable, RuleResult::severity, RuleResult::violationCount);
+
+        assertThat(counts.get("HIGH")).isEqualTo(8);
+        assertThat(counts.get("MEDIUM")).isEqualTo(2);
+        assertThat(counts.get("LOW")).isZero();
+    }
+
+    @Test
+    void occurrenceCountsRejectsNegativeFindingCounts() {
+        List<RuleResult> results = List.of(new RuleResult("HIGH", -1, true));
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> SeverityOrder.occurrenceCounts(
+                        results, RuleResult::countable, RuleResult::severity, RuleResult::violationCount))
+                .withMessage("Occurrence count must not be negative");
+    }
+
+    private record RuleResult(String severity, int violationCount, boolean countable) {}
 }
