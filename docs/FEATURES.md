@@ -1219,7 +1219,8 @@ or when a WebFlux application uses only a `ReactiveTransactionManager` (R2DBC), 
 listener hook exists solely on the blocking `PlatformTransactionManager` SPI. Capture, the initial recording state, buffer
 size, and the slow-transaction and connection-hold thresholds are all configurable under `bootui.transactions.*`.
 The Spring sample's product list and uncached product-search operations use explicit read-only service transactions, so
-loading or checking products produces representative entries in this panel as well as SQL Trace.
+loading or checking products produces representative entries in this panel as well as SQL Trace. Its sample action lab
+also has a one-click transaction scenario set that generates committed, slow, rolled-back, and nested boundaries.
 
 Like SQL Trace, the panel refreshes over **Server-Sent Events**: the browser subscribes to
 `/bootui/api/transactions/stream` and the server pushes a small coalesced notification whenever a transaction completes,

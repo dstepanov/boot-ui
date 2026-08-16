@@ -547,6 +547,47 @@ class BootUiSampleApplicationIntegrationTests {
     }
 
     @Test
+    void transactionSamplesProduceRepresentativeBoundaries() {
+        Map<?, ?> before = getMap("/bootui/api/transactions").getBody();
+        assertThat(before).isNotNull();
+        long capturedBefore = ((Number) before.get("totalCaptured")).longValue();
+
+        ResponseEntity<Map> sampleResponse = getMap("/api/sample/transaction-samples");
+        assertThat(sampleResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(sampleResponse.getBody()).containsEntry("slowMillis", 650);
+
+        Map<?, ?> after = getMap("/bootui/api/transactions").getBody();
+        assertThat(after).isNotNull();
+        assertThat(((Number) after.get("totalCaptured")).longValue()).isGreaterThanOrEqualTo(capturedBefore + 5);
+        Iterable<?> entries = (Iterable<?>) after.get("entries");
+        assertThat(entries).anySatisfy(entry -> {
+            Map<?, ?> transaction = (Map<?, ?>) entry;
+            assertThat(transaction.get("methodName"))
+                    .isEqualTo("io.github.jdubois.bootui.sample.catalog.SampleTransactionScenarios.commit");
+            assertThat(transaction.get("status")).isEqualTo("COMMITTED");
+        });
+        assertThat(entries).anySatisfy(entry -> {
+            Map<?, ?> transaction = (Map<?, ?>) entry;
+            assertThat(transaction.get("methodName"))
+                    .isEqualTo("io.github.jdubois.bootui.sample.catalog.SampleTransactionScenarios.slowCommit");
+            assertThat(transaction.get("status")).isEqualTo("COMMITTED");
+            assertThat(transaction.get("slow")).isEqualTo(true);
+        });
+        assertThat(entries).anySatisfy(entry -> {
+            Map<?, ?> transaction = (Map<?, ?>) entry;
+            assertThat(transaction.get("methodName"))
+                    .isEqualTo("io.github.jdubois.bootui.sample.catalog.SampleTransactionScenarios.rollBack");
+            assertThat(transaction.get("status")).isEqualTo("ROLLED_BACK");
+        });
+        assertThat(entries).anySatisfy(entry -> {
+            Map<?, ?> transaction = (Map<?, ?>) entry;
+            assertThat(transaction.get("methodName"))
+                    .isEqualTo("io.github.jdubois.bootui.sample.catalog.SampleNestedTransactionStep.run");
+            assertThat(transaction.get("parentId")).isNotNull();
+        });
+    }
+
+    @Test
     void flywayEndpointListsAppliedAndPendingCatalogMigrations() {
         ResponseEntity<Map> response = getMap("/bootui/api/flyway/migrations");
 
