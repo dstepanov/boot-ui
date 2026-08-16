@@ -1859,20 +1859,27 @@ groups:
 
 - **Advisor scans and cached reports:** action tools include `architecture_scan`, `spring_scan`, `hibernate_scan`,
   `database_advisor_scan`, `memory_scan`, `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`,
-  `crac_scan`, and `vulnerabilities_scan`. Matching `get_*_report` tools return the last report without rerunning the
-  scan. `vulnerabilities_scan` additionally makes outbound calls to OSV.dev.
+  `crac_scan`, and `vulnerabilities_scan`. Cached reads are `get_architecture_report`, `get_spring_report`,
+  `get_hibernate_report`, `get_database_advisor_report`, `get_memory_report`, `get_security_report`,
+  `get_pentest_report`, `get_rest_api_report`, `get_graalvm_report`, `get_crac_report`, and
+  `get_vulnerabilities_report`. `vulnerabilities_scan` additionally makes outbound calls to OSV.dev.
 - **Diagnostics reads:** `get_live_activity`, `get_exceptions`, `get_exception_detail`, `get_security_logs`,
   `get_sql_traces`, `get_transactions` (Spring MVC/WebFlux only), `get_traces`, `get_log_tail`, `get_http_exchanges`,
   and `get_rest_client_traces`. `get_live_activity` returns the correlated feed this panel shows, including HTTP
   requests, SQL statements, exceptions, security events, scheduled-task runs, and, on Spring, cache accesses grouped by
   request or trace. `get_exception_detail` returns a selected exception group's stack trace, causes, and occurrences.
-- **Runtime and integration reads:** the existing core context tools plus safe passive views for metrics, live memory,
-  JVM tuning, heap-dump metadata, threads, startup, profile differences, Spring Data, Flyway, Liquibase, Spring
-  Security, AI telemetry, messaging activity, DevTools/Dev Services, the cached GitHub dashboard, and local
-  Copilot/Claude Code session summaries. The live status response and MCP panel are the authoritative catalog for the
-  running stack.
-- **Bounded controls:** action tools clear in-memory diagnostic buffers, pause or resume supported recorders, analyze
-  an existing heap dump, and trigger Spring DevTools LiveReload. Destructive, database-mutating, arbitrary-command,
+- **Runtime and integration reads:** `get_overview`, `get_health`, `get_config`, `get_beans`, `get_mappings`,
+  `get_loggers`, `get_conditions`, `get_http_sessions`, `get_scheduled_tasks`, `get_cache_stats`,
+  `get_database_connection_pools`, `get_metrics`, `get_live_memory`, `get_jvm_tuning`, `get_heap_dump_report`,
+  `get_threads`, `get_startup_timeline`, `get_profile_diff`, `get_spring_data_repositories`,
+  `get_flyway_migrations`, `get_liquibase_changesets`, `get_spring_security`, `get_ai_overview`, `get_emails`,
+  `get_kafka_activity`, `get_rabbitmq_activity`, `get_jms_activity`, `get_devtools_status`, `get_dev_services`,
+  `get_github_dashboard`, `get_copilot_sessions`, and `get_claude_code_sessions`. The live status response and MCP
+  panel are the authoritative catalog for the running stack.
+- **Bounded controls:** `clear_exceptions`, `clear_sql_traces`, `pause_sql_trace_recording`,
+  `resume_sql_trace_recording`, `clear_transactions`, `pause_transaction_recording`, `resume_transaction_recording`,
+  `clear_traces`, `clear_rest_client_traces`, `pause_rest_client_recording`, `resume_rest_client_recording`,
+  `analyze_heap_dump`, and `trigger_devtools_livereload`. Destructive, database-mutating, arbitrary-command,
   heap-capture/download, HTTP-probe, GitHub-write, and dev-service-restart operations are deliberately not exposed.
 
 Tools whose backing panel/controller is not present (for example Hibernate or Spring Security when those libraries are

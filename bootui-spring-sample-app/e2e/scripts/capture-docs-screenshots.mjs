@@ -3867,6 +3867,136 @@ const activityReport = {
   warnings: []
 }
 
+const activityServiceMap = {
+  available: true,
+  unavailableReason: null,
+  generatedAt: nowMillis,
+  application: {
+    id: 'app',
+    kind: 'APPLICATION',
+    protocol: 'APPLICATION',
+    label: 'This application',
+    configured: true,
+    observed: true,
+    interactions: 31,
+    failures: 1,
+    outcome: 'RETAINED_FAILURES'
+  },
+  nodes: [
+    serviceMapNode({
+      id: 'inbound:http',
+      kind: 'INBOUND',
+      protocol: 'HTTP_INBOUND',
+      label: 'Local HTTP clients',
+      detail: 'Completed inbound requests',
+      interactions: 12,
+      distinctOperations: 4,
+      sourcePanelId: 'http-exchanges',
+      sourceRoute: '/http-exchanges',
+      sourceLabel: 'HTTP Exchanges'
+    }),
+    serviceMapNode({
+      id: 'jdbc:pool:dataSource',
+      protocol: 'JDBC',
+      label: 'PostgreSQL · bootui_sample',
+      detail: 'jdbc:postgresql://localhost:5432/bootui_sample',
+      configured: true,
+      interactions: 8,
+      distinctOperations: 5,
+      sourcePanelId: 'database-connection-pools',
+      sourceRoute: '/database-connection-pools',
+      sourceLabel: 'Database Connection Pools'
+    }),
+    serviceMapNode({
+      id: 'http:https://inventory.internal',
+      protocol: 'HTTP',
+      label: 'https://inventory.internal',
+      detail: 'Outbound REST client',
+      interactions: 4,
+      failures: 1,
+      distinctOperations: 2,
+      outcome: 'RETAINED_FAILURES',
+      sourcePanelId: 'rest-client-trace',
+      sourceRoute: '/rest-client-trace',
+      sourceLabel: 'REST Client'
+    }),
+    serviceMapNode({
+      id: 'cache:sample-products',
+      protocol: 'CACHE',
+      label: 'sample-products',
+      detail: 'Spring Cache',
+      configured: true,
+      interactions: 5,
+      distinctOperations: 2,
+      sourcePanelId: 'cache',
+      sourceRoute: '/cache',
+      sourceLabel: 'Cache'
+    }),
+    serviceMapNode({
+      id: 'kafka:topic:orders.created',
+      protocol: 'KAFKA',
+      label: 'orders.created',
+      detail: 'Kafka topic',
+      configured: true,
+      interactions: 2,
+      distinctOperations: 1,
+      sourcePanelId: 'kafka',
+      sourceRoute: '/kafka',
+      sourceLabel: 'Kafka'
+    })
+  ],
+  edges: [
+    serviceMapEdge({
+      id: 'inbound:http->app',
+      fromId: 'inbound:http',
+      toId: 'app',
+      protocol: 'HTTP_INBOUND',
+      direction: 'INBOUND',
+      interactions: 12,
+      operation: 'GET /api/sample/products'
+    }),
+    serviceMapEdge({
+      id: 'app->jdbc:pool:dataSource',
+      toId: 'jdbc:pool:dataSource',
+      protocol: 'JDBC',
+      interactions: 8,
+      operation: 'SELECT products'
+    }),
+    serviceMapEdge({
+      id: 'app->http:https://inventory.internal',
+      toId: 'http:https://inventory.internal',
+      protocol: 'HTTP',
+      interactions: 4,
+      failures: 1,
+      outcome: 'RETAINED_FAILURES',
+      operation: 'GET'
+    }),
+    serviceMapEdge({
+      id: 'app->cache:sample-products',
+      toId: 'cache:sample-products',
+      protocol: 'CACHE',
+      interactions: 5,
+      operation: 'HIT'
+    }),
+    serviceMapEdge({
+      id: 'app->kafka:topic:orders.created',
+      toId: 'kafka:topic:orders.created',
+      protocol: 'KAFKA',
+      interactions: 2,
+      operation: 'PUBLISH'
+    })
+  ],
+  truncation: {
+    truncated: false,
+    dependencyLimit: 28,
+    dependenciesShown: 5,
+    dependenciesOmitted: 0,
+    interactionLimit: 6
+  },
+  sources: ['HTTP Exchanges', 'Database Connection Pools', 'REST Client', 'Cache', 'Kafka'],
+  warnings: []
+}
+
 const activityProfile = {
   available: true,
   unavailableReason: null,
@@ -4299,6 +4429,15 @@ const screenshots = [
     'Live Activity',
     'bootui-activity.webp',
     async (page) => {
+      await page.getByRole('heading', {name: 'Live flow'}).waitFor()
+      const inboundNode = page.locator('.flow-svg .flow-node').filter({hasText: 'Local HTTP clients'})
+      const applicationNode = page.locator('.flow-svg .flow-node--app')
+      await inboundNode.waitFor()
+      await page.locator('.flow-svg .flow-node-label').filter({hasText: 'inventory.internal'}).waitFor()
+      const [inboundBox, applicationBox] = await Promise.all([inboundNode.boundingBox(), applicationNode.boundingBox()])
+      if (!inboundBox || !applicationBox || inboundBox.x + inboundBox.width >= applicationBox.x) {
+        throw new Error('Live flow screenshot requires the inbound HTTP lane to render left of the application')
+      }
       await page.getByText('GET /api/sample/products').first().waitFor()
       await page.getByText('inventory.internal').first().waitFor()
       await page.getByText('Your order has shipped').first().waitFor()
@@ -4856,6 +4995,7 @@ async function handleApiRoute(route) {
   if (endpoint === 'traces') return fulfillJson(route, traceReport)
   if (endpoint === `traces/${traceId}`) return fulfillJson(route, traceDetail)
   if (endpoint === 'exceptions') return fulfillJson(route, exceptions)
+  if (endpoint === 'activity/service-map') return fulfillJson(route, activityServiceMap)
   if (endpoint === 'activity') return fulfillJson(route, activityReport)
   if (endpoint === `activity/request/${activityRequestId}`) return fulfillJson(route, activityProfile)
   if (endpoint.startsWith('exceptions/'))
@@ -5010,6 +5150,54 @@ async function handleApiRoute(route) {
 
 function waitForText(text) {
   return (page) => page.getByText(text).first().waitFor()
+}
+
+function serviceMapNode(overrides) {
+  return {
+    kind: 'DEPENDENCY',
+    configured: false,
+    observed: true,
+    interactions: 1,
+    failures: 0,
+    distinctOperations: 1,
+    lastSeen: nowMillis - 12_000,
+    outcome: 'OBSERVED_OK',
+    note: null,
+    ...overrides
+  }
+}
+
+function serviceMapEdge({
+  id,
+  fromId = 'app',
+  toId,
+  protocol,
+  direction = 'OUTBOUND',
+  interactions,
+  failures = 0,
+  outcome = 'OBSERVED_OK',
+  operation
+}) {
+  return {
+    id,
+    fromId,
+    toId,
+    protocol,
+    direction,
+    interactions,
+    failures,
+    lastSeen: nowMillis - 12_000,
+    outcome,
+    recentInteractions: [
+      {
+        id: `${id}:latest`,
+        timestamp: nowMillis - 12_000,
+        operation,
+        outcome: failures > 0 ? 'FAILED' : 'OK',
+        durationMs: failures > 0 ? 680 : 24
+      }
+    ]
+  }
 }
 
 function requiredMatch(source, pattern, label, sourcePath) {

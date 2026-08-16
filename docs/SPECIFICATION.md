@@ -1584,44 +1584,6 @@ Acceptance criteria:
 - Spring MVC, Spring WebFlux, and Quarkus report equivalent statistics data through the same
   `/bootui/api/hibernate-statistics` contract wherever Hibernate ORM is present.
 
-### 5.17.1.2 Database Panel
-
-Purpose: answer "Does my application's physical schema hold up structurally, and does it still match what my entities
-assume?"
-
-Data sources:
-
-- Every discovered application `DataSource` bean, read through JDBC `DatabaseMetaData` (tables, columns, primary and
-  foreign keys, indexes) over a short-lived, read-only connection.
-- Read-only PostgreSQL `pg_catalog` and MySQL/MariaDB `information_schema` augmentation, selected from the detected
-  dialect and reported server version.
-- The same JPA metamodel the Hibernate panel reads, when one is available for the same application.
-
-Features:
-
-- Run explicit, read-only, bounded physical-schema checks and cross-reference them against mapped entities.
-- Report findings by severity with sample evidence and remediation guidance, cached until the next explicit scan.
-- Report per-datasource read status (`AVAILABLE`/`PARTIAL`/`FAILED`) with the detected product and dialect.
-- Report every datasource, table, catalog augmentation, bound and rule that could not be evaluated as a diagnostic,
-  separately from findings.
-
-Out of scope for the current release surface:
-
-- Executing DDL, querying application data, analysing query plans or workload, or proposing indexes from observed usage.
-
-Acceptance criteria:
-
-- The scan is bounded in tables, columns, indexes, catalog rows and wall-clock time, and reaching a bound is reported
-  rather than silently truncating the result.
-- The connection's original read-only state is restored before it returns to the pool.
-- A failed datasource, an unreadable table, a blocked catalog view, a truncated scan, or a skipped/errored rule is never
-  reported as a passing check and never counted as a violation; the scan status is `SCANNED` only when everything was
-  read completely.
-- Credentials in a JDBC URL or driver error message are redacted from every message, independently of the value
-  exposure policy.
-- Rule ids are stable across releases so dismissals keep applying.
-- The scan action is blocked by global read-only mode and the panel's read-only policy.
-
 ### 5.17.2 Flyway Panel
 
 Purpose: answer "Which Flyway-managed databases exist, what schema version is applied, which migrations are applied or
@@ -2291,17 +2253,30 @@ Design rules:
   `tools/call` remains an HTTP `200` MCP response but returns an in-band tool error (`isError: true`) with the canonical
   busy message. Panel disabled/read-only policy is checked first, and the aggregate MCP concurrent-call cap remains a
   separate capacity limit.
-- **Tool surface.** Every available panel with a safe passive read has an MCP read tool. Advisor action tools include
-  architecture, Spring/Quarkus, Hibernate, database, memory, security, pentesting, REST API, GraalVM, CRaC, and
-  vulnerability scans; matching `get_*_report` tools read the cached result without rescanning. Diagnostics include
-  live activity, exceptions and detail, security logs, SQL and transaction boundaries, traces, logs, HTTP exchanges,
-  and REST-client traces. Context and integration reads cover overview, health, masked configuration, beans, mappings,
-  loggers, conditions, scheduled tasks, caches, connection pools, metrics, JVM/memory/thread/startup state, persistence
-  integrations, AI/messaging activity, development services, cached GitHub data, and local agent-session summaries.
-  Bounded actions may clear in-memory buffers, pause/resume supported recorders, analyze an existing heap dump, or
-  trigger LiveReload. Heap capture/download, HTTP probes, database/cache mutations, GitHub writes, dev-service
-  restarts, and arbitrary agent commands are deliberately excluded. Tools whose backing controller is absent or not
-  applicable to the running stack are not advertised.
+- **Tool surface.** Every available panel with a safe passive read has an MCP read tool:
+  - Advisor actions: `architecture_scan`, `spring_scan`, `hibernate_scan`, `database_advisor_scan`, `memory_scan`,
+    `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`, and `vulnerabilities_scan`.
+  - Cached advisor reports: `get_architecture_report`, `get_spring_report`, `get_hibernate_report`,
+    `get_database_advisor_report`, `get_memory_report`, `get_security_report`, `get_pentest_report`,
+    `get_rest_api_report`, `get_graalvm_report`, `get_crac_report`, and `get_vulnerabilities_report`.
+  - Diagnostics: `get_live_activity`, `get_exceptions`, `get_exception_detail`, `get_security_logs`,
+    `get_sql_traces`, `get_transactions`, `get_traces`, `get_log_tail`, `get_http_exchanges`, and
+    `get_rest_client_traces`.
+  - Runtime and integration reads: `get_overview`, `get_health`, `get_config`, `get_beans`, `get_mappings`,
+    `get_loggers`, `get_conditions`, `get_http_sessions`, `get_scheduled_tasks`, `get_cache_stats`,
+    `get_database_connection_pools`, `get_metrics`, `get_live_memory`, `get_jvm_tuning`, `get_heap_dump_report`,
+    `get_threads`, `get_startup_timeline`, `get_profile_diff`, `get_spring_data_repositories`,
+    `get_flyway_migrations`, `get_liquibase_changesets`, `get_spring_security`, `get_ai_overview`, `get_emails`,
+    `get_kafka_activity`, `get_rabbitmq_activity`, `get_jms_activity`, `get_devtools_status`, `get_dev_services`,
+    `get_github_dashboard`, `get_copilot_sessions`, and `get_claude_code_sessions`.
+  - Bounded actions: `clear_exceptions`, `clear_sql_traces`, `pause_sql_trace_recording`,
+    `resume_sql_trace_recording`, `clear_transactions`, `pause_transaction_recording`,
+    `resume_transaction_recording`, `clear_traces`, `clear_rest_client_traces`, `pause_rest_client_recording`,
+    `resume_rest_client_recording`, `analyze_heap_dump`, and `trigger_devtools_livereload`.
+
+  Heap capture/download, HTTP probes, database/cache mutations, GitHub writes, dev-service restarts, and arbitrary agent
+  commands are deliberately excluded. Tools whose backing controller is absent or not applicable to the running stack
+  are not advertised.
 - **Strict inputs.** The transport rejects invalid JSON-RPC id/params types, non-object tool arguments, unknown
   arguments, and values whose type does not match the advertised schema with `-32600`/`-32602`; malformed values are
   never silently coerced or replaced with broad defaults.

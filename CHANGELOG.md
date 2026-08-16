@@ -7,6 +7,54 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-08-16
+
+Feature release headlined by three new database diagnostics — the **Database advisor**, **Transactions**, and
+**Hibernate Statistics** panels — plus Live Activity's animated **Live flow** service map and complete MCP access to
+BootUI's safely exposable features.
+
+### Added
+
+- **Database advisor on Spring MVC, Spring WebFlux, and Quarkus.** A bounded, metadata-only scan inspects every
+  application datasource for schema, key, index, type, and portability risks, with PostgreSQL, MySQL/MariaDB, and
+  Hibernate cross-reference checks. Per-datasource diagnostics make truncation, timeouts, unsupported metadata, and
+  partial reads explicit instead of reporting a clean result (#760, #795).
+- **Transactions panel for Spring MVC and WebFlux.** BootUI now records bounded `@Transactional` boundaries with
+  propagation, isolation, commit/rollback outcome, duration, parent/child nesting, and correlated SQL/connection counts,
+  together with pause, resume, clear, filtering, and SSE updates. R2DBC-only WebFlux applications and Quarkus report the
+  capability honestly unavailable because their transaction APIs expose no equivalent listener hook (#759, #781).
+- **Hibernate Statistics panel on all three runtimes.** The new Database-group view exposes live session, transaction,
+  query, entity, collection, and second-level/query-cache statistics, can explicitly enable collection at runtime, and
+  never resets existing counters. Single-persistence-unit scope and cache availability are reported clearly (#761).
+- **Animated Live flow service map inside Live Activity.** The map assembles existing bounded HTTP, JDBC, REST client,
+  cache, Kafka, and RabbitMQ evidence into configured and observed dependencies, retained failures, deep links, and
+  causally sequenced activity without adding probes, network calls, or new instrumentation. It is responsive,
+  keyboard-accessible, reduced-motion aware, and available on Spring MVC, WebFlux, and Quarkus (#777, #784).
+- **Complete capability-aware MCP feature access.** The local MCP server now exposes every safely passive panel read,
+  cached advisor reports, bounded diagnostic controls, strict tool schemas, execution/response budgets, runtime
+  counters, and full Spring MVC, WebFlux, and Quarkus conformance. Destructive, unbounded, database-mutating,
+  arbitrary-probe, and agent-execution operations remain deliberately excluded (#776, #791).
+- **CycloneDX 1.6 aggregate SBOM generation in CI.** Every build publishes a downloadable `bootui-sbom` workflow
+  artifact without attaching extra artifacts to Maven Central releases (#773).
+
+### Changed
+
+- **Advisor accuracy was audited across Architecture, Spring, Quarkus, Hibernate, Security, REST API, JVM Tuning,
+  Memory, Vulnerabilities, GraalVM, CRaC, Pentesting, and Database.** Rules now model current framework behavior more
+  precisely, use stronger evidence, skip honestly when evidence is unavailable, and keep their check documentation
+  synchronized (#743–#755, #775, #782, #795).
+- **Advisor scores now penalize every concrete finding, not only each violated rule once.** Panels and Overview therefore
+  apply the documented severity weights consistently when one rule reports multiple affected items (#803).
+- **SSE health and auto-refresh are one control.** Live Activity, Exceptions, SQL Trace, Security Logs, REST Client, and
+  Transactions share quiet healthy/paused states plus accessible reconnecting, unavailable, and retry feedback (#757,
+  #783).
+- **Panel documentation is now contract-checked.** Conformance tests keep backend manifests, feature headings, access
+  properties, read endpoints, MCP tool lists, screenshot files, and screenshot embeds aligned with authoritative code
+  catalogs (#797–#804).
+- **Build and release integrity is stricter.** CI adds focused coverage gates and deterministic OSV checks, while the
+  release workflow validates version transitions and immutable release commits/tags, publishes only the intended Maven
+  Central modules, and preserves resumable post-publication verification (#723, #731, #739, #741, #778).
+
 ### Fixed
 
 - **Quarkus Security advisor rules now match Quarkus 3.33 LTS effective behavior.** The 49-rule catalogue
@@ -16,7 +64,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   secret checks now use raw config/source metadata so environment/system properties, expressions, dev/test values, and
   non-secret `token.*` settings do not become CRITICAL findings. Added checks for plain-text embedded passwords and
   disabled TLS hostname verification; retired `QS-AUTH-006` because MicroProfile JWT already pins the absent algorithm
-  property to RS256.
+  property to RS256 (#755).
+- **SQL Trace no longer breaks applications that inject vendor-specific datasource interfaces.** JVM proxies preserve
+  interfaces such as Oracle UCP's `PoolDataSource`, while native images retain the fixed pre-registered proxy shape
+  (#779).
+- **WebFlux request handling no longer performs blocking BootUI work on event-loop threads.** Applicable handlers are
+  offloaded without changing the shared API contract (#726).
+- **Bounded runtime data stays bounded under edge cases.** Metrics responses, SQL batch previews, captured email bodies,
+  telemetry snapshots, and scanner concurrency now enforce their configured limits without leaking stale or partial
+  state (#720, #727, #732, #771).
+- **Vulnerability severity summaries reject malformed or contradictory data** instead of producing misleading Overview
+  scores (#742, #780).
+- **Shared UI state is more resilient.** Data panels avoid stale-request races, platform-aware navigation recovers after
+  manifest changes, keyboard behavior and chart contrast are improved, and responsive/reduced-motion layouts no longer
+  hide or over-animate controls (#721, #722, #730, #735, #737).
+- **Dev Services classification is consistent across Spring and Quarkus**, including datasource and messaging service
+  type inference (#772).
 
 ## [1.13.1] - 2026-08-07
 
@@ -1380,7 +1443,8 @@ First tagged BootUI alpha. Highlights of the harden-all-visible-panels scope:
   request history, distributed tracing, multi-service orchestration, and live
   Docker Compose lifecycle control are intentionally out of scope for the alpha.
 
-[Unreleased]: https://github.com/jdubois/boot-ui/compare/v1.13.1...HEAD
+[Unreleased]: https://github.com/jdubois/boot-ui/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/jdubois/boot-ui/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/jdubois/boot-ui/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/jdubois/boot-ui/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/jdubois/boot-ui/compare/v1.11.0...v1.12.0
