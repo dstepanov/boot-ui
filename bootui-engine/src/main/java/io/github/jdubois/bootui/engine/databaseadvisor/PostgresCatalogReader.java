@@ -22,9 +22,10 @@ final class PostgresCatalogReader {
             " and n.nspname not in ('pg_catalog', 'information_schema', 'pg_toast')"
                     + " and n.nspname not like 'pg\\_temp%' and n.nspname not like 'pg\\_toast%'";
 
-    private static final String INVALID_INDEXES_SQL = """
+    private static final String INVALID_INDEXES_BASE_SQL = """
             select n.nspname as schema_name, t.relname as table_name, c.relname as index_name,
-                   i.indisvalid as is_valid, i.indisready as is_ready, i.indislive as is_live
+                   i.indisvalid as is_valid, i.indisready as is_ready, i.indislive as is_live,
+                   i.indisunique as is_unique
             from pg_index i
             join pg_class c on c.oid = i.indexrelid
             join pg_class t on t.oid = i.indrelid
@@ -37,27 +38,36 @@ final class PostgresCatalogReader {
                     select 1 from pg_depend d
                     where d.classid = 'pg_class'::regclass and d.objid = c.oid
                       and d.refclassid = 'pg_extension'::regclass and d.deptype = 'e')
+            """;
+
+    /** {@code pg_stat_progress_create_index} requires PostgreSQL 12 or later. */
+    private static final String EXCLUDE_INDEXES_BUILDING_CONCURRENTLY = """
+              and not exists (
+                    select 1 from pg_stat_progress_create_index p where p.index_relid = c.oid)
+            """;
+
+    private static final String ORDER_AND_LIMIT_SQL = """
             order by n.nspname, t.relname, c.relname
             limit ?
             """;
 
-    private static final String INDEX_DETAILS_SQL = """
+    private static final String INDEX_DETAILS_BASE_SQL = """
             select n.nspname as schema_name, t.relname as table_name, c.relname as index_name,
                    i.indisvalid as is_valid,
                    (i.indpred is not null) as is_partial,
                    pg_get_expr(i.indpred, i.indrelid) as predicate,
                    (i.indexprs is not null) as has_expression,
-                   am.amname as method
+                   am.amname as method""";
+
+    private static final String INDEX_DETAILS_FROM_WHERE_SQL = """
+
             from pg_index i
             join pg_class c on c.oid = i.indexrelid
             join pg_class t on t.oid = i.indrelid
             join pg_namespace n on n.oid = t.relnamespace
             join pg_am am on am.oid = c.relam
             where true
-            """ + SYSTEM_SCHEMA_FILTER + """
-            order by n.nspname, t.relname, c.relname
-            limit ?
-            """;
+            """ + SYSTEM_SCHEMA_FILTER;
 
     private static final String PARTITIONS_SQL = """
             select n.nspname as schema_name, c.relname as table_name,
@@ -107,6 +117,7 @@ final class PostgresCatalogReader {
     private static final String SEQUENCES_SQL = """
             select s.schemaname as schema_name, s.sequencename as sequence_name,
                    s.last_value as last_value, s.max_value as max_value, s.cycle as is_cycle,
+                   s.increment_by as increment_by,
                    owner_ns.nspname as owner_schema, owner_table.relname as owner_table,
                    owner_column.attname as owner_column, owner_type.typname as owner_type
             from pg_sequences s
@@ -126,6 +137,26 @@ final class PostgresCatalogReader {
             limit ?
             """;
 
+    /**
+     * Tables actually in scope for logical replication: an explicit {@code pg_publication_rel} member, or
+     * every table implicitly, because some publication is declared {@code FOR ALL TABLES}. A table outside
+     * both is never a candidate — flagging every primary-key-less table regardless of whether logical
+     * replication is even configured would be noise on the overwhelming majority of development databases.
+     */
+    private static final String REPLICA_IDENTITY_CANDIDATES_SQL = """
+            select n.nspname as schema_name, t.relname as table_name, t.relreplident as replica_identity
+            from pg_class t
+            join pg_namespace n on n.oid = t.relnamespace
+            where t.relkind = 'r'
+              and (
+                    exists (select 1 from pg_publication_rel pr where pr.prrelid = t.oid)
+                    or exists (select 1 from pg_publication p where p.puballtables)
+                  )
+            """ + SYSTEM_SCHEMA_FILTER + """
+            order by n.nspname, t.relname
+            limit ?
+            """;
+
     private PostgresCatalogReader() {}
 
     static void read(
@@ -138,17 +169,17 @@ final class PostgresCatalogReader {
         findings.add(CatalogQuery.read(
                 connection,
                 VendorFindingKinds.POSTGRES_INVALID_INDEXES,
-                INVALID_INDEXES_SQL,
+                invalidIndexesSql(capabilities),
                 budget,
                 limits,
                 PostgresCatalogReader::readInvalidIndex));
         findings.add(CatalogQuery.read(
                 connection,
                 VendorFindingKinds.POSTGRES_INDEX_DETAILS,
-                INDEX_DETAILS_SQL,
+                indexDetailsSql(capabilities),
                 budget,
                 limits,
-                PostgresCatalogReader::readIndexDetail));
+                resultSet -> readIndexDetail(resultSet, capabilities)));
         findings.add(CatalogQuery.read(
                 connection,
                 VendorFindingKinds.POSTGRES_EXTENSION_TABLES,
@@ -191,6 +222,36 @@ final class PostgresCatalogReader {
                     "The pg_sequences view requires PostgreSQL 10 or later (server reports " + version.describe()
                             + ")."));
         }
+        findings.add(CatalogQuery.read(
+                connection,
+                VendorFindingKinds.POSTGRES_REPLICA_IDENTITY_CANDIDATES,
+                REPLICA_IDENTITY_CANDIDATES_SQL,
+                budget,
+                limits,
+                PostgresCatalogReader::readReplicaIdentityCandidate));
+    }
+
+    private static String invalidIndexesSql(DialectCapabilities capabilities) {
+        StringBuilder sql = new StringBuilder(INVALID_INDEXES_BASE_SQL);
+        if (capabilities.indexBuildProgressView()) {
+            // An index still being built CONCURRENTLY is transiently invalid by design; excluding it here is
+            // the only way to tell that healthy, in-progress state from one a failed build left behind.
+            sql.append(EXCLUDE_INDEXES_BUILDING_CONCURRENTLY);
+        }
+        sql.append(ORDER_AND_LIMIT_SQL);
+        return sql.toString();
+    }
+
+    private static String indexDetailsSql(DialectCapabilities capabilities) {
+        StringBuilder sql = new StringBuilder(INDEX_DETAILS_BASE_SQL);
+        if (capabilities.indexIncludeColumns()) {
+            sql.append(",\n                   i.indnkeyatts as key_column_count");
+        }
+        if (capabilities.nullsNotDistinct()) {
+            sql.append(",\n                   i.indnullsnotdistinct as nulls_not_distinct");
+        }
+        sql.append(INDEX_DETAILS_FROM_WHERE_SQL).append(ORDER_AND_LIMIT_SQL);
+        return sql.toString();
     }
 
     private static PostgresInvalidIndex readInvalidIndex(ResultSet rs) throws SQLException {
@@ -200,10 +261,12 @@ final class PostgresCatalogReader {
                 rs.getString("index_name"),
                 rs.getBoolean("is_valid"),
                 rs.getBoolean("is_ready"),
-                rs.getBoolean("is_live"));
+                rs.getBoolean("is_live"),
+                rs.getBoolean("is_unique"));
     }
 
-    private static PostgresIndexDetail readIndexDetail(ResultSet rs) throws SQLException {
+    private static PostgresIndexDetail readIndexDetail(ResultSet rs, DialectCapabilities capabilities)
+            throws SQLException {
         return new PostgresIndexDetail(
                 rs.getString("schema_name"),
                 rs.getString("table_name"),
@@ -212,7 +275,14 @@ final class PostgresCatalogReader {
                 rs.getBoolean("is_partial"),
                 rs.getString("predicate"),
                 rs.getBoolean("has_expression"),
-                rs.getString("method"));
+                rs.getString("method"),
+                capabilities.indexIncludeColumns() ? nullableInt(rs, "key_column_count") : null,
+                capabilities.nullsNotDistinct() && rs.getBoolean("nulls_not_distinct"));
+    }
+
+    private static Integer nullableInt(ResultSet rs, String column) throws SQLException {
+        int value = rs.getInt(column);
+        return rs.wasNull() ? null : value;
     }
 
     private static PostgresPartitionInfo readPartition(ResultSet rs) throws SQLException {
@@ -226,6 +296,11 @@ final class PostgresCatalogReader {
     private static PostgresExtensionTable readExtensionTable(ResultSet rs) throws SQLException {
         return new PostgresExtensionTable(
                 rs.getString("schema_name"), rs.getString("table_name"), rs.getString("extension_name"));
+    }
+
+    private static PostgresReplicaIdentityCandidate readReplicaIdentityCandidate(ResultSet rs) throws SQLException {
+        return new PostgresReplicaIdentityCandidate(
+                rs.getString("schema_name"), rs.getString("table_name"), rs.getString("replica_identity"));
     }
 
     private static PostgresUnvalidatedConstraint readUnvalidatedConstraint(ResultSet rs) throws SQLException {
@@ -245,6 +320,8 @@ final class PostgresCatalogReader {
             return null;
         }
         String ownerType = rs.getString("owner_type");
+        long incrementBy = rs.getLong("increment_by");
+        Long incrementByOrNull = rs.wasNull() ? null : incrementBy;
         return new PostgresSequenceUsage(
                 rs.getString("schema_name"),
                 rs.getString("sequence_name"),
@@ -255,7 +332,8 @@ final class PostgresCatalogReader {
                 rs.getString("owner_schema"),
                 rs.getString("owner_table"),
                 rs.getString("owner_column"),
-                ownerType);
+                ownerType,
+                incrementByOrNull);
     }
 
     /** The largest value the sequence's owning column type can hold, or {@code null} when not classified. */

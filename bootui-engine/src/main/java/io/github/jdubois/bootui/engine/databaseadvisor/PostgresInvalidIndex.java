@@ -11,8 +11,11 @@ package io.github.jdubois.bootui.engine.databaseadvisor;
  * @param valid {@code pg_index.indisvalid}
  * @param ready {@code pg_index.indisready}
  * @param live {@code pg_index.indislive}
+ * @param unique {@code pg_index.indisunique} — an invalid unique index enforces no uniqueness at all until
+ *     it is fixed, which is a more serious consequence than simply being unused by the planner
  */
-record PostgresInvalidIndex(String schema, String table, String index, boolean valid, boolean ready, boolean live) {
+record PostgresInvalidIndex(
+        String schema, String table, String index, boolean valid, boolean ready, boolean live, boolean unique) {
 
     String qualifiedTable() {
         return schema == null || schema.isBlank() ? table : schema + "." + table;

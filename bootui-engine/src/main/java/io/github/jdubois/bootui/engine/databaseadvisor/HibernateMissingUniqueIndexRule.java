@@ -31,12 +31,21 @@ final class HibernateMissingUniqueIndexRule extends AbstractHibernateCrossRefere
                 "Add a unique index or constraint (via a migration) covering the same column(s) in full. Without "
                         + "one, the database never enforces the mapping's uniqueness assumption, so concurrent "
                         + "inserts can create duplicate rows the application logic never expected.",
-                "https://vladmihalcea.com/database-uniqueness-application-level-vs-database-level/"));
+                "https://www.postgresql.org/docs/current/indexes-unique.html"));
     }
 
     @Override
-    void checkEntity(SchemaSnapshot schema, TableModel table, MappedEntityFacts entity, List<String> details) {
+    void checkEntity(
+            DatabaseAdvisorContext context,
+            MappedTableResolution primary,
+            MappedEntityFacts entity,
+            List<String> details) {
         for (MappedUniqueConstraintFacts uniqueConstraint : entity.uniqueConstraints()) {
+            MappedTableResolution resolution = resolveItemTable(context, entity, primary, uniqueConstraint.tableName());
+            if (!resolution.resolved()) {
+                continue;
+            }
+            TableModel table = resolution.table();
             List<String> columns = uniqueConstraint.columns();
             if (columns.isEmpty() || !columns.stream().allMatch(table::hasColumn)) {
                 continue;
@@ -44,7 +53,7 @@ final class HibernateMissingUniqueIndexRule extends AbstractHibernateCrossRefere
             if (isPrimaryKey(table, columns) || table.hasEnforcedUniqueness(columns)) {
                 continue;
             }
-            details.add(schema.dataSourceName() + ": " + uniqueConstraint.description()
+            details.add(resolution.schema().dataSourceName() + ": " + uniqueConstraint.description()
                     + " declares a unique constraint on " + table.qualifiedName() + " " + columns
                     + ", which no physical unique index fully enforces.");
         }

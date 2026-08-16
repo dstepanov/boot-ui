@@ -41,9 +41,17 @@ final class HibernateColumnLengthMismatchRule extends AbstractHibernateCrossRefe
     }
 
     @Override
-    void checkEntity(SchemaSnapshot schema, TableModel table, MappedEntityFacts entity, List<String> details) {
+    void checkEntity(
+            DatabaseAdvisorContext context,
+            MappedTableResolution primary,
+            MappedEntityFacts entity,
+            List<String> details) {
         for (MappedColumnFacts column : entity.columns()) {
-            checkColumn(schema, table, column, details);
+            MappedTableResolution resolution = resolveItemTable(context, entity, primary, column.tableName());
+            if (!resolution.resolved()) {
+                continue;
+            }
+            checkColumn(resolution.schema(), resolution.table(), column, details);
         }
     }
 

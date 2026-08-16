@@ -10,6 +10,11 @@ import java.util.List;
  * when either half is missing, and they all evaluate only entities whose physical table could be resolved
  * unambiguously — an entity with no explicit {@code @Table(name)}, or one whose name matches tables in several
  * readable datasources, is skipped rather than attributed to the wrong database.
+ *
+ * <p>An entity can split its mapped items across more than one physical table via {@code @SecondaryTable}.
+ * {@link #checkEntity} therefore does not receive one pre-resolved table; it receives the entity's own
+ * (primary-table) resolution and resolves each item's actual table through {@link #resolveItemTable}, which
+ * falls back to the primary table when the item declares no {@code table=} override.</p>
  */
 abstract class AbstractHibernateCrossReferenceRule extends AbstractDatabaseAdvisorRule {
 
@@ -17,8 +22,12 @@ abstract class AbstractHibernateCrossReferenceRule extends AbstractDatabaseAdvis
         super(definition);
     }
 
-    /** Adds any findings for one resolved entity/table pair. */
-    abstract void checkEntity(SchemaSnapshot schema, TableModel table, MappedEntityFacts entity, List<String> details);
+    /** Adds any findings for one entity, given its resolved primary-table facts. */
+    abstract void checkEntity(
+            DatabaseAdvisorContext context,
+            MappedTableResolution primary,
+            MappedEntityFacts entity,
+            List<String> details);
 
     @Override
     DatabaseAdvisorRuleResultDto evaluateRule(DatabaseAdvisorContext context) {
@@ -37,9 +46,34 @@ abstract class AbstractHibernateCrossReferenceRule extends AbstractDatabaseAdvis
             if (!resolution.table().metadata().complete() && requiresCompleteMetadata()) {
                 continue;
             }
-            checkEntity(resolution.schema(), resolution.table(), entity, details);
+            checkEntity(context, resolution, entity, details);
         }
         return violation(details);
+    }
+
+    /**
+     * Resolves which physical table one mapped item (a column, join column set, or unique constraint) belongs
+     * to: {@code primary} when the item declares no explicit {@code table=} override, or the named
+     * {@code @SecondaryTable} otherwise. Returns a resolution with {@link MappedTableResolution#resolved()}
+     * {@code false} when the override does not match a declared secondary table, that secondary table cannot
+     * be found unambiguously in the physical schema, or (when {@link #requiresCompleteMetadata()}) its metadata
+     * was not read completely — skip that item rather than guess or risk a false "absent" finding.
+     */
+    final MappedTableResolution resolveItemTable(
+            DatabaseAdvisorContext context,
+            MappedEntityFacts entity,
+            MappedTableResolution primary,
+            String itemTableName) {
+        MappedTableResolution resolution = itemTableName == null || itemTableName.isBlank()
+                ? primary
+                : MappedTableResolution.resolveSecondary(context, entity, itemTableName);
+        if (!resolution.resolved()) {
+            return resolution;
+        }
+        if (requiresCompleteMetadata() && !resolution.table().metadata().complete()) {
+            return new MappedTableResolution(MappedTableResolution.Status.NOT_FOUND, null, null, null);
+        }
+        return resolution;
     }
 
     /**

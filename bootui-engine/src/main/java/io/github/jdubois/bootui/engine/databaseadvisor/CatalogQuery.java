@@ -33,6 +33,27 @@ final class CatalogQuery {
             ScanBudget budget,
             DatabaseAdvisorLimits limits,
             RowMapper<T> mapper) {
+        return read(connection, kind, sql, List.of(), budget, limits, mapper);
+    }
+
+    /**
+     * Same as {@link #read(Connection, VendorFindingKind, String, ScanBudget, DatabaseAdvisorLimits,
+     * RowMapper)}, for a query with extra {@code WHERE}-clause bind parameters ahead of the trailing row-limit
+     * placeholder — Oracle's {@code ALL_*} queries always scope with {@code OWNER = ?} to stay inside the
+     * connected session's {@code CURRENT_SCHEMA}, which a query text with no bind parameters cannot express.
+     *
+     * @param parameters bind values for every {@code ?} placeholder that appears before the final
+     *     {@code FETCH FIRST ? ROWS ONLY}/{@code LIMIT ?} placeholder, in the same left-to-right order they
+     *     appear in {@code sql}
+     */
+    static <T> VendorAugmentation<T> read(
+            Connection connection,
+            VendorFindingKind<T> kind,
+            String sql,
+            List<Object> parameters,
+            ScanBudget budget,
+            DatabaseAdvisorLimits limits,
+            RowMapper<T> mapper) {
         if (budget.exhausted()) {
             return VendorAugmentation.failed(
                     kind, "The scan budget ran out before " + kind.label() + " could be read.");
@@ -43,7 +64,11 @@ final class CatalogQuery {
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setQueryTimeout(budget.remainingSecondsAtMost(limits.statementTimeoutSeconds()));
             statement.setMaxRows(limit + 1);
-            statement.setInt(1, limit + 1);
+            int parameterIndex = 1;
+            for (Object parameter : parameters) {
+                statement.setObject(parameterIndex++, parameter);
+            }
+            statement.setInt(parameterIndex, limit + 1);
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     if (findings.size() >= limit) {

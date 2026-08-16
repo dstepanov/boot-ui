@@ -541,10 +541,12 @@ The Database panel introspects the physical schema of every discovered applicati
 plain JDBC `DatabaseMetaData` — tables, columns, primary keys, foreign keys, and indexes — and evaluates a fixed,
 on-demand ruleset of deterministic, low-false-positive structural checks (a missing primary key, a foreign key whose
 complete ordered column list has no usable supporting index, duplicate/overlapping indexes, a foreign-key column whose
-type disagrees with the column it actually references, and a redundant unique index duplicating the primary key). It
-reuses the same proxy-aware datasource discovery as Database Connection Pools and SQL Trace, skipping Spring's
-delegating/routing `DataSource` wrappers and de-duplicating by the physical pool behind BootUI's own SQL Trace proxy,
-so a wrapped datasource is never introspected twice. It never executes DDL and never queries application data.
+type disagrees with the column it actually references, a redundant unique index duplicating the primary key,
+duplicate foreign key constraints, a narrow auto-generated primary key, and a composite foreign key or unique index
+with partially nullable columns). It reuses the same proxy-aware datasource discovery as Database Connection Pools and
+SQL Trace, skipping Spring's delegating/routing `DataSource` wrappers and de-duplicating by the physical pool behind
+BootUI's own SQL Trace proxy, so a wrapped datasource is never introspected twice. It never executes DDL and never
+queries application data.
 
 Every scan is bounded and reports exactly what it could not do. It runs under fixed bounds (at most 300 tables, 300
 columns and 100 indexes per table, 500 rows per catalog query, an overall 20-second budget, and a 5-second timeout on
@@ -556,42 +558,60 @@ as findings or against the advisor score. The scan status is `SCANNED` only when
 `PARTIAL` when something was not, `ERROR` when every datasource failed, and `DISABLED` only when there is no
 `DataSource` bean to inspect. Credentials in a JDBC URL or a driver error message are always redacted.
 
-For **PostgreSQL**, **MySQL** and **MariaDB**, dialect-specific catalog augmentation runs in addition to the generic
-checks: PostgreSQL invalid/broken indexes (`pg_index`, excluding partitioned index parents), a PostgreSQL sequence
-nearing exhaustion measured against the smaller of its own maximum and its **owning column's** capacity (the classic
-`bigint` sequence feeding an `integer` column), PostgreSQL constraints added `NOT VALID` and never validated, tables on
-a non-transactional MySQL/MariaDB storage engine, the legacy three-byte `utf8mb3` character set, and an
-`AUTO_INCREMENT` counter nearing its column type's signed/unsigned capacity. PostgreSQL declarative partitioning is
-modelled explicitly, so a finding on a partitioned table is reported once on its parent instead of once per child
-partition. The dialect is detected from `DatabaseMetaData.getDatabaseProductName()`, the product version string and the
-JDBC URL — MariaDB is detected as its own dialect even through the MySQL driver, which reports the product name as
-"MySQL" — and catalog SQL is selected from the reported server version (MySQL 8.0's `IS_VISIBLE` versus MariaDB 10.6's
-`IGNORED`, PostgreSQL 10's `pg_sequences`). Every other database (H2, SQL Server, Oracle, etc.) still runs the full
-generic ruleset through the standard JDBC metadata fallback — it is never treated as unsupported. A catalog query
-blocked by restricted privileges makes its rule report `SKIPPED` with that reason instead of silently reporting no
-findings.
+For **PostgreSQL**, **MySQL**, **MariaDB** and **Oracle** (19c+), dialect-specific catalog augmentation runs in
+addition to the generic checks: PostgreSQL invalid/broken indexes (`pg_index`, excluding partitioned index parents and
+one currently being built `CONCURRENTLY`), a PostgreSQL sequence nearing exhaustion measured against the smaller of
+its own maximum and its **owning column's** capacity (the classic `bigint` sequence feeding an `integer` column),
+PostgreSQL constraints added `NOT VALID` and never validated, a PostgreSQL table published for logical replication
+with no usable replica identity, tables on a non-transactional MySQL/MariaDB storage engine, the legacy three-byte
+`utf8mb3` character set (with dialect-appropriate collation guidance — MySQL 8.0's `utf8mb4_0900_ai_ci` does not exist
+on MariaDB), an `AUTO_INCREMENT` counter nearing its column type's signed/unsigned capacity, unusable Oracle indexes
+(including per-partition status for a partitioned index), disabled or unvalidated Oracle constraints, and a
+non-cycling Oracle sequence or `GENERATED ... AS IDENTITY` generator nearing exhaustion. PostgreSQL declarative
+partitioning is modelled explicitly, so a finding on a partitioned table is reported once on its parent instead of
+once per child partition. The dialect is detected from `DatabaseMetaData.getDatabaseProductName()`, the product
+version string and the JDBC URL — MariaDB is detected as its own dialect even through the MySQL driver, which reports
+the product name as "MySQL" — and catalog SQL is selected from the reported server version (MySQL 8.0's `IS_VISIBLE`
+versus MariaDB 10.6's `IGNORED`, PostgreSQL 10's `pg_sequences`, PostgreSQL 11's `INCLUDE` columns, PostgreSQL 15's
+`NULLS NOT DISTINCT`). A driver-reported "Oracle" product name is confirmed against `v$version`/
+`product_component_version` before any Oracle-specific augmentation runs, since some Oracle-compatible databases
+report the same product name; Oracle's own catalog reads are scoped to the connected session's `CURRENT_SCHEMA`
+through only `ALL_*` views and `SYS_CONTEXT`, with no production `ojdbc` dependency anywhere in BootUI. Every other
+database (H2, SQL Server, Tibero, EDB Postgres Advanced Server, etc.) still runs the full generic ruleset through the
+standard JDBC metadata fallback — it is never treated as unsupported. A catalog query blocked by restricted privileges
+makes its rule report `SKIPPED` with that reason instead of silently reporting no findings.
 
 Where the vendor catalog can answer, index semantics JDBC cannot express are folded into the shared model — validity,
-partial predicates, expression and prefix key parts, access method and visibility — so every index rule asks "does this
-index actually support that lookup, or enforce that uniqueness?" instead of comparing bare column-name lists.
+partial predicates, expression and prefix key parts, access method, visibility, and (Oracle) whether an index is
+automatically created to back a constraint or is a specialized type — so every index rule asks "does this index
+actually support that lookup, or enforce that uniqueness?" instead of comparing bare column-name lists.
 
 When a Hibernate `EntityManagerFactory`/metamodel is also available for the same application, the panel additionally
 cross-references the physical schema against the mapped JPA entities the shared Hibernate metamodel reader already
 reads (the same reader `Hibernate` uses): mapped `@JoinColumn`/`@JoinColumns` foreign keys with no supporting physical
-index or no physical foreign key constraint at all, an explicitly-`@Table`-named entity with no matching physical
-table, a mapped column that does not exist physically, type-family and *explicitly declared* nullability mismatches, an
-*explicitly declared* `@Column(length=...)` longer than the physical column can hold, and a mapped unique constraint
-with no physical index that genuinely enforces it. Only entities with an *explicit* `@Table(name = ...)` are
-cross-referenced — entities relying on the default naming strategy are skipped rather than guessed — matching honors a
-declared `catalog`/`schema`, and a mapped name that matches tables in several readable datasources is treated as
-ambiguous rather than attributed to an arbitrary one. Attributes whose persisted shape is decided by a converter,
-`@Enumerated` or `@Lob` are skipped by the type and length rules. This half of the panel is skipped (with a clear
-reason, not silently dropped) when either a `DataSource` or a Hibernate metamodel is unavailable. See
+index or no physical foreign key constraint at all (skipping an association declaring
+`@ForeignKey(ConstraintMode.NO_CONSTRAINT)`, and never double-counting a physical foreign key `DB-SCHEMA-002` already
+evaluates), an explicitly-`@Table`-named entity or `@SecondaryTable` with no matching physical table, a mapped column
+that does not exist physically, type-family and *explicitly declared* nullability mismatches, an *explicitly
+declared* `@Column(length=...)` longer than the physical column can hold, a mapped unique constraint with no physical
+index that genuinely enforces it, and a `@SequenceGenerator(allocationSize=...)` that disagrees with the physical
+sequence's `INCREMENT BY`. Only entities with an *explicit* `@Table(name = ...)` are cross-referenced — entities
+relying on the default naming strategy are skipped rather than guessed — matching honors a declared `catalog`/`schema`,
+and a mapped name that matches tables in several readable datasources is treated as ambiguous rather than attributed
+to an arbitrary one. An entity split across secondary tables (`@SecondaryTable`) has each column/join-column/unique
+constraint checked against the table it is actually pinned to. Composite foreign key matching tolerates the physical
+constraint's own column order but not a different child-to-parent pairing, and verifies the referenced table when it
+is resolvable. Attributes whose persisted shape is decided by a converter, `@Enumerated` or `@Lob` are skipped by the
+type and length rules. This half of the panel is skipped (with a clear reason, not silently dropped) when either a
+`DataSource` or a Hibernate metamodel is unavailable. See
 [DATABASE-ADVISOR-CHECKS.md](DATABASE-ADVISOR-CHECKS.md) for the full rule catalogue and remediation links.
 
 Out of scope by design: this panel proposes no query/workload-based optimizations, runs no execution-plan analysis,
 performs no partition discovery/management, and never suggests new indexes based on observed usage — it is a
-structural, deterministic advisor in the same spirit as the Hibernate Advisor, not a tuning engine.
+structural, deterministic advisor in the same spirit as the Hibernate Advisor, not a tuning engine. Resolving a mapped
+entity's Hibernate-computed physical name (after the configured naming strategy runs), rather than an explicit
+`@Table`/`@Column` name, is also out of scope: the engine deliberately reads only the standard JPA metamodel API, not
+Hibernate-internal naming-strategy SPI, to stay provider-version-agnostic.
 
 On Quarkus the panel is identical, running the same shared rule engine over the same report contract: `DataSource`
 beans are discovered through `@Any Instance<DataSource>` (unconditionally — `javax.sql.DataSource` is core JDK, so no

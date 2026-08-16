@@ -30,6 +30,12 @@ final class VendorFindingKinds {
     static final VendorFindingKind<PostgresIndexDetail> POSTGRES_INDEX_DETAILS = new VendorFindingKind<>(
             "postgresql.index-details", "PostgreSQL index semantics", PostgresIndexDetail.class);
 
+    static final VendorFindingKind<PostgresReplicaIdentityCandidate> POSTGRES_REPLICA_IDENTITY_CANDIDATES =
+            new VendorFindingKind<>(
+                    "postgresql.replica-identity-candidates",
+                    "PostgreSQL tables in scope for logical replication",
+                    PostgresReplicaIdentityCandidate.class);
+
     static final VendorFindingKind<MySqlTableInfo> MYSQL_TABLES =
             new VendorFindingKind<>("mysql.tables", "MySQL/MariaDB table metadata", MySqlTableInfo.class);
 
@@ -41,6 +47,23 @@ final class VendorFindingKinds {
 
     static final VendorFindingKind<MySqlIndexDetail> MYSQL_INDEX_DETAILS =
             new VendorFindingKind<>("mysql.index-details", "MySQL/MariaDB index semantics", MySqlIndexDetail.class);
+
+    static final VendorFindingKind<OracleIndexDetail> ORACLE_INDEX_DETAILS =
+            new VendorFindingKind<>("oracle.index-details", "Oracle index status/visibility", OracleIndexDetail.class);
+
+    static final VendorFindingKind<OracleIndexPartitionStatus> ORACLE_INDEX_PARTITION_STATUS = new VendorFindingKind<>(
+            "oracle.index-partition-status",
+            "Oracle index partition/subpartition status",
+            OracleIndexPartitionStatus.class);
+
+    static final VendorFindingKind<OracleConstraintDetail> ORACLE_CONSTRAINTS =
+            new VendorFindingKind<>("oracle.constraints", "Oracle constraint status", OracleConstraintDetail.class);
+
+    static final VendorFindingKind<OracleSequenceUsage> ORACLE_SEQUENCES =
+            new VendorFindingKind<>("oracle.sequences", "Oracle sequence usage", OracleSequenceUsage.class);
+
+    static final VendorFindingKind<OracleIdentityColumn> ORACLE_IDENTITY_COLUMNS =
+            new VendorFindingKind<>("oracle.identity-columns", "Oracle identity columns", OracleIdentityColumn.class);
 
     private VendorFindingKinds() {}
 }

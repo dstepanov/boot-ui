@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.engine.databaseadvisor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,7 +12,9 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -134,5 +137,110 @@ class SchemaIntrospectorTests {
         SchemaSnapshot snapshot = SchemaIntrospector.introspect("primary", (javax.sql.DataSource) null);
         assertThat(snapshot.available()).isFalse();
         assertThat(snapshot.error()).contains("not available");
+    }
+
+    // --- Oracle dialect confirmation: a driver-reported "Oracle" product name is not proof by itself ---
+
+    @Test
+    void resolveOracleConfirmsAGenuineOracleServerViaVVersion() throws Exception {
+        Connection connection = mock(Connection.class);
+        Statement statement = mock(Statement.class);
+        ResultSet rs = mock(ResultSet.class);
+        when(connection.createStatement()).thenReturn(statement);
+        when(statement.executeQuery(any())).thenReturn(rs);
+        when(rs.next()).thenReturn(true, false);
+        when(rs.getString(1)).thenReturn("Oracle Database 19c Enterprise Edition Release 19.0.0.0.0 - Production");
+
+        List<SchemaDiagnostic> diagnostics = new ArrayList<>();
+        Dialect resolved = SchemaIntrospector.resolveOracle(connection, Dialect.ORACLE, "primary", diagnostics);
+
+        assertThat(resolved).isEqualTo(Dialect.ORACLE);
+        assertThat(diagnostics).isEmpty();
+        verify(statement).setQueryTimeout(5);
+    }
+
+    @Test
+    void resolveOracleConfirmsANewerOracleAiDatabaseRebrandedBanner() throws Exception {
+        // Oracle rebranded v$version.banner from "Oracle Database ..." to "Oracle AI Database ..." starting
+        // with the 23ai/26ai line; the confirmation must not be a rigid "Oracle Database" prefix match.
+        Connection connection = mock(Connection.class);
+        Statement statement = mock(Statement.class);
+        ResultSet rs = mock(ResultSet.class);
+        when(connection.createStatement()).thenReturn(statement);
+        when(statement.executeQuery(any())).thenReturn(rs);
+        when(rs.next()).thenReturn(true, false);
+        when(rs.getString(1))
+                .thenReturn("Oracle AI Database 26ai Free Release 23.26.2.0.0 - Develop, Learn, and Run for Free");
+
+        Dialect resolved = SchemaIntrospector.resolveOracle(connection, Dialect.ORACLE, "primary", new ArrayList<>());
+
+        assertThat(resolved).isEqualTo(Dialect.ORACLE);
+        verify(statement).setQueryTimeout(5);
+    }
+
+    @Test
+    void resolveOracleRejectsAnOracleCompatibleLookalikeThatDoesNotConfirmInVVersion() throws Exception {
+        // OceanBase's driver can report getDatabaseProductName() == "Oracle" for an Oracle-mode tenant, but its
+        // own v$version.banner self-identifies as "OceanBase Database ... (Oracle Compatible Mode)": "Database"
+        // appears before "Oracle" there, so the order-sensitive check correctly does not confirm it.
+        Connection connection = mock(Connection.class);
+        Statement statement = mock(Statement.class);
+        ResultSet versionResult = mock(ResultSet.class);
+        ResultSet productResult = mock(ResultSet.class);
+        when(connection.createStatement()).thenReturn(statement);
+        when(statement.executeQuery(contains("v$version"))).thenReturn(versionResult);
+        when(versionResult.next()).thenReturn(true, false);
+        when(versionResult.getString(1)).thenReturn("OceanBase Database 4.2.0.0 (Oracle Compatible Mode)");
+        when(statement.executeQuery(contains("product_component_version"))).thenReturn(productResult);
+        when(productResult.next()).thenReturn(false);
+
+        List<SchemaDiagnostic> diagnostics = new ArrayList<>();
+        Dialect resolved = SchemaIntrospector.resolveOracle(connection, Dialect.ORACLE, "primary", diagnostics);
+
+        assertThat(resolved).isEqualTo(Dialect.GENERIC);
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.get(0).message()).contains("neither v$version nor product_component_version");
+    }
+
+    @Test
+    void resolveOracleFallsBackToProductComponentVersionWhenVVersionCannotBeRead() throws Exception {
+        // A locked-down role may not have SELECT on v$ views at all, unlike product_component_version.
+        Connection connection = mock(Connection.class);
+        Statement statement = mock(Statement.class);
+        ResultSet productResult = mock(ResultSet.class);
+        when(connection.createStatement()).thenReturn(statement);
+        when(statement.executeQuery(contains("v$version")))
+                .thenThrow(new SQLException("ORA-00942: table or view does not exist"));
+        when(statement.executeQuery(contains("product_component_version"))).thenReturn(productResult);
+        when(productResult.next()).thenReturn(true, false);
+        when(productResult.getString(1)).thenReturn("Oracle Database 19c Enterprise Edition");
+
+        Dialect resolved = SchemaIntrospector.resolveOracle(connection, Dialect.ORACLE, "primary", new ArrayList<>());
+
+        assertThat(resolved).isEqualTo(Dialect.ORACLE);
+    }
+
+    @Test
+    void resolveOracleFallsBackToGenericWhenNeitherSourceCanBeRead() throws Exception {
+        Connection connection = mock(Connection.class);
+        Statement statement = mock(Statement.class);
+        when(connection.createStatement()).thenReturn(statement);
+        when(statement.executeQuery(any())).thenThrow(new SQLException("ORA-00942: table or view does not exist"));
+
+        List<SchemaDiagnostic> diagnostics = new ArrayList<>();
+        Dialect resolved = SchemaIntrospector.resolveOracle(connection, Dialect.ORACLE, "primary", diagnostics);
+
+        assertThat(resolved).isEqualTo(Dialect.GENERIC);
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.get(0).message()).contains("neither v$version nor product_component_version");
+    }
+
+    @Test
+    void resolveOracleLeavesEveryOtherDialectUntouched() {
+        List<SchemaDiagnostic> diagnostics = new ArrayList<>();
+        Dialect resolved =
+                SchemaIntrospector.resolveOracle(mock(Connection.class), Dialect.POSTGRESQL, "primary", diagnostics);
+        assertThat(resolved).isEqualTo(Dialect.POSTGRESQL);
+        assertThat(diagnostics).isEmpty();
     }
 }

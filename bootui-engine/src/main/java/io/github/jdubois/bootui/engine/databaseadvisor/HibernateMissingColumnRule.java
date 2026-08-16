@@ -37,18 +37,32 @@ final class HibernateMissingColumnRule extends AbstractHibernateCrossReferenceRu
     }
 
     @Override
-    void checkEntity(SchemaSnapshot schema, TableModel table, MappedEntityFacts entity, List<String> details) {
+    void checkEntity(
+            DatabaseAdvisorContext context,
+            MappedTableResolution primary,
+            MappedEntityFacts entity,
+            List<String> details) {
         for (MappedColumnFacts column : entity.columns()) {
+            MappedTableResolution resolution = resolveItemTable(context, entity, primary, column.tableName());
+            if (!resolution.resolved()) {
+                continue;
+            }
+            TableModel table = resolution.table();
             if (!table.hasColumn(column.columnName())) {
-                details.add(schema.dataSourceName() + ": " + column.attributeDescription() + " maps column "
-                        + table.qualifiedName() + "." + column.columnName()
+                details.add(resolution.schema().dataSourceName() + ": " + column.attributeDescription()
+                        + " maps column " + table.qualifiedName() + "." + column.columnName()
                         + ", which does not exist in the physical table.");
             }
         }
         for (MappedForeignKeyFacts foreignKey : entity.foreignKeys()) {
+            MappedTableResolution resolution = resolveItemTable(context, entity, primary, foreignKey.tableName());
+            if (!resolution.resolved()) {
+                continue;
+            }
+            TableModel table = resolution.table();
             for (String column : foreignKey.columns()) {
                 if (!table.hasColumn(column)) {
-                    details.add(schema.dataSourceName() + ": " + foreignKey.attributeDescription()
+                    details.add(resolution.schema().dataSourceName() + ": " + foreignKey.attributeDescription()
                             + " maps join column " + table.qualifiedName() + "." + column
                             + ", which does not exist in the physical table.");
                 }

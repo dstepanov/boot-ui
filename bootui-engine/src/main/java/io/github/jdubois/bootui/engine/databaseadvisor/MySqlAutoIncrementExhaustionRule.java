@@ -17,6 +17,14 @@ import java.util.List;
  * {@code Long.MAX_VALUE} and would overflow every {@code long}-based percentage. When the server does not
  * report a table's {@code AUTO_INCREMENT} value at all — which InnoDB may decline when statistics are stale
  * or disabled — the table is skipped rather than reported as empty.</p>
+ *
+ * <p><strong>Known limitation:</strong> {@code information_schema.tables.AUTO_INCREMENT} is itself only an
+ * estimate on InnoDB, not a transactionally exact reading. Before MySQL 8.0 (and still on MariaDB), the
+ * counter is kept purely in memory and is re-derived from {@code MAX(id) + 1} the first time the table is
+ * touched after a server restart — a scan that runs in that narrow window can under-report consumption. MySQL
+ * 8.0's persistent {@code AUTO_INCREMENT} counters (redo-logged on every change) close most of that gap, but
+ * this rule can still occasionally under-report a table's true usage; it is not known to over-report one, so
+ * every finding it does produce reflects real, already-consumed capacity.</p>
  */
 final class MySqlAutoIncrementExhaustionRule extends AbstractDatabaseAdvisorRule {
 

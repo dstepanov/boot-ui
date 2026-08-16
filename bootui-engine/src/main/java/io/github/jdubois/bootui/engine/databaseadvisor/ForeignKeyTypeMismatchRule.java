@@ -19,18 +19,19 @@ import java.util.List;
 final class ForeignKeyTypeMismatchRule extends AbstractDatabaseAdvisorRule {
 
     ForeignKeyTypeMismatchRule() {
-        super(new DatabaseAdvisorRuleDefinition(
-                "DB-SCHEMA-004",
-                "Foreign key column type mismatch with the referenced column",
-                DatabaseAdvisorCategory.SCHEMA,
-                DatabaseAdvisorRuleSupport.HIGH,
-                "Compares each foreign key column against the column it actually references "
-                        + "(getImportedKeys().PKCOLUMN_NAME, which may be an alternate unique key), including type "
-                        + "family, integer width and signedness, numeric precision/scale, and declared length.",
-                "Align the foreign key column's type with the referenced column's type (e.g. both BIGINT). A "
-                        + "narrower or differently-typed child column can silently truncate values, defeat query "
-                        + "planner join optimizations, or fail outright once the parent's values outgrow it.",
-                "https://use-the-index-luke.com/sql/join/foreign-keys"));
+        super(
+                new DatabaseAdvisorRuleDefinition(
+                        "DB-SCHEMA-004",
+                        "Foreign key column type mismatch with the referenced column",
+                        DatabaseAdvisorCategory.SCHEMA,
+                        DatabaseAdvisorRuleSupport.HIGH,
+                        "Compares each foreign key column against the column it actually references "
+                                + "(getImportedKeys().PKCOLUMN_NAME, which may be an alternate unique key), including type "
+                                + "family, integer width and signedness, numeric precision/scale, and declared length.",
+                        "Align the foreign key column's type with the referenced column's type (e.g. both BIGINT). A "
+                                + "narrower or differently-typed child column can silently truncate values, defeat query "
+                                + "planner join optimizations, or fail outright once the parent's values outgrow it.",
+                        "https://vladmihalcea.com/how-to-fix-wrong-column-type-encountered-schema-validation-errors-with-jpa-and-hibernate/"));
     }
 
     @Override
