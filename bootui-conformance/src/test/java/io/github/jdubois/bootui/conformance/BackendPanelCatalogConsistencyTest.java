@@ -12,14 +12,19 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 class BackendPanelCatalogConsistencyTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Pattern PANEL_ACCESS_ROW = Pattern.compile(
+            "^\\|\\s*[^|]+\\|\\s*([^|]+?)\\s*\\|\\s*`([^`]+)`\\s*\\|\\s*`([^`]+)`\\s*\\|\\s*(.*?)\\s*\\|$",
+            Pattern.MULTILINE);
 
     private static final List<ManifestResource> MANIFEST_RESOURCES = List.of(
             new ManifestResource("/io/github/jdubois/bootui/conformance/expected-panels-spring.json", "spring-boot"),
@@ -76,6 +81,31 @@ class BackendPanelCatalogConsistencyTest {
                     .containsPattern(Pattern.compile(
                             "^" + Pattern.quote(headingPrefix + panel.title()) + "$", Pattern.MULTILINE));
         }
+    }
+
+    @Test
+    void backendCatalogMatchesPropertiesPanelAccessMatrix() {
+        String properties = readPropertiesMarkdown();
+        String accessMatrix = properties.substring(
+                properties.indexOf("## Panel access settings"), properties.indexOf("## Per-panel action details"));
+        Matcher rows = PANEL_ACCESS_ROW.matcher(accessMatrix);
+        List<PanelAccessMetadata> documented = new ArrayList<>();
+        while (rows.find()) {
+            documented.add(new PanelAccessMetadata(
+                    rows.group(1).trim(), rows.group(2), rows.group(3), markdownCodeValue(rows.group(4))));
+        }
+
+        List<PanelAccessMetadata> expected = BootUiPanels.all().stream()
+                .map(panel -> new PanelAccessMetadata(
+                        panel.title(),
+                        panel.id(),
+                        "bootui.panels." + panel.id() + ".enabled",
+                        panel.actionCapable()
+                                ? "bootui.panels." + panel.id() + ".read-only"
+                                : "Not applicable; view-only."))
+                .toList();
+
+        assertThat(documented).containsExactlyInAnyOrderElementsOf(expected);
     }
 
     @Test
@@ -140,13 +170,29 @@ class BackendPanelCatalogConsistencyTest {
     }
 
     private static String readFeaturesMarkdown() {
+        return readDocumentation("FEATURES.md");
+    }
+
+    private static String readPropertiesMarkdown() {
+        return readDocumentation("PROPERTIES.md");
+    }
+
+    private static String readDocumentation(String filename) {
         Path root = findRepositoryRoot(Path.of(".").toAbsolutePath());
-        Path features = root.resolve("docs").resolve("FEATURES.md");
+        Path documentation = root.resolve("docs").resolve(filename);
         try {
-            return Files.readString(features);
+            return Files.readString(documentation);
         } catch (IOException ex) {
-            throw new UncheckedIOException("Failed to read " + features, ex);
+            throw new UncheckedIOException("Failed to read " + documentation, ex);
         }
+    }
+
+    private static String markdownCodeValue(String value) {
+        String trimmed = value.trim();
+        if (trimmed.startsWith("`") && trimmed.endsWith("`")) {
+            return trimmed.substring(1, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 
     private static Path findRepositoryRoot(Path start) {
@@ -165,4 +211,6 @@ class BackendPanelCatalogConsistencyTest {
     private record ManifestResource(String path, String platform) {}
 
     private record PanelMetadata(String id, String title, boolean actionCapable) {}
+
+    private record PanelAccessMetadata(String title, String id, String enabledProperty, String readOnlyProperty) {}
 }

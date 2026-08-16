@@ -155,11 +155,12 @@ Enforced identically on Spring and Quarkus (`PanelAccessFilter` / `QuarkusPanelA
 | Group           | Panel                     | Panel id                    | Enable property                                   | Read-only property                        |
 | --------------- | ------------------------- | --------------------------- | ------------------------------------------------- | ----------------------------------------- |
 | Overview        | Overview                  | `overview`                  | `bootui.panels.overview.enabled`                  | Not applicable; view-only.                |
-| Overview        | Live Activity             | `activity`                  | `bootui.panels.activity.enabled`                  | Not applicable; view-only.                |
+| Overview        | Live Activity             | `activity`                  | `bootui.panels.activity.enabled`                  | `bootui.panels.activity.read-only`         |
 | Overview        | GitHub                    | `github`                    | `bootui.panels.github.enabled`                    | `bootui.panels.github.read-only`          |
 | Advisors        | Architecture              | `architecture`              | `bootui.panels.architecture.enabled`              | `bootui.panels.architecture.read-only`    |
 | Advisors        | REST API                  | `rest-api`                  | `bootui.panels.rest-api.enabled`                  | `bootui.panels.rest-api.read-only`        |
 | Advisors        | Spring                    | `spring`                    | `bootui.panels.spring.enabled`                    | `bootui.panels.spring.read-only`          |
+| Advisors        | Database                  | `database-advisor`          | `bootui.panels.database-advisor.enabled`          | `bootui.panels.database-advisor.read-only` |
 | Advisors        | Hibernate                 | `hibernate`                 | `bootui.panels.hibernate.enabled`                 | `bootui.panels.hibernate.read-only`       |
 | Advisors        | Memory                    | `memory`                    | `bootui.panels.memory.enabled`                    | `bootui.panels.memory.read-only`          |
 | Advisors        | Security                  | `security`                  | `bootui.panels.security.enabled`                  | `bootui.panels.security.read-only`        |
@@ -182,7 +183,9 @@ Enforced identically on Spring and Quarkus (`PanelAccessFilter` / `QuarkusPanelA
 | Configuration   | Conditions                | `conditions`                | `bootui.panels.conditions.enabled`                | Not applicable; view-only.                |
 | Configuration   | Mappings                  | `mappings`                  | `bootui.panels.mappings.enabled`                  | Not applicable; view-only.                |
 | Database        | Database Connection Pools | `database-connection-pools` | `bootui.panels.database-connection-pools.enabled` | Not applicable; view-only.                |
+| Database        | Transactions              | `transactions`              | `bootui.panels.transactions.enabled`              | `bootui.panels.transactions.read-only`    |
 | Database        | SQL Trace                 | `sql-trace`                 | `bootui.panels.sql-trace.enabled`                 | `bootui.panels.sql-trace.read-only`       |
+| Database        | Hibernate Statistics      | `hibernate-statistics`      | `bootui.panels.hibernate-statistics.enabled`      | `bootui.panels.hibernate-statistics.read-only` |
 | Database        | Spring Data               | `data`                      | `bootui.panels.data.enabled`                      | Not applicable; view-only.                |
 | Database        | Flyway                    | `flyway`                    | `bootui.panels.flyway.enabled`                    | `bootui.panels.flyway.read-only`          |
 | Database        | Liquibase                 | `liquibase`                 | `bootui.panels.liquibase.enabled`                 | `bootui.panels.liquibase.read-only`       |
