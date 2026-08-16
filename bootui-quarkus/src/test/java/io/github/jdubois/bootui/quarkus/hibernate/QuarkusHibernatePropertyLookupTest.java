@@ -143,6 +143,15 @@ class QuarkusHibernatePropertyLookupTest {
     }
 
     @Test
+    void mapsJdbcFetchSizeToQuarkusStatementFetchSize() {
+        QuarkusHibernatePropertyLookup lookup = lookup(Map.of("quarkus.hibernate-orm.jdbc.statement-fetch-size", "50"));
+
+        assertThat(lookup.apply("hibernate.jdbc.fetch_size")).isEqualTo("50");
+        assertThat(lookup.apply("spring.jpa.properties.hibernate.jdbc.fetch_size"))
+                .isEqualTo("50");
+    }
+
+    @Test
     void mapsGenerateStatisticsToQuarkusStatistics() {
         // HIB-CONFIG-007.
         QuarkusHibernatePropertyLookup lookup = lookup(Map.of("quarkus.hibernate-orm.statistics", "true"));

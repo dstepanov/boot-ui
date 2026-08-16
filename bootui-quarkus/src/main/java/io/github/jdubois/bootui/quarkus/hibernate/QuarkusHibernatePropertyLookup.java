@@ -30,12 +30,13 @@ import org.eclipse.microprofile.config.Config;
  *       build step) — there is no {@code quarkus.hibernate-orm.enhancement.*} switch to turn it off. The engine
  *       consumes this internal adapter fact separately from ordinary Hibernate enhancement settings, which request
  *       enhancement features but do not prove that application classes were transformed.</li>
- *   <li><strong>Maps batch fetching, slow-query logging, JDBC time zone, statistics, IN-clause padding,
- *       pagination-over-collection and second-level/query caching</strong> to their real
+ *   <li><strong>Maps batch fetching, JDBC statement fetch size, slow-query logging, JDBC time zone, statistics,
+ *       IN-clause padding, pagination-over-collection and second-level/query caching</strong> to their real
  *       {@code quarkus.hibernate-orm.*} equivalents (all confirmed by decompiling the
  *       {@code quarkus-hibernate-orm}/{@code -deployment} 3.33.2.1 jars — see the per-alias notes on
  *       {@link #KEY_ALIASES}). Before this mapping existed, {@code HIB-FETCH-002} and
- *       {@code HIB-CONFIG-006}/{@code -007}/{@code -009}/{@code -010}/{@code -011}/{@code -013}/{@code -016}
+ *       {@code HIB-CONFIG-006}/{@code -007}/{@code -009}/{@code -010}/{@code -011}/{@code -013}/{@code -016}/
+ *       {@code -020}
  *       could never observe an operator's setting on Quarkus, no matter which native property name they used.</li>
  *   <li><strong>Reads the Quarkus-native {@code quarkus.hibernate-orm.log.bind-parameters} convenience
  *       flag</strong> (and its deprecated {@code .bind-param} alias) as the synthetic {@code "trace"} value of
@@ -127,6 +128,10 @@ public final class QuarkusHibernatePropertyLookup implements Function<String, St
             Map.entry(
                     "spring.jpa.properties.hibernate.jdbc.batch_size",
                     "quarkus.hibernate-orm.jdbc.statement-batch-size"),
+            Map.entry("hibernate.jdbc.fetch_size", "quarkus.hibernate-orm.jdbc.statement-fetch-size"),
+            Map.entry(
+                    "spring.jpa.properties.hibernate.jdbc.fetch_size",
+                    "quarkus.hibernate-orm.jdbc.statement-fetch-size"),
             Map.entry("hibernate.default_batch_fetch_size", "quarkus.hibernate-orm.fetch.batch-size"),
             Map.entry(
                     "spring.jpa.properties.hibernate.default_batch_fetch_size",

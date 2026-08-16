@@ -935,8 +935,8 @@ final class JdbcBatchSizeRule extends AbstractHibernateRule {
                         "JDBC batching should be configured for writes",
                         HibernateCategory.CONFIGURATION,
                         "INFO",
-                        "Detects missing or non-positive hibernate.jdbc.batch_size.",
-                        "Set a bounded JDBC batch size such as 25 for write-capable applications, then tune it with representative workloads.",
+                        "Detects hibernate.jdbc.batch_size values below 2, which cannot combine multiple statements into one JDBC batch.",
+                        "Set a bounded JDBC batch size between 5 and 30 for write-capable applications, then tune it with representative workloads.",
                         "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#batch-session-batch"));
     }
 
@@ -944,10 +944,10 @@ final class JdbcBatchSizeRule extends AbstractHibernateRule {
     HibernateRuleResultDto evaluateRule(HibernateContext context) {
         Integer batchSize = context.firstIntegerProperty(
                 "spring.jpa.properties.hibernate.jdbc.batch_size", "hibernate.jdbc.batch_size");
-        if (batchSize != null && batchSize > 0) {
+        if (batchSize != null && batchSize > 1) {
             return pass();
         }
-        return violation(List.of("hibernate.jdbc.batch_size is not configured with a positive value."));
+        return violation(List.of("hibernate.jdbc.batch_size is not configured with a value greater than 1."));
     }
 }
 
@@ -969,7 +969,7 @@ final class OrderedBatchingRule extends AbstractHibernateRule {
     HibernateRuleResultDto evaluateRule(HibernateContext context) {
         Integer batchSize = context.firstIntegerProperty(
                 "spring.jpa.properties.hibernate.jdbc.batch_size", "hibernate.jdbc.batch_size");
-        if (batchSize == null || batchSize <= 0) {
+        if (batchSize == null || batchSize <= 1) {
             return skipped("JDBC batching is not configured.");
         }
         List<String> details = new ArrayList<>();
@@ -1408,7 +1408,7 @@ final class CollectionFetchJoinAnnotationRule extends AbstractHibernateRule {
                         HibernateCategory.FETCHING,
                         "MEDIUM",
                         "Detects collection-valued associations annotated with @Fetch(FetchMode.JOIN), which forces every fetch path through a SQL JOIN and undermines pagination.",
-                        "Prefer @Fetch(FetchMode.SELECT) or SUBSELECT for collections and request JOIN FETCH only on the specific query that needs the graph.",
+                        "Prefer @Fetch(FetchMode.SELECT), explicit entity queries, or DTO projections, and request JOIN FETCH only on the specific query that needs the graph.",
                         "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#fetching-strategies"));
     }
 
@@ -1423,6 +1423,40 @@ final class CollectionFetchJoinAnnotationRule extends AbstractHibernateRule {
                 Annotation fetch = attribute.fetchAnnotation();
                 if (fetch != null && "JOIN".equals(attribute.annotationValueName(fetch, "value"))) {
                     details.add(attribute.description() + " is a collection mapped with @Fetch(FetchMode.JOIN).");
+                }
+            }
+        }
+        return violation(details);
+    }
+}
+
+final class SubselectCollectionFetchRule extends AbstractHibernateRule {
+
+    SubselectCollectionFetchRule() {
+        super(
+                new HibernateRuleDefinition(
+                        "HIB-FETCH-008",
+                        "Subselect collection fetching should be reviewed",
+                        HibernateCategory.FETCHING,
+                        "INFO",
+                        "Detects collection associations annotated with @Fetch(FetchMode.SUBSELECT), which initializes the same collection role for every owner loaded in the persistence context.",
+                        "Use SUBSELECT only for bounded owner sets. Prefer an explicit entity query or DTO projection when the collection can be large or when only a subset is needed.",
+                        "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#fetching-fetchmode-subselect"));
+    }
+
+    @Override
+    HibernateRuleResultDto evaluateRule(HibernateContext context) {
+        List<String> details = new ArrayList<>();
+        for (HibernateEntityModel entity : context.entities()) {
+            for (HibernateAttributeModel attribute : entity.attributes()) {
+                if (!attribute.isCollectionAssociation()) {
+                    continue;
+                }
+                Annotation fetch = attribute.fetchAnnotation();
+                if (fetch != null && "SUBSELECT".equals(attribute.annotationValueName(fetch, "value"))) {
+                    details.add(
+                            attribute.description()
+                                    + " uses @Fetch(FetchMode.SUBSELECT); verify that owner and collection cardinalities stay bounded.");
                 }
             }
         }
@@ -2267,6 +2301,81 @@ final class BindParameterLoggingInProductionRule extends AbstractHibernateRule {
                     List.of("Bind-parameter logging is enabled at TRACE while a production profile is active."));
         }
         return pass();
+    }
+}
+
+final class SqlCommentsRule extends AbstractHibernateRule {
+
+    SqlCommentsRule() {
+        super(
+                new HibernateRuleDefinition(
+                        "HIB-CONFIG-019",
+                        "SQL comments should be enabled intentionally",
+                        HibernateCategory.CONFIGURATION,
+                        "INFO",
+                        "Detects hibernate.use_sql_comments=true, which adds text to every generated SQL statement and can fragment database or JDBC statement caches.",
+                        "Disable SQL comments unless a measured observability benefit outweighs the extra statement text and cache cardinality.",
+                        "https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#configurations-logging"));
+    }
+
+    @Override
+    HibernateRuleResultDto evaluateRule(HibernateContext context) {
+        if (context.isPropertyTrue("spring.jpa.properties.hibernate.use_sql_comments", "hibernate.use_sql_comments")) {
+            return violation(
+                    List.of(
+                            "hibernate.use_sql_comments is enabled; confirm that statement-cache efficiency and network overhead are acceptable."));
+        }
+        return pass();
+    }
+}
+
+final class OracleJdbcFetchSizeRule extends AbstractHibernateRule {
+
+    OracleJdbcFetchSizeRule() {
+        super(new HibernateRuleDefinition(
+                "HIB-CONFIG-020",
+                "Oracle JDBC fetch size should exceed the driver default",
+                HibernateCategory.CONFIGURATION,
+                "INFO",
+                "Detects Oracle-backed persistence units that leave hibernate.jdbc.fetch_size unset or at 10 or less.",
+                "For result sets that commonly exceed ten rows, set and measure a bounded hibernate.jdbc.fetch_size above Oracle's default of 10; keep the driver default when queries are consistently small.",
+                "https://vladmihalcea.com/resultset-statement-fetching-with-jdbc-and-hibernate/"));
+    }
+
+    @Override
+    HibernateRuleResultDto evaluateRule(HibernateContext context) {
+        if (!isOracle(context)) {
+            return skipped("The persistence unit is not known to use Oracle.");
+        }
+        Integer fetchSize = context.firstIntegerProperty(
+                "spring.jpa.properties.hibernate.jdbc.fetch_size", "hibernate.jdbc.fetch_size");
+        if (fetchSize != null && fetchSize > 10) {
+            return pass();
+        }
+        String configured = fetchSize == null ? "not configured" : "set to " + fetchSize;
+        return violation(List.of("Oracle was detected and hibernate.jdbc.fetch_size is " + configured
+                + "; the Oracle JDBC driver defaults to fetching 10 rows per roundtrip."));
+    }
+
+    private boolean isOracle(HibernateContext context) {
+        String databaseKind = context.firstProperty("quarkus.datasource.db-kind", "spring.jpa.database");
+        if ("oracle".equalsIgnoreCase(databaseKind)) {
+            return true;
+        }
+        String url = context.firstProperty(
+                "spring.datasource.url", "jakarta.persistence.jdbc.url", "hibernate.connection.url");
+        if (url != null && url.toLowerCase(Locale.ROOT).startsWith("jdbc:oracle:")) {
+            return true;
+        }
+        String driver = context.firstProperty(
+                "spring.datasource.driver-class-name",
+                "jakarta.persistence.jdbc.driver",
+                "hibernate.connection.driver_class");
+        if (driver != null && driver.toLowerCase(Locale.ROOT).startsWith("oracle.jdbc.")) {
+            return true;
+        }
+        String dialect = context.firstProperty("spring.jpa.database-platform", "hibernate.dialect");
+        return dialect != null && dialect.toLowerCase(Locale.ROOT).startsWith("org.hibernate.dialect.oracle");
     }
 }
 

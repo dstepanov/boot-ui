@@ -13,6 +13,7 @@ final class HibernateRuleRegistry {
             new LobLazyFetchRule(),
             new LazyBasicWithoutEnhancementRule(),
             new CollectionFetchJoinAnnotationRule(),
+            new SubselectCollectionFetchRule(),
             // Identifiers
             new IdentityIdentifierRule(),
             new TableIdentifierRule(),
@@ -82,6 +83,8 @@ final class HibernateRuleRegistry {
             new FailOnPaginationOverCollectionFetchRule(),
             new FormatSqlInProductionRule(),
             new BindParameterLoggingInProductionRule(),
+            new SqlCommentsRule(),
+            new OracleJdbcFetchSizeRule(),
 
             // Caching
             new CacheAssociationCoverageRule(),
