@@ -2049,6 +2049,8 @@ Initial endpoints:
 | `/bootui/api/http-probe`                          | POST   | Local HTTP probe                                                                       |
 | `/bootui/api/log-tail/recent`                    | GET    | Recent log lines                                                                       |
 | `/bootui/api/log-tail/stream`                    | GET    | Log stream over Server-Sent Events                                                     |
+| `/bootui/api/exceptions`                         | GET    | Bounded exception groups with status and occurrence summaries                         |
+| `/bootui/api/http-exchanges`                     | GET    | Recent application HTTP request/response metadata                                      |
 | `/bootui/api/traces`                         | GET    | Recent local trace summaries                                                           |
 | `/bootui/api/traces/{traceId}`               | GET    | Trace waterfall detail                                                                 |
 | `/bootui/api/traces`                         | DELETE | Clear retained local traces when not read-only                                         |
@@ -2080,6 +2082,7 @@ Initial endpoints:
 | `/bootui/api/graalvm`                        | GET    | Latest GraalVM native-image readiness report                                           |
 | `/bootui/api/graalvm/scan`                   | POST   | Run explicit native-image readiness checks                                             |
 | `/bootui/api/graalvm/metadata`               | GET    | Download generated reachability metadata scaffold                                      |
+| `/bootui/api/crac`                            | GET    | Latest CRaC checkpoint/restore readiness report                                        |
 | `/bootui/api/flyway/migrations`              | GET    | Flyway migration state and action availability per database                            |
 | `/bootui/api/flyway/migrate`                 | POST   | Run pending Flyway migrations only when confirmed, not read-only, and not Modulith-managed |
 | `/bootui/api/flyway/clean`                   | POST   | Clean Flyway-managed schemas only when confirmed, allowed by Flyway, not read-only, and not Modulith-managed |
@@ -2095,7 +2098,9 @@ Initial endpoints:
 | `/bootui/api/security/scan`          | POST   | Run explicit Spring Security hardening checks                                          |
 | `/bootui/api/pentesting`                        | GET    | Latest local OWASP hygiene report                                                      |
 | `/bootui/api/pentesting/scan`                   | POST   | Run explicit bounded loopback OWASP hygiene checks                                    |
+| `/bootui/api/copilot/dashboard`                 | GET    | Sanitized GitHub Copilot CLI activity dashboard                                        |
 | `/bootui/api/copilot/**`                     | GET    | Sanitized GitHub Copilot CLI session dashboard, token usage, explorer, raw reveal, SSE |
+| `/bootui/api/claude-code/dashboard`             | GET    | Sanitized Claude Code activity dashboard                                               |
 | `/bootui/api/claude-code/**`                 | GET    | Sanitized Claude Code project-log dashboard, token usage, explorer, raw reveal, SSE    |
 | `/bootui/api/mcp-server`                     | GET    | MCP Server panel status (enabled state, configured mode, transport, advertised tools)  |
 | `/bootui/api/mcp-server/toggle`              | POST   | Enable/disable the MCP server at runtime, overriding `bootui.mcp.enabled`               |
@@ -2104,10 +2109,16 @@ Initial endpoints:
 | `/bootui/api/rest-client-trace/clear`        | POST   | Clear the retained REST client call buffer                                              |
 | `/bootui/api/rest-client-trace/recording`    | POST   | Pause/resume REST client call capture at runtime                                        |
 | `/bootui/api/rest-client-trace/stream`       | GET    | REST Client change notifications over Server-Sent Events (re-fetch trigger)             |
+| `/bootui/api/sql-trace`                      | GET    | Current bounded SQL trace snapshot and aggregate statistics                             |
+| `/bootui/api/transactions`                   | GET    | Current bounded transaction-boundary snapshot and aggregate statistics                 |
 | `/bootui/api/activity`                       | GET    | Merged Live Activity stream and KPI summary (params: `type`, `severity`, `since`, `limit`, plus `q`, `until`, `cursor`, `pageSize` when persistence is enabled) |
 | `/bootui/api/activity/stream`                | GET    | Live Activity change notifications over Server-Sent Events (re-fetch trigger)           |
 | `/bootui/api/activity/request/{id}`          | GET    | Per-request profile correlating SQL, exceptions, trace, and auth for one HTTP exchange   |
 | `/bootui/api/activity/use-existing-datasource` | POST | Hot-switch Live Activity from in-memory to the existing `DataSource` (confirmation-gated) |
+| `/bootui/api/email`                          | GET    | Captured outgoing email summaries and content-policy status                             |
+| `/bootui/api/kafka`                          | GET    | Bounded Kafka producer and consumer activity                                            |
+| `/bootui/api/rabbitmq`                       | GET    | Bounded RabbitMQ publisher and consumer activity                                        |
+| `/bootui/api/jms`                            | GET    | Bounded JMS producer and consumer activity                                              |
 
 ### 6.5 Configuration properties
 
