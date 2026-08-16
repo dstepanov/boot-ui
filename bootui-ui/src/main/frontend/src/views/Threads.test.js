@@ -181,6 +181,7 @@ describe('Threads', () => {
     vi.stubGlobal('fetch', fetchMock)
     URL.createObjectURL = vi.fn(() => 'blob:dump')
     URL.revokeObjectURL = vi.fn()
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
 
     const wrapper = mount(Threads, {props: {panel: {}}})
     wrappers.push(wrapper)
@@ -205,6 +206,7 @@ describe('Threads', () => {
     expect(
       fetchMock.mock.calls.some(([url, init]) => String(url).includes('threads/download') && init?.method === 'POST')
     ).toBe(true)
+    expect(anchorClick).toHaveBeenCalledOnce()
   })
 
   it('does not post a thread dump when confirmation is cancelled', async () => {

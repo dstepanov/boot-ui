@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -64,8 +65,8 @@ class BootUiSampleApplicationDevProfileTests {
 
     @Test
     void servesSampleProductsFromInMemoryH2() {
-        ResponseEntity<List> response =
-                client().get().uri("/api/sample/products").retrieve().toEntity(List.class);
+        ResponseEntity<List<Map<String, Object>>> response =
+                client().get().uri("/api/sample/products").retrieve().toEntity(new ParameterizedTypeReference<>() {});
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
@@ -75,8 +76,8 @@ class BootUiSampleApplicationDevProfileTests {
 
     @Test
     void overviewReportsBootUiActiveWithoutDocker() {
-        ResponseEntity<Map> response =
-                client().get().uri("/bootui/api/overview").retrieve().toEntity(Map.class);
+        ResponseEntity<Map<String, Object>> response =
+                client().get().uri("/bootui/api/overview").retrieve().toEntity(new ParameterizedTypeReference<>() {});
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
@@ -84,8 +85,8 @@ class BootUiSampleApplicationDevProfileTests {
 
     @Test
     void healthIsUpWithoutRedisOrDatabaseDocker() {
-        ResponseEntity<Map> response =
-                client().get().uri("/actuator/health").retrieve().toEntity(Map.class);
+        ResponseEntity<Map<String, Object>> response =
+                client().get().uri("/actuator/health").retrieve().toEntity(new ParameterizedTypeReference<>() {});
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
@@ -94,11 +95,11 @@ class BootUiSampleApplicationDevProfileTests {
 
     @Test
     void chatReportsAiUnavailableWhenOllamaDisabled() {
-        ResponseEntity<Map> response = client().post()
+        ResponseEntity<Map<String, Object>> response = client().post()
                 .uri("/api/chat")
                 .body(Map.of("message", "Hello"))
                 .retrieve()
-                .toEntity(Map.class);
+                .toEntity(new ParameterizedTypeReference<>() {});
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
         assertThat(response.getBody()).isNotNull();

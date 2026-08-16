@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -104,21 +105,21 @@ class BootUiSampleApplicationIntegrationTests {
         return client;
     }
 
-    private ResponseEntity<Map> getMap(String path) {
-        return client().get().uri(path).retrieve().toEntity(Map.class);
+    private ResponseEntity<Map<String, Object>> getMap(String path) {
+        return client().get().uri(path).retrieve().toEntity(new ParameterizedTypeReference<>() {});
     }
 
-    private ResponseEntity<Map> postMap(String path, Object body) {
+    private ResponseEntity<Map<String, Object>> postMap(String path, Object body) {
         return client().post()
                 .uri(path)
                 .headers(headers -> applyCsrfToken(path, headers))
                 .body(body)
                 .retrieve()
-                .toEntity(Map.class);
+                .toEntity(new ParameterizedTypeReference<>() {});
     }
 
-    private ResponseEntity<List> getList(String path) {
-        return client().get().uri(path).retrieve().toEntity(List.class);
+    private ResponseEntity<List<Object>> getList(String path) {
+        return client().get().uri(path).retrieve().toEntity(new ParameterizedTypeReference<>() {});
     }
 
     private ResponseEntity<String> getString(String path) {
@@ -150,7 +151,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void overviewEndpointReturnsActivationMetadata() {
-        ResponseEntity<Map> response = getMap("/bootui/api/overview");
+        var response = getMap("/bootui/api/overview");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -178,7 +179,7 @@ class BootUiSampleApplicationIntegrationTests {
     void configEndpointListsPropertiesAndMasksSecrets() {
         postMap("/bootui/api/config/overrides", Map.of("name", "demo.api.token", "value", "topsecret"));
 
-        ResponseEntity<Map> response = getMap("/bootui/api/config");
+        var response = getMap("/bootui/api/config");
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
         Map<?, ?> body = response.getBody();
@@ -200,7 +201,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void healthEndpointReturnsStatus() {
-        ResponseEntity<Map> response = getMap("/bootui/api/health");
+        var response = getMap("/bootui/api/health");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -210,19 +211,20 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void loggersEndpointExposesKnownLoggers() {
-        ResponseEntity<Map> response = getMap("/bootui/api/loggers");
+        var response = getMap("/bootui/api/loggers");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
         assertThat(body).isNotNull();
-        assertThat((Iterable<Object>) body.get("availableLevels")).contains("INFO", "DEBUG");
+        assertThat((Iterable<?>) body.get("availableLevels"))
+                .anyMatch("INFO"::equals)
+                .anyMatch("DEBUG"::equals);
         assertThat((Iterable<?>) body.get("loggers")).isNotEmpty();
     }
 
     @Test
     void postLoggerLevelChangesEffectiveLevel() {
-        ResponseEntity<Map> response =
-                postMap("/bootui/api/loggers/io.github.jdubois.bootui.sample", Map.of("level", "WARN"));
+        var response = postMap("/bootui/api/loggers/io.github.jdubois.bootui.sample", Map.of("level", "WARN"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -233,8 +235,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void invalidLoggerLevelReturnsBadRequest() {
-        ResponseEntity<Map> response =
-                postMap("/bootui/api/loggers/io.github.jdubois.bootui.sample", Map.of("level", "NOT-A-LEVEL"));
+        var response = postMap("/bootui/api/loggers/io.github.jdubois.bootui.sample", Map.of("level", "NOT-A-LEVEL"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();
@@ -243,8 +244,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void configOverrideRoundtripPersistsAndDeletes() throws Exception {
-        ResponseEntity<Map> put =
-                postMap("/bootui/api/config/overrides", Map.of("name", "sample.greeting", "value", "Hola"));
+        var put = postMap("/bootui/api/config/overrides", Map.of("name", "sample.greeting", "value", "Hola"));
 
         assertThat(put.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> putBody = put.getBody();
@@ -255,11 +255,11 @@ class BootUiSampleApplicationIntegrationTests {
         assertThat(Files.exists(OVERRIDES_FILE)).isTrue();
         assertThat(Files.readString(OVERRIDES_FILE)).contains("sample.greeting=Hola");
 
-        ResponseEntity<Map> delete = client().delete()
+        ResponseEntity<Map<String, Object>> delete = client().delete()
                 .uri("/bootui/api/config/overrides/sample.greeting")
                 .headers(headers -> applyCsrfToken("/bootui/api/config/overrides/sample.greeting", headers))
                 .retrieve()
-                .toEntity(Map.class);
+                .toEntity(new ParameterizedTypeReference<>() {});
         assertThat(delete.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> deleteBody = delete.getBody();
         assertThat(deleteBody).isNotNull();
@@ -269,7 +269,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void beansEndpointReturnsBeanList() {
-        ResponseEntity<Map> response = getMap("/bootui/api/beans");
+        var response = getMap("/bootui/api/beans");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -279,7 +279,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void mappingsEndpointReturnsContexts() {
-        ResponseEntity<Map> response = getMap("/bootui/api/mappings");
+        var response = getMap("/bootui/api/mappings");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -290,7 +290,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void conditionsEndpointReturnsStableDto() {
-        ResponseEntity<Map> response = getMap("/bootui/api/conditions");
+        var response = getMap("/bootui/api/conditions");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -303,7 +303,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void startupEndpointReturnsStableDto() {
-        ResponseEntity<Map> response = getMap("/bootui/api/startup");
+        var response = getMap("/bootui/api/startup");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -313,7 +313,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void scheduledEndpointFindsSampleTask() {
-        ResponseEntity<Map> response = getMap("/bootui/api/scheduled");
+        var response = getMap("/bootui/api/scheduled");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -329,7 +329,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void memoryEndpointReturnsJvmMemoryReport() {
-        ResponseEntity<Map> response = getMap("/bootui/api/live-memory");
+        var response = getMap("/bootui/api/live-memory");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -367,7 +367,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void profilesEndpointReturnsActiveProfileReport() {
-        ResponseEntity<Map> response = getMap("/bootui/api/profile-diff");
+        var response = getMap("/bootui/api/profile-diff");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -378,7 +378,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void httpProbeEndpointCallsLoopbackSampleEndpoint() {
-        ResponseEntity<Map> response = postMap(
+        var response = postMap(
                 "/bootui/api/http-probe",
                 Map.of("method", "get", "path", "api/hello", "headers", Map.of("X-Ignored", "ok")));
 
@@ -393,7 +393,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void logTailRecentEndpointReturnsSerializedLogLines() {
-        ResponseEntity<List> response = getList("/bootui/api/log-tail/recent");
+        var response = getList("/bootui/api/log-tail/recent");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
@@ -423,7 +423,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void sampleChatEndpointReportsUnavailableWhenSpringAiClientIsDisabled() {
-        ResponseEntity<Map> response = postMap("/api/chat", Map.of("message", "What can BootUI show me?"));
+        var response = postMap("/api/chat", Map.of("message", "What can BootUI show me?"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
         assertThat(response.getBody()).isNotNull();
@@ -432,7 +432,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void sampleChatEndpointRejectsBlankMessages() {
-        ResponseEntity<Map> response = postMap("/api/chat", Map.of("message", " "));
+        var response = postMap("/api/chat", Map.of("message", " "));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();
@@ -441,19 +441,19 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void sampleProductsEndpointReturnsSqlInitializedProducts() {
-        ResponseEntity<List> response = getList("/api/sample/products");
+        var response = getList("/api/sample/products");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody())
-                .extracting(product -> ((Map<?, ?>) product).get("name"))
-                .contains("BootUI Starter", "Sample Console")
-                .doesNotContain("Archived Prototype");
+        List<String> names = response.getBody().stream()
+                .map(product -> String.valueOf(((Map<?, ?>) product).get("name")))
+                .toList();
+        assertThat(names).contains("BootUI Starter", "Sample Console").doesNotContain("Archived Prototype");
     }
 
     @Test
     void hibernateSecondLevelCacheSampleProducesMissPutAndHit() {
-        ResponseEntity<Map> response = getMap("/api/sample/hibernate-second-level-cache");
+        var response = getMap("/api/sample/hibernate-second-level-cache");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -510,7 +510,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void dataEndpointFindsSampleJpaRepository() {
-        ResponseEntity<Map> response = getMap("/bootui/api/data/repositories");
+        var response = getMap("/bootui/api/data/repositories");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -528,7 +528,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void dataRepositoryDetailIncludesAnnotatedQueryMethod() {
-        ResponseEntity<Map> response = getMap("/bootui/api/data/repositories/" + ProductRepository.class.getName());
+        var response = getMap("/bootui/api/data/repositories/" + ProductRepository.class.getName());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -547,10 +547,10 @@ class BootUiSampleApplicationIntegrationTests {
         assertThat(before).isNotNull();
         long capturedBefore = ((Number) before.get("totalCaptured")).longValue();
 
-        ResponseEntity<List> search = client().get()
+        ResponseEntity<List<Object>> search = client().get()
                 .uri("/api/sample/product-search?term=console")
                 .retrieve()
-                .toEntity(List.class);
+                .toEntity(new ParameterizedTypeReference<>() {});
         assertThat(search.getStatusCode()).isEqualTo(HttpStatus.OK);
 
         Map<?, ?> after = getMap("/bootui/api/transactions").getBody();
@@ -567,7 +567,7 @@ class BootUiSampleApplicationIntegrationTests {
         assertThat(before).isNotNull();
         long capturedBefore = ((Number) before.get("totalCaptured")).longValue();
 
-        ResponseEntity<Map> sampleResponse = getMap("/api/sample/transaction-samples");
+        var sampleResponse = getMap("/api/sample/transaction-samples");
         assertThat(sampleResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(sampleResponse.getBody()).containsEntry("slowMillis", 650);
 
@@ -604,7 +604,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void flywayEndpointListsAppliedAndPendingCatalogMigrations() {
-        ResponseEntity<Map> response = getMap("/bootui/api/flyway/migrations");
+        var response = getMap("/bootui/api/flyway/migrations");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -628,7 +628,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void liquibaseEndpointListsAppliedAndPendingInventoryChangeSets() {
-        ResponseEntity<Map> response = getMap("/bootui/api/liquibase/changesets");
+        var response = getMap("/bootui/api/liquibase/changesets");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -657,7 +657,7 @@ class BootUiSampleApplicationIntegrationTests {
     void cacheEndpointFindsSampleCachesAndClearsOneCache() {
         getList("/api/sample/products");
 
-        ResponseEntity<Map> response = getMap("/bootui/api/cache");
+        var response = getMap("/bootui/api/cache");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -674,10 +674,10 @@ class BootUiSampleApplicationIntegrationTests {
         assertThat((Iterable<?>) body.get("operations")).anySatisfy(operation -> {
             Map<?, ?> dto = (Map<?, ?>) operation;
             assertThat(dto.get("operation")).isEqualTo("@Cacheable");
-            assertThat((Iterable<Object>) dto.get("caches")).contains("sample-products");
+            assertThat((Iterable<?>) dto.get("caches")).anyMatch("sample-products"::equals);
         });
 
-        ResponseEntity<Map> clear = postMap(
+        var clear = postMap(
                 "/bootui/api/cache/clear",
                 Map.of("managerName", "cacheManager", "cacheName", "sample-products", "confirm", true));
         assertThat(clear.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -687,7 +687,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void springSecurityEndpointFindsSampleFilterChains() {
-        ResponseEntity<Map> response = getMap("/bootui/api/spring-security");
+        var response = getMap("/bootui/api/spring-security");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -708,7 +708,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void springSecurityExplainMatchesSecureApiRequest() {
-        ResponseEntity<Map> response = getMap("/bootui/api/spring-security/explain?method=GET&path=/api/secure");
+        var response = getMap("/bootui/api/spring-security/explain?method=GET&path=/api/secure");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -721,7 +721,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void springSecurityEndpointsListsControllerMappingsWithRules() {
-        ResponseEntity<Map> response = getMap("/bootui/api/spring-security/endpoints");
+        var response = getMap("/bootui/api/spring-security/endpoints");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();
@@ -745,7 +745,7 @@ class BootUiSampleApplicationIntegrationTests {
 
     @Test
     void securityLogsEndpointListsMaskedAuditEvents() {
-        ResponseEntity<Map> response = getMap("/bootui/api/security-logs");
+        var response = getMap("/bootui/api/security-logs");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         Map<?, ?> body = response.getBody();

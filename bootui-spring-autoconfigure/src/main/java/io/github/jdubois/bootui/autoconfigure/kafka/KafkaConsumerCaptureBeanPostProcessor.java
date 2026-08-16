@@ -40,6 +40,7 @@ public final class KafkaConsumerCaptureBeanPostProcessor implements BeanPostProc
     }
 
     @Override
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
         if (!(bean instanceof AbstractKafkaListenerContainerFactory<?, ?, ?> factory)) {
             return bean;
@@ -49,10 +50,8 @@ public final class KafkaConsumerCaptureBeanPostProcessor implements BeanPostProc
             return bean;
         }
         try {
-            @SuppressWarnings("unchecked")
             RecordInterceptor<Object, Object> existing = (RecordInterceptor<Object, Object>)
                     new DirectFieldAccessor(factory).getPropertyValue("recordInterceptor");
-            @SuppressWarnings({"unchecked", "rawtypes"})
             AbstractKafkaListenerContainerFactory untyped = (AbstractKafkaListenerContainerFactory) factory;
             untyped.setRecordInterceptor(new CapturingRecordInterceptor(existing, recorder, beanName));
         } catch (RuntimeException ex) {

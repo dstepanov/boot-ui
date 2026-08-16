@@ -82,10 +82,9 @@
                 </executions>
             </plugin>
             <!--
-              Install the JBoss LogManager as the JVM's java.util.logging LogManager for the test fork.
-              QuarkusProdModeTest's own static initializer requires this (it casts the root
-              java.util.logging.Logger to org.jboss.logmanager.Logger), so this is not optional here the way
-              it might be for a plain @QuarkusTest module.
+              The shared Quarkus parent installs JBoss LogManager on every test fork's JVM command line.
+              QuarkusProdModeTest's own static initializer requires it (it casts the root
+              java.util.logging.Logger to org.jboss.logmanager.Logger).
 
               forkCount=1: same override as every other bootui-quarkus-integration-tests/* submodule (and
               bootui-quarkus itself); see bootui-quarkus-integration-tests/base/pom.xml for the full
@@ -98,9 +97,6 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <forkCount>1</forkCount>
-                    <systemPropertyVariables>
-                        <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
-                    </systemPropertyVariables>
                 </configuration>
             </plugin>
         </plugins>
