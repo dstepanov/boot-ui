@@ -16,6 +16,6 @@ test.describe('Hibernate Statistics view (Quarkus)', () => {
     await expect(page.getByText('Entities')).toBeVisible()
     await expect(page.getByText('Collections')).toBeVisible()
     await expect(page.getByText('Queries')).toBeVisible()
-    await expect(page.getByText('Second-level cache')).toBeVisible()
+    await expect(page.getByText('Second-level cache', {exact: true})).toBeVisible()
   })
 })
