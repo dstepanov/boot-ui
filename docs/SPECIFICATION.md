@@ -2069,6 +2069,14 @@ Initial endpoints:
 | `/bootui/api/hibernate-statistics/enable` | POST | Enable Hibernate statistics collection for the current runtime                         |
 | `/bootui/api/database-advisor`       | GET    | Latest Database advisor report, with per-datasource read status and scan diagnostics   |
 | `/bootui/api/database-advisor/scan`  | POST   | Run explicit read-only, bounded physical-schema checks                                 |
+| `/bootui/api/sql-trace`                       | GET    | Retained SQL execution report and aggregate statistics                                |
+| `/bootui/api/sql-trace/clear`                 | POST   | Clear the retained SQL execution buffer                                                |
+| `/bootui/api/sql-trace/recording`             | POST   | Pause/resume SQL execution capture at runtime                                          |
+| `/bootui/api/sql-trace/stream`                | GET    | SQL Trace change notifications over Server-Sent Events (re-fetch trigger)              |
+| `/bootui/api/transactions`                    | GET    | Retained transaction boundary report (unavailable report on Quarkus)                   |
+| `/bootui/api/transactions/clear`              | POST   | Clear retained transaction boundaries on Spring MVC and WebFlux                       |
+| `/bootui/api/transactions/recording`          | POST   | Pause/resume transaction capture on Spring MVC and WebFlux                             |
+| `/bootui/api/transactions/stream`             | GET    | Transaction change notifications over Server-Sent Events on Spring MVC and WebFlux     |
 | `/bootui/api/architecture`                   | GET    | Latest Architecture scan report                                                        |
 | `/bootui/api/architecture/scan`              | POST   | Run explicit ArchUnit hygiene checks                                                   |
 | `/bootui/api/rest-api`                   | GET    | Latest REST API Advisor scan report                                                    |
