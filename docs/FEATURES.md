@@ -582,6 +582,8 @@ per-datasource name is only discoverable through an Agroal-specific qualifier th
 importing, datasources are named positionally (`default`, `datasource-2`, ...) rather than by their configured Quarkus
 datasource name.
 
+![BootUI Database panel](./images/bootui-database-advisor.webp)
+
 ### Hibernate
 
 The Hibernate panel runs an explicit, read-only scan against the JPA `EntityManagerFactory` metamodel when
@@ -1268,6 +1270,8 @@ On Quarkus the panel is identical, running over the same framework-neutral `Hibe
 contract, backed by a `HibernateStatisticsProvider` gated on the same Hibernate ORM capability as the Hibernate
 advisor panel.
 
+![BootUI Hibernate Statistics panel](./images/bootui-hibernate-statistics.webp)
+
 ### Transactions
 
 The Transactions panel shows the `@Transactional` boundaries your application recently ran — begin, commit, and rollback
@@ -1318,6 +1322,8 @@ report to an agent. It is not advertised on Quarkus because transaction capture 
 > hook without much more invasive instrumentation than Spring's opt-in listener registration. Rather than force false
 > parity, the Quarkus endpoint always reports unavailable with a clear reason explaining the gap; see
 > `docs/QUARKUS-SUPPORT.md` for details.
+
+![BootUI Transactions panel](./images/bootui-transactions.webp)
 
 ### Spring Data
 
