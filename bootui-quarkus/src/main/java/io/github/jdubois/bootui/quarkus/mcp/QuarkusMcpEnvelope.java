@@ -22,7 +22,11 @@ import io.github.jdubois.bootui.engine.mcp.McpProtocol;
 import io.github.jdubois.bootui.engine.mcp.McpRequest;
 import io.github.jdubois.bootui.engine.mcp.McpToolDescriptor;
 import io.github.jdubois.bootui.engine.mcp.McpToolSchema;
+import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.util.Set;
+import java.util.TreeSet;
+import org.eclipse.microprofile.config.Config;
 
 /**
  * Quarkus (Jackson 2) JSON-RPC envelope codec for the BootUI MCP server — the byte-for-byte twin of
@@ -35,12 +39,30 @@ public class QuarkusMcpEnvelope {
     private final McpDispatcher dispatcher;
     private final ObjectMapper objectMapper;
     private final QuarkusMcpFailureReporter failureReporter;
+    private final int maxResponseBytes;
 
+    @Inject
     public QuarkusMcpEnvelope(
-            McpDispatcher dispatcher, ObjectMapper objectMapper, QuarkusMcpFailureReporter failureReporter) {
+            McpDispatcher dispatcher,
+            ObjectMapper objectMapper,
+            QuarkusMcpFailureReporter failureReporter,
+            Config config) {
+        this(dispatcher, objectMapper, failureReporter, BootUiMcpProducer.maxResponseBytes(config));
+    }
+
+    QuarkusMcpEnvelope(McpDispatcher dispatcher, ObjectMapper objectMapper, QuarkusMcpFailureReporter failureReporter) {
+        this(dispatcher, objectMapper, failureReporter, McpProtocol.DEFAULT_MAX_RESPONSE_BYTES);
+    }
+
+    QuarkusMcpEnvelope(
+            McpDispatcher dispatcher,
+            ObjectMapper objectMapper,
+            QuarkusMcpFailureReporter failureReporter,
+            int maxResponseBytes) {
         this.dispatcher = dispatcher;
         this.objectMapper = objectMapper;
         this.failureReporter = failureReporter;
+        this.maxResponseBytes = Math.max(1, maxResponseBytes);
     }
 
     /** Parse raw request bytes into a Jackson node. */
@@ -66,10 +88,22 @@ public class QuarkusMcpEnvelope {
         if (jsonrpc == null || !McpProtocol.JSONRPC_VERSION.equals(jsonrpc.asText())) {
             return error(id, McpProtocol.INVALID_REQUEST, "Request must include jsonrpc: \"2.0\"");
         }
+        if (id != null && !id.isNull() && !id.isTextual() && !id.isNumber()) {
+            return error(null, McpProtocol.INVALID_REQUEST, McpProtocol.INVALID_ID_MESSAGE);
+        }
+        JsonNode params = request.get("params");
+        if (params != null && !params.isObject()) {
+            return error(id, McpProtocol.INVALID_PARAMS, McpProtocol.PARAMS_OBJECT_MESSAGE);
+        }
         try {
             McpDispatchOutcome outcome = dispatcher.dispatch(parse(request));
-            return render(outcome, id);
-        } catch (RuntimeException | Error failure) {
+            JsonNode response = render(outcome, id);
+            if (response != null && objectMapper.writeValueAsBytes(response).length > maxResponseBytes) {
+                dispatcher.runtimeStats().recordResponseLimitRefusal();
+                return error(id, McpProtocol.RESPONSE_TOO_LARGE, McpProtocol.RESPONSE_TOO_LARGE_MESSAGE);
+            }
+            return response;
+        } catch (JsonProcessingException | RuntimeException | Error failure) {
             failureReporter.report("rendering a response", failure);
             return error(id, McpProtocol.INTERNAL_ERROR, McpProtocol.INTERNAL_ERROR_MESSAGE);
         }
@@ -94,40 +128,60 @@ public class QuarkusMcpEnvelope {
         String requestedProtocolVersion = params.path("protocolVersion").asText();
         String toolName = params.path("name").asText();
         JsonNode arguments = params.get("arguments");
+        ParsedArguments parsedArguments = parseArguments(arguments);
         return new McpRequest(
                 jsonrpc,
                 method,
                 notification,
                 requestedProtocolVersion,
                 toolName,
-                rawQuery(arguments),
-                rawLimit(arguments),
-                rawId(arguments));
+                parsedArguments.query(),
+                parsedArguments.limit(),
+                parsedArguments.id(),
+                parsedArguments.names(),
+                parsedArguments.error());
     }
 
-    private static String rawQuery(JsonNode arguments) {
-        if (arguments == null
-                || !arguments.has("query")
-                || arguments.get("query").isNull()) {
-            return null;
+    private static ParsedArguments parseArguments(JsonNode arguments) {
+        if (arguments == null) {
+            return ParsedArguments.empty();
         }
-        return arguments.get("query").asText();
+        if (!arguments.isObject()) {
+            return ParsedArguments.error(McpProtocol.ARGUMENTS_OBJECT_MESSAGE);
+        }
+        Set<String> names = new TreeSet<>();
+        arguments.fieldNames().forEachRemaining(names::add);
+        JsonNode query = arguments.get("query");
+        if (query != null && !query.isTextual()) {
+            return ParsedArguments.error(McpProtocol.invalidArgumentTypeMessage("query", "a string"));
+        }
+        JsonNode id = arguments.get("id");
+        if (id != null && !id.isTextual()) {
+            return ParsedArguments.error(McpProtocol.invalidArgumentTypeMessage("id", "a string"));
+        }
+        JsonNode limit = arguments.get("limit");
+        if (limit != null && (!limit.isIntegralNumber() || !limit.canConvertToInt())) {
+            return ParsedArguments.error(McpProtocol.invalidArgumentTypeMessage("limit", "an integer"));
+        }
+        if (limit != null && limit.asInt() < 1) {
+            return ParsedArguments.error(McpProtocol.invalidArgumentMinimumMessage("limit", 1));
+        }
+        return new ParsedArguments(
+                query == null ? null : query.asText(),
+                limit == null ? null : limit.asInt(),
+                id == null ? null : id.asText(),
+                names,
+                null);
     }
 
-    private static String rawId(JsonNode arguments) {
-        if (arguments == null || !arguments.has("id") || arguments.get("id").isNull()) {
-            return null;
+    private record ParsedArguments(String query, Integer limit, String id, Set<String> names, String error) {
+        private static ParsedArguments empty() {
+            return new ParsedArguments(null, null, null, Set.of(), null);
         }
-        return arguments.get("id").asText();
-    }
 
-    private static Integer rawLimit(JsonNode arguments) {
-        if (arguments != null
-                && arguments.has("limit")
-                && arguments.get("limit").isIntegralNumber()) {
-            return arguments.get("limit").asInt();
+        private static ParsedArguments error(String error) {
+            return new ParsedArguments(null, null, null, Set.of(), error);
         }
-        return null;
     }
 
     private JsonNode render(McpDispatchOutcome outcome, JsonNode id) {

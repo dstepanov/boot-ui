@@ -33,6 +33,10 @@ public final class McpProtocol {
 
     /** Default maximum concurrent MCP tool invocations. */
     public static final int DEFAULT_MAX_CONCURRENT_CALLS = 20;
+    /** Default maximum duration of one MCP tool invocation. */
+    public static final int DEFAULT_EXECUTION_TIMEOUT_MILLIS = 30_000;
+    /** Default maximum rendered MCP response size (4 MiB). */
+    public static final int DEFAULT_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
     // JSON-RPC 2.0 error codes.
     /** JSON parsing failed. */
@@ -47,6 +51,12 @@ public final class McpProtocol {
     public static final int INTERNAL_ERROR = -32603;
     /** Server-defined: the MCP server is currently disabled (transport-level short-circuit). */
     public static final int SERVER_DISABLED = -32000;
+    /** Server-defined: the aggregate MCP tool-call capacity is currently exhausted. */
+    public static final int SERVER_AT_CAPACITY = -32001;
+    /** Server-defined: a tool exceeded its execution-time budget. */
+    public static final int TOOL_TIMEOUT = -32002;
+    /** Server-defined: a rendered response exceeded its byte budget. */
+    public static final int RESPONSE_TOO_LARGE = -32003;
 
     /** Returned when the request is not a JSON-RPC object. */
     public static final String MALFORMED_REQUEST_MESSAGE = "Request must be a JSON-RPC object";
@@ -63,14 +73,34 @@ public final class McpProtocol {
     public static final String MISSING_PROMPT_NAME_MESSAGE = "Missing prompt name";
     /** Reported in-band when a {@link McpToolSchema#ID} tool is called without a (non-blank) {@code id}. */
     public static final String MISSING_ID_ARGUMENT_MESSAGE = "Missing required argument: id";
+    /** Returned when {@code tools/call.params.arguments} is present but is not a JSON object. */
+    public static final String ARGUMENTS_OBJECT_MESSAGE = "Tool arguments must be an object";
+    /** Returned when a JSON-RPC id is not a string, number, or null. */
+    public static final String INVALID_ID_MESSAGE = "Request id must be a string, number, or null";
+    /** Returned when JSON-RPC params is present but is not an object. */
+    public static final String PARAMS_OBJECT_MESSAGE = "Request params must be an object";
     /** Fallback in-band tool-error text when a tool fails without a message. */
     public static final String TOOL_CALL_FAILED_MESSAGE = "Tool call failed";
     /** Standard JSON-RPC message for an unexpected server-side failure. */
     public static final String INTERNAL_ERROR_MESSAGE = "Internal error";
     /** Reported when the server refuses another concurrent {@code tools/call}. */
     public static final String RATE_LIMITED_MESSAGE = "MCP server is at capacity; try again shortly.";
+    /** Reported when a tool exceeds its execution-time budget. */
+    public static final String TOOL_TIMEOUT_MESSAGE = "MCP tool execution timed out";
+    /** Reported when a rendered response exceeds its byte budget. */
+    public static final String RESPONSE_TOO_LARGE_MESSAGE = "MCP response exceeds configured byte limit";
 
     /** Transport-level message returned (JSON-RPC error {@link #SERVER_DISABLED}) while disabled. */
     public static final String SERVER_DISABLED_MESSAGE =
             "BootUI MCP server is disabled. Enable it from the MCP Server panel or set bootui.mcp.enabled=ON.";
+
+    /** Canonical invalid-type message used by both adapter codecs. */
+    public static String invalidArgumentTypeMessage(String name, String expectedType) {
+        return "Argument '" + name + "' must be " + expectedType;
+    }
+
+    /** Canonical lower-bound message used by both adapter codecs. */
+    public static String invalidArgumentMinimumMessage(String name, int minimum) {
+        return "Argument '" + name + "' must be at least " + minimum;
+    }
 }

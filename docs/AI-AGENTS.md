@@ -87,28 +87,39 @@ agent will see before you wire it up.
 Tools whose backing panel/controller is absent (for example Hibernate or Spring Security when those libraries are not on
 the classpath) are simply not advertised.
 
-- **Advisor scans (actions):** `architecture_scan`, `spring_scan`, `hibernate_scan`, `memory_scan`, `security_scan`,
-  `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`, `vulnerabilities_scan`. Each runs the same scan as the
-  panel's action button and returns the report DTO; `vulnerabilities_scan` additionally makes outbound calls to
-  OSV.dev to check dependencies for known vulnerabilities.
+- **Advisor scans (actions):** `architecture_scan`, `spring_scan`, `hibernate_scan`, `database_advisor_scan`,
+  `memory_scan`, `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`, and
+  `vulnerabilities_scan`. Each runs the same scan as the panel's action button; `vulnerabilities_scan` additionally
+  makes outbound calls to OSV.dev.
+- **Cached advisor reports:** matching `get_*_report` tools return the last completed report without starting another
+  scan, including `get_database_advisor_report`, `get_graalvm_report`, and `get_crac_report` where applicable.
 - **Diagnostics reads:** `get_live_activity`, `get_exceptions`, `get_exception_detail`, `get_security_logs`,
-  `get_sql_traces`, `get_traces`, `get_log_tail`, `get_http_exchanges`. `get_live_activity` returns the correlated feed
-  the [Live Activity panel](FEATURES.md) shows (HTTP requests, SQL statements, exceptions, and security events grouped
-  by request/trace); `get_exception_detail` takes a required `id` (from `get_exceptions` or `get_live_activity`) and
-  returns that exception group's full stack trace, causes, and individual occurrences.
+  `get_sql_traces`, `get_transactions` (Spring only), `get_traces`, `get_log_tail`, `get_http_exchanges`, and
+  `get_rest_client_traces`. `get_exception_detail` takes an `id` and returns the full stack trace, causes, and
+  occurrences.
 - **Core context reads:** `get_overview`, `get_health`, `get_config` (masked), `get_beans`, `get_mappings`,
   `get_loggers`, `get_conditions` (Spring MVC/WebFlux only), `get_scheduled_tasks`, `get_cache_stats`,
-  `get_database_connection_pools`.
+  `get_database_connection_pools`, `get_metrics`, `get_live_memory`, `get_jvm_tuning`, `get_heap_dump_report`,
+  `get_threads`, `get_startup_timeline`, `get_profile_diff`, `get_spring_data_repositories`,
+  `get_flyway_migrations`, `get_liquibase_changesets`, `get_spring_security`, `get_ai_overview`, messaging activity,
+  DevTools/Dev Services, GitHub's cached dashboard, and local Copilot/Claude Code session summaries. Stack-specific or
+  unavailable capabilities are omitted.
+- **Bounded controls (actions):** tools can clear in-memory exception/trace buffers, pause or resume SQL,
+  transaction, and REST-client recording, analyze an existing heap dump, and trigger Spring DevTools LiveReload.
+  They never capture or download a heap dump, execute an HTTP probe, mutate a database, clear a cache, write GitHub
+  state, restart a dev service, or run an agent command.
 
 ### Safety model
 
 The MCP server inherits BootUI's full safety posture, so handing it to an agent stays safe by construction:
 
 - It is only ever live while BootUI is active, so it is **never reachable in production**.
-- Read tools require the backing panel to be enabled; action (`*_scan`) tools are additionally refused when the panel is
+- Read tools require the backing panel to be enabled; all action tools are additionally refused when the panel is
   read-only or `bootui.read-only=true`, returning a clear tool error instead of running.
 - Values pass through the same secret masking and `bootui.expose-values` mode as the REST API, and paginated reads are
   capped by `bootui.mcp.max-results` (default `200`).
+- MCP request size, concurrency, tool execution time, and rendered response size are independently bounded through
+  `bootui.mcp.*`; capacity, timeout, and response-limit failures are explicit rather than silently truncated.
 
 See [Properties](PROPERTIES.md) for the `bootui.mcp.*` settings and [Features](FEATURES.md) for the full MCP Server panel
 description.

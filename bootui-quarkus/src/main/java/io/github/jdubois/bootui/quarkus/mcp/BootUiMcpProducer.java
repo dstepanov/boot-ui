@@ -8,6 +8,7 @@ import io.github.jdubois.bootui.spi.McpPanelPolicy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
+import java.time.Duration;
 import org.eclipse.microprofile.config.Config;
 
 /**
@@ -34,15 +35,17 @@ public class BootUiMcpProducer {
         int maxResults =
                 config.getOptionalValue("bootui.mcp.max-results", Integer.class).orElse(200);
         int maxConcurrentCalls = maxConcurrentCalls(config);
+        long executionTimeoutMillis = executionTimeoutMillis(config);
         McpPanelPolicy policy = new QuarkusMcpPanelPolicy(new QuarkusPanelAccessConfig(config));
         return new McpDispatcher(
-                tools.tools(),
+                tools::tools,
                 McpGuidance.prompts(FRAMEWORK),
                 policy,
                 serverVersion(),
                 INSTRUCTIONS,
                 maxResults,
                 maxConcurrentCalls,
+                executionTimeoutMillis,
                 failureReporter);
     }
 
@@ -58,6 +61,21 @@ public class BootUiMcpProducer {
                 1,
                 config.getOptionalValue("bootui.mcp.max-payload-bytes", Integer.class)
                         .orElse(McpProtocol.DEFAULT_MAX_PAYLOAD_BYTES));
+    }
+
+    public static int maxResponseBytes(Config config) {
+        return Math.max(
+                1,
+                config.getOptionalValue("bootui.mcp.max-response-bytes", Integer.class)
+                        .orElse(McpProtocol.DEFAULT_MAX_RESPONSE_BYTES));
+    }
+
+    public static long executionTimeoutMillis(Config config) {
+        return Math.max(
+                1,
+                config.getOptionalValue("bootui.mcp.execution-timeout", Duration.class)
+                        .orElse(Duration.ofMillis(McpProtocol.DEFAULT_EXECUTION_TIMEOUT_MILLIS))
+                        .toMillis());
     }
 
     private static String serverVersion() {

@@ -2,10 +2,12 @@ package io.github.jdubois.bootui.autoconfigure.reactive;
 
 import io.github.jdubois.bootui.autoconfigure.BootUiAutoConfiguration;
 import io.github.jdubois.bootui.autoconfigure.BootUiProperties;
+import io.github.jdubois.bootui.autoconfigure.mcp.BootUiMcpService;
 import io.github.jdubois.bootui.autoconfigure.mcp.McpServerState;
 import io.github.jdubois.bootui.core.dto.McpServerStatus;
 import io.github.jdubois.bootui.core.dto.McpToolInfo;
 import io.github.jdubois.bootui.engine.mcp.McpProtocol;
+import io.github.jdubois.bootui.engine.mcp.McpRuntimeStats;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,12 +24,14 @@ public class ReactiveBootUiMcpServerController {
     private final McpServerState state;
     private final ReactiveBootUiMcpTools tools;
     private final BootUiProperties properties;
+    private final BootUiMcpService service;
 
     public ReactiveBootUiMcpServerController(
-            McpServerState state, ReactiveBootUiMcpTools tools, BootUiProperties properties) {
+            McpServerState state, ReactiveBootUiMcpTools tools, BootUiProperties properties, BootUiMcpService service) {
         this.state = state;
         this.tools = tools;
         this.properties = properties;
+        this.service = service;
     }
 
     @GetMapping
@@ -52,6 +56,7 @@ public class ReactiveBootUiMcpServerController {
                         properties.isPanelEnabled(tool.panelId()),
                         properties.isPanelReadOnly(tool.panelId())))
                 .toList();
+        McpRuntimeStats.Snapshot stats = service.dispatcher().runtimeStats().snapshot();
         return new McpServerStatus(
                 state.isEnabled(),
                 state.configuredMode().name(),
@@ -62,6 +67,11 @@ public class ReactiveBootUiMcpServerController {
                 properties.getApiPath() + "/mcp",
                 McpProtocol.DEFAULT_PROTOCOL_VERSION,
                 Math.max(1, properties.getMcp().getMaxResults()),
+                stats.callCount(),
+                stats.totalLatencyMillis(),
+                stats.capacityRefusals(),
+                stats.timeouts(),
+                stats.responseLimitRefusals(),
                 toolInfos.size(),
                 toolInfos);
     }

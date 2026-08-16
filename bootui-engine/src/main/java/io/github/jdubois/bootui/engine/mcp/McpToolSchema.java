@@ -1,5 +1,7 @@
 package io.github.jdubois.bootui.engine.mcp;
 
+import java.util.Set;
+
 /**
  * The shape of an MCP tool's input schema, advertised in {@code tools/list}.
  *
@@ -11,11 +13,22 @@ package io.github.jdubois.bootui.engine.mcp;
  */
 public enum McpToolSchema {
     /** No arguments: an empty object schema. */
-    NONE,
+    NONE(Set.of()),
     /** An optional positive integer {@code limit}, capped by {@code bootui.mcp.max-results}. */
-    LIMIT,
+    LIMIT(Set.of("limit")),
     /** An optional {@code query} string plus the optional {@code limit}. */
-    QUERY_LIMIT,
+    QUERY_LIMIT(Set.of("query", "limit")),
     /** A required string {@code id} identifying one specific resource (e.g. an exception group id). */
-    ID
+    ID(Set.of("id"));
+
+    private final Set<String> argumentNames;
+
+    McpToolSchema(Set<String> argumentNames) {
+        this.argumentNames = argumentNames;
+    }
+
+    /** Argument names accepted by this schema. */
+    public Set<String> argumentNames() {
+        return argumentNames;
+    }
 }

@@ -35,7 +35,11 @@ public final class McpServerState {
             return "OFF";
         }
         String trimmed = mode.trim().toUpperCase(Locale.ROOT);
-        return trimmed.isEmpty() ? "OFF" : trimmed;
+        String normalized = trimmed.isEmpty() ? "OFF" : trimmed;
+        if (!"ON".equals(normalized) && !"OFF".equals(normalized) && !"AUTO".equals(normalized)) {
+            throw new IllegalArgumentException("bootui.mcp.enabled must be ON, OFF, or AUTO");
+        }
+        return normalized;
     }
 
     /** Whether the MCP server is currently serving requests. */

@@ -4,6 +4,7 @@ import io.github.jdubois.bootui.autoconfigure.BootUiAutoConfiguration;
 import io.github.jdubois.bootui.autoconfigure.BootUiProperties;
 import io.github.jdubois.bootui.core.dto.McpServerStatus;
 import io.github.jdubois.bootui.core.dto.McpToolInfo;
+import io.github.jdubois.bootui.engine.mcp.McpRuntimeStats;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,11 +31,14 @@ public class McpServerController {
     private final McpServerState state;
     private final BootUiMcpTools tools;
     private final BootUiProperties properties;
+    private final BootUiMcpService service;
 
-    public McpServerController(McpServerState state, BootUiMcpTools tools, BootUiProperties properties) {
+    public McpServerController(
+            McpServerState state, BootUiMcpTools tools, BootUiProperties properties, BootUiMcpService service) {
         this.state = state;
         this.tools = tools;
         this.properties = properties;
+        this.service = service;
     }
 
     @GetMapping
@@ -59,6 +63,7 @@ public class McpServerController {
                         properties.isPanelEnabled(tool.panelId()),
                         properties.isPanelReadOnly(tool.panelId())))
                 .toList();
+        McpRuntimeStats.Snapshot stats = service.dispatcher().runtimeStats().snapshot();
         return new McpServerStatus(
                 state.isEnabled(),
                 state.configuredMode().name(),
@@ -69,6 +74,11 @@ public class McpServerController {
                 properties.getApiPath() + "/mcp",
                 BootUiMcpService.DEFAULT_PROTOCOL_VERSION,
                 Math.max(1, properties.getMcp().getMaxResults()),
+                stats.callCount(),
+                stats.totalLatencyMillis(),
+                stats.capacityRefusals(),
+                stats.timeouts(),
+                stats.responseLimitRefusals(),
                 toolInfos.size(),
                 toolInfos);
     }

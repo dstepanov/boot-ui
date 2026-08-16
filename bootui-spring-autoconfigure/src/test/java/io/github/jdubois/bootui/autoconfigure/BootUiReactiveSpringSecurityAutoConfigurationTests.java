@@ -268,6 +268,7 @@ class BootUiReactiveSpringSecurityAutoConfigurationTests {
         return WebTestClient.bindToApplicationContext(context)
                 .configureClient()
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .defaultHeader(HttpHeaders.HOST, "localhost")
                 .build();
     }
 

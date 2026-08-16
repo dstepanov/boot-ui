@@ -30,13 +30,22 @@ const endpointUrl = computed(() => {
   return origin + path
 })
 
+const remoteAccess = computed(() => {
+  if (typeof window === 'undefined' || !window.location) return false
+  return !['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname)
+})
+
 const mcpConfigJson = computed(() => {
+  const server = {
+    type: status.value?.transport || 'http',
+    url: endpointUrl.value
+  }
+  if (remoteAccess.value) {
+    server.headers = {Authorization: 'Bearer <bootui authentication token>'}
+  }
   const config = {
     servers: {
-      [status.value?.serverName || 'bootui']: {
-        type: status.value?.transport || 'http',
-        url: endpointUrl.value
-      }
+      [status.value?.serverName || 'bootui']: server
     }
   }
   return JSON.stringify(config, null, 2)
@@ -236,9 +245,9 @@ const {autoRefresh, loading, load} = useAutoRefresh(fetchStatus, {enabled: manif
           </div>
 
           <p class="text-muted small">
-            <strong>Action tools</strong> run an advisor scan (refused when the backing panel is read-only).
-            <strong>Read tools</strong> return sanitized runtime data. A tool is advertised only when its backing panel
-            is enabled.
+            <strong>Action tools</strong> run explicit scans or bounded runtime controls and are refused when the
+            backing panel is read-only. <strong>Read tools</strong> return sanitized runtime data. Tools are advertised
+            when their backing capability is available; disabled-panel tools stay listed but are refused when called.
           </p>
 
           <div v-if="actionTools.length" class="mb-3">

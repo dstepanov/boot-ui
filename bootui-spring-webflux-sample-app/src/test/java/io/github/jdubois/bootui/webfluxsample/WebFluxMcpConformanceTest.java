@@ -1,8 +1,6 @@
 package io.github.jdubois.bootui.webfluxsample;
 
 import io.github.jdubois.bootui.conformance.AbstractMcpConformanceTest;
-import io.github.jdubois.bootui.conformance.BootUiHttpProbe;
-import java.util.Map;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -17,7 +15,8 @@ import org.springframework.boot.test.web.server.LocalServerPort;
             "bootui.panels.copilot.enabled=false",
             "bootui.panels.heap-dump.read-only=true",
             "bootui.heap-dump.capture-enabled=false",
-            "bootui.claude-code.enabled=OFF"
+            "bootui.claude-code.enabled=OFF",
+            "bootui.mcp.max-payload-bytes=256"
         })
 class WebFluxMcpConformanceTest extends AbstractMcpConformanceTest {
 
@@ -27,26 +26,5 @@ class WebFluxMcpConformanceTest extends AbstractMcpConformanceTest {
     @Override
     protected String baseUrl() {
         return "http://localhost:" + port;
-    }
-
-    @Override
-    protected boolean enableMcp() {
-        BootUiHttpProbe.Response response = new BootUiHttpProbe(baseUrl())
-                .request(
-                        "POST",
-                        "/bootui/api/mcp-server/toggle",
-                        Map.of("Content-Type", "application/json"),
-                        "{\"enabled\":true}");
-        return response.status() == 200 && response.json().path("enabled").asBoolean(false);
-    }
-
-    @Override
-    protected void disableMcp() {
-        new BootUiHttpProbe(baseUrl())
-                .request(
-                        "POST",
-                        "/bootui/api/mcp-server/toggle",
-                        Map.of("Content-Type", "application/json"),
-                        "{\"enabled\":false}");
     }
 }

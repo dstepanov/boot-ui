@@ -1,12 +1,14 @@
 package io.github.jdubois.bootui.autoconfigure.mcp;
 
 import io.github.jdubois.bootui.autoconfigure.BootUiProperties;
+import io.github.jdubois.bootui.engine.mcp.McpPayloadReader;
+import io.github.jdubois.bootui.engine.mcp.McpPayloadReader.PayloadTooLargeException;
 import io.github.jdubois.bootui.engine.mcp.McpProtocol;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,18 +46,23 @@ public class BootUiMcpController {
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> rpc(
-            @RequestBody byte[] requestBody,
+            HttpServletRequest servletRequest,
             @RequestHeader(value = McpProtocol.PROTOCOL_VERSION_HEADER, required = false) String protocolVersion) {
         if (protocolVersion != null && !McpProtocol.KNOWN_VERSIONS.contains(protocolVersion)) {
             return json(
                     400, error(null, McpProtocol.INVALID_REQUEST, McpProtocol.UNSUPPORTED_PROTOCOL_VERSION_MESSAGE));
         }
-        if (requestBody != null && requestBody.length > maxPayloadBytes) {
+        byte[] requestBody;
+        try {
+            requestBody = McpPayloadReader.read(servletRequest.getInputStream(), maxPayloadBytes);
+        } catch (PayloadTooLargeException ex) {
             return json(413, error(null, McpProtocol.PARSE_ERROR, PAYLOAD_LIMIT_MESSAGE));
+        } catch (IllegalArgumentException | java.io.IOException ex) {
+            return json(400, error(null, McpProtocol.PARSE_ERROR, "Could not read request payload"));
         }
         JsonNode request;
         try {
-            request = service.readTree(requestBody == null ? new byte[0] : requestBody);
+            request = service.readTree(requestBody);
         } catch (IllegalArgumentException ex) {
             return json(400, error(null, McpProtocol.PARSE_ERROR, ex.getMessage()));
         }

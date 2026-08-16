@@ -1,7 +1,6 @@
 package io.github.jdubois.bootui.conformance;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.jdubois.bootui.conformance.BootUiHttpProbe.Response;
@@ -19,14 +18,30 @@ public abstract class AbstractMcpConformanceTest {
      * @return {@code true} when the server was enabled and the test may proceed; {@code false} to skip
      */
     protected boolean enableMcp() {
-        return false;
+        return setMcpEnabled(true);
     }
 
     /** Disable the MCP server after a test that enabled it. */
-    protected void disableMcp() {}
+    protected void disableMcp() {
+        assertThat(setMcpEnabled(false))
+                .as("MCP server must be disabled after the test")
+                .isTrue();
+    }
 
     private BootUiHttpProbe probe() {
         return new BootUiHttpProbe(baseUrl());
+    }
+
+    private boolean setMcpEnabled(boolean enabled) {
+        BootUiHttpProbe probe = probe();
+        Map<String, String> headers = new java.util.LinkedHashMap<>();
+        headers.put("Content-Type", "application/json");
+        headers.put("Origin", baseUrl());
+        probe.get("/bootui/api/overview");
+        probe.cookie("XSRF-TOKEN").ifPresent(token -> headers.put("X-XSRF-TOKEN", token));
+        Response response =
+                probe.request("POST", "/bootui/api/mcp-server/toggle", headers, "{\"enabled\":" + enabled + "}");
+        return response.status() == 200 && response.json().path("enabled").asBoolean(!enabled) == enabled;
     }
 
     @Test
@@ -60,6 +75,15 @@ public abstract class AbstractMcpConformanceTest {
     }
 
     @Test
+    void testMcpRejectsOversizedRequestBeforeParsing() {
+        String oversized = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"padding\":\"" + "x".repeat(300) + "\"}";
+        Response response =
+                probe().request("POST", "/bootui/api/mcp", Map.of("Content-Type", "application/json"), oversized);
+        assertThat(response.status()).isEqualTo(413);
+        assertThat(response.json().path("error").path("message").asText()).isEqualTo("Request payload exceeds limit");
+    }
+
+    @Test
     void testMcpDisabledShortCircuit() {
         Response response = probe().request(
                         "POST",
@@ -72,7 +96,7 @@ public abstract class AbstractMcpConformanceTest {
 
     @Test
     void testMcpInitializeWhenEnabled() {
-        assumeTrue(enableMcp());
+        assertThat(enableMcp()).as("this adapter claims MCP support").isTrue();
         try {
             Response response = probe().request(
                             "POST",
@@ -94,7 +118,7 @@ public abstract class AbstractMcpConformanceTest {
 
     @Test
     void testMcpValidatesJsonrpc() {
-        assumeTrue(enableMcp());
+        assertThat(enableMcp()).as("this adapter claims MCP support").isTrue();
         try {
             Response response = probe().request(
                             "POST",
@@ -110,7 +134,7 @@ public abstract class AbstractMcpConformanceTest {
 
     @Test
     void testMcpInitiateVersionNegotiation() {
-        assumeTrue(enableMcp());
+        assertThat(enableMcp()).as("this adapter claims MCP support").isTrue();
         try {
             Response response = probe().request(
                             "POST",
@@ -128,7 +152,7 @@ public abstract class AbstractMcpConformanceTest {
 
     @Test
     void testMcpRejectsUnsupportedProtocolVersionHeader() {
-        assumeTrue(enableMcp());
+        assertThat(enableMcp()).as("this adapter claims MCP support").isTrue();
         try {
             Response response = probe().request(
                             "POST",
@@ -144,7 +168,7 @@ public abstract class AbstractMcpConformanceTest {
 
     @Test
     void testMcpToolsListWhenEnabled() {
-        assumeTrue(enableMcp());
+        assertThat(enableMcp()).as("this adapter claims MCP support").isTrue();
         try {
             Response response = probe().request(
                             "POST",
@@ -167,11 +191,16 @@ public abstract class AbstractMcpConformanceTest {
 
     @Test
     void testMcpTransactionsToolMatchesAdapterSupport() {
-        assumeTrue(enableMcp());
+        assertThat(enableMcp()).as("this adapter claims MCP support").isTrue();
         try {
             Response panelsResponse = probe().get("/bootui/api/panels");
-            boolean expected =
-                    !"quarkus".equals(panelsResponse.json().path("platform").asText());
+            boolean expected = false;
+            for (JsonNode panel : panelsResponse.json().path("panels")) {
+                if ("transactions".equals(panel.path("id").asText())) {
+                    expected = panel.path("available").asBoolean(false);
+                    break;
+                }
+            }
 
             Response listResponse = probe().request(
                             "POST",
@@ -211,7 +240,7 @@ public abstract class AbstractMcpConformanceTest {
 
     @Test
     void testMcpPingWhenEnabled() {
-        assumeTrue(enableMcp());
+        assertThat(enableMcp()).as("this adapter claims MCP support").isTrue();
         try {
             Response response = probe().request(
                             "POST",
@@ -228,7 +257,7 @@ public abstract class AbstractMcpConformanceTest {
 
     @Test
     void testMcpUnknownToolRetainsSafeActionableError() {
-        assumeTrue(enableMcp());
+        assertThat(enableMcp()).as("this adapter claims MCP support").isTrue();
         try {
             Response response = probe().request(
                             "POST",
@@ -247,7 +276,7 @@ public abstract class AbstractMcpConformanceTest {
 
     @Test
     void testMcpPromptsWhenEnabled() {
-        assumeTrue(enableMcp());
+        assertThat(enableMcp()).as("this adapter claims MCP support").isTrue();
         try {
             Response list = probe().request(
                             "POST",
@@ -281,7 +310,7 @@ public abstract class AbstractMcpConformanceTest {
 
     @Test
     void testMcpNotificationReturns202() {
-        assumeTrue(enableMcp());
+        assertThat(enableMcp()).as("this adapter claims MCP support").isTrue();
         try {
             Response response = probe().request(
                             "POST",
@@ -297,7 +326,7 @@ public abstract class AbstractMcpConformanceTest {
 
     @Test
     void testRecognizedMcpNotificationReturns202() {
-        assumeTrue(enableMcp());
+        assertThat(enableMcp()).as("this adapter claims MCP support").isTrue();
         try {
             Response response = probe().request(
                             "POST",
