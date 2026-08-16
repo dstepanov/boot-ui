@@ -315,6 +315,30 @@ Enforced identically on Spring and Quarkus (`PanelAccessFilter` / `QuarkusPanelA
 | `bootui.panels.hibernate.enabled`   | `true`  | Show Hibernate/JPA mapping and configuration advisor findings.                    |
 | `bootui.panels.hibernate.read-only` | `false` | Disable the explicit Hibernate Advisor scan action while keeping results visible. |
 
+### Hibernate Statistics
+
+| Property                                       | Default | Description                                                                                         |
+| ---------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------- |
+| `bootui.panels.hibernate-statistics.enabled`   | `true`  | Show live Hibernate `SessionFactory` statistics when Hibernate ORM is available.                    |
+| `bootui.panels.hibernate-statistics.read-only` | `false` | Disable **Enable for this runtime** while keeping already-enabled statistics visible and readable. |
+
+**Enable for this runtime** starts statistics collection for the current application process only. It does not rewrite
+application configuration or reset existing counters, and it does not require confirmation. The action is blocked when
+either `bootui.read-only=true` or `bootui.panels.hibernate-statistics.read-only=true`. To enable collection persistently
+from startup, set `hibernate.generate_statistics=true` on Spring or
+`quarkus.hibernate-orm.statistics=true` on Quarkus, as recommended by
+[HIB-CONFIG-007](HIBERNATE-CHECKS.md#hib-config-007---hibernate-statistics-should-be-enabled-when-tuning).
+
+### Database
+
+| Property                                  | Default | Description                                                                                   |
+| ----------------------------------------- | ------- | --------------------------------------------------------------------------------------------- |
+| `bootui.panels.database-advisor.enabled`   | `true`  | Show read-only JDBC schema checks and the latest Database Advisor report.                     |
+| `bootui.panels.database-advisor.read-only` | `false` | Disable the explicit Database Advisor scan action while keeping the latest report visible.   |
+
+**Run Database checks** performs bounded, read-only JDBC schema introspection. It does not require confirmation and is
+blocked when either `bootui.read-only=true` or `bootui.panels.database-advisor.read-only=true`.
+
 ### Memory
 
 | Property                         | Default | Description                                                    |
