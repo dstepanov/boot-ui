@@ -1650,6 +1650,126 @@ Acceptance criteria:
 - Opening the panel only reads changelog and history metadata; no Liquibase update command is executed as a side effect.
 - Mutating Liquibase actions require browser confirmation and a non-read-only app and panel.
 
+### 5.17.4 Database Advisor Panel
+
+Purpose: answer "Which deterministic structural risks exist in the application's physical database schema, and where
+does that schema disagree with explicit Hibernate mappings?"
+
+Data sources:
+
+- Every discovered application `DataSource`, introspected through standard JDBC `DatabaseMetaData` for tables, columns,
+  primary keys, foreign keys, and indexes.
+- PostgreSQL and MySQL system catalogs for the bounded vendor-specific checks documented in
+  `docs/DATABASE-ADVISOR-CHECKS.md`.
+- The Hibernate/JPA metamodel, when available, for cross-referencing explicitly named entity tables, columns, foreign
+  keys, and unique constraints with the physical schema.
+
+Features:
+
+- Run an explicit, read-only scan over a fixed generic ruleset covering missing primary keys, foreign-key columns without
+  supporting indexes, duplicate or overlapping indexes, foreign-key/primary-key type mismatches, and redundant unique
+  indexes.
+- Augment the generic scan for PostgreSQL with invalid-index and sequence-exhaustion checks, and for MySQL with
+  non-InnoDB-engine and non-`utf8mb4` checks. Catalog-query failures do not fail the generic scan.
+- When a Hibernate metamodel is available, compare only entities with explicit `@Table(name = ...)` mappings against
+  the physical schema instead of guessing naming-strategy output.
+- Discover datasources through the same proxy-aware mechanism as Database Connection Pools and SQL Trace so delegating
+  or routing wrappers do not cause the same physical datasource to be scanned twice.
+- Report findings by severity and rule, with bounded sample evidence and remediation guidance, and cache the latest
+  report until the next explicit scan.
+
+Availability:
+
+- The generic rules run for every JDBC-reachable database vendor; databases without vendor-specific augmentation are
+  not treated as unsupported.
+- When no application `DataSource` is present or no datasource can be read, the panel returns a stable unavailable or
+  empty report with an explanatory status. When only some datasources fail, readable datasources are still evaluated
+  and the report status is `PARTIAL`.
+- Hibernate cross-reference checks are skipped with an explicit reason when either the physical schema or Hibernate
+  metamodel is unavailable; their absence does not prevent the generic JDBC rules from running.
+- Spring MVC, Spring WebFlux, and Quarkus use the same shared rule engine and report contract. Quarkus discovers
+  datasources through CDI and names multiple datasources positionally (`default`, `datasource-2`, ...) because the
+  adapter intentionally avoids an Agroal-specific qualifier dependency.
+
+Out of scope for the current release surface:
+
+- Executing DDL, querying application data, changing schema objects, or changing Hibernate mappings.
+- Workload or query-plan analysis, partition management, and index suggestions derived from observed query usage.
+- Guessing physical names for entities that rely on an implicit Hibernate naming strategy.
+
+Acceptance criteria:
+
+- Opening the panel returns only the cached report; schema introspection starts only after the developer explicitly
+  invokes `POST /bootui/api/database-advisor/scan`.
+- The scan action is blocked by global read-only mode and `bootui.panels.database-advisor.read-only`.
+- A failure in PostgreSQL/MySQL catalog augmentation does not discard generic JDBC findings, and an unreadable
+  datasource does not discard findings from readable datasources.
+- The panel never executes DDL or queries application rows, and findings are presented as deterministic review prompts
+  rather than automatic tuning instructions.
+- Equivalent inputs produce the same findings and report shape on Spring MVC, Spring WebFlux, and Quarkus, subject only
+  to the documented Quarkus datasource-naming difference.
+
+### 5.17.5 Transactions Panel
+
+Purpose: answer "Which transaction boundaries recently ran, how did they complete, how were they nested, and which ones
+were slow or held multiple JDBC connections?"
+
+Data sources:
+
+- Spring Framework's `TransactionExecutionListener` SPI, registered without replacing existing listeners against every
+  discovered `ConfigurableTransactionManager`.
+- The bounded, framework-neutral `TransactionRecorder`.
+- SQL Trace's existing thread and time-window correlation for per-transaction SQL-statement and distinct-connection
+  counts.
+- The active Micrometer/W3C trace context when a trace id is available.
+
+Features:
+
+- Capture begin, commit, rollback, and failure outcomes for observed transaction boundaries, including the declared
+  boundary name, best-effort `NEW` or `PARTICIPATING` propagation classification, active JDBC isolation, read-only flag,
+  start/end timestamps, duration, thread, trace id, and error details.
+- Retain completed transactions most-recent-first in a configurable bounded ring buffer and render parent/child links
+  as a nested transaction tree.
+- Report aggregate total, average, and maximum duration; commit, rollback, and unknown counts; nested-transaction count;
+  and configurable slow-transaction and connection-hold threshold counts.
+- Correlate captured boundaries with SQL Trace without adding a second SQL instrumentation layer.
+- Provide explicit **Pause/Resume** and confirmation-gated **Clear** actions. Pausing preserves retained entries and does
+  not deregister the listener.
+- Stream coalesced change notifications over `/bootui/api/transactions/stream` when a transaction completes, recording
+  changes state, or the buffer is cleared. The browser closes the stream when auto-refresh is disabled or the tab is
+  hidden and retains manual refresh as a fallback.
+
+Availability:
+
+- Spring MVC and Spring WebFlux capture boundaries from configurable blocking transaction managers. BootUI contributes
+  its listener through Spring Boot's transaction-manager customization and completes registration for user-defined
+  managers after singleton initialization.
+- The panel returns a clear unavailable report when transaction capture is disabled, no
+  `ConfigurableTransactionManager` is present, or capture is otherwise not configured.
+- A WebFlux application backed only by `ReactiveTransactionManager` (R2DBC) is explicitly unavailable because Spring's
+  transaction-execution listener hook exists only on the blocking transaction-manager SPI.
+- Transactions are not applicable on Quarkus. Narayana JTA and the CDI `@Transactional` interceptor expose no comparable
+  per-boundary listener without invasive interception, so the Quarkus adapter reports the panel unavailable rather than
+  providing lower-fidelity capture.
+
+Out of scope for the current release surface:
+
+- Capturing R2DBC-only transaction boundaries or adding an invasive Quarkus transaction interceptor.
+- Changing transaction propagation, isolation, rollback rules, or application transaction-manager configuration.
+- Retaining an unbounded transaction history or recording application payloads and SQL parameter values.
+
+Acceptance criteria:
+
+- Listener registration composes with the application's transaction management and listeners; BootUI never wraps or
+  replaces a transaction manager.
+- Retention is bounded, nested boundaries preserve parent/child relationships while retained, and evicted parents do
+  not hide retained child entries.
+- `POST /bootui/api/transactions/recording` and `POST /bootui/api/transactions/clear` are blocked by global read-only
+  mode and `bootui.panels.transactions.read-only`; clearing additionally requires explicit browser confirmation.
+- Spring MVC and Spring WebFlux expose the same report and action contract, with equivalent SSE change semantics.
+- R2DBC-only WebFlux applications and Quarkus return an explained unavailable state rather than a silently empty
+  transaction list; the Quarkus adapter does not advertise the `get_transactions` MCP tool.
+
 ### 5.18 Cache Panel
 
 Purpose: answer "Which cache managers and caches exist, how are they used, and can I clear them during local
