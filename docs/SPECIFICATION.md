@@ -1697,20 +1697,31 @@ Data sources:
 
 - Every discovered application `DataSource`, introspected through standard JDBC `DatabaseMetaData` for tables, columns,
   primary keys, foreign keys, and indexes.
-- PostgreSQL and MySQL system catalogs for the bounded vendor-specific checks documented in
-  `docs/DATABASE-ADVISOR-CHECKS.md`.
-- The Hibernate/JPA metamodel, when available, for cross-referencing explicitly named entity tables, columns, foreign
-  keys, and unique constraints with the physical schema.
+- PostgreSQL, MySQL, MariaDB, and Oracle (19c+) system catalogs for the bounded vendor-specific checks documented in
+  `docs/DATABASE-ADVISOR-CHECKS.md`. Oracle catalog reads use only `ALL_*` dictionary views and
+  `SYS_CONTEXT('USERENV', ...)`, scoped to the connected session's `CURRENT_SCHEMA`, with no elevated privilege, no
+  application-row query, no database link, and no production `ojdbc` dependency.
+- The Hibernate/JPA metamodel, when available, for cross-referencing explicitly named entity tables (including
+  `@SecondaryTable`), columns, foreign keys, unique constraints, and sequence generators with the physical schema.
 
 Features:
 
-- Run an explicit, read-only scan over a fixed generic ruleset covering missing primary keys, foreign-key columns without
-  supporting indexes, duplicate or overlapping indexes, foreign-key/primary-key type mismatches, and redundant unique
-  indexes.
-- Augment the generic scan for PostgreSQL with invalid-index and sequence-exhaustion checks, and for MySQL with
-  non-InnoDB-engine and non-`utf8mb4` checks. Catalog-query failures do not fail the generic scan.
-- When a Hibernate metamodel is available, compare only entities with explicit `@Table(name = ...)` mappings against
-  the physical schema instead of guessing naming-strategy output.
+- Run an explicit, read-only scan over a fixed generic ruleset covering missing primary keys, foreign-key columns
+  without supporting indexes, duplicate or overlapping indexes, foreign-key/primary-key type mismatches, redundant
+  unique indexes, duplicate foreign key constraints, narrow auto-generated primary keys, and composite foreign keys or
+  unique indexes with partially nullable columns.
+- Augment the generic scan for PostgreSQL with invalid-index (excluding an index still building `CONCURRENTLY`),
+  sequence-exhaustion, `NOT VALID` constraint, and missing-replica-identity checks; for MySQL/MariaDB with
+  non-InnoDB-engine, non-`utf8mb4`, and `AUTO_INCREMENT`-exhaustion checks; and for Oracle with unusable-index,
+  disabled/unvalidated-constraint, and sequence/identity-exhaustion checks. A driver-reported "Oracle" product name is
+  confirmed against the server's version banner before Oracle augmentation runs, since some Oracle-compatible
+  databases report the same product name; Tibero, OceanBase, EDB Postgres Advanced Server, and H2's Oracle
+  compatibility mode are never classified as Oracle. Catalog-query failures do not fail the generic scan.
+- When a Hibernate metamodel is available, compare only entities with explicit `@Table(name = ...)` (and
+  `@SecondaryTable`) mappings against the physical schema instead of guessing naming-strategy output. Composite
+  foreign key matching tolerates the physical constraint's own column order but requires the same child-to-parent
+  pairing, and an association explicitly declaring `@ForeignKey(ConstraintMode.NO_CONSTRAINT)` is excluded from the
+  missing-constraint check.
 - Discover datasources through the same proxy-aware mechanism as Database Connection Pools and SQL Trace so delegating
   or routing wrappers do not cause the same physical datasource to be scanned twice.
 - Report findings by severity and rule, with bounded sample evidence and remediation guidance, and cache the latest
@@ -1734,14 +1745,17 @@ Out of scope for the current release surface:
 - Executing DDL, querying application data, changing schema objects, or changing Hibernate mappings.
 - Workload or query-plan analysis, partition management, and index suggestions derived from observed query usage.
 - Guessing physical names for entities that rely on an implicit Hibernate naming strategy.
+- Oracle orphaned-entry, chained-row, unused-index, fragmentation, and sequence-gap warnings, and any AWR/ASH-derived
+  finding, none of which can be evaluated from `ALL_*` views alone without an elevated role or workload assumptions
+  this advisor does not make.
 
 Acceptance criteria:
 
 - Opening the panel returns only the cached report; schema introspection starts only after the developer explicitly
   invokes `POST /bootui/api/database-advisor/scan`.
 - The scan action is blocked by global read-only mode and `bootui.panels.database-advisor.read-only`.
-- A failure in PostgreSQL/MySQL catalog augmentation does not discard generic JDBC findings, and an unreadable
-  datasource does not discard findings from readable datasources.
+- A failure in PostgreSQL/MySQL/MariaDB/Oracle catalog augmentation does not discard generic JDBC findings, and an
+  unreadable datasource does not discard findings from readable datasources.
 - The panel never executes DDL or queries application rows, and findings are presented as deterministic review prompts
   rather than automatic tuning instructions.
 - Equivalent inputs produce the same findings and report shape on Spring MVC, Spring WebFlux, and Quarkus, subject only

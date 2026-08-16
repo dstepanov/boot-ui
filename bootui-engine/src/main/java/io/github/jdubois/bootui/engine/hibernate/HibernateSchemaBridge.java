@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.engine.hibernate;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -27,6 +28,9 @@ import java.util.List;
 public final class HibernateSchemaBridge {
 
     private static final String TABLE_ANNOTATION = "jakarta.persistence.Table";
+    private static final String SECONDARY_TABLE_ANNOTATION = "jakarta.persistence.SecondaryTable";
+    private static final String SECONDARY_TABLES_ANNOTATION = "jakarta.persistence.SecondaryTables";
+    private static final String NO_CONSTRAINT = "NO_CONSTRAINT";
 
     private HibernateSchemaBridge() {}
 
@@ -47,6 +51,9 @@ public final class HibernateSchemaBridge {
         List<MappedColumnFacts> columns = new ArrayList<>();
         List<MappedUniqueConstraintFacts> uniqueConstraints =
                 new ArrayList<>(tableUniqueConstraints(table, entity.name()));
+        List<MappedSecondaryTableFacts> secondaryTables = secondaryTables(entity.javaType());
+        uniqueConstraints.addAll(secondaryTableUniqueConstraints(entity.javaType(), entity.name()));
+        List<MappedSequenceGeneratorFacts> sequenceGenerators = new ArrayList<>();
         for (HibernateAttributeModel attribute : entity.attributes()) {
             if (attribute.isTransient()) {
                 continue;
@@ -59,9 +66,143 @@ public final class HibernateSchemaBridge {
                 continue;
             }
             addColumn(attribute, columns, uniqueConstraints);
+            addSequenceGenerator(attribute, sequenceGenerators);
         }
         return new MappedEntityFacts(
-                entity.name(), tableName, schema, catalog, foreignKeys, columns, uniqueConstraints);
+                entity.name(),
+                tableName,
+                schema,
+                catalog,
+                foreignKeys,
+                columns,
+                uniqueConstraints,
+                secondaryTables,
+                sequenceGenerators);
+    }
+
+    /**
+     * Reads a {@code @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "x")} attribute's
+     * co-located {@code @SequenceGenerator(name = "x", sequenceName = "...", allocationSize = ...)}, when both
+     * annotations are on the same attribute and the generator names match — the common, unambiguous case.
+     *
+     * <p>A class-level {@code @SequenceGenerator} shared by generator name only (not declared on the {@code
+     * @Id} attribute itself), a missing or blank {@code sequenceName}, or a mismatched/absent generator name
+     * are all deliberately not resolved: guessing the physical sequence a generator name refers to risks
+     * comparing the wrong sequence's {@code INCREMENT BY} entirely.</p>
+     */
+    private static void addSequenceGenerator(
+            HibernateAttributeModel attribute, List<MappedSequenceGeneratorFacts> sequenceGenerators) {
+        if (!attribute.hasId()) {
+            return;
+        }
+        Annotation generatedValue = attribute.generatedValueAnnotation();
+        if (generatedValue == null || !"SEQUENCE".equals(attribute.annotationValueName(generatedValue, "strategy"))) {
+            return;
+        }
+        Annotation sequenceGenerator = attribute.sequenceGeneratorAnnotation();
+        if (sequenceGenerator == null) {
+            return;
+        }
+        String generatorName = attribute.annotationStringValue(generatedValue, "generator");
+        String declaredGeneratorName = attribute.annotationStringValue(sequenceGenerator, "name");
+        if (generatorName == null || !generatorName.equals(declaredGeneratorName)) {
+            return;
+        }
+        String sequenceName = attribute.annotationStringValue(sequenceGenerator, "sequenceName");
+        Integer allocationSize = attribute.annotationIntValue(sequenceGenerator, "allocationSize");
+        if (sequenceName == null || sequenceName.isBlank() || allocationSize == null) {
+            return;
+        }
+        sequenceGenerators.add(new MappedSequenceGeneratorFacts(attribute.description(), sequenceName, allocationSize));
+    }
+
+    /**
+     * Reads every {@code @SecondaryTable} declared on the entity (directly or via a plural
+     * {@code @SecondaryTables}), across the mapped superclass hierarchy the same way {@link #tableAnnotation}
+     * walks it. An entity that splits its columns across more than one physical table needs each of them known
+     * so a mapped item explicitly pinned to one (via {@code @Column(table=...)}/{@code @JoinColumn(table=...)})
+     * can be checked against the table it actually lives in, instead of the primary table.
+     */
+    private static List<MappedSecondaryTableFacts> secondaryTables(Class<?> javaType) {
+        List<MappedSecondaryTableFacts> tables = new ArrayList<>();
+        Class<?> current = javaType;
+        while (current != null && current != Object.class) {
+            for (Annotation annotation : current.getDeclaredAnnotations()) {
+                String typeName = annotation.annotationType().getName();
+                if (SECONDARY_TABLE_ANNOTATION.equals(typeName)) {
+                    addSecondaryTable(annotation, tables);
+                } else if (SECONDARY_TABLES_ANNOTATION.equals(typeName)) {
+                    Object value = annotationValue(annotation, "value");
+                    if (value instanceof Object[] members) {
+                        for (Object member : members) {
+                            if (member instanceof Annotation secondaryTable) {
+                                addSecondaryTable(secondaryTable, tables);
+                            }
+                        }
+                    }
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return tables;
+    }
+
+    private static void addSecondaryTable(Annotation secondaryTable, List<MappedSecondaryTableFacts> tables) {
+        String name = annotationString(secondaryTable, "name");
+        if (name == null) {
+            return;
+        }
+        tables.add(new MappedSecondaryTableFacts(
+                name, annotationString(secondaryTable, "schema"), annotationString(secondaryTable, "catalog")));
+    }
+
+    /** {@code @SecondaryTable(uniqueConstraints=...)}, one secondary table at a time. */
+    private static List<MappedUniqueConstraintFacts> secondaryTableUniqueConstraints(
+            Class<?> javaType, String entityName) {
+        List<MappedUniqueConstraintFacts> facts = new ArrayList<>();
+        Class<?> current = javaType;
+        while (current != null && current != Object.class) {
+            for (Annotation annotation : current.getDeclaredAnnotations()) {
+                String typeName = annotation.annotationType().getName();
+                if (SECONDARY_TABLE_ANNOTATION.equals(typeName)) {
+                    facts.addAll(secondaryTableUniqueConstraintsOf(annotation, entityName));
+                } else if (SECONDARY_TABLES_ANNOTATION.equals(typeName)) {
+                    Object value = annotationValue(annotation, "value");
+                    if (value instanceof Object[] members) {
+                        for (Object member : members) {
+                            if (member instanceof Annotation secondaryTable) {
+                                facts.addAll(secondaryTableUniqueConstraintsOf(secondaryTable, entityName));
+                            }
+                        }
+                    }
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return facts;
+    }
+
+    private static List<MappedUniqueConstraintFacts> secondaryTableUniqueConstraintsOf(
+            Annotation secondaryTable, String entityName) {
+        String tableName = annotationString(secondaryTable, "name");
+        if (tableName == null) {
+            return List.of();
+        }
+        Object value = annotationValue(secondaryTable, "uniqueConstraints");
+        if (!(value instanceof Object[] uniqueConstraints)) {
+            return List.of();
+        }
+        List<MappedUniqueConstraintFacts> facts = new ArrayList<>();
+        for (Object uniqueConstraint : uniqueConstraints) {
+            Object columnNames = annotationValue(uniqueConstraint, "columnNames");
+            if (columnNames instanceof String[] names && names.length > 0) {
+                facts.add(new MappedUniqueConstraintFacts(
+                        entityName + " @SecondaryTable(" + tableName + ") unique constraint",
+                        List.of(names),
+                        tableName));
+            }
+        }
+        return facts;
     }
 
     private static void addColumn(
@@ -81,6 +222,7 @@ public final class HibernateSchemaBridge {
                 || attribute.isEnumAttribute()
                 || attribute.enumeratedAnnotation() != null
                 || attribute.isLob();
+        String tableName = attribute.annotationStringValue(column, "table");
         columns.add(new MappedColumnFacts(
                 attribute.description(),
                 columnName,
@@ -89,10 +231,16 @@ public final class HibernateSchemaBridge {
                 declaredLength,
                 attribute.isLob(),
                 ambiguousType,
-                attribute.hasId()));
+                attribute.hasId(),
+                blankToNull(tableName)));
         if (Boolean.TRUE.equals(attribute.annotationBooleanValue(column, "unique"))) {
-            uniqueConstraints.add(new MappedUniqueConstraintFacts(attribute.description(), List.of(columnName)));
+            uniqueConstraints.add(new MappedUniqueConstraintFacts(
+                    attribute.description(), List.of(columnName), blankToNull(tableName)));
         }
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     /**
@@ -111,11 +259,29 @@ public final class HibernateSchemaBridge {
     }
 
     private static void addForeignKey(HibernateAttributeModel attribute, List<MappedForeignKeyFacts> foreignKeys) {
-        List<String> columns = foreignKeyColumns(attribute);
-        if (columns.isEmpty()) {
+        List<JoinColumnFact> joinColumns = foreignKeyColumns(attribute);
+        if (joinColumns.isEmpty()) {
             return;
         }
-        foreignKeys.add(new MappedForeignKeyFacts(attribute.description(), columns));
+        List<String> columns = joinColumns.stream().map(JoinColumnFact::name).toList();
+        List<String> referencedColumns =
+                joinColumns.stream().map(JoinColumnFact::referencedColumnName).toList();
+        String tableName = joinColumns.stream()
+                .map(JoinColumnFact::table)
+                .filter(name -> name != null && !name.isBlank())
+                .findFirst()
+                .orElse(null);
+        boolean constraintExpected = joinColumns.stream().noneMatch(JoinColumnFact::noConstraint);
+        TargetTable target = targetTable(attribute);
+        foreignKeys.add(new MappedForeignKeyFacts(
+                attribute.description(),
+                columns,
+                referencedColumns,
+                tableName,
+                constraintExpected,
+                target.name(),
+                target.schema(),
+                target.catalog()));
     }
 
     private static boolean isOwningToOne(HibernateAttributeModel attribute) {
@@ -131,12 +297,42 @@ public final class HibernateSchemaBridge {
     }
 
     /**
+     * The association's target entity's declared physical table, resolved the same conservative way as the
+     * owning entity's own table: only when the target class carries an explicit {@code @Table(name=...)}
+     * (directly or on a mapped superclass). {@code @ManyToOne}/{@code @OneToOne} always resolves to a
+     * non-collection attribute type, so the raw Java type of the attribute already is the target entity class.
+     *
+     * <p>Used only to double-check that a physical foreign key candidate actually references the table this
+     * association points at — never to guess a target for an entity with no explicit table name, which stays
+     * {@code null} here exactly like an unmapped owning entity.</p>
+     */
+    private static TargetTable targetTable(HibernateAttributeModel attribute) {
+        Class<?> rawType = attribute.rawType();
+        if (rawType == null) {
+            return TargetTable.UNRESOLVED;
+        }
+        Annotation table = tableAnnotation(rawType);
+        String name = annotationString(table, "name");
+        if (name == null) {
+            return TargetTable.UNRESOLVED;
+        }
+        return new TargetTable(name, annotationString(table, "schema"), annotationString(table, "catalog"));
+    }
+
+    private record TargetTable(String name, String schema, String catalog) {
+        static final TargetTable UNRESOLVED = new TargetTable(null, null, null);
+    }
+
+    /** One {@code @JoinColumn}'s resolved facts, before they are split across {@link MappedForeignKeyFacts}. */
+    private record JoinColumnFact(String name, String referencedColumnName, String table, boolean noConstraint) {}
+
+    /**
      * The owning side's join columns in declaration order: a single {@code @JoinColumn}, or every
      * {@code @JoinColumn} of a composite {@code @JoinColumns}. A composite association where any member has no
      * explicit name resolves to nothing at all — a partially-known composite key cannot be matched against a
      * physical index without guessing the rest.
      */
-    private static List<String> foreignKeyColumns(HibernateAttributeModel attribute) {
+    private static List<JoinColumnFact> foreignKeyColumns(HibernateAttributeModel attribute) {
         Annotation joinColumns = attribute.joinColumnsAnnotation();
         if (joinColumns != null) {
             return compositeJoinColumns(attribute, joinColumns);
@@ -146,15 +342,27 @@ public final class HibernateSchemaBridge {
             return List.of();
         }
         String name = attribute.annotationStringValue(joinColumn, "name");
-        return name == null || name.isBlank() ? List.of() : List.of(name);
+        if (name == null || name.isBlank()) {
+            return List.of();
+        }
+        return List.of(new JoinColumnFact(
+                name,
+                blankToNull(attribute.annotationStringValue(joinColumn, "referencedColumnName")),
+                attribute.annotationStringValue(joinColumn, "table"),
+                isNoConstraint(annotationValue(joinColumn, "foreignKey"))));
     }
 
-    private static List<String> compositeJoinColumns(HibernateAttributeModel attribute, Annotation joinColumns) {
+    private static List<JoinColumnFact> compositeJoinColumns(
+            HibernateAttributeModel attribute, Annotation joinColumns) {
+        // Per the Jakarta Persistence spec, a @ForeignKey declared on the @JoinColumns group governs the whole
+        // composite constraint; a provider may still honor one declared on an individual @JoinColumn, so either
+        // being NO_CONSTRAINT is enough to mean "no constraint is expected" for the whole association.
+        boolean groupNoConstraint = isNoConstraint(annotationValue(joinColumns, "foreignKey"));
         Object value = annotationValue(joinColumns, "value");
         if (!(value instanceof Object[] members) || members.length == 0) {
             return List.of();
         }
-        List<String> columns = new ArrayList<>();
+        List<JoinColumnFact> columns = new ArrayList<>();
         for (Object member : members) {
             if (!(member instanceof Annotation joinColumn)) {
                 return List.of();
@@ -163,9 +371,22 @@ public final class HibernateSchemaBridge {
             if (name == null || name.isBlank()) {
                 return List.of();
             }
-            columns.add(name);
+            columns.add(new JoinColumnFact(
+                    name,
+                    blankToNull(attribute.annotationStringValue(joinColumn, "referencedColumnName")),
+                    attribute.annotationStringValue(joinColumn, "table"),
+                    groupNoConstraint || isNoConstraint(annotationValue(joinColumn, "foreignKey"))));
         }
         return List.copyOf(columns);
+    }
+
+    /** {@code true} when a {@code @ForeignKey} annotation explicitly declares {@code ConstraintMode.NO_CONSTRAINT}. */
+    private static boolean isNoConstraint(Object foreignKeyAnnotation) {
+        if (foreignKeyAnnotation == null) {
+            return false;
+        }
+        Object mode = annotationValue(foreignKeyAnnotation, "value");
+        return mode instanceof Enum<?> enumValue && NO_CONSTRAINT.equals(enumValue.name());
     }
 
     /**
@@ -184,7 +405,8 @@ public final class HibernateSchemaBridge {
         for (Object uniqueConstraint : uniqueConstraints) {
             Object columnNames = annotationValue(uniqueConstraint, "columnNames");
             if (columnNames instanceof String[] names && names.length > 0) {
-                facts.add(new MappedUniqueConstraintFacts(entityName + " @Table unique constraint", List.of(names)));
+                facts.add(new MappedUniqueConstraintFacts(
+                        entityName + " @Table unique constraint", List.of(names), null));
             }
         }
         return facts;
@@ -234,7 +456,10 @@ public final class HibernateSchemaBridge {
      *     column names, in declaration order
      * @param columns basic mapped attributes with an explicit {@code @Column(name=...)}
      * @param uniqueConstraints single-column {@code @Column(unique=true)} attributes and multi-column
-     *     {@code @Table(uniqueConstraints=...)} constraints
+     *     {@code @Table(uniqueConstraints=...)}/{@code @SecondaryTable(uniqueConstraints=...)} constraints
+     * @param secondaryTables every {@code @SecondaryTable} declared on the entity, explicitly named
+     * @param sequenceGenerators {@code @GeneratedValue(strategy=SEQUENCE)} attributes with a co-located,
+     *     matching {@code @SequenceGenerator} that explicitly names a physical {@code sequenceName}
      */
     public record MappedEntityFacts(
             String entityName,
@@ -243,12 +468,16 @@ public final class HibernateSchemaBridge {
             String explicitCatalog,
             List<MappedForeignKeyFacts> foreignKeys,
             List<MappedColumnFacts> columns,
-            List<MappedUniqueConstraintFacts> uniqueConstraints) {
+            List<MappedUniqueConstraintFacts> uniqueConstraints,
+            List<MappedSecondaryTableFacts> secondaryTables,
+            List<MappedSequenceGeneratorFacts> sequenceGenerators) {
 
         public MappedEntityFacts {
             foreignKeys = List.copyOf(foreignKeys);
             columns = List.copyOf(columns);
             uniqueConstraints = List.copyOf(uniqueConstraints);
+            secondaryTables = List.copyOf(secondaryTables);
+            sequenceGenerators = List.copyOf(sequenceGenerators);
         }
 
         /** Convenience constructor for callers with no explicit schema/catalog and no unique constraints. */
@@ -257,7 +486,7 @@ public final class HibernateSchemaBridge {
                 String explicitTableName,
                 List<MappedForeignKeyFacts> foreignKeys,
                 List<MappedColumnFacts> columns) {
-            this(entityName, explicitTableName, null, null, foreignKeys, columns, List.of());
+            this(entityName, explicitTableName, null, null, foreignKeys, columns, List.of(), List.of(), List.of());
         }
 
         /** Convenience constructor for callers with no explicit schema/catalog. */
@@ -267,7 +496,59 @@ public final class HibernateSchemaBridge {
                 List<MappedForeignKeyFacts> foreignKeys,
                 List<MappedColumnFacts> columns,
                 List<MappedUniqueConstraintFacts> uniqueConstraints) {
-            this(entityName, explicitTableName, null, null, foreignKeys, columns, uniqueConstraints);
+            this(
+                    entityName,
+                    explicitTableName,
+                    null,
+                    null,
+                    foreignKeys,
+                    columns,
+                    uniqueConstraints,
+                    List.of(),
+                    List.of());
+        }
+
+        /** Convenience constructor for callers with no {@code @SecondaryTable}s or sequence generators. */
+        public MappedEntityFacts(
+                String entityName,
+                String explicitTableName,
+                String explicitSchema,
+                String explicitCatalog,
+                List<MappedForeignKeyFacts> foreignKeys,
+                List<MappedColumnFacts> columns,
+                List<MappedUniqueConstraintFacts> uniqueConstraints) {
+            this(
+                    entityName,
+                    explicitTableName,
+                    explicitSchema,
+                    explicitCatalog,
+                    foreignKeys,
+                    columns,
+                    uniqueConstraints,
+                    List.of(),
+                    List.of());
+        }
+
+        /** Convenience constructor for callers with no sequence generators. */
+        public MappedEntityFacts(
+                String entityName,
+                String explicitTableName,
+                String explicitSchema,
+                String explicitCatalog,
+                List<MappedForeignKeyFacts> foreignKeys,
+                List<MappedColumnFacts> columns,
+                List<MappedUniqueConstraintFacts> uniqueConstraints,
+                List<MappedSecondaryTableFacts> secondaryTables) {
+            this(
+                    entityName,
+                    explicitTableName,
+                    explicitSchema,
+                    explicitCatalog,
+                    foreignKeys,
+                    columns,
+                    uniqueConstraints,
+                    secondaryTables,
+                    List.of());
         }
 
         /** {@code schema.table} when a schema was declared, otherwise the bare declared table name. */
@@ -279,11 +560,85 @@ public final class HibernateSchemaBridge {
         }
     }
 
-    /** @param attributeDescription a human-readable "Entity.attribute" description for finding details */
-    public record MappedForeignKeyFacts(String attributeDescription, List<String> columns) {
+    /**
+     * One {@code @SecondaryTable} an entity's columns can be split across.
+     *
+     * @param name the explicit {@code @SecondaryTable(name=...)} value
+     * @param schema the explicit {@code @SecondaryTable(schema=...)} value, or {@code null}
+     * @param catalog the explicit {@code @SecondaryTable(catalog=...)} value, or {@code null}
+     */
+    public record MappedSecondaryTableFacts(String name, String schema, String catalog) {
+
+        /** {@code schema.table} when a schema was declared, otherwise the bare table name. */
+        public String qualifiedName() {
+            return schema == null || schema.isBlank() ? name : schema + "." + name;
+        }
+    }
+
+    /**
+     * A {@code @GeneratedValue(strategy = GenerationType.SEQUENCE)} attribute's co-located, explicitly-named
+     * {@code @SequenceGenerator}: the physical sequence it points at and the block size Hibernate assumes it
+     * advances by on every {@code nextval} call.
+     *
+     * @param attributeDescription a human-readable "Entity.attribute" description for finding details
+     * @param sequenceName the explicit {@code @SequenceGenerator(sequenceName = ...)} value
+     * @param allocationSize the declared {@code @SequenceGenerator(allocationSize = ...)}
+     */
+    public record MappedSequenceGeneratorFacts(String attributeDescription, String sequenceName, int allocationSize) {}
+
+    /**
+     * @param attributeDescription a human-readable "Entity.attribute" description for finding details
+     * @param columns the referencing (child) join column names, in declaration order
+     * @param referencedColumns the explicit {@code @JoinColumn(referencedColumnName=...)} for each entry in
+     *     {@code columns}, positionally aligned; {@code null} for a join column that left it unspecified (the
+     *     common case, which JPA defaults to the referenced entity's own primary key column)
+     * @param tableName the explicit {@code @JoinColumn(table=...)}/{@code @JoinColumns(... )} secondary-table
+     *     name the join column(s) belong to, or {@code null} for the entity's primary table
+     * @param constraintExpected {@code false} when the mapping explicitly declares
+     *     {@code @ForeignKey(ConstraintMode.NO_CONSTRAINT)}, meaning the absence of a physical foreign key
+     *     constraint is intentional and must not be reported as a gap
+     * @param targetTableName the association's target entity's explicit {@code @Table(name=...)}, or
+     *     {@code null} when the target relies on the default naming strategy (not guessed)
+     * @param targetSchema the target entity's explicit {@code @Table(schema=...)}, or {@code null}
+     * @param targetCatalog the target entity's explicit {@code @Table(catalog=...)}, or {@code null}
+     */
+    public record MappedForeignKeyFacts(
+            String attributeDescription,
+            List<String> columns,
+            List<String> referencedColumns,
+            String tableName,
+            boolean constraintExpected,
+            String targetTableName,
+            String targetSchema,
+            String targetCatalog) {
 
         public MappedForeignKeyFacts {
             columns = List.copyOf(columns);
+            // referencedColumns legitimately contains null entries (an unspecified referencedColumnName), so
+            // it cannot use List.copyOf, which rejects null elements outright.
+            referencedColumns = Collections.unmodifiableList(new ArrayList<>(referencedColumns));
+        }
+
+        /**
+         * Convenience constructor for callers with no referenced-column/table/constraint-mode/target-table
+         * information: every join column's referenced column is unknown, a constraint is expected, and the
+         * target table is unresolved.
+         */
+        public MappedForeignKeyFacts(String attributeDescription, List<String> columns) {
+            this(
+                    attributeDescription,
+                    columns,
+                    columns.stream().map(column -> (String) null).toList(),
+                    null,
+                    true,
+                    null,
+                    null,
+                    null);
+        }
+
+        /** {@code true} when the target entity's physical table is known, for matching against a physical FK. */
+        public boolean targetTableResolved() {
+            return targetTableName != null && !targetTableName.isBlank();
         }
     }
 
@@ -296,6 +651,8 @@ public final class HibernateSchemaBridge {
      * @param ambiguousType whether a converter/{@code @Enumerated}/{@code @Lob} decides the persisted shape,
      *     so the Java type says nothing reliable about the physical column
      * @param identifier whether the attribute is the entity's {@code @Id}
+     * @param tableName the explicit {@code @Column(table=...)} secondary-table name, or {@code null} for the
+     *     entity's primary table
      */
     public record MappedColumnFacts(
             String attributeDescription,
@@ -305,12 +662,13 @@ public final class HibernateSchemaBridge {
             Integer declaredLength,
             boolean lob,
             boolean ambiguousType,
-            boolean identifier) {
+            boolean identifier,
+            String tableName) {
 
-        /** Convenience constructor for callers with no length/LOB/converter information. */
+        /** Convenience constructor for callers with no length/LOB/converter/table information. */
         public MappedColumnFacts(
                 String attributeDescription, String columnName, Boolean nullable, String javaTypeSimpleName) {
-            this(attributeDescription, columnName, nullable, javaTypeSimpleName, null, false, false, false);
+            this(attributeDescription, columnName, nullable, javaTypeSimpleName, null, false, false, false, null);
         }
 
         /** Convenience constructor for callers with an explicit declared length only. */
@@ -320,20 +678,37 @@ public final class HibernateSchemaBridge {
                 Boolean nullable,
                 String javaTypeSimpleName,
                 Integer declaredLength) {
-            this(attributeDescription, columnName, nullable, javaTypeSimpleName, declaredLength, false, false, false);
+            this(
+                    attributeDescription,
+                    columnName,
+                    nullable,
+                    javaTypeSimpleName,
+                    declaredLength,
+                    false,
+                    false,
+                    false,
+                    null);
         }
     }
 
     /**
-     * A mapped unique constraint, either a single-column {@code @Column(unique=true)} attribute or a
-     * multi-column {@code @Table(uniqueConstraints=...)} constraint.
+     * A mapped unique constraint: a single-column {@code @Column(unique=true)} attribute, a multi-column
+     * {@code @Table(uniqueConstraints=...)} constraint, or a {@code @SecondaryTable(uniqueConstraints=...)}
+     * constraint.
      *
      * @param description a human-readable description for finding details
+     * @param tableName the secondary table this constraint belongs to, or {@code null} for the entity's
+     *     primary table
      */
-    public record MappedUniqueConstraintFacts(String description, List<String> columns) {
+    public record MappedUniqueConstraintFacts(String description, List<String> columns, String tableName) {
 
         public MappedUniqueConstraintFacts {
             columns = List.copyOf(columns);
+        }
+
+        /** Convenience constructor for a primary-table constraint. */
+        public MappedUniqueConstraintFacts(String description, List<String> columns) {
+            this(description, columns, null);
         }
     }
 }

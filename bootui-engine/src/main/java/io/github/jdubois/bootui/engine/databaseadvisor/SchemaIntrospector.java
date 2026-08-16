@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -108,17 +109,30 @@ final class SchemaIntrospector {
         String productName = safeString(metaData::getDatabaseProductName);
         String productVersion = safeString(metaData::getDatabaseProductVersion);
         String url = safeString(metaData::getURL);
-        Dialect dialect = Dialect.detect(productName, productVersion, url);
+        Dialect dialect = resolveOracle(
+                connection,
+                Dialect.detect(productName, productVersion, url),
+                dataSourceName,
+                diagnostics,
+                budget,
+                limits);
         DatabaseVersion version = readVersion(metaData, productVersion);
         DialectCapabilities capabilities = DialectCapabilities.of(dialect, version);
 
-        TableReadResult tableResult = readTables(dataSourceName, connection, metaData, budget, limits, diagnostics);
+        String oracleSchema = dialect == Dialect.ORACLE
+                ? oracleCurrentSchema(connection, dataSourceName, diagnostics, budget, limits)
+                : null;
+
+        TableReadResult tableResult =
+                readTables(dataSourceName, connection, metaData, oracleSchema, budget, limits, diagnostics);
 
         VendorFindings.Builder vendorFindings = VendorFindings.builder();
         if (dialect == Dialect.POSTGRESQL) {
             PostgresCatalogReader.read(connection, version, capabilities, budget, limits, vendorFindings);
         } else if (dialect.isMySqlFamily()) {
             MySqlCatalogReader.read(connection, dialect, capabilities, budget, limits, vendorFindings);
+        } else if (dialect == Dialect.ORACLE) {
+            OracleCatalogReader.read(connection, oracleSchema, version, capabilities, budget, limits, vendorFindings);
         }
         VendorFindings findings = vendorFindings.build();
         for (VendorAugmentation<?> failure : findings.failures()) {
@@ -145,18 +159,133 @@ final class SchemaIntrospector {
                 null);
     }
 
+    /**
+     * A driver-reported {@code "Oracle"} product name is not proof of a genuine Oracle Database server: some
+     * Oracle-compatible databases (OceanBase's driver, in its 2.2.x default or with
+     * {@code useCompatibleMetadata=true}) report it too. {@code v$version.banner} (falling back to
+     * {@code product_component_version.product} for a role locked out of {@code v$} views, which are not
+     * always granted to {@code PUBLIC}) is Oracle's own self-identification: a genuine server's banner has
+     * "Oracle" appearing before "Database" (matching both the long-standing "Oracle Database 19c ..." banner
+     * and the newer "Oracle AI Database 26ai ..." rebrand). OceanBase's own banner reads
+     * {@code "OceanBase Database ... (Oracle Compatible Mode)"} — "Database" appears <em>before</em> "Oracle"
+     * there, so the order-sensitive check still tells them apart. Tibero and EDB Postgres Advanced Server
+     * report their own product names and never collide on the product name check at all. A server that
+     * cannot confirm itself this way is treated as {@link Dialect#GENERIC}: it still gets the full generic
+     * JDBC ruleset, just not Oracle-specific augmentation it may not actually support.
+     */
+    static Dialect resolveOracle(
+            Connection connection, Dialect detected, String dataSourceName, List<SchemaDiagnostic> diagnostics) {
+        return resolveOracle(
+                connection,
+                detected,
+                dataSourceName,
+                diagnostics,
+                ScanBudget.of(DatabaseAdvisorLimits.DEFAULTS.scanBudget()),
+                DatabaseAdvisorLimits.DEFAULTS);
+    }
+
+    private static Dialect resolveOracle(
+            Connection connection,
+            Dialect detected,
+            String dataSourceName,
+            List<SchemaDiagnostic> diagnostics,
+            ScanBudget budget,
+            DatabaseAdvisorLimits limits) {
+        if (detected != Dialect.ORACLE) {
+            return detected;
+        }
+        if (budget.exhausted()) {
+            diagnostics.add(SchemaDiagnostic.warning(
+                    dataSourceName, "The scan budget ran out before Oracle Database could be confirmed."));
+            return Dialect.GENERIC;
+        }
+        if (reportsAnOracleBanner(connection, "select banner from v$version", budget, limits)
+                || reportsAnOracleBanner(connection, "select product from product_component_version", budget, limits)) {
+            return Dialect.ORACLE;
+        }
+        diagnostics.add(SchemaDiagnostic.info(
+                dataSourceName,
+                "The driver reported an Oracle-compatible product name, but neither v$version nor "
+                        + "product_component_version confirmed a genuine Oracle Database/Oracle AI Database "
+                        + "server; Oracle-specific catalog augmentation was not attempted."));
+        return Dialect.GENERIC;
+    }
+
+    private static boolean reportsAnOracleBanner(
+            Connection connection, String sql, ScanBudget budget, DatabaseAdvisorLimits limits) {
+        if (budget.exhausted()) {
+            return false;
+        }
+        try (Statement statement = connection.createStatement()) {
+            statement.setQueryTimeout(budget.remainingSecondsAtMost(limits.statementTimeoutSeconds()));
+            try (ResultSet rs = statement.executeQuery(sql)) {
+                while (rs.next()) {
+                    String banner = normalize(rs.getString(1));
+                    int oracleIndex = banner.indexOf("oracle");
+                    int databaseIndex = banner.indexOf("database");
+                    if (oracleIndex >= 0 && databaseIndex > oracleIndex) {
+                        return true;
+                    }
+                }
+            }
+        } catch (SQLException | RuntimeException ex) {
+            return false;
+        }
+        return false;
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * The connected session's {@code CURRENT_SCHEMA}, so the generic table scan and every Oracle-specific
+     * {@code ALL_*} query stay scoped to it — never to every schema the connected user can merely see.
+     */
+    private static String oracleCurrentSchema(
+            Connection connection,
+            String dataSourceName,
+            List<SchemaDiagnostic> diagnostics,
+            ScanBudget budget,
+            DatabaseAdvisorLimits limits) {
+        try {
+            if (budget.exhausted()) {
+                diagnostics.add(SchemaDiagnostic.warning(
+                        dataSourceName, "The scan budget ran out before Oracle's CURRENT_SCHEMA could be read."));
+                return null;
+            }
+            String schema =
+                    OracleSessionContext.read(connection, budget, limits).currentSchema();
+            if (schema == null || schema.isBlank()) {
+                diagnostics.add(SchemaDiagnostic.warning(
+                        dataSourceName,
+                        "Oracle's CURRENT_SCHEMA could not be determined; the scan may not be scoped to the "
+                                + "connected schema."));
+                return null;
+            }
+            return schema;
+        } catch (SQLException | RuntimeException ex) {
+            diagnostics.add(SchemaDiagnostic.warning(
+                    dataSourceName,
+                    "Oracle session context (CURRENT_SCHEMA) could not be read (" + describe(ex) + "); the scan "
+                            + "may not be scoped to the connected schema."));
+            return null;
+        }
+    }
+
     private record TableReadResult(List<TableModel> tables, boolean truncated) {}
 
     private static TableReadResult readTables(
             String dataSourceName,
             Connection connection,
             DatabaseMetaData metaData,
+            String schemaPattern,
             ScanBudget budget,
             DatabaseAdvisorLimits limits,
             List<SchemaDiagnostic> diagnostics)
             throws SQLException {
         String catalog = safeString(connection::getCatalog);
-        List<TableRef> refs = readTableRefs(dataSourceName, metaData, catalog, limits, diagnostics);
+        List<TableRef> refs = readTableRefs(dataSourceName, metaData, catalog, schemaPattern, limits, diagnostics);
         boolean truncated = refs.size() > limits.maxTables();
         if (truncated) {
             refs = refs.subList(0, limits.maxTables());
@@ -191,11 +320,13 @@ final class SchemaIntrospector {
             String dataSourceName,
             DatabaseMetaData metaData,
             String catalog,
+            String schemaPattern,
             DatabaseAdvisorLimits limits,
             List<SchemaDiagnostic> diagnostics)
             throws SQLException {
+        String escapedSchemaPattern = escapePattern(schemaPattern, searchStringEscape(metaData));
         try {
-            return readTableRefs(metaData, catalog, TABLE_TYPES, limits);
+            return readTableRefs(metaData, catalog, escapedSchemaPattern, schemaPattern, TABLE_TYPES, limits);
         } catch (SQLException ex) {
             // Not every driver accepts a table type it does not know; retry with the universal "TABLE" type
             // rather than losing the whole datasource over PostgreSQL's partitioned-table type.
@@ -203,20 +334,27 @@ final class SchemaIntrospector {
                     dataSourceName,
                     "The driver rejected the PARTITIONED TABLE type filter; retried with TABLE only (" + describe(ex)
                             + ")."));
-            return readTableRefs(metaData, catalog, FALLBACK_TABLE_TYPES, limits);
+            return readTableRefs(metaData, catalog, escapedSchemaPattern, schemaPattern, FALLBACK_TABLE_TYPES, limits);
         }
     }
 
     private static List<TableRef> readTableRefs(
-            DatabaseMetaData metaData, String catalog, String[] types, DatabaseAdvisorLimits limits)
+            DatabaseMetaData metaData,
+            String catalog,
+            String schemaPattern,
+            String exactSchema,
+            String[] types,
+            DatabaseAdvisorLimits limits)
             throws SQLException {
         List<TableRef> refs = new ArrayList<>();
-        try (ResultSet rs = metaData.getTables(catalog, null, "%", types)) {
+        try (ResultSet rs = metaData.getTables(catalog, schemaPattern, "%", types)) {
             // One row past the bound: seeing max + 1 candidates is what makes truncation observable.
             while (rs.next() && refs.size() <= limits.maxTables()) {
                 String tableSchema = rs.getString("TABLE_SCHEM");
                 String tableName = rs.getString("TABLE_NAME");
-                if (tableName == null || isSystemSchema(tableSchema)) {
+                if (tableName == null
+                        || isSystemSchema(tableSchema)
+                        || (exactSchema != null && !exactSchema.equals(tableSchema))) {
                     continue;
                 }
                 refs.add(new TableRef(rs.getString("TABLE_CAT"), tableSchema, tableName, rs.getString("TABLE_TYPE")));

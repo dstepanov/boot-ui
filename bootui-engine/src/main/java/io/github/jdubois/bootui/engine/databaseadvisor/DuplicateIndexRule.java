@@ -12,14 +12,18 @@ import java.util.List;
  * <p>The previous "same leading column" comparison flagged pairs that are not interchangeable at all. This
  * one requires every key part to match — column, direction, collation, prefix length, expression — plus the
  * same access method, the same partial predicate and the same visibility, and it refuses to suggest dropping
- * an index that carries a semantic guarantee the other does not:</p>
+ * an index that carries a semantic guarantee the other does not, or one this advisor cannot fully model:</p>
  *
  * <ul>
  *   <li>a <strong>unique</strong> index is never reported as the redundant one: {@code unique(a)} and
  *       {@code index(a, b)} look like a prefix pair but only the first enforces uniqueness of {@code a};</li>
  *   <li>the <strong>primary key's backing index</strong> is left out entirely — dropping it is not an
  *       option, and the redundant-unique-index case belongs to {@code DB-SCHEMA-005};</li>
- *   <li>a <strong>partial or invalid</strong> index is left out, since it is not equivalent to a full one.</li>
+ *   <li>a <strong>partial or invalid</strong> index is left out, since it is not equivalent to a full one;</li>
+ *   <li>on Oracle, an <strong>automatically created (constraint-backing), partitioned, or specialized</strong>
+ *       index — function-based, domain, bitmap, LOB, or index-organized-table — is left out: dropping a
+ *       constraint's own backing index is not the user's decision, and this advisor's leading-prefix
+ *       reasoning is written for ordinary B-tree indexes, not proven complete for those semantics.</li>
  * </ul>
  */
 final class DuplicateIndexRule extends AbstractDatabaseAdvisorRule {
@@ -33,7 +37,8 @@ final class DuplicateIndexRule extends AbstractDatabaseAdvisorRule {
                 "Detects a non-unique index whose ordered key parts (columns, direction, collation, prefix "
                         + "length, expressions) are a leading prefix of another index on the same table with the "
                         + "same access method, predicate and visibility. Unique indexes, primary key backing "
-                        + "indexes and partial/invalid indexes are excluded.",
+                        + "indexes, partial/invalid indexes, and (Oracle) automatic/partitioned/specialized "
+                        + "indexes are excluded.",
                 "Every additional index slows down INSERT/UPDATE/DELETE and consumes storage. When one index's "
                         + "key parts are a leading prefix of another's with identical semantics, the shorter one is "
                         + "usually redundant; review both definitions, and any index hints or constraints relying "
@@ -61,7 +66,10 @@ final class DuplicateIndexRule extends AbstractDatabaseAdvisorRule {
                 .filter(index -> index != primaryKeyIndex)
                 .filter(index -> !index.partial()
                         && !index.invalid()
-                        && !index.keyParts().isEmpty())
+                        && !index.keyParts().isEmpty()
+                        && !index.automatic()
+                        && !index.partitioned()
+                        && !index.specialized())
                 .toList();
         for (IndexModel shorter : candidates) {
             if (shorter.unique()) {

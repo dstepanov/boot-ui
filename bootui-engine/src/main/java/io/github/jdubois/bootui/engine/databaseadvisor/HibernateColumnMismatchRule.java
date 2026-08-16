@@ -41,8 +41,18 @@ final class HibernateColumnMismatchRule extends AbstractHibernateCrossReferenceR
     }
 
     @Override
-    void checkEntity(SchemaSnapshot schema, TableModel table, MappedEntityFacts entity, List<String> details) {
+    void checkEntity(
+            DatabaseAdvisorContext context,
+            MappedTableResolution primary,
+            MappedEntityFacts entity,
+            List<String> details) {
         for (MappedColumnFacts column : entity.columns()) {
+            MappedTableResolution resolution = resolveItemTable(context, entity, primary, column.tableName());
+            if (!resolution.resolved()) {
+                continue;
+            }
+            SchemaSnapshot schema = resolution.schema();
+            TableModel table = resolution.table();
             ColumnModel physical = table.column(column.columnName());
             if (physical == null) {
                 // A mapped column with no physical counterpart is DB-HIB-006's finding.

@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.engine.databaseadvisor;
 
 import io.github.jdubois.bootui.core.dto.DatabaseAdvisorRuleResultDto;
 import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedEntityFacts;
+import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedSecondaryTableFacts;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,7 +15,8 @@ import java.util.List;
  * mapped to {@code reporting.orders} is not silently satisfied by an {@code app.orders} in another schema.
  * Entities relying on the default naming strategy are not evaluated (their physical name is not guessed), and
  * a name that matches tables in more than one readable datasource is reported as ambiguous rather than
- * resolved arbitrarily.</p>
+ * resolved arbitrarily. Every declared {@code @SecondaryTable} is checked the same way, in addition to the
+ * primary table.</p>
  */
 final class HibernateMissingTableRule extends AbstractDatabaseAdvisorRule {
 
@@ -24,8 +26,9 @@ final class HibernateMissingTableRule extends AbstractDatabaseAdvisorRule {
                 "Mapped entity table not found in the physical schema",
                 DatabaseAdvisorCategory.HIBERNATE_MAPPING,
                 DatabaseAdvisorRuleSupport.MEDIUM,
-                "Cross-references entities with an explicit @Table(name=...) — honoring the declared "
-                        + "catalog/schema — against the physical schema's tables across every readable datasource.",
+                "Cross-references entities with an explicit @Table(name=...) and every declared "
+                        + "@SecondaryTable — honoring the declared catalog/schema — against the physical "
+                        + "schema's tables across every readable datasource.",
                 "Verify the entity is mapped to the correct persistence unit/datasource, that a pending "
                         + "migration creates the table, or that the entity is stale and should be removed.",
                 "https://jakarta.ee/specifications/persistence/3.2/jakarta-persistence-spec-3.2.html"));
@@ -51,6 +54,14 @@ final class HibernateMissingTableRule extends AbstractDatabaseAdvisorRule {
             if (resolution.status() == MappedTableResolution.Status.NOT_FOUND) {
                 details.add(entity.entityName() + " is mapped to table " + entity.qualifiedTableName()
                         + ", which was not found in any readable datasource.");
+            }
+            for (MappedSecondaryTableFacts secondaryTable : entity.secondaryTables()) {
+                MappedTableResolution secondaryResolution =
+                        MappedTableResolution.resolveSecondary(context, entity, secondaryTable.name());
+                if (secondaryResolution.status() == MappedTableResolution.Status.NOT_FOUND) {
+                    details.add(entity.entityName() + " declares @SecondaryTable " + secondaryTable.qualifiedName()
+                            + ", which was not found in any readable datasource.");
+                }
             }
         }
         return violation(details);

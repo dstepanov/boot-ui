@@ -16,6 +16,7 @@ import java.math.RoundingMode;
  * @param sequenceMax {@code pg_sequences.max_value}
  * @param columnCapacity the owning column type's maximum, or {@code null} when the owner is unknown
  * @param cycle {@code pg_sequences.cycle}
+ * @param incrementBy {@code pg_sequences.increment_by}, or {@code null} when the server did not report it
  */
 record PostgresSequenceUsage(
         String schema,
@@ -27,7 +28,8 @@ record PostgresSequenceUsage(
         String ownerSchema,
         String ownerTable,
         String ownerColumn,
-        String ownerType) {
+        String ownerType,
+        Long incrementBy) {
 
     String qualifiedName() {
         return schema == null || schema.isBlank() ? sequence : schema + "." + sequence;

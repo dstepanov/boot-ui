@@ -8,14 +8,19 @@ import static io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorFix
 import static io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorFixtures.schema;
 import static io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorFixtures.table;
 import static io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorFixtures.uniqueIndex;
+import static io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorFixtures.vendorSchema;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.jdubois.bootui.core.dto.DatabaseAdvisorRuleResultDto;
 import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedColumnFacts;
 import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedEntityFacts;
 import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedForeignKeyFacts;
+import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedSecondaryTableFacts;
+import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedSequenceGeneratorFacts;
 import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedUniqueConstraintFacts;
+import java.math.BigInteger;
 import java.sql.Types;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -184,7 +189,7 @@ class DatabaseAdvisorHibernateRulesTests {
                 "users",
                 List.of(),
                 List.of(new MappedColumnFacts(
-                        "com.example.User#status", "status", null, "Status", null, false, true, false)),
+                        "com.example.User#status", "status", null, "Status", null, false, true, false, null)),
                 List.of());
         assertThat(new HibernateColumnMismatchRule()
                         .evaluate(hibernateContext(schema("ds", Dialect.GENERIC, List.of(users)), entity))
@@ -234,7 +239,7 @@ class DatabaseAdvisorHibernateRulesTests {
                 "documents",
                 List.of(),
                 List.of(new MappedColumnFacts(
-                        "com.example.Document#body", "body", null, "String", 4000, true, true, false)),
+                        "com.example.Document#body", "body", null, "String", 4000, true, true, false, null)),
                 List.of());
         assertThat(new HibernateColumnLengthMismatchRule()
                         .evaluate(hibernateContext(schema("ds", Dialect.GENERIC, List.of(documents)), entity))
@@ -371,6 +376,219 @@ class DatabaseAdvisorHibernateRulesTests {
                 List.of());
         assertThat(new HibernateMissingForeignKeyConstraintRule()
                         .evaluate(hibernateContext(schema("ds", Dialect.GENERIC, List.of(orders)), entity))
+                        .status())
+                .isEqualTo(PASS);
+    }
+
+    @Test
+    void hibernateMissingForeignKeyConstraintRuleSkipsAssociationsDeclaringNoConstraint() {
+        TableModel orders =
+                table("orders", List.of(column("customer_id", "int8", Types.BIGINT)), List.of(), List.of(), List.of());
+        MappedForeignKeyFacts foreignKey = new MappedForeignKeyFacts(
+                "com.example.Order#customer",
+                List.of("customer_id"),
+                Arrays.asList((String) null),
+                null,
+                false,
+                null,
+                null,
+                null);
+        MappedEntityFacts entity = new MappedEntityFacts("com.example.Order", "orders", List.of(foreignKey), List.of());
+        assertThat(new HibernateMissingForeignKeyConstraintRule()
+                        .evaluate(hibernateContext(schema("ds", Dialect.GENERIC, List.of(orders)), entity))
+                        .status())
+                .isEqualTo(PASS);
+    }
+
+    @Test
+    void hibernateMissingForeignKeyConstraintRuleToleratesReorderedColumnsWithMatchingPairing() {
+        TableModel orderLines = table(
+                "order_lines",
+                List.of(column("tenant_id", "int8", Types.BIGINT), column("order_id", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(foreignKey(
+                        "fk_order_lines_order",
+                        List.of("order_id", "tenant_id"),
+                        "orders",
+                        List.of("id", "tenant_id"))),
+                List.of());
+        MappedForeignKeyFacts foreignKey = new MappedForeignKeyFacts(
+                "com.example.OrderLine#order",
+                List.of("tenant_id", "order_id"),
+                Arrays.asList("tenant_id", "id"),
+                null,
+                true,
+                null,
+                null,
+                null);
+        MappedEntityFacts entity =
+                new MappedEntityFacts("com.example.OrderLine", "order_lines", List.of(foreignKey), List.of());
+        assertThat(new HibernateMissingForeignKeyConstraintRule()
+                        .evaluate(hibernateContext(schema("ds", Dialect.GENERIC, List.of(orderLines)), entity))
+                        .status())
+                .isEqualTo(PASS);
+    }
+
+    @Test
+    void hibernateMissingForeignKeyConstraintRuleRejectsAConstraintReferencingTheWrongTable() {
+        TableModel orders = table(
+                "orders",
+                List.of(column("customer_id", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(foreignKey(
+                        "fk_orders_something_else", List.of("customer_id"), "archived_customers", List.of("id"))),
+                List.of());
+        MappedForeignKeyFacts foreignKey = new MappedForeignKeyFacts(
+                "com.example.Order#customer",
+                List.of("customer_id"),
+                Arrays.asList((String) null),
+                null,
+                true,
+                "customers",
+                null,
+                null);
+        MappedEntityFacts entity = new MappedEntityFacts("com.example.Order", "orders", List.of(foreignKey), List.of());
+        DatabaseAdvisorRuleResultDto result = new HibernateMissingForeignKeyConstraintRule()
+                .evaluate(hibernateContext(schema("ds", Dialect.GENERIC, List.of(orders)), entity));
+        assertThat(result.status()).isEqualTo(VIOLATION);
+        assertThat(result.sampleViolations().get(0)).contains("customer_id");
+    }
+
+    // --- DB-HIB-001 / DB-SCHEMA-002 double-counting avoidance ---
+
+    @Test
+    void hibernateForeignKeyIndexRuleSkipsWhenAPhysicalForeignKeyAlreadyCoversTheColumns() {
+        TableModel orders = table(
+                "orders",
+                List.of(column("customer_id", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(foreignKey("fk_orders_customer", List.of("customer_id"), "customers", List.of("id"))),
+                List.of());
+        MappedEntityFacts entity = entity(
+                "com.example.Order",
+                "orders",
+                List.of(new MappedForeignKeyFacts("com.example.Order#customer", List.of("customer_id"))),
+                List.of(),
+                List.of());
+        assertThat(new HibernateMissingForeignKeyIndexRule()
+                        .evaluate(hibernateContext(schema("ds", Dialect.GENERIC, List.of(orders)), entity))
+                        .status())
+                .isEqualTo(PASS);
+    }
+
+    // --- @SecondaryTable support ---
+
+    @Test
+    void hibernateMissingColumnRuleChecksSecondaryTableColumnsAgainstTheSecondaryTable() {
+        TableModel users =
+                table("users", List.of(column("id", "int8", Types.BIGINT)), List.of("id"), List.of(), List.of());
+        TableModel profiles = table(
+                "user_profiles", List.of(column("bio", "varchar", Types.VARCHAR)), List.of(), List.of(), List.of());
+        MappedSecondaryTableFacts secondaryTable = new MappedSecondaryTableFacts("user_profiles", null, null);
+        MappedColumnFacts bio = new MappedColumnFacts(
+                "com.example.User#bio", "bio", null, "String", null, false, false, false, "user_profiles");
+        MappedColumnFacts missing = new MappedColumnFacts(
+                "com.example.User#nickname", "nickname", null, "String", null, false, false, false, "user_profiles");
+        MappedEntityFacts entity = new MappedEntityFacts(
+                "com.example.User",
+                "users",
+                null,
+                null,
+                List.of(),
+                List.of(bio, missing),
+                List.of(),
+                List.of(secondaryTable));
+        DatabaseAdvisorRuleResultDto result = new HibernateMissingColumnRule()
+                .evaluate(hibernateContext(schema("ds", Dialect.GENERIC, List.of(users, profiles)), entity));
+        assertThat(result.status()).isEqualTo(VIOLATION);
+        assertThat(result.violationCount()).isEqualTo(1);
+        assertThat(result.sampleViolations().get(0)).contains("user_profiles.nickname");
+    }
+
+    @Test
+    void hibernateMissingTableRuleReportsAnAbsentSecondaryTable() {
+        TableModel users = table("users", List.of(), List.of("id"), List.of(), List.of());
+        MappedSecondaryTableFacts secondaryTable = new MappedSecondaryTableFacts("user_profiles", null, null);
+        MappedEntityFacts entity = new MappedEntityFacts(
+                "com.example.User", "users", null, null, List.of(), List.of(), List.of(), List.of(secondaryTable));
+        DatabaseAdvisorRuleResultDto result = new HibernateMissingTableRule()
+                .evaluate(hibernateContext(schema("ds", Dialect.GENERIC, List.of(users)), entity));
+        assertThat(result.status()).isEqualTo(VIOLATION);
+        assertThat(result.sampleViolations().get(0)).contains("user_profiles");
+    }
+
+    // --- DB-HIB-008: sequence allocationSize vs physical INCREMENT BY ---
+
+    @Test
+    void hibernateSequenceIncrementMismatchRuleDetectsAMismatch() {
+        PostgresSequenceUsage sequence = new PostgresSequenceUsage(
+                "public",
+                "orders_seq",
+                BigInteger.valueOf(1),
+                BigInteger.valueOf(1000),
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                1L);
+        SchemaSnapshot postgres = vendorSchema(
+                "ds",
+                Dialect.POSTGRESQL,
+                VendorAugmentation.available(VendorFindingKinds.POSTGRES_SEQUENCES, List.of(sequence), false));
+        MappedSequenceGeneratorFacts generator =
+                new MappedSequenceGeneratorFacts("com.example.Order#id", "orders_seq", 50);
+        MappedEntityFacts entity = new MappedEntityFacts(
+                "com.example.Order", null, null, null, List.of(), List.of(), List.of(), List.of(), List.of(generator));
+        DatabaseAdvisorRuleResultDto result =
+                new HibernateSequenceIncrementMismatchRule().evaluate(hibernateContext(postgres, entity));
+        assertThat(result.status()).isEqualTo(VIOLATION);
+        assertThat(result.sampleViolations().get(0))
+                .contains("allocationSize=50")
+                .contains("INCREMENT BY is 1");
+    }
+
+    @Test
+    void hibernateSequenceIncrementMismatchRulePassesWhenTheyMatch() {
+        PostgresSequenceUsage sequence = new PostgresSequenceUsage(
+                "public",
+                "orders_seq",
+                BigInteger.valueOf(1),
+                BigInteger.valueOf(1000),
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                50L);
+        SchemaSnapshot postgres = vendorSchema(
+                "ds",
+                Dialect.POSTGRESQL,
+                VendorAugmentation.available(VendorFindingKinds.POSTGRES_SEQUENCES, List.of(sequence), false));
+        MappedSequenceGeneratorFacts generator =
+                new MappedSequenceGeneratorFacts("com.example.Order#id", "orders_seq", 50);
+        MappedEntityFacts entity = new MappedEntityFacts(
+                "com.example.Order", null, null, null, List.of(), List.of(), List.of(), List.of(), List.of(generator));
+        assertThat(new HibernateSequenceIncrementMismatchRule()
+                        .evaluate(hibernateContext(postgres, entity))
+                        .status())
+                .isEqualTo(PASS);
+    }
+
+    @Test
+    void hibernateSequenceIncrementMismatchRuleSkipsWhenTheSequenceCannotBeResolved() {
+        SchemaSnapshot postgres = vendorSchema(
+                "ds",
+                Dialect.POSTGRESQL,
+                VendorAugmentation.available(VendorFindingKinds.POSTGRES_SEQUENCES, List.of(), false));
+        MappedSequenceGeneratorFacts generator =
+                new MappedSequenceGeneratorFacts("com.example.Order#id", "unknown_seq", 50);
+        MappedEntityFacts entity = new MappedEntityFacts(
+                "com.example.Order", null, null, null, List.of(), List.of(), List.of(), List.of(), List.of(generator));
+        assertThat(new HibernateSequenceIncrementMismatchRule()
+                        .evaluate(hibernateContext(postgres, entity))
                         .status())
                 .isEqualTo(PASS);
     }

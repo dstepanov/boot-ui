@@ -31,6 +31,9 @@ final class VendorSchemaMerge {
         if (dialect.isMySqlFamily()) {
             return mergeMySql(tables, findings);
         }
+        if (dialect == Dialect.ORACLE) {
+            return mergeOracle(tables, findings);
+        }
         return tables;
     }
 
@@ -66,6 +69,14 @@ final class VendorSchemaMerge {
 
     private static IndexModel enrich(IndexModel index, PostgresIndexDetail detail) {
         List<IndexKeyPart> keyParts = index.keyParts();
+        Integer keyColumnCount = detail.keyColumnCount();
+        if (keyColumnCount != null && keyColumnCount > 0 && keyColumnCount < keyParts.size()) {
+            // pgjdbc's getIndexInfo() reports a covering index's INCLUDE (non-key) columns as if they were
+            // ordinary trailing key parts (confirmed pgjdbc issue #3430) — pg_index.indnkeyatts is the only
+            // reliable signal for how many leading key parts are genuine keys, so anything past it is trimmed
+            // before it can inflate a composite key or defeat a uniqueness/leading-equality check.
+            keyParts = keyParts.subList(0, keyColumnCount);
+        }
         if (detail.expression() && keyParts.stream().noneMatch(IndexKeyPart::isExpression)) {
             // pgjdbc reports the expression's rendered text in COLUMN_NAME, which is indistinguishable from a
             // real column name; pg_index.indexprs is the only reliable signal that a key part is an
@@ -81,7 +92,65 @@ final class VendorSchemaMerge {
                         ? (detail.predicate() == null ? "partial index" : detail.predicate())
                         : index.filterCondition(),
                 index.visibility(),
-                detail.valid() ? IndexModel.Validity.VALID : IndexModel.Validity.INVALID);
+                detail.valid() ? IndexModel.Validity.VALID : IndexModel.Validity.INVALID,
+                detail.nullsNotDistinct(),
+                false,
+                false,
+                false);
+    }
+
+    private static List<TableModel> mergeOracle(List<TableModel> tables, VendorFindings findings) {
+        Map<String, OracleIndexDetail> indexDetails = new HashMap<>();
+        for (OracleIndexDetail detail : findings.findings(VendorFindingKinds.ORACLE_INDEX_DETAILS)) {
+            indexDetails.put(exactKey(detail.schema(), detail.table(), detail.index()), detail);
+        }
+        Set<String> unusablePartitionedIndexes = new HashSet<>();
+        for (OracleIndexPartitionStatus partition :
+                findings.findings(VendorFindingKinds.ORACLE_INDEX_PARTITION_STATUS)) {
+            if (partition.unusable()) {
+                unusablePartitionedIndexes.add(exactKey(partition.schema(), partition.table(), partition.index()));
+            }
+        }
+        List<TableModel> merged = new ArrayList<>();
+        for (TableModel table : tables) {
+            List<IndexModel> indexes = new ArrayList<>();
+            for (IndexModel index : table.indexes()) {
+                String indexKey = exactKey(table.schema(), table.name(), index.name());
+                OracleIndexDetail detail = indexDetails.get(indexKey);
+                indexes.add(
+                        detail == null
+                                ? index
+                                : enrichOracle(index, detail, unusablePartitionedIndexes.contains(indexKey)));
+            }
+            merged.add(table.withIndexes(indexes));
+        }
+        return List.copyOf(merged);
+    }
+
+    /**
+     * A partitioned index's own {@code all_indexes.status} reads {@code N/A} — its real usability lives on
+     * its partitions/subpartitions instead, so {@code hasUnusablePartition} (already resolved against
+     * {@code all_ind_partitions}/{@code all_ind_subpartitions}) decides validity for those, and the plain
+     * {@code status} column decides it for every other index.
+     */
+    private static IndexModel enrichOracle(IndexModel index, OracleIndexDetail detail, boolean hasUnusablePartition) {
+        IndexModel.Validity validity = detail.partitioned()
+                ? (hasUnusablePartition ? IndexModel.Validity.INVALID : IndexModel.Validity.VALID)
+                : (detail.usable() ? IndexModel.Validity.VALID : IndexModel.Validity.INVALID);
+        IndexModel.Visibility visibility =
+                detail.invisible() ? IndexModel.Visibility.INVISIBLE : IndexModel.Visibility.VISIBLE;
+        return new IndexModel(
+                index.name(),
+                index.keyParts(),
+                index.unique(),
+                detail.indexType() == null ? index.method() : detail.indexType().toLowerCase(Locale.ROOT),
+                index.filterCondition(),
+                visibility,
+                validity,
+                false,
+                detail.automatic(),
+                detail.partitioned(),
+                !detail.normal());
     }
 
     private static List<TableModel> mergeMySql(List<TableModel> tables, VendorFindings findings) {
@@ -158,5 +227,19 @@ final class VendorSchemaMerge {
 
     private static String normalize(String value) {
         return value == null ? "" : value.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Unlike PostgreSQL/MySQL (which fold unquoted identifiers to lowercase, so case-insensitive matching is
+     * safe and correct), Oracle folds unquoted identifiers to <em>uppercase</em> and allows genuinely distinct
+     * case-sensitive quoted identifiers — so the Oracle merge key must not normalize case at all, or two
+     * distinctly-quoted indexes could collide, or a real match could be silently missed.
+     */
+    private static String exactKey(String schema, String table, String index) {
+        return exact(schema) + "." + exact(table) + "." + exact(index);
+    }
+
+    private static String exact(String value) {
+        return value == null ? "" : value;
     }
 }

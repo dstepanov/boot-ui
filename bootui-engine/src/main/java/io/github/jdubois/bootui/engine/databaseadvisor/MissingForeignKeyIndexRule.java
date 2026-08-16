@@ -14,6 +14,12 @@ import java.util.List;
  * is not supported by an index leading on {@code tenant_id} alone, and an index that is invalid, invisible,
  * partial, expression-based or prefix-truncated cannot serve the lookup at all — each of those looks like a
  * perfectly good index in bare JDBC metadata.</p>
+ *
+ * <p>On Oracle, the leading columns may appear in <em>any</em> order: a composite foreign key's real access
+ * pattern (a cascading delete/update check, a join, or a {@code REFERENCES} validation) is a pure multi-column
+ * equality lookup, which does not care which of an index's leading key parts binds to which column, and this
+ * is Oracle's own documented guidance for what supports a foreign key. Every other dialect keeps the stricter
+ * same-order check.</p>
  */
 final class MissingForeignKeyIndexRule extends AbstractDatabaseAdvisorRule {
 
@@ -24,13 +30,15 @@ final class MissingForeignKeyIndexRule extends AbstractDatabaseAdvisorRule {
                 DatabaseAdvisorCategory.SCHEMA,
                 DatabaseAdvisorRuleSupport.HIGH,
                 "Detects foreign keys (from DatabaseMetaData.getImportedKeys()) whose complete ordered column "
-                        + "list is not the leading prefix of any usable index on the same table. Invalid, "
-                        + "invisible, partial, expression-based and prefix-truncated indexes do not count.",
+                        + "list is not the leading prefix of any usable index on the same table (on Oracle, any "
+                        + "order among the leading columns counts). Invalid, invisible, partial, expression-based "
+                        + "and prefix-truncated indexes do not count.",
                 "Create an index whose leading columns are exactly the foreign key's columns, in the same order. "
-                        + "Most databases do not automatically index foreign keys, so joins against the referenced "
-                        + "table and cascading deletes/updates on the parent row can force a full table scan on the "
-                        + "child table.",
-                "https://use-the-index-luke.com/sql/join/foreign-keys"));
+                        + "MySQL/InnoDB creates a supporting index automatically for every foreign key column, but "
+                        + "PostgreSQL, Oracle and SQL Server do not: joins against the referenced table and "
+                        + "cascading deletes/updates on the parent row can force a full table scan on the child "
+                        + "table.",
+                "https://vladmihalcea.com/default-database-key-indexing/"));
     }
 
     @Override
@@ -55,7 +63,10 @@ final class MissingForeignKeyIndexRule extends AbstractDatabaseAdvisorRule {
         if (columns.isEmpty() || columns.stream().anyMatch(column -> column == null)) {
             return;
         }
-        if (table.hasUsableLeadingIndex(columns)) {
+        boolean supported = schema.dialect() == Dialect.ORACLE
+                ? table.hasUsableLeadingIndexAnyOrder(columns)
+                : table.hasUsableLeadingIndex(columns);
+        if (supported) {
             return;
         }
         details.add(schema.dataSourceName() + ": " + table.qualifiedName() + " foreign key " + foreignKey.name() + " "

@@ -7,6 +7,7 @@ import static io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorFix
 import static io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorFixtures.index;
 import static io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorFixtures.invalidIndex;
 import static io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorFixtures.invisibleIndex;
+import static io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorFixtures.notNullColumn;
 import static io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorFixtures.partialIndex;
 import static io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorFixtures.prefixIndex;
 import static io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorFixtures.schema;
@@ -410,6 +411,380 @@ class DatabaseAdvisorSchemaRulesTests {
                 TableMetadata.COMPLETE);
         DatabaseAdvisorRuleResultDto result = new RedundantPrimaryKeyUniqueIndexRule()
                 .evaluate(context(schema("ds", Dialect.GENERIC, List.of(memberships))));
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    // --- DB-SCHEMA-006: duplicate foreign key constraints ---
+
+    @Test
+    void duplicateForeignKeyRuleFlagsTwoConstraintsEnforcingTheSameRelationship() {
+        TableModel orders = table(
+                "orders",
+                List.of(column("customer_id", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(
+                        foreignKey("fk_orders_customer_1", List.of("customer_id"), "customers", List.of("id")),
+                        foreignKey("fk_orders_customer_2", List.of("customer_id"), "customers", List.of("id"))),
+                List.of());
+        DatabaseAdvisorRuleResultDto result =
+                new DuplicateForeignKeyRule().evaluate(context(schema("ds", Dialect.GENERIC, List.of(orders))));
+        assertThat(result.status()).isEqualTo(VIOLATION);
+        assertThat(result.violationCount()).isEqualTo(1);
+        assertThat(result.sampleViolations().get(0))
+                .contains("fk_orders_customer_1")
+                .contains("fk_orders_customer_2");
+    }
+
+    @Test
+    void duplicateForeignKeyRuleToleratesReorderedColumnsWithTheSamePairing() {
+        TableModel orderLines = table(
+                "order_lines",
+                List.of(column("tenant_id", "int8", Types.BIGINT), column("order_id", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(
+                        foreignKey("fk_a", List.of("tenant_id", "order_id"), "orders", List.of("tenant_id", "id")),
+                        foreignKey("fk_b", List.of("order_id", "tenant_id"), "orders", List.of("id", "tenant_id"))),
+                List.of());
+        DatabaseAdvisorRuleResultDto result =
+                new DuplicateForeignKeyRule().evaluate(context(schema("ds", Dialect.GENERIC, List.of(orderLines))));
+        assertThat(result.status()).isEqualTo(VIOLATION);
+        assertThat(result.violationCount()).isEqualTo(1);
+    }
+
+    @Test
+    void duplicateForeignKeyRulePassesWhenConstraintsReferenceDifferentTables() {
+        TableModel orders = table(
+                "orders",
+                List.of(column("customer_id", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(
+                        foreignKey("fk_orders_customer", List.of("customer_id"), "customers", List.of("id")),
+                        foreignKey(
+                                "fk_orders_archived_customer",
+                                List.of("customer_id"),
+                                "archived_customers",
+                                List.of("id"))),
+                List.of());
+        DatabaseAdvisorRuleResultDto result =
+                new DuplicateForeignKeyRule().evaluate(context(schema("ds", Dialect.GENERIC, List.of(orders))));
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    @Test
+    void duplicateForeignKeyRulePassesWhenColumnPairingDiffers() {
+        // Same child columns, but the pairing to parent columns differs: not the same relationship.
+        TableModel children = table(
+                "children",
+                List.of(column("a", "int8", Types.BIGINT), column("b", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(
+                        foreignKey("fk_1", List.of("a", "b"), "parents", List.of("pa", "pb")),
+                        foreignKey("fk_2", List.of("a", "b"), "parents", List.of("pb", "pa"))),
+                List.of());
+        DatabaseAdvisorRuleResultDto result =
+                new DuplicateForeignKeyRule().evaluate(context(schema("ds", Dialect.GENERIC, List.of(children))));
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    // --- DB-SCHEMA-007: narrow auto-generated primary key ---
+
+    @Test
+    void narrowPrimaryKeyRuleFlagsATinyintAutoIncrementPrimaryKey() {
+        ColumnModel id =
+                new ColumnModel("id", "tinyint", Types.TINYINT, ColumnModel.Nullability.NOT_NULL, null, null, true);
+        TableModel statuses = table("statuses", List.of(id), List.of("id"), List.of(), List.of());
+        DatabaseAdvisorRuleResultDto result = new NarrowAutoGeneratedPrimaryKeyRule()
+                .evaluate(context(schema("ds", Dialect.MYSQL, List.of(statuses))));
+        assertThat(result.status()).isEqualTo(VIOLATION);
+        assertThat(result.sampleViolations().get(0)).contains("statuses.id").contains("127");
+    }
+
+    @Test
+    void narrowPrimaryKeyRuleFlagsASmallintUnsignedAutoIncrementPrimaryKey() {
+        ColumnModel id = new ColumnModel(
+                "id", "smallint unsigned", Types.SMALLINT, ColumnModel.Nullability.NOT_NULL, null, null, true);
+        TableModel tickets = table("tickets", List.of(id), List.of("id"), List.of(), List.of());
+        DatabaseAdvisorRuleResultDto result = new NarrowAutoGeneratedPrimaryKeyRule()
+                .evaluate(context(schema("ds", Dialect.MYSQL, List.of(tickets))));
+        assertThat(result.status()).isEqualTo(VIOLATION);
+        assertThat(result.sampleViolations().get(0)).contains("65535");
+    }
+
+    @Test
+    void narrowPrimaryKeyRuleIgnoresAManuallyAssignedTinyintKey() {
+        ColumnModel id =
+                new ColumnModel("id", "tinyint", Types.TINYINT, ColumnModel.Nullability.NOT_NULL, null, null, false);
+        TableModel statuses = table("statuses", List.of(id), List.of("id"), List.of(), List.of());
+        DatabaseAdvisorRuleResultDto result = new NarrowAutoGeneratedPrimaryKeyRule()
+                .evaluate(context(schema("ds", Dialect.MYSQL, List.of(statuses))));
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    @Test
+    void narrowPrimaryKeyRuleIgnoresAPlainIntegerPrimaryKey() {
+        ColumnModel id =
+                new ColumnModel("id", "int4", Types.INTEGER, ColumnModel.Nullability.NOT_NULL, null, null, true);
+        TableModel accounts = table("accounts", List.of(id), List.of("id"), List.of(), List.of());
+        DatabaseAdvisorRuleResultDto result = new NarrowAutoGeneratedPrimaryKeyRule()
+                .evaluate(context(schema("ds", Dialect.POSTGRESQL, List.of(accounts))));
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    @Test
+    void narrowPrimaryKeyRuleIgnoresACompositePrimaryKey() {
+        ColumnModel a =
+                new ColumnModel("a", "tinyint", Types.TINYINT, ColumnModel.Nullability.NOT_NULL, null, null, true);
+        ColumnModel b =
+                new ColumnModel("b", "tinyint", Types.TINYINT, ColumnModel.Nullability.NOT_NULL, null, null, false);
+        TableModel composite = table("composite", List.of(a, b), List.of("a", "b"), List.of(), List.of());
+        DatabaseAdvisorRuleResultDto result = new NarrowAutoGeneratedPrimaryKeyRule()
+                .evaluate(context(schema("ds", Dialect.MYSQL, List.of(composite))));
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    // --- DB-SCHEMA-008: composite foreign key with partially nullable columns ---
+
+    @Test
+    void compositeForeignKeyPartialNullabilityRuleFlagsAMixOfNullableAndNotNullColumns() {
+        TableModel children = table(
+                "children",
+                List.of(notNullColumn("tenant_id", "int8", Types.BIGINT), column("external_ref", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(foreignKey(
+                        "fk_children_parent",
+                        List.of("tenant_id", "external_ref"),
+                        "parents",
+                        List.of("tenant_id", "external_ref"))),
+                List.of());
+        DatabaseAdvisorRuleResultDto result = new CompositeForeignKeyPartialNullabilityRule()
+                .evaluate(context(schema("ds", Dialect.GENERIC, List.of(children))));
+        assertThat(result.status()).isEqualTo(VIOLATION);
+        assertThat(result.sampleViolations().get(0))
+                .contains("fk_children_parent")
+                .contains("external_ref");
+    }
+
+    @Test
+    void compositeForeignKeyPartialNullabilityRulePassesWhenFullyNotNull() {
+        TableModel children = table(
+                "children",
+                List.of(
+                        notNullColumn("tenant_id", "int8", Types.BIGINT),
+                        notNullColumn("parent_id", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(foreignKey(
+                        "fk_children_parent",
+                        List.of("tenant_id", "parent_id"),
+                        "parents",
+                        List.of("tenant_id", "id"))),
+                List.of());
+        DatabaseAdvisorRuleResultDto result = new CompositeForeignKeyPartialNullabilityRule()
+                .evaluate(context(schema("ds", Dialect.GENERIC, List.of(children))));
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    @Test
+    void compositeForeignKeyPartialNullabilityRulePassesWhenFullyNullable() {
+        TableModel children = table(
+                "children",
+                List.of(column("tenant_id", "int8", Types.BIGINT), column("parent_id", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(foreignKey(
+                        "fk_children_parent",
+                        List.of("tenant_id", "parent_id"),
+                        "parents",
+                        List.of("tenant_id", "id"))),
+                List.of());
+        DatabaseAdvisorRuleResultDto result = new CompositeForeignKeyPartialNullabilityRule()
+                .evaluate(context(schema("ds", Dialect.GENERIC, List.of(children))));
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    @Test
+    void compositeForeignKeyPartialNullabilityRuleIgnoresSingleColumnForeignKeys() {
+        TableModel orders = table(
+                "orders",
+                List.of(column("customer_id", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(foreignKey("fk_orders_customer", List.of("customer_id"), "customers", List.of("id"))),
+                List.of());
+        DatabaseAdvisorRuleResultDto result = new CompositeForeignKeyPartialNullabilityRule()
+                .evaluate(context(schema("ds", Dialect.GENERIC, List.of(orders))));
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    // --- DB-SCHEMA-009: composite unique index with partially nullable columns ---
+
+    @Test
+    void nullableColumnCompositeUniquenessRuleFlagsAMixedNullabilityUniqueIndex() {
+        TableModel memberships = table(
+                "memberships",
+                List.of(
+                        notNullColumn("org_id", "int8", Types.BIGINT),
+                        column("external_ref", "varchar", Types.VARCHAR, 64)),
+                List.of(),
+                List.of(),
+                List.of(uniqueIndex("uq_org_external_ref", List.of("org_id", "external_ref"))));
+        DatabaseAdvisorRuleResultDto result = new NullableColumnCompositeUniquenessRule()
+                .evaluate(context(schema("ds", Dialect.POSTGRESQL, List.of(memberships))));
+        assertThat(result.status()).isEqualTo(VIOLATION);
+        assertThat(result.sampleViolations().get(0))
+                .contains("uq_org_external_ref")
+                .contains("external_ref");
+    }
+
+    @Test
+    void nullableColumnCompositeUniquenessRuleSkipsUnknownGenericNullSemantics() {
+        TableModel memberships = table(
+                "memberships",
+                List.of(
+                        notNullColumn("org_id", "bigint", Types.BIGINT),
+                        column("external_ref", "varchar", Types.VARCHAR, 64)),
+                List.of(),
+                List.of(),
+                List.of(uniqueIndex("uq_org_external_ref", List.of("org_id", "external_ref"))));
+
+        DatabaseAdvisorRuleResultDto result = new NullableColumnCompositeUniquenessRule()
+                .evaluate(context(schema("ds", Dialect.GENERIC, List.of(memberships))));
+
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    @Test
+    void nullableColumnCompositeUniquenessRuleIsSuppressedByNullsNotDistinct() {
+        IndexModel nullsNotDistinctIndex = new IndexModel(
+                "uq_org_external_ref",
+                List.of(IndexKeyPart.column("org_id", true), IndexKeyPart.column("external_ref", true)),
+                true,
+                "btree",
+                null,
+                IndexModel.Visibility.VISIBLE,
+                IndexModel.Validity.VALID,
+                true,
+                false,
+                false,
+                false);
+        TableModel memberships = table(
+                "memberships",
+                List.of(
+                        notNullColumn("org_id", "int8", Types.BIGINT),
+                        column("external_ref", "varchar", Types.VARCHAR, 64)),
+                List.of(),
+                List.of(),
+                List.of(nullsNotDistinctIndex));
+        DatabaseAdvisorRuleResultDto result = new NullableColumnCompositeUniquenessRule()
+                .evaluate(context(schema("ds", Dialect.POSTGRESQL, List.of(memberships))));
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    @Test
+    void nullableColumnCompositeUniquenessRulePassesWhenFullyNotNull() {
+        TableModel memberships = table(
+                "memberships",
+                List.of(notNullColumn("org_id", "int8", Types.BIGINT), notNullColumn("user_id", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(),
+                List.of(uniqueIndex("uq_org_user", List.of("org_id", "user_id"))));
+        DatabaseAdvisorRuleResultDto result = new NullableColumnCompositeUniquenessRule()
+                .evaluate(context(schema("ds", Dialect.POSTGRESQL, List.of(memberships))));
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    // --- Oracle-aware DB-SCHEMA-002 (any-order leading columns) ---
+
+    @Test
+    void missingForeignKeyIndexRuleAcceptsAnyColumnOrderOnOracle() {
+        TableModel orderLines = table(
+                "order_lines",
+                List.of(column("tenant_id", "int8", Types.BIGINT), column("order_id", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(foreignKey(
+                        "fk_lines_order", List.of("tenant_id", "order_id"), "orders", List.of("tenant_id", "id"))),
+                // Index leads with order_id first, then tenant_id: reversed order from the FK's own declaration.
+                List.of(index("ix_lines_reversed", List.of("order_id", "tenant_id"))));
+        DatabaseAdvisorRuleResultDto result =
+                new MissingForeignKeyIndexRule().evaluate(context(schema("ds", Dialect.ORACLE, List.of(orderLines))));
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    @Test
+    void missingForeignKeyIndexRuleStillRequiresDeclaredOrderOnPostgres() {
+        TableModel orderLines = table(
+                "order_lines",
+                List.of(column("tenant_id", "int8", Types.BIGINT), column("order_id", "int8", Types.BIGINT)),
+                List.of(),
+                List.of(foreignKey(
+                        "fk_lines_order", List.of("tenant_id", "order_id"), "orders", List.of("tenant_id", "id"))),
+                List.of(index("ix_lines_reversed", List.of("order_id", "tenant_id"))));
+        DatabaseAdvisorRuleResultDto result = new MissingForeignKeyIndexRule()
+                .evaluate(context(schema("ds", Dialect.POSTGRESQL, List.of(orderLines))));
+        assertThat(result.status()).isEqualTo(VIOLATION);
+    }
+
+    // --- Oracle-aware DB-SCHEMA-003 (automatic/partitioned/specialized exclusions) ---
+
+    @Test
+    void duplicateIndexRuleExcludesAnAutomaticOracleIndexFromComparison() {
+        IndexModel automaticIndex = new IndexModel(
+                "sys_c007",
+                List.of(IndexKeyPart.column("sku", true)),
+                true,
+                "normal",
+                null,
+                IndexModel.Visibility.VISIBLE,
+                IndexModel.Validity.VALID,
+                false,
+                true,
+                false,
+                false);
+        IndexModel candidateLonger = new IndexModel(
+                "ix_sku_name",
+                List.of(IndexKeyPart.column("sku", true), IndexKeyPart.column("name", true)),
+                false,
+                "normal",
+                null,
+                IndexModel.Visibility.VISIBLE,
+                IndexModel.Validity.VALID,
+                false,
+                false,
+                false,
+                false);
+        TableModel products =
+                table("products", List.of(), List.of(), List.of(), List.of(automaticIndex, candidateLonger));
+        DatabaseAdvisorRuleResultDto result =
+                new DuplicateIndexRule().evaluate(context(schema("ds", Dialect.ORACLE, List.of(products))));
+        assertThat(result.status()).isEqualTo(PASS);
+    }
+
+    @Test
+    void duplicateIndexRuleExcludesASpecializedOracleIndexFromComparison() {
+        IndexModel bitmapIndex = new IndexModel(
+                "ix_bitmap_sku",
+                List.of(IndexKeyPart.column("sku", true)),
+                false,
+                "bitmap",
+                null,
+                IndexModel.Visibility.VISIBLE,
+                IndexModel.Validity.VALID,
+                false,
+                false,
+                false,
+                true);
+        IndexModel candidateLonger = new IndexModel(
+                "ix_sku_name",
+                List.of(IndexKeyPart.column("sku", true), IndexKeyPart.column("name", true)),
+                false,
+                "bitmap",
+                null,
+                IndexModel.Visibility.VISIBLE,
+                IndexModel.Validity.VALID,
+                false,
+                false,
+                false,
+                true);
+        TableModel products = table("products", List.of(), List.of(), List.of(), List.of(bitmapIndex, candidateLonger));
+        DatabaseAdvisorRuleResultDto result =
+                new DuplicateIndexRule().evaluate(context(schema("ds", Dialect.ORACLE, List.of(products))));
         assertThat(result.status()).isEqualTo(PASS);
     }
 }

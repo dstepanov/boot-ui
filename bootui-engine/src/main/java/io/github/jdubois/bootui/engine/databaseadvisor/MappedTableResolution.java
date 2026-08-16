@@ -1,6 +1,7 @@
 package io.github.jdubois.bootui.engine.databaseadvisor;
 
 import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedEntityFacts;
+import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedSecondaryTableFacts;
 import java.util.List;
 
 /**
@@ -11,6 +12,11 @@ import java.util.List;
  * name can legitimately exist more than once, and picking the first match would attribute findings to the
  * wrong database. An ambiguous match therefore reports {@link Status#AMBIGUOUS} and the rule skips that
  * entity instead of guessing.</p>
+ *
+ * <p>The same resolution applies to an explicitly named {@code @SecondaryTable}: {@link #resolveSecondary}
+ * looks the name up among the entity's declared secondary tables and resolves it exactly like the primary
+ * table, so a mapped item pinned to a secondary table (via {@code @Column(table=...)}/
+ * {@code @JoinColumn(table=...)}) is checked against the table it actually lives in.</p>
  */
 record MappedTableResolution(Status status, SchemaSnapshot schema, TableModel table, String detail) {
 
@@ -26,19 +32,57 @@ record MappedTableResolution(Status status, SchemaSnapshot schema, TableModel ta
     }
 
     static MappedTableResolution resolve(DatabaseAdvisorContext context, MappedEntityFacts entity) {
-        String tableName = entity.explicitTableName();
+        return resolveNamed(
+                context,
+                entity.explicitTableName(),
+                entity.explicitCatalog(),
+                entity.explicitSchema(),
+                entity.explicitTableName());
+    }
+
+    /**
+     * Resolves an explicitly named {@code @SecondaryTable}, or {@code null}/blank {@code tableName} for the
+     * entity's own primary table. A {@code tableName} that does not match any {@code @SecondaryTable} the
+     * entity declares is reported as {@link Status#NOT_MAPPED} rather than guessed.
+     */
+    static MappedTableResolution resolveSecondary(
+            DatabaseAdvisorContext context, MappedEntityFacts entity, String tableName) {
+        if (tableName == null || tableName.isBlank()) {
+            return resolve(context, entity);
+        }
+        MappedSecondaryTableFacts secondaryTable = entity.secondaryTables().stream()
+                .filter(candidate -> tableName.equalsIgnoreCase(candidate.name()))
+                .findFirst()
+                .orElse(null);
+        if (secondaryTable == null) {
+            return new MappedTableResolution(
+                    Status.NOT_MAPPED,
+                    null,
+                    null,
+                    "References secondary table \"" + tableName + "\", which " + entity.entityName()
+                            + " does not declare via @SecondaryTable.");
+        }
+        return resolveNamed(
+                context,
+                secondaryTable.name(),
+                secondaryTable.catalog(),
+                secondaryTable.schema(),
+                secondaryTable.qualifiedName());
+    }
+
+    private static MappedTableResolution resolveNamed(
+            DatabaseAdvisorContext context, String tableName, String catalog, String schema, String qualifiedName) {
         if (tableName == null || tableName.isBlank()) {
             return new MappedTableResolution(Status.NOT_MAPPED, null, null, null);
         }
         SchemaSnapshot matchedSchema = null;
         TableModel matchedTable = null;
         int matches = 0;
-        for (SchemaSnapshot schema : context.availableSchemas()) {
-            List<TableModel> candidates =
-                    schema.tablesNamed(entity.explicitCatalog(), entity.explicitSchema(), tableName);
+        for (SchemaSnapshot candidateSchema : context.availableSchemas()) {
+            List<TableModel> candidates = candidateSchema.tablesNamed(catalog, schema, tableName);
             matches += candidates.size();
             if (!candidates.isEmpty() && matchedTable == null) {
-                matchedSchema = schema;
+                matchedSchema = candidateSchema;
                 matchedTable = candidates.get(0);
             }
         }
@@ -50,17 +94,16 @@ record MappedTableResolution(Status status, SchemaSnapshot schema, TableModel ta
                     Status.AMBIGUOUS,
                     null,
                     null,
-                    matches + " physical tables named " + qualify(entity) + " were found across the readable "
-                            + "datasources, so this entity cannot be attributed to one of them.");
+                    matches + " physical tables named " + qualify(schema, qualifiedName) + " were found across "
+                            + "the readable datasources, so this cannot be attributed to one of them.");
         }
         return new MappedTableResolution(Status.RESOLVED, matchedSchema, matchedTable, null);
     }
 
-    private static String qualify(MappedEntityFacts entity) {
-        StringBuilder name = new StringBuilder();
-        if (entity.explicitSchema() != null && !entity.explicitSchema().isBlank()) {
-            name.append(entity.explicitSchema()).append('.');
+    private static String qualify(String schema, String qualifiedName) {
+        if (schema == null || schema.isBlank() || qualifiedName.contains(".")) {
+            return qualifiedName;
         }
-        return name.append(entity.explicitTableName()).toString();
+        return schema + "." + qualifiedName;
     }
 }

@@ -3,7 +3,6 @@ package io.github.jdubois.bootui.engine.databaseadvisor;
 import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedEntityFacts;
 import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedForeignKeyFacts;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Cross-references a mapped association against the physical schema's foreign key constraints: the entity
@@ -17,7 +16,13 @@ import java.util.Locale;
  *
  * <p>It only fires for associations whose join columns are fully resolved and physically present, and only
  * when the table's foreign key metadata was read completely — an unreadable constraint list is never treated
- * as an empty one.</p>
+ * as an empty one. An association explicitly declaring {@code @JoinColumn(foreignKey = @ForeignKey(
+ * ConstraintMode.NO_CONSTRAINT))} is skipped entirely: the absence of a physical constraint there is the
+ * developer's own choice, not a defect. Matching a candidate physical constraint tolerates the constraint's
+ * own DDL column order (which does not decide whether it is the same constraint) but not a different
+ * child-to-parent column pairing, and — when the target entity's table is resolvable — requires the
+ * constraint to actually reference that table, so a same-named-columns constraint pointing at an unrelated
+ * table is never mistaken for this association's.</p>
  */
 final class HibernateMissingForeignKeyConstraintRule extends AbstractHibernateCrossReferenceRule {
 
@@ -28,45 +33,39 @@ final class HibernateMissingForeignKeyConstraintRule extends AbstractHibernateCr
                 DatabaseAdvisorCategory.HIBERNATE_MAPPING,
                 DatabaseAdvisorRuleSupport.HIGH,
                 "Cross-references mapped @ManyToOne/@OneToOne @JoinColumn(s) — including composite ones — "
-                        + "against the foreign keys DatabaseMetaData.getImportedKeys() reports for the same table.",
+                        + "against the foreign keys DatabaseMetaData.getImportedKeys() reports for the same table, "
+                        + "verifying the child-to-parent column pairing and (when resolvable) the referenced "
+                        + "table. Associations declaring @ForeignKey(ConstraintMode.NO_CONSTRAINT) are skipped.",
                 "Add the foreign key constraint via a migration. Without it the database never rejects an "
                         + "orphaned child row, so an association the entity model presents as guaranteed can "
                         + "resolve to a missing row at runtime, and cascading deletes are silently not enforced.",
-                "https://vladmihalcea.com/database-uniqueness-application-level-vs-database-level/"));
+                "https://vladmihalcea.com/database-table-relationships/"));
     }
 
     @Override
-    void checkEntity(SchemaSnapshot schema, TableModel table, MappedEntityFacts entity, List<String> details) {
+    void checkEntity(
+            DatabaseAdvisorContext context,
+            MappedTableResolution primary,
+            MappedEntityFacts entity,
+            List<String> details) {
         for (MappedForeignKeyFacts foreignKey : entity.foreignKeys()) {
+            if (!foreignKey.constraintExpected()) {
+                continue;
+            }
+            MappedTableResolution resolution = resolveItemTable(context, entity, primary, foreignKey.tableName());
+            if (!resolution.resolved()) {
+                continue;
+            }
+            TableModel table = resolution.table();
             List<String> columns = foreignKey.columns();
             if (columns.isEmpty() || !columns.stream().allMatch(table::hasColumn)) {
                 continue;
             }
-            if (!hasPhysicalForeignKey(table, columns)) {
-                details.add(schema.dataSourceName() + ": " + foreignKey.attributeDescription() + " maps "
-                        + table.qualifiedName() + " " + columns
+            if (!ForeignKeyMatching.hasMatchingPhysicalForeignKey(table, foreignKey)) {
+                details.add(resolution.schema().dataSourceName() + ": " + foreignKey.attributeDescription()
+                        + " maps " + table.qualifiedName() + " " + columns
                         + " as a foreign key, but the database enforces no such constraint.");
             }
         }
-    }
-
-    private boolean hasPhysicalForeignKey(TableModel table, List<String> columns) {
-        return table.foreignKeys().stream().anyMatch(foreignKey -> sameColumns(foreignKey.columns(), columns));
-    }
-
-    private boolean sameColumns(List<String> physical, List<String> mapped) {
-        if (physical.size() != mapped.size()) {
-            return false;
-        }
-        for (int i = 0; i < physical.size(); i++) {
-            String left = physical.get(i);
-            String right = mapped.get(i);
-            if (left == null
-                    || right == null
-                    || !left.toLowerCase(Locale.ROOT).equals(right.toLowerCase(Locale.ROOT))) {
-                return false;
-            }
-        }
-        return true;
     }
 }

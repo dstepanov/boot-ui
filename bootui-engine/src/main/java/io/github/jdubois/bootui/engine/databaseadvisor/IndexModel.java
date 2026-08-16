@@ -21,6 +21,17 @@ import java.util.Objects;
  * @param filterCondition the partial-index predicate, or {@code null} when the index covers every row
  * @param visibility whether the optimizer may use the index
  * @param validity whether the catalog reports the index as valid/usable
+ * @param nullsNotDistinct whether a unique index was declared {@code NULLS NOT DISTINCT} (PostgreSQL 15+), so
+ *     it rejects more than one {@code NULL} instead of treating every {@code NULL} as distinct
+ * @param automatic whether the database created this index itself to back a primary key/unique constraint
+ *     (Oracle {@code all_indexes.generated = 'Y'}) rather than the user creating it directly — {@code false}
+ *     for every dialect that does not report this, since PostgreSQL/MySQL constraint-backing is instead
+ *     identified by name/column match against the primary key ({@link TableModel#primaryKeyBackingIndex()})
+ * @param partitioned whether the index itself is partitioned (Oracle {@code all_indexes.partitioned = 'YES'});
+ *     always {@code false} elsewhere
+ * @param specialized whether the index has a type this advisor does not model comparison semantics for
+ *     (Oracle function-based, domain, bitmap, LOB, or index-organized-table indexes) — excluded from
+ *     redundancy comparisons rather than compared as if it were an ordinary B-tree index
  */
 record IndexModel(
         String name,
@@ -29,7 +40,11 @@ record IndexModel(
         String method,
         String filterCondition,
         Visibility visibility,
-        Validity validity) {
+        Validity validity,
+        boolean nullsNotDistinct,
+        boolean automatic,
+        boolean partitioned,
+        boolean specialized) {
 
     enum Visibility {
         VISIBLE,
@@ -45,6 +60,18 @@ record IndexModel(
 
     IndexModel {
         keyParts = List.copyOf(keyParts);
+    }
+
+    /** Convenience constructor for callers with no Oracle-only/PostgreSQL-15-only information. */
+    IndexModel(
+            String name,
+            List<IndexKeyPart> keyParts,
+            boolean unique,
+            String method,
+            String filterCondition,
+            Visibility visibility,
+            Validity validity) {
+        this(name, keyParts, unique, method, filterCondition, visibility, validity, false, false, false, false);
     }
 
     /** A plain index with no vendor augmentation, as read from generic JDBC metadata. */
@@ -104,6 +131,32 @@ record IndexModel(
             }
         }
         return true;
+    }
+
+    /**
+     * True when the first {@code columns.size()} key parts of this index are exactly {@code columns}, as a
+     * set, in any order — Oracle's own documented guidance for what supports a composite foreign key: a pure
+     * multi-column equality lookup (the shape every FK-support query, join, and cascading delete/update uses)
+     * does not care which of the leading key parts binds to which column, since every one of them is bound by
+     * equality at once. Every usability caveat {@link #supportsLeadingEquality} applies still applies:
+     * invalid, invisible, partial, expression and prefix key parts are never counted.
+     */
+    boolean supportsLeadingEqualityAnyOrder(List<String> columns) {
+        if (columns.isEmpty() || keyParts.size() < columns.size() || !usable()) {
+            return false;
+        }
+        List<IndexKeyPart> leading = keyParts.subList(0, columns.size());
+        if (leading.stream().anyMatch(part -> part.isExpression() || part.isPrefix())) {
+            return false;
+        }
+        List<String> remaining = new ArrayList<>(columns);
+        for (IndexKeyPart part : leading) {
+            boolean matched = remaining.removeIf(part::matchesColumn);
+            if (!matched) {
+                return false;
+            }
+        }
+        return remaining.isEmpty();
     }
 
     /**
