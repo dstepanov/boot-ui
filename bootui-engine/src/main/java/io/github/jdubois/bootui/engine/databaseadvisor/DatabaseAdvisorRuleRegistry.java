@@ -14,14 +14,18 @@ final class DatabaseAdvisorRuleRegistry {
             // Schema (dialect-specific catalog augmentation)
             new PostgresInvalidIndexRule(),
             new PostgresSequenceExhaustionRule(),
+            new PostgresUnvalidatedConstraintRule(),
             new MySqlNonInnodbEngineRule(),
             new MySqlNonUtf8mb4CharsetRule(),
+            new MySqlAutoIncrementExhaustionRule(),
             // Hibernate <-> physical schema cross-reference
             new HibernateMissingForeignKeyIndexRule(),
             new HibernateMissingTableRule(),
             new HibernateColumnMismatchRule(),
             new HibernateColumnLengthMismatchRule(),
-            new HibernateMissingUniqueIndexRule());
+            new HibernateMissingUniqueIndexRule(),
+            new HibernateMissingColumnRule(),
+            new HibernateMissingForeignKeyConstraintRule());
 
     private DatabaseAdvisorRuleRegistry() {}
 

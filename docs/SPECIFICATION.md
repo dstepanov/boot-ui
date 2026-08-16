@@ -1584,6 +1584,44 @@ Acceptance criteria:
 - Spring MVC, Spring WebFlux, and Quarkus report equivalent statistics data through the same
   `/bootui/api/hibernate-statistics` contract wherever Hibernate ORM is present.
 
+### 5.17.1.2 Database Panel
+
+Purpose: answer "Does my application's physical schema hold up structurally, and does it still match what my entities
+assume?"
+
+Data sources:
+
+- Every discovered application `DataSource` bean, read through JDBC `DatabaseMetaData` (tables, columns, primary and
+  foreign keys, indexes) over a short-lived, read-only connection.
+- Read-only PostgreSQL `pg_catalog` and MySQL/MariaDB `information_schema` augmentation, selected from the detected
+  dialect and reported server version.
+- The same JPA metamodel the Hibernate panel reads, when one is available for the same application.
+
+Features:
+
+- Run explicit, read-only, bounded physical-schema checks and cross-reference them against mapped entities.
+- Report findings by severity with sample evidence and remediation guidance, cached until the next explicit scan.
+- Report per-datasource read status (`AVAILABLE`/`PARTIAL`/`FAILED`) with the detected product and dialect.
+- Report every datasource, table, catalog augmentation, bound and rule that could not be evaluated as a diagnostic,
+  separately from findings.
+
+Out of scope for the current release surface:
+
+- Executing DDL, querying application data, analysing query plans or workload, or proposing indexes from observed usage.
+
+Acceptance criteria:
+
+- The scan is bounded in tables, columns, indexes, catalog rows and wall-clock time, and reaching a bound is reported
+  rather than silently truncating the result.
+- The connection's original read-only state is restored before it returns to the pool.
+- A failed datasource, an unreadable table, a blocked catalog view, a truncated scan, or a skipped/errored rule is never
+  reported as a passing check and never counted as a violation; the scan status is `SCANNED` only when everything was
+  read completely.
+- Credentials in a JDBC URL or driver error message are redacted from every message, independently of the value
+  exposure policy.
+- Rule ids are stable across releases so dismissals keep applying.
+- The scan action is blocked by global read-only mode and the panel's read-only policy.
+
 ### 5.17.2 Flyway Panel
 
 Purpose: answer "Which Flyway-managed databases exist, what schema version is applied, which migrations are applied or
@@ -1649,6 +1687,126 @@ Acceptance criteria:
 - When Liquibase is present but no `SpringLiquibase` beans exist, the panel shows a clear empty state.
 - Opening the panel only reads changelog and history metadata; no Liquibase update command is executed as a side effect.
 - Mutating Liquibase actions require browser confirmation and a non-read-only app and panel.
+
+### 5.17.4 Database Advisor Panel
+
+Purpose: answer "Which deterministic structural risks exist in the application's physical database schema, and where
+does that schema disagree with explicit Hibernate mappings?"
+
+Data sources:
+
+- Every discovered application `DataSource`, introspected through standard JDBC `DatabaseMetaData` for tables, columns,
+  primary keys, foreign keys, and indexes.
+- PostgreSQL and MySQL system catalogs for the bounded vendor-specific checks documented in
+  `docs/DATABASE-ADVISOR-CHECKS.md`.
+- The Hibernate/JPA metamodel, when available, for cross-referencing explicitly named entity tables, columns, foreign
+  keys, and unique constraints with the physical schema.
+
+Features:
+
+- Run an explicit, read-only scan over a fixed generic ruleset covering missing primary keys, foreign-key columns without
+  supporting indexes, duplicate or overlapping indexes, foreign-key/primary-key type mismatches, and redundant unique
+  indexes.
+- Augment the generic scan for PostgreSQL with invalid-index and sequence-exhaustion checks, and for MySQL with
+  non-InnoDB-engine and non-`utf8mb4` checks. Catalog-query failures do not fail the generic scan.
+- When a Hibernate metamodel is available, compare only entities with explicit `@Table(name = ...)` mappings against
+  the physical schema instead of guessing naming-strategy output.
+- Discover datasources through the same proxy-aware mechanism as Database Connection Pools and SQL Trace so delegating
+  or routing wrappers do not cause the same physical datasource to be scanned twice.
+- Report findings by severity and rule, with bounded sample evidence and remediation guidance, and cache the latest
+  report until the next explicit scan.
+
+Availability:
+
+- The generic rules run for every JDBC-reachable database vendor; databases without vendor-specific augmentation are
+  not treated as unsupported.
+- When no application `DataSource` is present or no datasource can be read, the panel returns a stable unavailable or
+  empty report with an explanatory status. When only some datasources fail, readable datasources are still evaluated
+  and the report status is `PARTIAL`.
+- Hibernate cross-reference checks are skipped with an explicit reason when either the physical schema or Hibernate
+  metamodel is unavailable; their absence does not prevent the generic JDBC rules from running.
+- Spring MVC, Spring WebFlux, and Quarkus use the same shared rule engine and report contract. Quarkus discovers
+  datasources through CDI and names multiple datasources positionally (`default`, `datasource-2`, ...) because the
+  adapter intentionally avoids an Agroal-specific qualifier dependency.
+
+Out of scope for the current release surface:
+
+- Executing DDL, querying application data, changing schema objects, or changing Hibernate mappings.
+- Workload or query-plan analysis, partition management, and index suggestions derived from observed query usage.
+- Guessing physical names for entities that rely on an implicit Hibernate naming strategy.
+
+Acceptance criteria:
+
+- Opening the panel returns only the cached report; schema introspection starts only after the developer explicitly
+  invokes `POST /bootui/api/database-advisor/scan`.
+- The scan action is blocked by global read-only mode and `bootui.panels.database-advisor.read-only`.
+- A failure in PostgreSQL/MySQL catalog augmentation does not discard generic JDBC findings, and an unreadable
+  datasource does not discard findings from readable datasources.
+- The panel never executes DDL or queries application rows, and findings are presented as deterministic review prompts
+  rather than automatic tuning instructions.
+- Equivalent inputs produce the same findings and report shape on Spring MVC, Spring WebFlux, and Quarkus, subject only
+  to the documented Quarkus datasource-naming difference.
+
+### 5.17.5 Transactions Panel
+
+Purpose: answer "Which transaction boundaries recently ran, how did they complete, how were they nested, and which ones
+were slow or held multiple JDBC connections?"
+
+Data sources:
+
+- Spring Framework's `TransactionExecutionListener` SPI, registered without replacing existing listeners against every
+  discovered `ConfigurableTransactionManager`.
+- The bounded, framework-neutral `TransactionRecorder`.
+- SQL Trace's existing thread and time-window correlation for per-transaction SQL-statement and distinct-connection
+  counts.
+- The active Micrometer/W3C trace context when a trace id is available.
+
+Features:
+
+- Capture begin, commit, rollback, and failure outcomes for observed transaction boundaries, including the declared
+  boundary name, best-effort `NEW` or `PARTICIPATING` propagation classification, active JDBC isolation, read-only flag,
+  start/end timestamps, duration, thread, trace id, and error details.
+- Retain completed transactions most-recent-first in a configurable bounded ring buffer and render parent/child links
+  as a nested transaction tree.
+- Report aggregate total, average, and maximum duration; commit, rollback, and unknown counts; nested-transaction count;
+  and configurable slow-transaction and connection-hold threshold counts.
+- Correlate captured boundaries with SQL Trace without adding a second SQL instrumentation layer.
+- Provide explicit **Pause/Resume** and confirmation-gated **Clear** actions. Pausing preserves retained entries and does
+  not deregister the listener.
+- Stream coalesced change notifications over `/bootui/api/transactions/stream` when a transaction completes, recording
+  changes state, or the buffer is cleared. The browser closes the stream when auto-refresh is disabled or the tab is
+  hidden and retains manual refresh as a fallback.
+
+Availability:
+
+- Spring MVC and Spring WebFlux capture boundaries from configurable blocking transaction managers. BootUI contributes
+  its listener through Spring Boot's transaction-manager customization and completes registration for user-defined
+  managers after singleton initialization.
+- The panel returns a clear unavailable report when transaction capture is disabled, no
+  `ConfigurableTransactionManager` is present, or capture is otherwise not configured.
+- A WebFlux application backed only by `ReactiveTransactionManager` (R2DBC) is explicitly unavailable because Spring's
+  transaction-execution listener hook exists only on the blocking transaction-manager SPI.
+- Transactions are not applicable on Quarkus. Narayana JTA and the CDI `@Transactional` interceptor expose no comparable
+  per-boundary listener without invasive interception, so the Quarkus adapter reports the panel unavailable rather than
+  providing lower-fidelity capture.
+
+Out of scope for the current release surface:
+
+- Capturing R2DBC-only transaction boundaries or adding an invasive Quarkus transaction interceptor.
+- Changing transaction propagation, isolation, rollback rules, or application transaction-manager configuration.
+- Retaining an unbounded transaction history or recording application payloads and SQL parameter values.
+
+Acceptance criteria:
+
+- Listener registration composes with the application's transaction management and listeners; BootUI never wraps or
+  replaces a transaction manager.
+- Retention is bounded, nested boundaries preserve parent/child relationships while retained, and evicted parents do
+  not hide retained child entries.
+- `POST /bootui/api/transactions/recording` and `POST /bootui/api/transactions/clear` are blocked by global read-only
+  mode and `bootui.panels.transactions.read-only`; clearing additionally requires explicit browser confirmation.
+- Spring MVC and Spring WebFlux expose the same report and action contract, with equivalent SSE change semantics.
+- R2DBC-only WebFlux applications and Quarkus return an explained unavailable state rather than a silently empty
+  transaction list; the Quarkus adapter does not advertise the `get_transactions` MCP tool.
 
 ### 5.18 Cache Panel
 
@@ -1909,6 +2067,8 @@ Initial endpoints:
 | `/bootui/api/hibernate/scan`         | POST   | Run explicit read-only Hibernate/JPA advisor checks                                    |
 | `/bootui/api/hibernate-statistics`   | GET    | Live read-only Hibernate `SessionFactory` statistics (Hibernate Statistics panel)      |
 | `/bootui/api/hibernate-statistics/enable` | POST | Enable Hibernate statistics collection for the current runtime                         |
+| `/bootui/api/database-advisor`       | GET    | Latest Database advisor report, with per-datasource read status and scan diagnostics   |
+| `/bootui/api/database-advisor/scan`  | POST   | Run explicit read-only, bounded physical-schema checks                                 |
 | `/bootui/api/architecture`                   | GET    | Latest Architecture scan report                                                        |
 | `/bootui/api/architecture/scan`              | POST   | Run explicit ArchUnit hygiene checks                                                   |
 | `/bootui/api/rest-api`                   | GET    | Latest REST API Advisor scan report                                                    |
@@ -2108,16 +2268,17 @@ Design rules:
   `tools/call` remains an HTTP `200` MCP response but returns an in-band tool error (`isError: true`) with the canonical
   busy message. Panel disabled/read-only policy is checked first, and the aggregate MCP concurrent-call cap remains a
   separate capacity limit.
-- **Tool surface.** Advisor scans as action tools (`architecture_scan`, `spring_scan`, `hibernate_scan`, `memory_scan`,
-  `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`, `vulnerabilities_scan`); diagnostics
-  reads (`get_live_activity`, `get_exceptions`, `get_exception_detail`, `get_security_logs`, `get_sql_traces`,
-  `get_traces`, `get_log_tail`, `get_http_exchanges`); and core context reads (`get_overview`, `get_health`,
-  `get_config`, `get_beans`, `get_mappings`, `get_loggers`, `get_conditions`, `get_scheduled_tasks`, `get_cache_stats`,
-  `get_database_connection_pools`). `get_live_activity` returns the same correlated feed as the Live Activity panel;
-  `get_exception_detail` takes a required `id` argument and returns one exception group's full stack trace, causes,
-  and occurrences. `vulnerabilities_scan` makes outbound calls to OSV.dev, unlike every other read/scan tool which
-  stays local. Tools whose backing controller is absent (conditional on classpath, e.g. Hibernate or Spring Security)
-  or not applicable to the running stack (e.g. `get_conditions` on Quarkus) are not advertised.
+- **Tool surface.** Advisor scans as action tools (`architecture_scan`, `spring_scan`, `hibernate_scan`,
+  `database_advisor_scan`, `memory_scan`, `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`,
+  `vulnerabilities_scan`); diagnostics reads (`get_live_activity`, `get_exceptions`, `get_exception_detail`,
+  `get_security_logs`, `get_sql_traces`, `get_transactions` (Spring MVC/WebFlux only), `get_traces`, `get_log_tail`,
+  `get_http_exchanges`); and core context reads (`get_overview`, `get_health`, `get_config`, `get_beans`, `get_mappings`,
+  `get_loggers`, `get_conditions`, `get_scheduled_tasks`, `get_cache_stats`, `get_database_connection_pools`).
+  `get_live_activity` returns the same correlated feed as the Live Activity panel; `get_exception_detail` takes a
+  required `id` argument and returns one exception group's full stack trace, causes, and occurrences.
+  `vulnerabilities_scan` makes outbound calls to OSV.dev, unlike every other read/scan tool which stays local. Tools
+  whose backing controller is absent (conditional on classpath, e.g. Hibernate or Spring Security) or not applicable
+  to the running stack (e.g. `get_conditions` and `get_transactions` on Quarkus) are not advertised.
 - **Agent guidance.** Initialization instructions direct agents to establish overview/health context, prefer the smallest
   relevant read, correlate exception and trace identifiers, verify advisor findings before changing code, and account for
   active scan costs (`memory_scan` may trigger a full GC; `pentest_scan` sends bounded loopback probes). Tool descriptions

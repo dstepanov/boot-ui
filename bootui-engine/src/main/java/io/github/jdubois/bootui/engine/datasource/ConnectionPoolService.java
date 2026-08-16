@@ -5,13 +5,13 @@ import io.github.jdubois.bootui.core.ValueExposure;
 import io.github.jdubois.bootui.core.dto.HikariPoolDto;
 import io.github.jdubois.bootui.core.dto.HikariPoolSnapshotDto;
 import io.github.jdubois.bootui.core.dto.HikariPoolsReport;
+import io.github.jdubois.bootui.engine.support.CredentialRedaction;
 import io.github.jdubois.bootui.spi.ConnectionPoolInfo;
 import io.github.jdubois.bootui.spi.ConnectionPoolProvider;
 import io.github.jdubois.bootui.spi.ConnectionPoolSnapshot;
 import io.github.jdubois.bootui.spi.ExposurePolicy;
 import java.util.Comparator;
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
  * Framework-neutral logic behind the Database Connection Pools panel, shared by the Spring Boot and Quarkus
@@ -23,7 +23,8 @@ import java.util.regex.Pattern;
  * assembling the wire {@link HikariPoolsReport} / per-pool {@link HikariPoolSnapshotDto}.</p>
  *
  * <p>The masking is the byte-identical move of the former {@code DatabaseConnectionPoolsController} logic: the
- * two URL-credential regexes and the {@link SecretMasker#MASKED_VALUE} username substitution are reproduced
+ * two URL-credential patterns (now shared with the Database Advisor through
+ * {@link CredentialRedaction}) and the {@link SecretMasker#MASKED_VALUE} username substitution are reproduced
  * verbatim, and both {@link ExposurePolicy#valueExposure()} and {@link ExposurePolicy#maskSecrets()} are
  * honored exactly as before (so a Spring user running {@code expose-values=MASKED} with
  * {@code mask-secrets=false} still sees raw values), keeping the Spring panel's wire contract unchanged.</p>
@@ -33,11 +34,6 @@ import java.util.regex.Pattern;
  * (a deliberate kept-contract decision, mirroring the Cache panel sharing the {@code cache} id).</p>
  */
 public final class ConnectionPoolService {
-
-    private static final Pattern URL_CREDENTIALS =
-            Pattern.compile("([a-z][a-z0-9+.-]*://)([^:/@\\s]+):([^@\\s]+)@", Pattern.CASE_INSENSITIVE);
-    private static final Pattern URL_CREDENTIAL_PARAMS =
-            Pattern.compile("([?&](?:user|username|password|passwd|pwd)=)([^&\\s]*)", Pattern.CASE_INSENSITIVE);
 
     private final ConnectionPoolProvider provider;
 
@@ -113,9 +109,7 @@ public final class ConnectionPoolService {
         if (valueExposure == ValueExposure.FULL || !exposure.maskSecrets()) {
             return url;
         }
-        String masked = URL_CREDENTIALS.matcher(url).replaceAll("$1******@");
-        masked = URL_CREDENTIAL_PARAMS.matcher(masked).replaceAll("$1" + SecretMasker.MASKED_VALUE);
-        return masked;
+        return CredentialRedaction.redact(url);
     }
 
     private String maskUsername(String username) {

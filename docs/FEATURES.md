@@ -539,35 +539,54 @@ the same `/spring` route, `/bootui/api/spring` endpoint, and report contract —
 
 The Database panel introspects the physical schema of every discovered application `DataSource` bean through
 plain JDBC `DatabaseMetaData` — tables, columns, primary keys, foreign keys, and indexes — and evaluates a fixed,
-on-demand ruleset of deterministic, low-false-positive structural checks (a missing primary key, a foreign-key column
-with no supporting index, duplicate/overlapping indexes, a foreign-key column whose type disagrees with the
-referenced primary key's type, and a redundant unique index duplicating the primary key). It reuses the same
-proxy-aware datasource discovery as Database Connection Pools and SQL Trace, skipping Spring's delegating/routing
-`DataSource` wrappers so a wrapped datasource is never introspected twice. It never executes DDL, never queries
-application data, and fails closed with a stable empty report and an explanatory status when no `DataSource` bean is
-present or no datasource can be read. If only some datasources fail introspection, readable datasources are still
-evaluated and the report status is `PARTIAL`.
+on-demand ruleset of deterministic, low-false-positive structural checks (a missing primary key, a foreign key whose
+complete ordered column list has no usable supporting index, duplicate/overlapping indexes, a foreign-key column whose
+type disagrees with the column it actually references, and a redundant unique index duplicating the primary key). It
+reuses the same proxy-aware datasource discovery as Database Connection Pools and SQL Trace, skipping Spring's
+delegating/routing `DataSource` wrappers and de-duplicating by the physical pool behind BootUI's own SQL Trace proxy,
+so a wrapped datasource is never introspected twice. It never executes DDL and never queries application data.
 
-For **PostgreSQL** and **MySQL** — the two most widely used relational databases among Java developers — a small amount
-of dialect-specific catalog augmentation runs in addition to the generic checks: PostgreSQL invalid/broken indexes
-(`pg_index.indisvalid = false`, e.g. left behind by a failed `CREATE INDEX CONCURRENTLY`), a PostgreSQL sequence
-nearing exhaustion of its underlying type's numeric range (`pg_sequences.last_value`), MySQL tables using a
-non-`InnoDB` storage engine, and MySQL columns using a character set other than `utf8mb4`. The dialect is detected from
-`DatabaseMetaData.getDatabaseProductName()` and the JDBC URL; every other database (H2, SQL Server, Oracle, MariaDB, etc.)
-still runs the full generic ruleset through the standard JDBC metadata fallback — it is never treated as unsupported. Both
-dialect-specific queries fail soft (an empty result) rather than propagating, since they may be blocked by restricted
-database privileges on some hosts.
+Every scan is bounded and reports exactly what it could not do. It runs under fixed bounds (at most 300 tables, 300
+columns and 100 indexes per table, 500 rows per catalog query, an overall 20-second budget, and a 5-second timeout on
+every catalog statement), detects a reached bound deterministically by reading one row past it, and restores the
+connection's original read-only state before returning it to the pool. A datasource that could not be read, a table
+whose metadata was refused, a catalog view a database role cannot see, a truncated scan, and every rule that was
+skipped or errored are reported as per-datasource statuses and diagnostics — never as passing checks, and never counted
+as findings or against the advisor score. The scan status is `SCANNED` only when everything was read completely,
+`PARTIAL` when something was not, `ERROR` when every datasource failed, and `DISABLED` only when there is no
+`DataSource` bean to inspect. Credentials in a JDBC URL or a driver error message are always redacted.
+
+For **PostgreSQL**, **MySQL** and **MariaDB**, dialect-specific catalog augmentation runs in addition to the generic
+checks: PostgreSQL invalid/broken indexes (`pg_index`, excluding partitioned index parents), a PostgreSQL sequence
+nearing exhaustion measured against the smaller of its own maximum and its **owning column's** capacity (the classic
+`bigint` sequence feeding an `integer` column), PostgreSQL constraints added `NOT VALID` and never validated, tables on
+a non-transactional MySQL/MariaDB storage engine, the legacy three-byte `utf8mb3` character set, and an
+`AUTO_INCREMENT` counter nearing its column type's signed/unsigned capacity. PostgreSQL declarative partitioning is
+modelled explicitly, so a finding on a partitioned table is reported once on its parent instead of once per child
+partition. The dialect is detected from `DatabaseMetaData.getDatabaseProductName()`, the product version string and the
+JDBC URL — MariaDB is detected as its own dialect even through the MySQL driver, which reports the product name as
+"MySQL" — and catalog SQL is selected from the reported server version (MySQL 8.0's `IS_VISIBLE` versus MariaDB 10.6's
+`IGNORED`, PostgreSQL 10's `pg_sequences`). Every other database (H2, SQL Server, Oracle, etc.) still runs the full
+generic ruleset through the standard JDBC metadata fallback — it is never treated as unsupported. A catalog query
+blocked by restricted privileges makes its rule report `SKIPPED` with that reason instead of silently reporting no
+findings.
+
+Where the vendor catalog can answer, index semantics JDBC cannot express are folded into the shared model — validity,
+partial predicates, expression and prefix key parts, access method and visibility — so every index rule asks "does this
+index actually support that lookup, or enforce that uniqueness?" instead of comparing bare column-name lists.
 
 When a Hibernate `EntityManagerFactory`/metamodel is also available for the same application, the panel additionally
 cross-references the physical schema against the mapped JPA entities the shared Hibernate metamodel reader already
-reads (the same reader `Hibernate` uses): a `@ManyToOne`/`@JoinColumn` foreign-key column with no supporting physical
-index (the highest-confidence check), an explicitly-`@Table`-named entity with no matching physical table, basic
-type-family/nullability mismatches between a mapped `@Column` and its physical column, a mapped `@Column(length=...)`
-longer than the physical column can hold (a truncation risk), and a mapped unique constraint
-(`@Column(unique=true)`/`@Table(uniqueConstraints=...)`) with no backing physical unique index. Only entities with an
-*explicit* `@Table(name = ...)` are cross-referenced — entities relying on the default naming strategy are skipped rather
-than guessed, keeping the false-positive rate low. This half of the panel is skipped (with a clear reason, not silently
-dropped) when either a `DataSource` or a Hibernate metamodel is unavailable. See
+reads (the same reader `Hibernate` uses): mapped `@JoinColumn`/`@JoinColumns` foreign keys with no supporting physical
+index or no physical foreign key constraint at all, an explicitly-`@Table`-named entity with no matching physical
+table, a mapped column that does not exist physically, type-family and *explicitly declared* nullability mismatches, an
+*explicitly declared* `@Column(length=...)` longer than the physical column can hold, and a mapped unique constraint
+with no physical index that genuinely enforces it. Only entities with an *explicit* `@Table(name = ...)` are
+cross-referenced — entities relying on the default naming strategy are skipped rather than guessed — matching honors a
+declared `catalog`/`schema`, and a mapped name that matches tables in several readable datasources is treated as
+ambiguous rather than attributed to an arbitrary one. Attributes whose persisted shape is decided by a converter,
+`@Enumerated` or `@Lob` are skipped by the type and length rules. This half of the panel is skipped (with a clear
+reason, not silently dropped) when either a `DataSource` or a Hibernate metamodel is unavailable. See
 [DATABASE-ADVISOR-CHECKS.md](DATABASE-ADVISOR-CHECKS.md) for the full rule catalogue and remediation links.
 
 Out of scope by design: this panel proposes no query/workload-based optimizations, runs no execution-plan analysis,
@@ -577,10 +596,14 @@ structural, deterministic advisor in the same spirit as the Hibernate Advisor, n
 On Quarkus the panel is identical, running the same shared rule engine over the same report contract: `DataSource`
 beans are discovered through `@Any Instance<DataSource>` (unconditionally — `javax.sql.DataSource` is core JDK, so no
 capability gating is needed), and the Hibernate cross-reference half reuses the same `EntityDiscoverySource` the
-Hibernate panel produces when `quarkus-hibernate-orm` is present. One reduced-fidelity difference: since the
-per-datasource name is only discoverable through an Agroal-specific qualifier this panel intentionally avoids
-importing, datasources are named positionally (`default`, `datasource-2`, ...) rather than by their configured Quarkus
-datasource name.
+Hibernate panel produces when `quarkus-hibernate-orm` is present. Arc reports BootUI's own `@Alternative` SQL Trace
+wrapper alongside the real Agroal pool it wraps, so the adapter de-duplicates by the physical pool behind the proxy —
+otherwise the same database would be introspected twice, under two names, doubling every finding. Datasource names come
+from the Agroal `@DataSource("...")` qualifier, read reflectively by annotation type name so the panel still links no
+`io.quarkus.agroal`/`io.agroal` type and stays safe in an application with no JDBC datasource extension; a bean with no
+such qualifier falls back to positional naming (`default`, `datasource-2`, ...).
+
+![BootUI Database panel](./images/bootui-database-advisor.webp)
 
 ### Hibernate
 
@@ -1268,6 +1291,8 @@ On Quarkus the panel is identical, running over the same framework-neutral `Hibe
 contract, backed by a `HibernateStatisticsProvider` gated on the same Hibernate ORM capability as the Hibernate
 advisor panel.
 
+![BootUI Hibernate Statistics panel](./images/bootui-hibernate-statistics.webp)
+
 ### Transactions
 
 The Transactions panel shows the `@Transactional` boundaries your application recently ran — begin, commit, and rollback
@@ -1318,6 +1343,8 @@ report to an agent. It is not advertised on Quarkus because transaction capture 
 > hook without much more invasive instrumentation than Spring's opt-in listener registration. Rather than force false
 > parity, the Quarkus endpoint always reports unavailable with a clear reason explaining the gap; see
 > `docs/QUARKUS-SUPPORT.md` for details.
+
+![BootUI Transactions panel](./images/bootui-transactions.webp)
 
 ### Spring Data
 
@@ -1830,15 +1857,16 @@ The panel explains what the server does and lists every tool it exposes. Tools r
 rather than reimplementing anything, so every tool returns the same masked, bounded shape as the REST API, in three
 groups:
 
-- **Advisor scans (actions):** `architecture_scan`, `spring_scan`, `hibernate_scan`, `memory_scan`, `security_scan`,
-  `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`, `vulnerabilities_scan`. Each triggers the same scan the
-  panel's action button runs and returns the report DTO; `vulnerabilities_scan` additionally makes outbound calls to
-  OSV.dev.
+- **Advisor scans (actions):** `architecture_scan`, `spring_scan`, `hibernate_scan`, `database_advisor_scan`,
+  `memory_scan`, `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`,
+  `vulnerabilities_scan`. Each triggers the same scan the panel's action button runs and returns the report DTO;
+  `vulnerabilities_scan` additionally makes outbound calls to OSV.dev.
 - **Diagnostics reads:** `get_live_activity`, `get_exceptions`, `get_exception_detail`, `get_security_logs`,
-  `get_sql_traces`, `get_traces`, `get_log_tail`, `get_http_exchanges`. `get_live_activity` returns the correlated feed
-  the [Live Activity panel](#live-activity) shows (HTTP requests, SQL statements, exceptions, security events,
-  scheduled-task runs, and — Spring only — cache accesses, grouped by request/trace); `get_exception_detail` takes a required `id` (from `get_exceptions` or
-  `get_live_activity`) and returns that exception group's full stack trace, causes, and individual occurrences.
+  `get_sql_traces`, `get_transactions` (Spring MVC/WebFlux only), `get_traces`, `get_log_tail`, `get_http_exchanges`.
+  `get_live_activity` returns the correlated feed the [Live Activity panel](#live-activity) shows (HTTP requests, SQL
+  statements, exceptions, security events, scheduled-task runs, and — Spring only — cache accesses, grouped by
+  request/trace); `get_exception_detail` takes a required `id` (from `get_exceptions` or `get_live_activity`) and returns
+  that exception group's full stack trace, causes, and individual occurrences.
 - **Core context reads:** `get_overview`, `get_health`, `get_config` (masked), `get_beans`, `get_mappings`,
   `get_loggers`, `get_conditions` (Spring MVC/WebFlux only — Quarkus has no runtime condition-match graph),
   `get_scheduled_tasks`, `get_cache_stats`, `get_database_connection_pools`.

@@ -17,8 +17,10 @@ public final class McpToolDescriptions {
             Map.entry(
                     "database_advisor_scan",
                     "Actively introspect the physical database schema (tables, columns, keys, indexes) via read-only "
-                            + "JDBC metadata, plus PostgreSQL/MySQL-specific catalog checks and Hibernate mapping "
-                            + "cross-reference when available. Verify findings against the live schema before changing it."),
+                            + "JDBC metadata, plus PostgreSQL/MySQL/MariaDB catalog checks and Hibernate mapping "
+                            + "cross-reference when available. The scan is bounded; anything it could not read is "
+                            + "reported as a diagnostic rather than as a passing check. Verify findings against the "
+                            + "live schema before changing it."),
             Map.entry(
                     "memory_scan",
                     "Actively analyze JVM memory and return prioritized findings. This can trigger a class histogram "

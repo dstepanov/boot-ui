@@ -4,7 +4,24 @@ import io.github.jdubois.bootui.core.dto.DatabaseAdvisorRuleResultDto;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Two indexes on the same table sharing the same leading column redundantly duplicate maintenance cost. */
+/**
+ * Two indexes on the same table where one is genuinely redundant: its ordered key parts are a leading prefix
+ * of the other's <em>and</em> both share the same semantics, so the longer index answers everything the
+ * shorter one does.
+ *
+ * <p>The previous "same leading column" comparison flagged pairs that are not interchangeable at all. This
+ * one requires every key part to match — column, direction, collation, prefix length, expression — plus the
+ * same access method, the same partial predicate and the same visibility, and it refuses to suggest dropping
+ * an index that carries a semantic guarantee the other does not:</p>
+ *
+ * <ul>
+ *   <li>a <strong>unique</strong> index is never reported as the redundant one: {@code unique(a)} and
+ *       {@code index(a, b)} look like a prefix pair but only the first enforces uniqueness of {@code a};</li>
+ *   <li>the <strong>primary key's backing index</strong> is left out entirely — dropping it is not an
+ *       option, and the redundant-unique-index case belongs to {@code DB-SCHEMA-005};</li>
+ *   <li>a <strong>partial or invalid</strong> index is left out, since it is not equivalent to a full one.</li>
+ * </ul>
+ */
 final class DuplicateIndexRule extends AbstractDatabaseAdvisorRule {
 
     DuplicateIndexRule() {
@@ -13,11 +30,14 @@ final class DuplicateIndexRule extends AbstractDatabaseAdvisorRule {
                 "Duplicate/redundant indexes",
                 DatabaseAdvisorCategory.SCHEMA,
                 DatabaseAdvisorRuleSupport.LOW,
-                "Detects two or more indexes on the same table whose column lists share the same leading column, "
-                        + "one of which is a strict prefix of the other (or an exact duplicate).",
+                "Detects a non-unique index whose ordered key parts (columns, direction, collation, prefix "
+                        + "length, expressions) are a leading prefix of another index on the same table with the "
+                        + "same access method, predicate and visibility. Unique indexes, primary key backing "
+                        + "indexes and partial/invalid indexes are excluded.",
                 "Every additional index slows down INSERT/UPDATE/DELETE and consumes storage. When one index's "
-                        + "column list is a prefix of another's, the shorter one is usually redundant and can be "
-                        + "dropped; review both definitions before removing either.",
+                        + "key parts are a leading prefix of another's with identical semantics, the shorter one is "
+                        + "usually redundant; review both definitions, and any index hints or constraints relying "
+                        + "on them, before removing either.",
                 "https://use-the-index-luke.com/sql/dml"));
     }
 
@@ -25,34 +45,43 @@ final class DuplicateIndexRule extends AbstractDatabaseAdvisorRule {
     DatabaseAdvisorRuleResultDto evaluateRule(DatabaseAdvisorContext context) {
         List<String> details = new ArrayList<>();
         for (SchemaSnapshot schema : context.availableSchemas()) {
-            for (TableModel table : schema.tables()) {
-                List<IndexModel> indexes = table.indexes();
-                for (int i = 0; i < indexes.size(); i++) {
-                    for (int j = i + 1; j < indexes.size(); j++) {
-                        IndexModel first = indexes.get(i);
-                        IndexModel second = indexes.get(j);
-                        if (isPrefixOf(first.columns(), second.columns())
-                                || isPrefixOf(second.columns(), first.columns())) {
-                            details.add(schema.dataSourceName() + ": " + table.qualifiedName() + " indexes "
-                                    + first.name() + " " + first.columns() + " and " + second.name() + " "
-                                    + second.columns() + " overlap.");
-                        }
-                    }
+            for (TableModel table : DatabaseAdvisorContext.analyzableTables(schema)) {
+                if (!table.metadata().indexesRead()) {
+                    continue;
                 }
+                checkTable(schema, table, details);
             }
         }
         return violation(details);
     }
 
-    private boolean isPrefixOf(List<String> prefix, List<String> candidate) {
-        if (prefix.isEmpty() || prefix.size() > candidate.size()) {
-            return false;
-        }
-        for (int i = 0; i < prefix.size(); i++) {
-            if (!prefix.get(i).equalsIgnoreCase(candidate.get(i))) {
-                return false;
+    private void checkTable(SchemaSnapshot schema, TableModel table, List<String> details) {
+        IndexModel primaryKeyIndex = table.primaryKeyBackingIndex();
+        List<IndexModel> candidates = table.indexes().stream()
+                .filter(index -> index != primaryKeyIndex)
+                .filter(index -> !index.partial()
+                        && !index.invalid()
+                        && !index.keyParts().isEmpty())
+                .toList();
+        for (IndexModel shorter : candidates) {
+            if (shorter.unique()) {
+                // A unique index enforces a constraint the covering index does not; never suggest dropping it.
+                continue;
+            }
+            for (IndexModel longer : candidates) {
+                if (shorter == longer || !shorter.sameSemanticsAs(longer) || !shorter.isKeyPrefixOf(longer)) {
+                    continue;
+                }
+                if (shorter.keyParts().size() == longer.keyParts().size()
+                        && shorter.name().compareToIgnoreCase(longer.name()) >= 0) {
+                    // Exact duplicates would otherwise be reported twice, once from each side.
+                    continue;
+                }
+                details.add(schema.dataSourceName() + ": " + table.qualifiedName() + " index " + shorter.name() + " "
+                        + shorter.describeKeyParts() + " is a leading prefix of " + longer.name() + " "
+                        + longer.describeKeyParts() + " with the same semantics.");
+                break;
             }
         }
-        return true;
     }
 }
