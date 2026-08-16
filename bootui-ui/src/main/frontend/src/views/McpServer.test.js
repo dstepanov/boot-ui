@@ -128,6 +128,19 @@ describe('McpServer', () => {
     expect(writeText.mock.calls[0][0]).toContain('/bootui/api/mcp')
   })
 
+  it('adds bearer authorization guidance for remote access', async () => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {origin: 'https://devbox.example.com', hostname: 'devbox.example.com'}
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(mcpStatus())))
+
+    wrapper = mount(McpServer)
+    await flushPromises()
+
+    expect(wrapper.get('.config-block').text()).toContain('"Authorization": "Bearer <bootui authentication token>"')
+  })
+
   it('does not toggle and warns when the panel is read-only', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(mcpStatus()))
     vi.stubGlobal('fetch', fetchMock)

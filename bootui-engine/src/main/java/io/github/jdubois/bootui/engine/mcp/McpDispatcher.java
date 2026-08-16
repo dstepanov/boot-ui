@@ -13,7 +13,17 @@ import io.github.jdubois.bootui.engine.mcp.McpDispatchOutcome.ToolsListResult;
 import io.github.jdubois.bootui.spi.McpPanelPolicy;
 import java.util.List;
 import java.util.Objects;
+import java.util.TreeSet;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,8 +46,9 @@ import org.slf4j.LoggerFactory;
 public final class McpDispatcher {
 
     private static final Logger log = LoggerFactory.getLogger(McpDispatcher.class);
+    private static final ExecutorService TOOL_EXECUTOR = Executors.newCachedThreadPool(new McpToolThreadFactory());
 
-    private final List<McpTool> tools;
+    private final Supplier<List<McpTool>> toolSupplier;
     private final List<McpPrompt> prompts;
     private final McpPanelPolicy policy;
     private final String serverVersion;
@@ -45,6 +56,8 @@ public final class McpDispatcher {
     private final int maxResults;
     private final Semaphore toolCallSemaphore;
     private final McpFailureReporter failureReporter;
+    private final long executionTimeoutMillis;
+    private final McpRuntimeStats runtimeStats;
 
     /**
      * @param tools the advertised tool catalog, in order (each adapter wires its own controllers /
@@ -72,6 +85,7 @@ public final class McpDispatcher {
                 instructions,
                 maxResults,
                 maxConcurrentCalls,
+                McpProtocol.DEFAULT_EXECUTION_TIMEOUT_MILLIS,
                 (operation, failure) -> log.error("BootUI MCP failure while {}", operation, failure));
     }
 
@@ -89,7 +103,51 @@ public final class McpDispatcher {
             int maxResults,
             int maxConcurrentCalls,
             McpFailureReporter failureReporter) {
-        this.tools = List.copyOf(tools);
+        this(
+                tools,
+                prompts,
+                policy,
+                serverVersion,
+                instructions,
+                maxResults,
+                maxConcurrentCalls,
+                McpProtocol.DEFAULT_EXECUTION_TIMEOUT_MILLIS,
+                failureReporter);
+    }
+
+    public McpDispatcher(
+            List<McpTool> tools,
+            List<McpPrompt> prompts,
+            McpPanelPolicy policy,
+            String serverVersion,
+            String instructions,
+            int maxResults,
+            int maxConcurrentCalls,
+            long executionTimeoutMillis,
+            McpFailureReporter failureReporter) {
+        this(
+                () -> tools,
+                prompts,
+                policy,
+                serverVersion,
+                instructions,
+                maxResults,
+                maxConcurrentCalls,
+                executionTimeoutMillis,
+                failureReporter);
+    }
+
+    public McpDispatcher(
+            Supplier<List<McpTool>> toolSupplier,
+            List<McpPrompt> prompts,
+            McpPanelPolicy policy,
+            String serverVersion,
+            String instructions,
+            int maxResults,
+            int maxConcurrentCalls,
+            long executionTimeoutMillis,
+            McpFailureReporter failureReporter) {
+        this.toolSupplier = Objects.requireNonNull(toolSupplier, "toolSupplier");
         this.prompts = List.copyOf(prompts);
         this.policy = Objects.requireNonNull(policy, "policy");
         this.serverVersion = serverVersion == null ? "dev" : serverVersion;
@@ -97,6 +155,8 @@ public final class McpDispatcher {
         this.maxResults = Math.max(1, maxResults);
         this.toolCallSemaphore = new Semaphore(Math.max(1, maxConcurrentCalls));
         this.failureReporter = Objects.requireNonNull(failureReporter, "failureReporter");
+        this.executionTimeoutMillis = Math.max(1, executionTimeoutMillis);
+        this.runtimeStats = new McpRuntimeStats();
     }
 
     /**
@@ -127,7 +187,12 @@ public final class McpDispatcher {
 
     /** The advertised tool catalog, in order. */
     public List<McpTool> tools() {
-        return tools;
+        return List.copyOf(toolSupplier.get());
+    }
+
+    /** Operational counters exposed by the MCP Server panel. */
+    public McpRuntimeStats runtimeStats() {
+        return runtimeStats;
     }
 
     /**
@@ -158,7 +223,7 @@ public final class McpDispatcher {
                     case "ping" -> new PingResult();
                     case "tools/list" ->
                         new ToolsListResult(
-                                tools.stream().map(McpTool::describe).toList());
+                                tools().stream().map(McpTool::describe).toList());
                     case "tools/call" -> callTool(request);
                     case "prompts/list" -> new PromptsListResult(prompts);
                     case "prompts/get" -> getPrompt(request);
@@ -185,6 +250,17 @@ public final class McpDispatcher {
         if (tool == null) {
             return new ProtocolError(McpProtocol.INVALID_PARAMS, "Unknown tool: " + name);
         }
+        if (request.argumentsError() != null) {
+            return new ProtocolError(McpProtocol.INVALID_PARAMS, request.argumentsError());
+        }
+        TreeSet<String> unexpectedArguments = new TreeSet<>(request.argumentNames());
+        unexpectedArguments.removeAll(tool.schema().argumentNames());
+        if (!unexpectedArguments.isEmpty()) {
+            return new ProtocolError(
+                    McpProtocol.INVALID_PARAMS,
+                    "Unexpected tool argument" + (unexpectedArguments.size() == 1 ? "" : "s") + ": "
+                            + String.join(", ", unexpectedArguments));
+        }
         if (!policy.isEnabled(tool.panelId())) {
             return new ToolCallError(policy.disabledReason(tool.panelId()));
         }
@@ -197,19 +273,68 @@ public final class McpDispatcher {
             return new ProtocolError(McpProtocol.INVALID_PARAMS, McpProtocol.MISSING_ID_ARGUMENT_MESSAGE);
         }
         if (!toolCallSemaphore.tryAcquire()) {
-            return new ProtocolError(McpProtocol.INTERNAL_ERROR, McpProtocol.RATE_LIMITED_MESSAGE);
+            runtimeStats.recordCapacityRefusal();
+            return new ProtocolError(McpProtocol.SERVER_AT_CAPACITY, McpProtocol.RATE_LIMITED_MESSAGE);
         }
-        // Permit acquired; the try/finally immediately below guarantees it is always released,
-        // since there is no code path between tryAcquire() and the try block.
+        long startedAt = System.nanoTime();
+        AtomicInteger invocationState = new AtomicInteger(0);
+        Future<Object> invocation;
         try {
-            try {
-                Object payload = tool.invoke(arguments);
-                return new ToolCallResult(payload);
-            } catch (ActionBusyException ex) {
-                return new ToolCallError(ex.result().message());
-            }
-        } finally {
+            invocation = TOOL_EXECUTOR.submit(() -> {
+                if (!invocationState.compareAndSet(0, 1)) {
+                    return null;
+                }
+                try {
+                    return tool.invoke(arguments);
+                } finally {
+                    int previous = invocationState.getAndSet(3);
+                    toolCallSemaphore.release();
+                    if (previous == 1) {
+                        runtimeStats.recordCall(System.nanoTime() - startedAt);
+                    }
+                }
+            });
+        } catch (RuntimeException | Error failure) {
             toolCallSemaphore.release();
+            runtimeStats.recordCall(System.nanoTime() - startedAt);
+            throw failure;
+        }
+        try {
+            return new ToolCallResult(invocation.get(executionTimeoutMillis, TimeUnit.MILLISECONDS));
+        } catch (TimeoutException ex) {
+            runtimeStats.recordTimeout();
+            int previous = invocationState.getAndUpdate(state -> state < 2 ? (state == 0 ? 3 : 2) : state);
+            invocation.cancel(true);
+            if (previous == 0) {
+                toolCallSemaphore.release();
+            }
+            if (previous == 0 || previous == 1) {
+                runtimeStats.recordCall(System.nanoTime() - startedAt);
+            }
+            return new ProtocolError(McpProtocol.TOOL_TIMEOUT, McpProtocol.TOOL_TIMEOUT_MESSAGE);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            int previous = invocationState.getAndUpdate(state -> state < 2 ? (state == 0 ? 3 : 2) : state);
+            invocation.cancel(true);
+            if (previous == 0) {
+                toolCallSemaphore.release();
+            }
+            if (previous == 0 || previous == 1) {
+                runtimeStats.recordCall(System.nanoTime() - startedAt);
+            }
+            throw new IllegalStateException("Interrupted while invoking MCP tool", ex);
+        } catch (ExecutionException ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof ActionBusyException busy) {
+                return new ToolCallError(busy.result().message());
+            }
+            if (cause instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            if (cause instanceof Error error) {
+                throw error;
+            }
+            throw new IllegalStateException("MCP tool invocation failed", cause);
         }
     }
 
@@ -226,9 +351,21 @@ public final class McpDispatcher {
     }
 
     private McpTool findTool(String name) {
-        return tools.stream()
+        return tools().stream()
                 .filter(tool -> tool.name().equals(name))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private static final class McpToolThreadFactory implements ThreadFactory {
+
+        private int sequence;
+
+        @Override
+        public synchronized Thread newThread(Runnable task) {
+            Thread thread = new Thread(task, "bootui-mcp-tool-" + ++sequence);
+            thread.setDaemon(true);
+            return thread;
+        }
     }
 }

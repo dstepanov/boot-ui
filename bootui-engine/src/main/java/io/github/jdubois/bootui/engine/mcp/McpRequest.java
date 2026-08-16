@@ -1,5 +1,8 @@
 package io.github.jdubois.bootui.engine.mcp;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * A neutral, already-parsed view of a JSON-RPC request, built by each adapter's envelope codec and
  * consumed by {@link McpDispatcher}.
@@ -21,6 +24,8 @@ package io.github.jdubois.bootui.engine.mcp;
  * @param rawQuery the client {@code arguments.query} as parsed (may be {@code null}/blank/untrimmed)
  * @param rawLimit the client {@code arguments.limit} as parsed (may be {@code null} or out of range)
  * @param rawId the client {@code arguments.id} as parsed (may be {@code null}/blank/untrimmed)
+ * @param argumentNames every property present in {@code arguments}
+ * @param argumentsError a safe adapter-detected shape/type error, or {@code null}
  */
 public record McpRequest(
         String jsonrpc,
@@ -30,4 +35,48 @@ public record McpRequest(
         String toolName,
         String rawQuery,
         Integer rawLimit,
-        String rawId) {}
+        String rawId,
+        Set<String> argumentNames,
+        String argumentsError) {
+
+    public McpRequest {
+        argumentNames = argumentNames == null ? Set.of() : Set.copyOf(argumentNames);
+    }
+
+    /** Backward-compatible constructor for engine callers that already provide typed values. */
+    public McpRequest(
+            String jsonrpc,
+            String method,
+            boolean notification,
+            String requestedProtocolVersion,
+            String toolName,
+            String rawQuery,
+            Integer rawLimit,
+            String rawId) {
+        this(
+                jsonrpc,
+                method,
+                notification,
+                requestedProtocolVersion,
+                toolName,
+                rawQuery,
+                rawLimit,
+                rawId,
+                inferredArgumentNames(rawQuery, rawLimit, rawId),
+                null);
+    }
+
+    private static Set<String> inferredArgumentNames(String rawQuery, Integer rawLimit, String rawId) {
+        Set<String> names = new HashSet<>();
+        if (rawQuery != null) {
+            names.add("query");
+        }
+        if (rawLimit != null) {
+            names.add("limit");
+        }
+        if (rawId != null) {
+            names.add("id");
+        }
+        return names;
+    }
+}

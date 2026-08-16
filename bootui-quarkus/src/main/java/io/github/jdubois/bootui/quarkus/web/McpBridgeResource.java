@@ -3,6 +3,8 @@ package io.github.jdubois.bootui.quarkus.web;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.jdubois.bootui.engine.mcp.McpPayloadReader;
+import io.github.jdubois.bootui.engine.mcp.McpPayloadReader.PayloadTooLargeException;
 import io.github.jdubois.bootui.engine.mcp.McpProtocol;
 import io.github.jdubois.bootui.quarkus.mcp.BootUiMcpProducer;
 import io.github.jdubois.bootui.quarkus.mcp.McpServerState;
@@ -18,6 +20,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.io.InputStream;
 import org.eclipse.microprofile.config.Config;
 
 /**
@@ -45,17 +48,23 @@ public class McpBridgeResource {
     @Blocking
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response rpc(byte[] requestBody, @HeaderParam(McpProtocol.PROTOCOL_VERSION_HEADER) String protocolVersion) {
+    public Response rpc(
+            InputStream requestBody, @HeaderParam(McpProtocol.PROTOCOL_VERSION_HEADER) String protocolVersion) {
         if (protocolVersion != null && !McpProtocol.KNOWN_VERSIONS.contains(protocolVersion)) {
             return json(
                     400, error(null, McpProtocol.INVALID_REQUEST, McpProtocol.UNSUPPORTED_PROTOCOL_VERSION_MESSAGE));
         }
-        if (requestBody != null && requestBody.length > maxPayloadBytes) {
+        byte[] payload;
+        try {
+            payload = McpPayloadReader.read(requestBody, maxPayloadBytes);
+        } catch (PayloadTooLargeException ex) {
             return json(413, error(null, McpProtocol.PARSE_ERROR, PAYLOAD_LIMIT_MESSAGE));
+        } catch (IllegalArgumentException ex) {
+            return json(400, error(null, McpProtocol.PARSE_ERROR, ex.getMessage()));
         }
         JsonNode request;
         try {
-            request = envelope.readTree(requestBody == null ? new byte[0] : requestBody);
+            request = envelope.readTree(payload);
         } catch (IllegalArgumentException ex) {
             return json(400, error(null, McpProtocol.PARSE_ERROR, ex.getMessage()));
         }

@@ -87,7 +87,7 @@ settings" below.
 | `bootui.force-web`               | `true`                                  | While BootUI is active, force a non-web (command-line) application into a servlet web application so the console can be served. No effect on apps that are already servlet web apps or explicitly reactive. Set to `false` to leave the host's web-application type untouched. |
 | `bootui.path`                    | `/bootui`                               | Application-relative UI base path used by the shell, assets, filters, and startup banner. Normalized and validated as described below. |
 | `bootui.api-path`                | `<bootui.path>/api`                     | Optional application-relative API base path used by the UI, controllers, filters, MCP, OTLP, streams, and downloads.             |
-| `bootui.allow-non-localhost`     | `false`                                 | Explicitly opt out of loopback-only protection. Keep this `false` unless the local network is trusted.                          |
+| `bootui.allow-non-localhost`     | `false`                                 | Explicitly relax only the source-address check. Host/DNS-rebinding, cross-site-write, and bearer-authentication protections remain active. Keep this `false` unless remote access is required and the network is trusted. |
 | `bootui.allowed-hosts`           | _(empty)_                               | Extra `Host` header values accepted by the loopback filter, in addition to the built-in loopback names (`localhost`, `127.0.0.1`, `::1`). Use this for custom local hostnames while keeping DNS-rebinding protection. |
 | `bootui.authentication.token`    | _(generated)_                           | Access token required for every non-loopback `/bootui/api/**` request. When remote access is configured and this property is blank, BootUI generates a 256-bit token and logs it once at startup. Supply a stable token through an environment-backed property when logs are shared; configured tokens are never printed. |
 | `bootui.trusted-proxies`         | _(empty)_                               | Source IP ranges in CIDR notation (e.g. `172.16.0.0/12` for the Linux Docker bridge, or `192.168.65.0/24` for the Docker Desktop gateway) trusted in addition to loopback. A narrow opt-in for local Docker-bridge callers: it relaxes only the source-address check while keeping the `Host` allow-list (DNS-rebinding) and cross-site write (CSRF) protections in force. Prefer this over `bootui.allow-non-localhost`, and pair it with `bootui.allowed-hosts` for the hostname the browser uses. |
@@ -718,6 +718,8 @@ read-only, and all values flow through the same secret masking as the REST API.
 | `bootui.mcp.max-results`       | `200`     | Maximum number of items returned by paginated read tools (config, beans, mappings, security logs, traces, HTTP exchanges) per call. |
 | `bootui.mcp.max-payload-bytes` | `1048576` | Maximum size (in bytes) of an incoming JSON-RPC request body; larger requests are rejected before parsing. |
 | `bootui.mcp.max-concurrent-calls` | `20`   | Maximum number of `tools/call` invocations the server executes concurrently; excess calls are refused with a rate-limited error. |
+| `bootui.mcp.execution-timeout` | `30s`     | Maximum wall-clock duration of one tool invocation; timed-out calls are interrupted and return JSON-RPC `-32002`. |
+| `bootui.mcp.max-response-bytes` | `4194304` | Maximum size of a rendered JSON-RPC response; oversized results are replaced by JSON-RPC `-32003`. |
 
 
 

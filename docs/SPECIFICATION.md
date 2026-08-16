@@ -2193,6 +2193,10 @@ Initial properties:
 | `bootui.claude-code.allow-raw-reveal`        | `false`                                 | Allows opt-in raw Claude Code JSONL reveal; disabled by default because logs can include content. |
 | `bootui.mcp.enabled`                         | `OFF`                                   | Initial state of the local-only MCP server for AI agents. `OFF`/`AUTO` start it disabled; `ON` starts it enabled. The MCP Server panel can toggle it at runtime, overriding this value. |
 | `bootui.mcp.max-results`                     | `200`                                   | Maximum items returned by paginated MCP read tools (config, beans, mappings, logs, traces, etc.). |
+| `bootui.mcp.max-payload-bytes`               | `1048576`                               | Maximum incoming JSON-RPC request bytes, enforced before full body materialization. |
+| `bootui.mcp.max-concurrent-calls`            | `20`                                    | Maximum concurrent tool calls; additional calls fail immediately with server-defined error `-32001`. |
+| `bootui.mcp.execution-timeout`               | `30s`                                   | Maximum wall-clock duration of a tool call; timeouts return server-defined error `-32002`. |
+| `bootui.mcp.max-response-bytes`              | `4194304`                               | Maximum rendered JSON-RPC response bytes; oversized responses return server-defined error `-32003`. |
 
 Every visible panel must support `bootui.panels.<panel-id>.enabled`; panels with mutating browser actions must also
 support `bootui.panels.<panel-id>.read-only`. These properties are specified panel-by-panel in
@@ -2276,17 +2280,22 @@ Design rules:
   `tools/call` remains an HTTP `200` MCP response but returns an in-band tool error (`isError: true`) with the canonical
   busy message. Panel disabled/read-only policy is checked first, and the aggregate MCP concurrent-call cap remains a
   separate capacity limit.
-- **Tool surface.** Advisor scans as action tools (`architecture_scan`, `spring_scan`, `hibernate_scan`,
-  `database_advisor_scan`, `memory_scan`, `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`,
-  `vulnerabilities_scan`); diagnostics reads (`get_live_activity`, `get_exceptions`, `get_exception_detail`,
-  `get_security_logs`, `get_sql_traces`, `get_transactions` (Spring MVC/WebFlux only), `get_traces`, `get_log_tail`,
-  `get_http_exchanges`); and core context reads (`get_overview`, `get_health`, `get_config`, `get_beans`, `get_mappings`,
-  `get_loggers`, `get_conditions`, `get_scheduled_tasks`, `get_cache_stats`, `get_database_connection_pools`).
-  `get_live_activity` returns the same correlated feed as the Live Activity panel; `get_exception_detail` takes a
-  required `id` argument and returns one exception group's full stack trace, causes, and occurrences.
-  `vulnerabilities_scan` makes outbound calls to OSV.dev, unlike every other read/scan tool which stays local. Tools
-  whose backing controller is absent (conditional on classpath, e.g. Hibernate or Spring Security) or not applicable
-  to the running stack (e.g. `get_conditions` and `get_transactions` on Quarkus) are not advertised.
+- **Tool surface.** Every available panel with a safe passive read has an MCP read tool. Advisor action tools include
+  architecture, Spring/Quarkus, Hibernate, database, memory, security, pentesting, REST API, GraalVM, CRaC, and
+  vulnerability scans; matching `get_*_report` tools read the cached result without rescanning. Diagnostics include
+  live activity, exceptions and detail, security logs, SQL and transaction boundaries, traces, logs, HTTP exchanges,
+  and REST-client traces. Context and integration reads cover overview, health, masked configuration, beans, mappings,
+  loggers, conditions, scheduled tasks, caches, connection pools, metrics, JVM/memory/thread/startup state, persistence
+  integrations, AI/messaging activity, development services, cached GitHub data, and local agent-session summaries.
+  Bounded actions may clear in-memory buffers, pause/resume supported recorders, analyze an existing heap dump, or
+  trigger LiveReload. Heap capture/download, HTTP probes, database/cache mutations, GitHub writes, dev-service
+  restarts, and arbitrary agent commands are deliberately excluded. Tools whose backing controller is absent or not
+  applicable to the running stack are not advertised.
+- **Strict inputs.** The transport rejects invalid JSON-RPC id/params types, non-object tool arguments, unknown
+  arguments, and values whose type does not match the advertised schema with `-32600`/`-32602`; malformed values are
+  never silently coerced or replaced with broad defaults.
+- **Protocol version.** An absent `MCP-Protocol-Version` header uses the server's advertised current revision
+  (`2025-06-18`). A present unsupported revision is rejected; BootUI does not emulate older session semantics.
 - **Agent guidance.** Initialization instructions direct agents to establish overview/health context, prefer the smallest
   relevant read, correlate exception and trace identifiers, verify advisor findings before changing code, and account for
   active scan costs (`memory_scan` may trigger a full GC; `pentest_scan` sends bounded loopback probes). Tool descriptions
@@ -2300,7 +2309,9 @@ Design rules:
   allow-list, cross-site write protection). The dispatcher enforces per-panel access: read tools require the backing
   panel to be enabled, action tools are additionally refused when the panel is read-only or `bootui.read-only=true`.
   Configuration values flow through the same secret masking and `bootui.expose-values` mode, and paginated reads are
-  bounded by `bootui.mcp.max-results`. Application-controlled logs, SQL, traces, and exception messages cannot be
+  bounded by `bootui.mcp.max-results`. Request, concurrent-call, execution-time, and rendered-response budgets prevent a
+  client from monopolizing local resources. The MCP Server status reports completed call count, aggregate latency,
+  capacity refusals, timeouts, and response-limit refusals. Application-controlled logs, SQL, traces, and exception messages cannot be
   generically guaranteed secret-free, so initialization and tool guidance explicitly keep that data in the local
   diagnostic context.
 

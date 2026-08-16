@@ -15,6 +15,11 @@ import java.util.List;
  * @param endpoint the relative JSON-RPC endpoint path
  * @param protocolVersion the MCP protocol revision advertised by default
  * @param maxResults the {@code bootui.mcp.max-results} cap applied to paginated read tools
+ * @param callCount completed or timed-out tool calls since server startup
+ * @param totalLatencyMillis aggregate wall-clock latency of those calls
+ * @param capacityRefusals calls refused because all execution slots were occupied
+ * @param timeouts calls that exceeded the configured execution-time budget
+ * @param responseLimitRefusals responses replaced because they exceeded the configured byte budget
  * @param toolCount the number of tools currently advertised
  * @param tools the catalog of advertised tools
  */
@@ -28,5 +33,42 @@ public record McpServerStatus(
         String endpoint,
         String protocolVersion,
         int maxResults,
+        long callCount,
+        long totalLatencyMillis,
+        long capacityRefusals,
+        long timeouts,
+        long responseLimitRefusals,
         int toolCount,
-        List<McpToolInfo> tools) {}
+        List<McpToolInfo> tools) {
+
+    public McpServerStatus(
+            boolean enabled,
+            String configuredMode,
+            boolean overridden,
+            String serverName,
+            String serverVersion,
+            String transport,
+            String endpoint,
+            String protocolVersion,
+            int maxResults,
+            int toolCount,
+            List<McpToolInfo> tools) {
+        this(
+                enabled,
+                configuredMode,
+                overridden,
+                serverName,
+                serverVersion,
+                transport,
+                endpoint,
+                protocolVersion,
+                maxResults,
+                0,
+                0,
+                0,
+                0,
+                0,
+                toolCount,
+                tools);
+    }
+}

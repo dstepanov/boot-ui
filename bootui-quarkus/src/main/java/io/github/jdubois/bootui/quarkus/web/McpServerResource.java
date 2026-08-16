@@ -4,6 +4,7 @@ import io.github.jdubois.bootui.core.dto.McpServerStatus;
 import io.github.jdubois.bootui.core.dto.McpToolInfo;
 import io.github.jdubois.bootui.engine.mcp.McpDispatcher;
 import io.github.jdubois.bootui.engine.mcp.McpProtocol;
+import io.github.jdubois.bootui.engine.mcp.McpRuntimeStats;
 import io.github.jdubois.bootui.engine.mcp.McpTool;
 import io.github.jdubois.bootui.quarkus.QuarkusBootUiPaths;
 import io.github.jdubois.bootui.quarkus.QuarkusPanelAccessConfig;
@@ -74,6 +75,7 @@ public class McpServerResource {
     private McpServerStatus buildStatus() {
         List<McpToolInfo> toolInfos =
                 dispatcher.tools().stream().map(this::toInfo).toList();
+        McpRuntimeStats.Snapshot stats = dispatcher.runtimeStats().snapshot();
         return new McpServerStatus(
                 state.isEnabled(),
                 state.configuredMode(),
@@ -84,6 +86,11 @@ public class McpServerResource {
                 mcpEndpoint,
                 McpProtocol.DEFAULT_PROTOCOL_VERSION,
                 maxResults,
+                stats.callCount(),
+                stats.totalLatencyMillis(),
+                stats.capacityRefusals(),
+                stats.timeouts(),
+                stats.responseLimitRefusals(),
                 toolInfos.size(),
                 toolInfos);
     }

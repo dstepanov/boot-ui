@@ -196,6 +196,33 @@ class McpDispatcherTests {
     }
 
     @Test
+    void toolsCallRejectsArgumentsOutsideAdvertisedSchema() {
+        McpRequest request = new McpRequest(
+                JSONRPC, "tools/call", false, null, "get_overview", null, null, null, Set.of("query", "extra"), null);
+
+        assertThat(dispatcher().dispatch(request))
+                .isEqualTo(new ProtocolError(McpProtocol.INVALID_PARAMS, "Unexpected tool arguments: extra, query"));
+    }
+
+    @Test
+    void toolsCallRejectsAdapterDetectedArgumentTypeError() {
+        McpRequest request = new McpRequest(
+                JSONRPC,
+                "tools/call",
+                false,
+                null,
+                "get_config",
+                null,
+                null,
+                null,
+                Set.of(),
+                McpProtocol.invalidArgumentTypeMessage("limit", "an integer"));
+
+        assertThat(dispatcher().dispatch(request))
+                .isEqualTo(new ProtocolError(McpProtocol.INVALID_PARAMS, "Argument 'limit' must be an integer"));
+    }
+
+    @Test
     void missingToolNameIsInvalidParams() {
         McpDispatchOutcome outcome = dispatcher().dispatch(call(""));
 
@@ -371,10 +398,61 @@ class McpDispatcherTests {
 
         McpDispatchOutcome second = dispatcher.dispatch(call("slow"));
 
-        assertThat(second).isEqualTo(new ProtocolError(McpProtocol.INTERNAL_ERROR, McpProtocol.RATE_LIMITED_MESSAGE));
+        assertThat(second)
+                .isEqualTo(new ProtocolError(McpProtocol.SERVER_AT_CAPACITY, McpProtocol.RATE_LIMITED_MESSAGE));
         release.countDown();
         thread.join(5000);
         assertThat(firstOutcome.get()).isInstanceOf(ToolCallResult.class);
+        assertThat(dispatcher.runtimeStats().snapshot().capacityRefusals()).isEqualTo(1);
+    }
+
+    @Test
+    void toolCallsTimeOutAndAreRecorded() {
+        McpTool blocking = new McpTool("slow", "Slow.", McpToolSchema.NONE, "overview", false, args -> {
+            try {
+                Thread.sleep(5_000);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            }
+            return Map.of("ok", true);
+        });
+        McpDispatcher dispatcher =
+                new McpDispatcher(List.of(blocking), List.of(), policy, "1.0", "x", 50, 1, 10, diagnostics);
+
+        assertThat(dispatcher.dispatch(call("slow")))
+                .isEqualTo(new ProtocolError(McpProtocol.TOOL_TIMEOUT, McpProtocol.TOOL_TIMEOUT_MESSAGE));
+        assertThat(dispatcher.runtimeStats().snapshot().timeouts()).isEqualTo(1);
+    }
+
+    @Test
+    void interruptedDispatchReleasesCapacity() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch finished = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        McpTool interruptible = new McpTool("slow", "Slow.", McpToolSchema.NONE, "overview", false, args -> {
+            if (calls.incrementAndGet() == 1) {
+                entered.countDown();
+                try {
+                    Thread.sleep(5_000);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    finished.countDown();
+                }
+            }
+            return Map.of("ok", true);
+        });
+        McpDispatcher dispatcher = new McpDispatcher(List.of(interruptible), policy, "1.0", "x", 50, 1);
+        Thread interruptedCaller = new Thread(() -> dispatcher.dispatch(call("slow")));
+        interruptedCaller.start();
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+
+        interruptedCaller.interrupt();
+        interruptedCaller.join(5_000);
+        assertThat(finished.await(5, TimeUnit.SECONDS)).isTrue();
+
+        assertThat(dispatcher.dispatch(call("slow"))).isInstanceOf(ToolCallResult.class);
+        assertThat(dispatcher.runtimeStats().snapshot().callCount()).isEqualTo(2);
     }
 
     @Test

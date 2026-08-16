@@ -243,7 +243,7 @@ class BootUiQuarkusSafetyFilterTest {
     }
 
     @Test
-    void allowNonLocalhostBypassesEveryCheck() {
+    void allowNonLocalhostRetainsHostAndCrossSiteChecks() {
         RoutingContext rc = mockRequest(
                 "POST",
                 "/bootui/api/loggers",
@@ -255,8 +255,8 @@ class BootUiQuarkusSafetyFilterTest {
 
         filter.handle(rc);
 
-        verify(rc).next();
-        verify(rc.response(), never()).setStatusCode(anyInt());
+        verify(rc.response()).setStatusCode(403);
+        verify(rc, never()).next();
     }
 
     @Test

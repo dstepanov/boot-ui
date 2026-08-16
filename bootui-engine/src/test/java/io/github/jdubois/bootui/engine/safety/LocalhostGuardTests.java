@@ -99,8 +99,15 @@ class LocalhostGuardTests {
     }
 
     @Test
-    void allowsAnySourceWhenAllowNonLocalhost() {
-        assertAllowed(guard.decide(get("203.0.113.5", "attacker.example.com"), allowNonLocalhost()));
+    void allowNonLocalhostBypassesOnlySourceCheck() {
+        assertAllowed(guard.decide(get("203.0.113.5", "localhost:8080"), allowNonLocalhost()));
+        assertRejected(
+                guard.decide(get("203.0.113.5", "attacker.example.com"), allowNonLocalhost()), Reason.DISALLOWED_HOST);
+        assertRejected(
+                guard.decide(
+                        post("203.0.113.5", "localhost:8080", "https://attacker.example.com", "cross-site"),
+                        allowNonLocalhost()),
+                Reason.CROSS_SITE_WRITE);
     }
 
     @Test

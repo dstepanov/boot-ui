@@ -182,7 +182,9 @@ Maven metadata + OSV) · `Pentesting` · `HTTP Probe` (local HTTP probing) · `A
 Quarkus/LangChain4j export it) · `GitHub` (`HttpClient`) · `Copilot` · `Claude Code` (read `~/.copilot` / `~/.claude`) ·
 `MCP Server` (**Implemented** — full JSON-RPC bridge: the shared engine `McpDispatcher` owns method routing/gating/tool
 lookup, a thin Jackson-2 `QuarkusMcpEnvelope` codec + `QuarkusMcpTools` catalog + working enable toggle sit behind the
-`LocalhostGuard` write floor) · `Dev Services` (**Implemented** — a Quarkus-native concept; build-time
+`LocalhostGuard` write floor; JVM-mode integration is covered end to end, while native-image availability follows each
+backing panel and is not claimed beyond the native-image tests that exercise that capability) · `Dev Services`
+(**Implemented** — a Quarkus-native concept; build-time
 `DevServicesResultBuildItem` snapshot captured via recorder + synthetic bean, masked config, logs/restart unavailable;
 service `type` classified via the shared `DevServiceTypeInference` engine helper, matching Spring's classification).
 

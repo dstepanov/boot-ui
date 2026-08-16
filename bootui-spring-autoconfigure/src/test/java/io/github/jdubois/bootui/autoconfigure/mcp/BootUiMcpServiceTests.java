@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.jdubois.bootui.autoconfigure.BootUiProperties;
 import io.github.jdubois.bootui.engine.mcp.McpFailureReporter;
+import io.github.jdubois.bootui.engine.mcp.McpProtocol;
 import io.github.jdubois.bootui.engine.mcp.McpTool;
 import io.github.jdubois.bootui.engine.mcp.McpToolSchema;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
@@ -150,6 +151,70 @@ class BootUiMcpServiceTests {
 
         assertThat(response.path("error").path("code").asInt()).isEqualTo(-32602);
         assertThat(response.path("error").path("message").asString()).contains("Unknown tool");
+    }
+
+    @Test
+    void toolCallRejectsNonObjectAndUnexpectedArguments() {
+        ObjectNode nonObject = request("tools/call", 71, params("name", "get_overview"));
+        ((ObjectNode) nonObject.path("params")).put("arguments", "invalid");
+        assertThat(service.handle(nonObject).path("error").path("message").asString())
+                .isEqualTo(McpProtocol.ARGUMENTS_OBJECT_MESSAGE);
+
+        ObjectNode unexpected = callRequest("get_overview", 72);
+        ((ObjectNode) unexpected.path("params").path("arguments")).put("extra", true);
+        assertThat(service.handle(unexpected).path("error").path("message").asString())
+                .isEqualTo("Unexpected tool argument: extra");
+    }
+
+    @Test
+    void rejectsInvalidIdAndParamsTypes() {
+        ObjectNode invalidId = request("ping", 73, null);
+        invalidId.put("id", true);
+        assertThat(service.handle(invalidId).path("error").path("message").asString())
+                .isEqualTo(McpProtocol.INVALID_ID_MESSAGE);
+
+        ObjectNode invalidParams = request("ping", 74, null);
+        invalidParams.put("params", "invalid");
+        assertThat(service.handle(invalidParams).path("error").path("message").asString())
+                .isEqualTo(McpProtocol.PARAMS_OBJECT_MESSAGE);
+    }
+
+    @Test
+    void rejectsNonPositiveLimit() {
+        List<McpTool> tools = List.of(new McpTool(
+                "get_config",
+                "Read configuration.",
+                McpToolSchema.QUERY_LIMIT,
+                BootUiPanels.CONFIG,
+                false,
+                args -> java.util.Map.of("limit", args.limit())));
+        BootUiMcpService strict = new BootUiMcpService(new BootUiMcpTools(tools), properties, objectMapper, "1.2.3");
+        ObjectNode request = callRequest("get_config", 75);
+        ((ObjectNode) request.path("params").path("arguments")).put("limit", 0);
+
+        assertThat(strict.handle(request).path("error").path("message").asString())
+                .isEqualTo("Argument 'limit' must be at least 1");
+    }
+
+    @Test
+    void rejectsOversizedRenderedResponse() {
+        BootUiProperties bounded = new BootUiProperties();
+        bounded.getMcp().setMaxResponseBytes(128);
+        McpTool large = new McpTool(
+                "get_overview",
+                "Read overview.",
+                McpToolSchema.NONE,
+                BootUiPanels.OVERVIEW,
+                false,
+                args -> java.util.Map.of("value", "x".repeat(512)));
+        BootUiMcpService boundedService =
+                new BootUiMcpService(new BootUiMcpTools(List.of(large)), bounded, objectMapper, "1.2.3");
+
+        JsonNode response = boundedService.handle(callRequest("get_overview", 76));
+
+        assertThat(response.path("error").path("code").asInt()).isEqualTo(McpProtocol.RESPONSE_TOO_LARGE);
+        assertThat(boundedService.dispatcher().runtimeStats().snapshot().responseLimitRefusals())
+                .isEqualTo(1);
     }
 
     @Test

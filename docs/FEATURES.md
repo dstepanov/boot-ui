@@ -1857,19 +1857,23 @@ The panel explains what the server does and lists every tool it exposes. Tools r
 rather than reimplementing anything, so every tool returns the same masked, bounded shape as the REST API, in three
 groups:
 
-- **Advisor scans (actions):** `architecture_scan`, `spring_scan`, `hibernate_scan`, `database_advisor_scan`,
-  `memory_scan`, `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`,
-  `vulnerabilities_scan`. Each triggers the same scan the panel's action button runs and returns the report DTO;
-  `vulnerabilities_scan` additionally makes outbound calls to OSV.dev.
+- **Advisor scans and cached reports:** action tools include `architecture_scan`, `spring_scan`, `hibernate_scan`,
+  `database_advisor_scan`, `memory_scan`, `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`,
+  `crac_scan`, and `vulnerabilities_scan`. Matching `get_*_report` tools return the last report without rerunning the
+  scan. `vulnerabilities_scan` additionally makes outbound calls to OSV.dev.
 - **Diagnostics reads:** `get_live_activity`, `get_exceptions`, `get_exception_detail`, `get_security_logs`,
-  `get_sql_traces`, `get_transactions` (Spring MVC/WebFlux only), `get_traces`, `get_log_tail`, `get_http_exchanges`.
-  `get_live_activity` returns the correlated feed the [Live Activity panel](#live-activity) shows (HTTP requests, SQL
-  statements, exceptions, security events, scheduled-task runs, and — Spring only — cache accesses, grouped by
-  request/trace); `get_exception_detail` takes a required `id` (from `get_exceptions` or `get_live_activity`) and returns
-  that exception group's full stack trace, causes, and individual occurrences.
-- **Core context reads:** `get_overview`, `get_health`, `get_config` (masked), `get_beans`, `get_mappings`,
-  `get_loggers`, `get_conditions` (Spring MVC/WebFlux only — Quarkus has no runtime condition-match graph),
-  `get_scheduled_tasks`, `get_cache_stats`, `get_database_connection_pools`.
+  `get_sql_traces`, `get_transactions` (Spring MVC/WebFlux only), `get_traces`, `get_log_tail`, `get_http_exchanges`,
+  and `get_rest_client_traces`. `get_live_activity` returns the correlated feed this panel shows, including HTTP
+  requests, SQL statements, exceptions, security events, scheduled-task runs, and, on Spring, cache accesses grouped by
+  request or trace. `get_exception_detail` returns a selected exception group's stack trace, causes, and occurrences.
+- **Runtime and integration reads:** the existing core context tools plus safe passive views for metrics, live memory,
+  JVM tuning, heap-dump metadata, threads, startup, profile differences, Spring Data, Flyway, Liquibase, Spring
+  Security, AI telemetry, messaging activity, DevTools/Dev Services, the cached GitHub dashboard, and local
+  Copilot/Claude Code session summaries. The live status response and MCP panel are the authoritative catalog for the
+  running stack.
+- **Bounded controls:** action tools clear in-memory diagnostic buffers, pause or resume supported recorders, analyze
+  an existing heap dump, and trigger Spring DevTools LiveReload. Destructive, database-mutating, arbitrary-command,
+  heap-capture/download, HTTP-probe, GitHub-write, and dev-service-restart operations are deliberately not exposed.
 
 Tools whose backing panel/controller is not present (for example Hibernate or Spring Security when those libraries are
 absent) are simply not advertised. The server inherits BootUI's full safety model:
@@ -1880,10 +1884,13 @@ absent) are simply not advertised. The server inherits BootUI's full safety mode
   plain HTTP config and no credentials on loopback, while `LocalhostOnlyFilter`'s cross-site defenses still block
   browser-driven writes. If non-loopback access is explicitly enabled, the client must send the configured or generated
   BootUI bearer token like every other remote API caller.
-- Read tools require the backing panel to be enabled; action (`*_scan`) tools are additionally refused when the panel is
+- Read tools require the backing panel to be enabled; all action tools are additionally refused when the panel is
   read-only or `bootui.read-only=true`, returning a clear tool error instead of running.
 - Values pass through the same secret masking and `bootui.expose-values` mode as the REST API, and paginated reads are
   capped by `bootui.mcp.max-results`.
+- Request bytes, concurrent calls, tool execution time, and rendered response bytes have configurable hard limits.
+  Capacity, timeout, and response-limit refusals use explicit server-defined JSON-RPC errors, and the status endpoint
+  exposes call count, aggregate latency, capacity refusals, timeouts, and response-limit refusals.
 - Unexpected server failures return only JSON-RPC `-32603` with the message `Internal error`; exception messages, stack
   traces, paths, queries, and credentials are never included. BootUI logs the original throwable once on the server,
   while expected protocol, disabled-server, and panel-policy errors keep their actionable messages.

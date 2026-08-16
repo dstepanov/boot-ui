@@ -97,6 +97,66 @@ class QuarkusMcpEnvelopeTest {
         assertThat(diagnostics.count()).isZero();
     }
 
+    @Test
+    void malformedToolArgumentsAreRejected() {
+        QuarkusMcpEnvelope envelope = envelope(tool(args -> "ok"), new RecordingFailureReporter());
+        ObjectNode nonObject = callRequest(44);
+        ((ObjectNode) nonObject.path("params")).put("arguments", "invalid");
+        assertThat(envelope.handle(nonObject).path("error").path("message").asText())
+                .isEqualTo(McpProtocol.ARGUMENTS_OBJECT_MESSAGE);
+
+        ObjectNode unexpected = callRequest(45);
+        ((ObjectNode) unexpected.path("params").path("arguments")).put("extra", true);
+        assertThat(envelope.handle(unexpected).path("error").path("message").asText())
+                .isEqualTo("Unexpected tool argument: extra");
+    }
+
+    @Test
+    void invalidIdAndParamsTypesAreRejected() {
+        QuarkusMcpEnvelope envelope = envelope(tool(args -> "ok"), new RecordingFailureReporter());
+        ObjectNode invalidId = callRequest(46);
+        invalidId.put("id", true);
+        assertThat(envelope.handle(invalidId).path("error").path("message").asText())
+                .isEqualTo(McpProtocol.INVALID_ID_MESSAGE);
+
+        ObjectNode invalidParams = callRequest(47);
+        invalidParams.put("params", "invalid");
+        assertThat(envelope.handle(invalidParams).path("error").path("message").asText())
+                .isEqualTo(McpProtocol.PARAMS_OBJECT_MESSAGE);
+    }
+
+    @Test
+    void nonPositiveLimitIsRejected() {
+        McpTool tool = new McpTool(
+                "get_config",
+                "Read configuration.",
+                McpToolSchema.QUERY_LIMIT,
+                BootUiPanels.CONFIG,
+                false,
+                args -> java.util.Map.of("limit", args.limit()));
+        QuarkusMcpEnvelope envelope = envelope(tool, new RecordingFailureReporter());
+        ObjectNode request = callRequest(48);
+        ((ObjectNode) request.path("params")).put("name", "get_config");
+        ((ObjectNode) request.path("params").path("arguments")).put("limit", 0);
+
+        assertThat(envelope.handle(request).path("error").path("message").asText())
+                .isEqualTo("Argument 'limit' must be at least 1");
+    }
+
+    @Test
+    void oversizedRenderedResponseIsRejected() {
+        RecordingFailureReporter diagnostics = new RecordingFailureReporter();
+        McpTool large = tool(args -> java.util.Map.of("value", "x".repeat(512)));
+        McpDispatcher dispatcher = new McpDispatcher(
+                List.of(large), List.of(), new AllowAllPolicy(), "1.2.3", "instructions", 50, 20, diagnostics);
+        QuarkusMcpEnvelope envelope = new QuarkusMcpEnvelope(dispatcher, objectMapper, diagnostics, 128);
+
+        JsonNode response = envelope.handle(callRequest(49));
+
+        assertThat(response.path("error").path("code").asInt()).isEqualTo(McpProtocol.RESPONSE_TOO_LARGE);
+        assertThat(dispatcher.runtimeStats().snapshot().responseLimitRefusals()).isEqualTo(1);
+    }
+
     private QuarkusMcpEnvelope envelope(McpTool tool, RecordingFailureReporter diagnostics) {
         McpDispatcher dispatcher = new McpDispatcher(
                 List.of(tool), List.of(), new AllowAllPolicy(), "1.2.3", "instructions", 50, 20, diagnostics);

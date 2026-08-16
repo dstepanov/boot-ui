@@ -34,17 +34,23 @@ import io.github.jdubois.bootui.autoconfigure.web.HealthController;
 import io.github.jdubois.bootui.autoconfigure.web.HttpExchangesController;
 import io.github.jdubois.bootui.autoconfigure.web.OtlpReceiverController;
 import io.github.jdubois.bootui.autoconfigure.web.OverviewController;
+import io.github.jdubois.bootui.autoconfigure.web.PanelsController;
 import io.github.jdubois.bootui.autoconfigure.web.TracesController;
 import io.github.jdubois.bootui.core.dto.PanelsReport;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
 import io.github.jdubois.bootui.engine.jms.JmsActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
+import io.github.jdubois.bootui.engine.mcp.McpTool;
+import io.github.jdubois.bootui.engine.mcp.McpToolSchema;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.actuate.audit.AuditEventRepository;
@@ -82,6 +88,22 @@ import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
  */
 class BootUiReactiveAutoConfigurationTests {
 
+    private static final Map<String, List<String>> BOUNDED_ACTIONS_BY_PANEL = Map.of(
+            BootUiPanels.SQL_TRACE,
+            List.of("clear_sql_traces", "pause_sql_trace_recording", "resume_sql_trace_recording"),
+            BootUiPanels.TRANSACTIONS,
+            List.of("clear_transactions", "pause_transaction_recording", "resume_transaction_recording"),
+            BootUiPanels.TRACES,
+            List.of("clear_traces"),
+            BootUiPanels.REST_CLIENT_TRACE,
+            List.of("clear_rest_client_traces", "pause_rest_client_recording", "resume_rest_client_recording"),
+            BootUiPanels.EXCEPTIONS,
+            List.of("clear_exceptions"),
+            BootUiPanels.HEAP_DUMP,
+            List.of("analyze_heap_dump"),
+            BootUiPanels.DEVTOOLS,
+            List.of("trigger_devtools_livereload"));
+
     private final ReactiveWebApplicationContextRunner runner = new ReactiveWebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(BootUiReactiveAutoConfiguration.class));
 
@@ -105,9 +127,53 @@ class BootUiReactiveAutoConfigurationTests {
                     .hasSingleBean(ReactiveBootUiIndexController.class)
                     .hasSingleBean(OverviewController.class)
                     .hasSingleBean(BootUiActivation.class);
-            assertThat(context.getBean(ReactiveBootUiMcpTools.class).tools())
-                    .extracting("name")
-                    .contains("get_transactions");
+            Set<String> availablePanels = context.getBean(PanelsController.class).panels().panels().stream()
+                    .filter(panel -> panel.available())
+                    .map(panel -> panel.id())
+                    .collect(Collectors.toSet());
+            Set<String> expectedPassivePanels = availablePanels.stream()
+                    .filter(panel -> !Set.of(BootUiPanels.HTTP_PROBE, BootUiPanels.MCP_SERVER)
+                            .contains(panel))
+                    .collect(Collectors.toSet());
+            List<McpTool> tools = context.getBean(ReactiveBootUiMcpTools.class).tools();
+            Set<String> passivePanels = tools.stream()
+                    .filter(tool -> !tool.action())
+                    .map(McpTool::panelId)
+                    .collect(Collectors.toSet());
+            assertThat(passivePanels).containsAll(expectedPassivePanels);
+            assertBoundedActions(tools, availablePanels);
+            assertThat(tools)
+                    .extracting(McpTool::name)
+                    .doesNotContain(
+                            "get_http_sessions",
+                            "get_http_probe",
+                            "get_mcp_server_status",
+                            "pause_email_recording",
+                            "resume_email_recording",
+                            "pause_kafka_recording",
+                            "resume_kafka_recording",
+                            "pause_rabbitmq_recording",
+                            "resume_rabbitmq_recording",
+                            "pause_jms_recording",
+                            "resume_jms_recording");
+        });
+    }
+
+    private static void assertBoundedActions(List<McpTool> tools, Set<String> availablePanels) {
+        Set<String> expected = BOUNDED_ACTIONS_BY_PANEL.entrySet().stream()
+                .filter(entry -> availablePanels.contains(entry.getKey()))
+                .flatMap(entry -> entry.getValue().stream())
+                .collect(Collectors.toSet());
+        List<McpTool> actual = tools.stream()
+                .filter(tool -> BOUNDED_ACTIONS_BY_PANEL
+                        .getOrDefault(tool.panelId(), List.of())
+                        .contains(tool.name()))
+                .toList();
+
+        assertThat(actual).extracting(McpTool::name).containsExactlyInAnyOrderElementsOf(expected);
+        assertThat(actual).allSatisfy(tool -> {
+            assertThat(tool.action()).as(tool.name()).isTrue();
+            assertThat(tool.schema()).as(tool.name()).isEqualTo(McpToolSchema.NONE);
         });
     }
 

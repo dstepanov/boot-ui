@@ -2056,6 +2056,12 @@ public class BootUiProperties {
          */
         private int maxConcurrentCalls = 20;
 
+        /** Maximum wall-clock duration of one MCP tool invocation; default 30 seconds. */
+        private Duration executionTimeout = Duration.ofSeconds(30);
+
+        /** Maximum rendered JSON-RPC response size; default 4MB. */
+        private int maxResponseBytes = 4 * 1024 * 1024;
+
         public Mode getEnabled() {
             return enabled;
         }
@@ -2086,6 +2092,22 @@ public class BootUiProperties {
 
         public void setMaxConcurrentCalls(int maxConcurrentCalls) {
             this.maxConcurrentCalls = maxConcurrentCalls;
+        }
+
+        public Duration getExecutionTimeout() {
+            return executionTimeout;
+        }
+
+        public void setExecutionTimeout(Duration executionTimeout) {
+            this.executionTimeout = executionTimeout == null ? Duration.ofSeconds(30) : executionTimeout;
+        }
+
+        public int getMaxResponseBytes() {
+            return maxResponseBytes;
+        }
+
+        public void setMaxResponseBytes(int maxResponseBytes) {
+            this.maxResponseBytes = maxResponseBytes;
         }
     }
 

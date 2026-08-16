@@ -17,7 +17,8 @@ import java.util.Set;
  *
  * <p>The guard enforces three independent defenses, evaluated in this order (the order is itself
  * behavior — it determines which 403 message a request that fails multiple checks receives), and is
- * bypassed entirely only when {@link LocalhostGuardConfig#allowNonLocalhost()} is {@code true}:</p>
+ * always enforced. {@link LocalhostGuardConfig#allowNonLocalhost()} bypasses only the trusted-source
+ * check; Host and cross-site-write defenses remain active:</p>
  * <ol>
  *   <li><strong>Trusted source</strong> — the raw TCP peer address must be loopback, fall within a
  *       configured trusted CIDR range, or equal an auto-detected container gateway when the
@@ -61,10 +62,8 @@ public final class LocalhostGuard {
     private static final Allow ALLOW_DIRECT = new Allow(true, false, null);
 
     /**
-     * Shared immutable allow result for the {@code bootui.allow-non-localhost} bypass, which skips the
-     * source check entirely rather than genuinely trusting the peer. {@link Allow#trustedSource()} is
-     * {@code false} here so callers that key additional protections (e.g. bearer-token authentication)
-     * off genuine source trust don't mistake the bypass for it.
+     * Shared immutable allow result for the {@code bootui.allow-non-localhost} source bypass.
+     * {@link Allow#trustedSource()} is {@code false} so bearer-token authentication still applies.
      */
     private static final Allow ALLOW_BYPASS = new Allow(false, false, null);
 
@@ -75,13 +74,14 @@ public final class LocalhostGuard {
      *     detail), or {@link Reject} with the typed reason and canonical 403 message otherwise
      */
     public LocalhostGuardDecision decide(LocalhostGuardRequest request, LocalhostGuardConfig config) {
+        Allow sourceTrust;
         if (config.allowNonLocalhost()) {
-            return ALLOW_BYPASS;
-        }
-
-        Allow sourceTrust = trustedSource(request.remoteAddr(), config);
-        if (sourceTrust == null) {
-            return new Reject(Reason.NON_LOOPBACK_SOURCE, MESSAGE_NON_LOOPBACK_SOURCE);
+            sourceTrust = ALLOW_BYPASS;
+        } else {
+            sourceTrust = trustedSource(request.remoteAddr(), config);
+            if (sourceTrust == null) {
+                return new Reject(Reason.NON_LOOPBACK_SOURCE, MESSAGE_NON_LOOPBACK_SOURCE);
+            }
         }
 
         String requestHost = extractHost(request.hostAuthority());
