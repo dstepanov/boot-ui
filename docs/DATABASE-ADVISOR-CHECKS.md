@@ -202,7 +202,7 @@ express).
   application logic must tolerate several `NULL`s in that column, document that the constraint only applies when
   every column is present.
 
-## Dialect-specific (PostgreSQL, MySQL, MariaDB and Oracle)
+## Dialect detection and catalog augmentation
 
 Dialect-specific catalog augmentation runs in addition to the generic checks above. The dialect is detected from
 `DatabaseMetaData.getDatabaseProductName()`, the product version string and the JDBC URL — MariaDB is detected as its
@@ -221,6 +221,8 @@ PostgreSQL 11's `INCLUDE` columns, PostgreSQL 12's concurrent-index-build visibi
 `NULLS NOT DISTINCT` are each selected from the reported server version; Oracle's `ALL_*`/`SYS_CONTEXT` augmentation
 requires 19c or later. When a server is too old, or a role cannot read a catalog view, the matching rule reports
 `SKIPPED` with that reason.
+
+## PostgreSQL
 
 ### DB-PG-001 - Invalid PostgreSQL indexes
 
@@ -280,6 +282,11 @@ requires 19c or later. When a server is too old, or a role cannot read a catalog
   identity and publishes updates or deletes`).
 - **Recommendation**: add a primary key (restores the `DEFAULT` replica identity), or set one explicitly with
   `ALTER TABLE ... REPLICA IDENTITY FULL/USING INDEX ...`.
+
+## MySQL and MariaDB
+
+These checks share one section because they apply to both MySQL and MariaDB. Version-aware catalog queries account for
+their differences where necessary.
 
 ### DB-MYSQL-001 - Tables on a non-transactional storage engine
 
