@@ -66,6 +66,7 @@ class DatabaseAdvisorScannerTests {
         assertThat(report.diagnostics()).isEmpty();
         assertThat(report.dataSources()).isEmpty();
         assertThat(report.truncated()).isFalse();
+        assertThat(report.disclaimer()).contains("PostgreSQL, MySQL/MariaDB, and Oracle catalog augmentation");
     }
 
     @Test

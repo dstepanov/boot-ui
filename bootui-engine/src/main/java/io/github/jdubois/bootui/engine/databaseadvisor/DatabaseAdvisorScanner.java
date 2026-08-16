@@ -38,7 +38,7 @@ public final class DatabaseAdvisorScanner {
     private static final String ANALYZER = "BootUI Database Advisor";
     private static final String DISCLAIMER =
             "Read-only JDBC schema introspection (tables, columns, primary/foreign keys, indexes) via "
-                    + "DatabaseMetaData, with PostgreSQL and MySQL/MariaDB catalog augmentation, plus "
+                    + "DatabaseMetaData, with PostgreSQL, MySQL/MariaDB, and Oracle catalog augmentation, plus "
                     + "cross-reference checks against the Hibernate metamodel when both are available. These checks "
                     + "are review prompts, not verdicts.";
     private static final Comparator<DatabaseAdvisorRuleResultDto> IMPORTANCE_ORDER = Comparator.comparingInt(
