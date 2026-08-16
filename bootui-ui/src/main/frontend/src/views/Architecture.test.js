@@ -48,7 +48,9 @@ function architectureReport(
 }
 
 function severityCount(results, severity) {
-  return results.filter((result) => result.status === 'VIOLATION' && result.severity === severity).length
+  return results
+    .filter((result) => result.status === 'VIOLATION' && result.severity === severity)
+    .reduce((total, result) => total + result.violationCount, 0)
 }
 
 async function mountWithReport(report) {

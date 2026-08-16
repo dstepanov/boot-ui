@@ -294,7 +294,8 @@ public final class MemoryScanner {
     }
 
     private List<MemorySeverityCountDto> severityCounts(List<MemoryRuleResultDto> violations) {
-        Map<String, Integer> counts = SeverityOrder.counts(violations, MemoryRuleResultDto::severity);
+        Map<String, Integer> counts = SeverityOrder.occurrenceCounts(
+                violations, MemoryRuleResultDto::severity, MemoryRuleResultDto::violationCount);
         return counts.entrySet().stream()
                 .map(entry -> new MemorySeverityCountDto(entry.getKey(), entry.getValue()))
                 .toList();

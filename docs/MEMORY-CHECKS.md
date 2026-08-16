@@ -23,6 +23,9 @@ The panel is always available (the JVM always exposes memory and thread beans). 
 - **LOW** - lower-impact hygiene or tuning findings.
 - **INFO** - informational prompts where the right fix depends heavily on project context.
 
+The advisor score applies the shared severity penalty to every concrete finding, not just once per violated rule.
+Dismissed rules remove all of their findings from the score.
+
 ---
 
 ## Heap pressure

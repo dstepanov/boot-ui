@@ -45,6 +45,9 @@ already checks, adapted to Quarkus's own config keys and extensions.
 
 The panel lists only checks with findings, ordered by severity, count, then rule id.
 
+The advisor score applies the shared severity penalty to every concrete finding, not just once per violated rule.
+Dismissed rules remove all of their findings from the score.
+
 ---
 
 ## Authentication

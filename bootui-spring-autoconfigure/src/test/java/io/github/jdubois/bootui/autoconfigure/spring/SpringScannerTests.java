@@ -82,13 +82,15 @@ class SpringScannerTests {
                         "SPRING-WEB-001",
                         "SPRING-WEB-002",
                         "SPRING-WEB-003");
-        // Every reported result is a violation, and severity counts add up to the total.
+        // Every reported result is a violation, and severity counts include every concrete finding.
         assertThat(report.results())
                 .allSatisfy(result -> assertThat(result.status()).isEqualTo("VIOLATION"));
         assertThat(report.severityCounts().stream()
                         .mapToInt(SpringSeverityCountDto::count)
                         .sum())
-                .isEqualTo(report.violationsFound());
+                .isEqualTo(report.results().stream()
+                        .mapToInt(SpringRuleResultDto::violationCount)
+                        .sum());
         // The severity histogram leads with CRITICAL so promoted rules sort and count correctly.
         assertThat(report.severityCounts())
                 .extracting(SpringSeverityCountDto::severity)
@@ -205,7 +207,10 @@ class SpringScannerTests {
         assertThat(dismissed.severityCounts().stream()
                         .mapToInt(SpringSeverityCountDto::count)
                         .sum())
-                .isEqualTo(dismissed.violationsFound());
+                .isEqualTo(dismissed.results().stream()
+                        .filter(result -> !result.dismissed())
+                        .mapToInt(SpringRuleResultDto::violationCount)
+                        .sum());
     }
 
     private static SpringContext findingContext() {

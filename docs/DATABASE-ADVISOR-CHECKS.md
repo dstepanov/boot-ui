@@ -51,6 +51,10 @@ Nothing that failed is ever reported as a passing check:
 The Rule results panel lists only checks that found findings, ordered by severity, finding count, and rule id. Each
 rule includes up to 10 sample findings plus a remediation link.
 
+The advisor score applies the shared severity penalty to every concrete finding, not just once per violated rule. For
+example, eight HIGH missing-index findings incur eight HIGH penalties. Dismissing that rule removes all eight findings
+from the score.
+
 ---
 
 ## Schema

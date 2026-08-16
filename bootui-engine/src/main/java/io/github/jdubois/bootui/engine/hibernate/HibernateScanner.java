@@ -231,8 +231,11 @@ public final class HibernateScanner {
     }
 
     private List<HibernateSeverityCountDto> severityCounts(List<HibernateRuleResultDto> results) {
-        Map<String, Integer> counts =
-                SeverityOrder.counts(results, HibernateScanner::isViolation, HibernateRuleResultDto::severity);
+        Map<String, Integer> counts = SeverityOrder.occurrenceCounts(
+                results,
+                HibernateScanner::isViolation,
+                HibernateRuleResultDto::severity,
+                HibernateRuleResultDto::violationCount);
         return counts.entrySet().stream()
                 .map(entry -> new HibernateSeverityCountDto(entry.getKey(), entry.getValue()))
                 .toList();

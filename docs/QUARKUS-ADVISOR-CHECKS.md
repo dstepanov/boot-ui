@@ -35,6 +35,9 @@ in dev/test only (skipped in `NORMAL`/production); profile keys are read live. M
 - **LOW** - hygiene/maintainability prompt.
 - **INFO** - informational; confirm intent.
 
+The advisor score applies the shared severity penalty to every concrete finding, not just once per violated rule.
+Dismissed rules remove all of their findings from the score.
+
 ## CDI
 
 ### QA-CDI-001 - Shared mutable state on @ApplicationScoped bean (MEDIUM)

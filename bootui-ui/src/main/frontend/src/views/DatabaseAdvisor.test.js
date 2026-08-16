@@ -64,7 +64,9 @@ function advisorReport(results, overrides = {}) {
 }
 
 function severityCount(results, severity) {
-  return results.filter((result) => result.status === 'VIOLATION' && result.severity === severity).length
+  return results
+    .filter((result) => result.status === 'VIOLATION' && result.severity === severity)
+    .reduce((total, result) => total + result.violationCount, 0)
 }
 
 async function mountWithReport(report) {
@@ -114,6 +116,17 @@ describe('DatabaseAdvisor', () => {
       'Medium severity finding',
       'Informational duplicate index'
     ])
+  })
+
+  it('scores every concrete finding rather than each violated rule', async () => {
+    const wrapper = await mountWithReport(
+      advisorReport([
+        ruleResult('DB-SCHEMA-002', 'Foreign key columns without a supporting index', 'HIGH', 'VIOLATION', 8)
+      ])
+    )
+
+    expect(wrapper.find('.advisor-summary__value').text()).toBe('20')
+    expect(wrapper.text()).toContain('At risk')
   })
 
   it('shows an empty findings state when every evaluated rule passes', async () => {

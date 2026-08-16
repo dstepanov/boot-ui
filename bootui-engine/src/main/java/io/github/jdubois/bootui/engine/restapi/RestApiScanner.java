@@ -307,8 +307,11 @@ public final class RestApiScanner {
     }
 
     private List<RestApiSeverityCountDto> severityCounts(List<RestApiRuleResultDto> results) {
-        Map<String, Integer> counts =
-                SeverityOrder.counts(results, RestApiScanner::isViolation, RestApiRuleResultDto::severity);
+        Map<String, Integer> counts = SeverityOrder.occurrenceCounts(
+                results,
+                RestApiScanner::isViolation,
+                RestApiRuleResultDto::severity,
+                RestApiRuleResultDto::violationCount);
         return counts.entrySet().stream()
                 .map(entry -> new RestApiSeverityCountDto(entry.getKey(), entry.getValue()))
                 .toList();

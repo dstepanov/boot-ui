@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
 
 /**
  * Shared severity-ranking and severity-tally helpers reused by every advisor scanner (Architecture,
@@ -46,16 +47,7 @@ public final class SeverityOrder {
      */
     public static <T> Map<String, Integer> counts(
             List<String> order, List<T> results, Predicate<T> countable, Function<T, String> severityOf) {
-        Map<String, Integer> counts = new LinkedHashMap<>();
-        for (String severity : order) {
-            counts.put(severity, 0);
-        }
-        for (T result : results) {
-            if (countable.test(result)) {
-                counts.computeIfPresent(severityOf.apply(result), (ignored, count) -> count + 1);
-            }
-        }
-        return counts;
+        return occurrenceCounts(order, results, countable, severityOf, ignored -> 1);
     }
 
     /** {@link #counts(List, List, Predicate, Function)} using the {@link #DEFAULT} vocabulary. */
@@ -72,5 +64,48 @@ public final class SeverityOrder {
     /** {@link #counts(List, List, Function)} using the {@link #DEFAULT} vocabulary. */
     public static <T> Map<String, Integer> counts(List<T> results, Function<T, String> severityOf) {
         return counts(DEFAULT, results, severityOf);
+    }
+
+    /**
+     * Builds a zero-initialized severity tally by adding {@code countOf} for each countable result.
+     * Use this for advisor rule results whose {@code violationCount} can represent multiple concrete
+     * findings.
+     */
+    public static <T> Map<String, Integer> occurrenceCounts(
+            List<String> order,
+            List<T> results,
+            Predicate<T> countable,
+            Function<T, String> severityOf,
+            ToIntFunction<T> countOf) {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (String severity : order) {
+            counts.put(severity, 0);
+        }
+        for (T result : results) {
+            if (countable.test(result)) {
+                String severity = severityOf.apply(result);
+                Integer current = counts.get(severity);
+                if (current != null) {
+                    int occurrences = countOf.applyAsInt(result);
+                    if (occurrences < 0) {
+                        throw new IllegalArgumentException("Occurrence count must not be negative");
+                    }
+                    counts.put(severity, Math.addExact(current, occurrences));
+                }
+            }
+        }
+        return counts;
+    }
+
+    /** {@link #occurrenceCounts(List, List, Predicate, Function, ToIntFunction)} using the default vocabulary. */
+    public static <T> Map<String, Integer> occurrenceCounts(
+            List<T> results, Predicate<T> countable, Function<T, String> severityOf, ToIntFunction<T> countOf) {
+        return occurrenceCounts(DEFAULT, results, countable, severityOf, countOf);
+    }
+
+    /** Counts occurrences for a list that is already fully countable. */
+    public static <T> Map<String, Integer> occurrenceCounts(
+            List<T> results, Function<T, String> severityOf, ToIntFunction<T> countOf) {
+        return occurrenceCounts(DEFAULT, results, ignored -> true, severityOf, countOf);
     }
 }

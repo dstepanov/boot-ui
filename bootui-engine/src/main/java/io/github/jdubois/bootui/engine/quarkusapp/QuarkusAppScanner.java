@@ -152,7 +152,8 @@ public final class QuarkusAppScanner {
     }
 
     private List<SpringSeverityCountDto> severityCounts(List<SpringRuleResultDto> results) {
-        Map<String, Integer> counts = SeverityOrder.counts(results, SpringRuleResultDto::severity);
+        Map<String, Integer> counts = SeverityOrder.occurrenceCounts(
+                results, SpringRuleResultDto::severity, SpringRuleResultDto::violationCount);
         return counts.entrySet().stream()
                 .map(entry -> new SpringSeverityCountDto(entry.getKey(), entry.getValue()))
                 .toList();

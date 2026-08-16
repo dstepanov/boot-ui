@@ -27,6 +27,9 @@ through `@EntityScan` or custom persistence-unit configuration without scanning 
 The Rule results panel lists only checks that found findings, ordered by severity, finding count, and rule id. Each rule
 includes up to a handful of sample mapped members plus a remediation link.
 
+The advisor score applies the shared severity penalty to every concrete finding, not just once per violated rule.
+Dismissed rules remove all of their findings from the score.
+
 ---
 
 ## Fetching

@@ -20,6 +20,9 @@ The panel is always available (a Spring application context always exists). Bean
 - **LOW** - lower-impact hygiene or optimization findings.
 - **INFO** - informational prompts where the right fix depends heavily on project context.
 
+The advisor score applies the shared severity penalty to every concrete finding, not just once per violated rule.
+Dismissed rules remove all of their findings from the score.
+
 ---
 
 ## Bean wiring

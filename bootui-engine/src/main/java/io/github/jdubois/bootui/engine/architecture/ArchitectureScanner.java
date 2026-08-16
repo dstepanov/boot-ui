@@ -219,8 +219,11 @@ public final class ArchitectureScanner {
     }
 
     private List<ArchitectureSeverityCountDto> severityCounts(List<ArchitectureRuleResultDto> results) {
-        Map<String, Integer> counts =
-                SeverityOrder.counts(results, ArchitectureScanner::isViolation, ArchitectureRuleResultDto::severity);
+        Map<String, Integer> counts = SeverityOrder.occurrenceCounts(
+                results,
+                ArchitectureScanner::isViolation,
+                ArchitectureRuleResultDto::severity,
+                ArchitectureRuleResultDto::violationCount);
         return counts.entrySet().stream()
                 .map(entry -> new ArchitectureSeverityCountDto(entry.getKey(), entry.getValue()))
                 .toList();
