@@ -114,8 +114,8 @@ Dismissed rules remove all of their findings from the score.
 - **Fires when**: a `@OneToMany` or `@ManyToMany` declares `@Fetch(FetchMode.JOIN)`.
 - **Why it matters**: this forces every fetch path through a SQL JOIN, undermines pagination, and risks cartesian
   products.
-- **Recommendation**: prefer `@Fetch(FetchMode.SELECT)` or `SUBSELECT` for collections, and request `JOIN FETCH` only in
-  the specific queries that need the graph.
+- **Recommendation**: prefer `@Fetch(FetchMode.SELECT)`, an explicit entity query, or a DTO projection, and request
+  `JOIN FETCH` only in the specific queries that need the graph.
 
 ### HIB-FETCH-007 - Lazy basic attributes require bytecode enhancement
 
@@ -125,6 +125,17 @@ Dismissed rules remove all of their findings from the score.
 - **Why it matters**: without enhancement, Hibernate cannot intercept access to a basic field and the requested lazy
   column loading is ineffective.
 - **Recommendation**: enable Hibernate bytecode enhancement, or remove the misleading `LAZY` declaration.
+
+### HIB-FETCH-008 - Subselect collection fetching should be reviewed
+
+- **Severity**: INFO
+- **Inspects**: collection associations declaring `@Fetch(FetchMode.SUBSELECT)`.
+- **Fires when**: a mapped `@OneToMany` or `@ManyToMany` uses subselect fetching.
+- **Why it matters**: accessing one collection initializes the same collection role for every matching owner currently
+  loaded in the persistence context. This avoids classic N+1 selects, but an unexpectedly large owner set can fetch much
+  more data than the caller needs.
+- **Recommendation**: keep `SUBSELECT` only for bounded owner sets. Prefer an explicit entity query or DTO projection when
+  owner or collection cardinality can be large.
 
 ## Identifiers
 
@@ -684,9 +695,9 @@ subqueries, or multiple roots may be skipped rather than inferred incorrectly.
 
 - **Severity**: INFO
 - **Inspects**: `hibernate.jdbc.batch_size` and Spring's `spring.jpa.properties.*` variant.
-- **Fires when**: the property is absent or non-positive.
+- **Fires when**: the property is absent or less than 2. A batch size of 1 cannot combine multiple statements.
 - **Why it matters**: write-heavy code otherwise sends insert/update/delete statements one at a time.
-- **Recommendation**: set a bounded batch size, such as 25, and tune it with representative workloads.
+- **Recommendation**: start with a bounded batch size between 5 and 30, then tune it with representative workloads.
 - **Quarkus**: `quarkus.hibernate-orm.jdbc.statement-batch-size` has no native default, so an unset value leaves
   Hibernate batching disabled and this INFO prompt remains applicable.
 
@@ -694,7 +705,7 @@ subqueries, or multiple roots may be skipped rather than inferred incorrectly.
 
 - **Severity**: INFO
 - **Inspects**: `hibernate.order_inserts` and `hibernate.order_updates` when JDBC batching is enabled.
-- **Fires when**: a positive batch size is configured but either ordering property is not `true`.
+- **Fires when**: a batch size greater than 1 is configured but either ordering property is not `true`.
 - **Why it matters**: batches are grouped by SQL/table shape; interleaved entity types reduce batch efficiency.
 - **Recommendation**: enable both ordering properties when batching writes across multiple entity types.
 - **Quarkus**: `hibernate.order_inserts`/`hibernate.order_updates` have no first-class `quarkus.hibernate-orm.*`
@@ -882,6 +893,26 @@ subqueries, or multiple roots may be skipped rather than inferred incorrectly.
 - **Quarkus**: also detects the Quarkus-native `quarkus.hibernate-orm.log.bind-parameters` convenience flag (and its
   deprecated `.bind-param` alias), which `QuarkusHibernatePropertyLookup` reports as the neutral TRACE logger state -
   Quarkus's own guide explicitly warns against enabling this in production.
+
+### HIB-CONFIG-019 - SQL comments should be enabled intentionally
+
+- **Severity**: INFO
+- **Inspects**: `hibernate.use_sql_comments`.
+- **Fires when**: generated SQL comments are enabled.
+- **Why it matters**: comments add text to every generated statement and can increase network traffic or fragment
+  database/JDBC statement caches when comment text varies.
+- **Recommendation**: keep comments only when their measured observability benefit outweighs the statement-cache cost.
+
+### HIB-CONFIG-020 - Oracle JDBC fetch size should exceed the driver default
+
+- **Severity**: INFO
+- **Inspects**: configured database kind, dialect, JDBC URL/driver, and `hibernate.jdbc.fetch_size`.
+- **Fires when**: Oracle is identifiable and the fetch size is absent or no greater than Oracle JDBC's default of 10.
+- **Why it matters**: iterating result sets larger than ten rows can require avoidable database roundtrips. PostgreSQL and
+  MySQL have different driver behavior, so this check deliberately does not prescribe a global fetch size.
+- **Recommendation**: for Oracle queries that commonly return more than ten rows, benchmark a bounded fetch size above 10;
+  retain the default when result sets are consistently small.
+- **Quarkus**: reads `quarkus.hibernate-orm.jdbc.statement-fetch-size` through the native property lookup.
 
 ## Caching
 

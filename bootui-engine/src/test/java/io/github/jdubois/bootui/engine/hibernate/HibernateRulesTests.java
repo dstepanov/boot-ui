@@ -38,6 +38,8 @@ import java.util.Set;
 import java.util.UUID;
 import org.hibernate.annotations.Cache;
 import org.hibernate.annotations.CacheConcurrencyStrategy;
+import org.hibernate.annotations.Fetch;
+import org.hibernate.annotations.FetchMode;
 import org.hibernate.annotations.Immutable;
 import org.hibernate.annotations.NaturalId;
 import org.hibernate.annotations.Where;
@@ -1235,6 +1237,95 @@ class HibernateRulesTests {
         assertThat(result.status()).isEqualTo(HibernateRuleSupport.PASS);
     }
 
+    // --- Hypersistence-inspired configuration and fetching checks ----------------
+
+    @Test
+    void jdbcBatchSizeRuleFlagsBatchSizeOne() {
+        TestEnvironment environment = new TestEnvironment().withProperty("hibernate.jdbc.batch_size", "1");
+
+        HibernateRuleResultDto result = new JdbcBatchSizeRule().evaluate(context(environment));
+
+        assertThat(result.status()).isEqualTo(HibernateRuleSupport.VIOLATION);
+        assertThat(result.sampleViolations())
+                .containsExactly("hibernate.jdbc.batch_size is not configured with a value greater than 1.");
+    }
+
+    @Test
+    void orderedBatchingRuleSkipsBatchSizeOne() {
+        TestEnvironment environment = new TestEnvironment().withProperty("hibernate.jdbc.batch_size", "1");
+
+        HibernateRuleResultDto result = new OrderedBatchingRule().evaluate(context(environment));
+
+        assertThat(result.status()).isEqualTo(HibernateRuleSupport.SKIPPED);
+    }
+
+    @Test
+    void subselectCollectionFetchRuleFlagsSubselectMapping() {
+        HibernateRuleResultDto result = new SubselectCollectionFetchRule()
+                .evaluate(context(new TestEnvironment(), SubselectCollectionEntity.class));
+
+        assertThat(result.status()).isEqualTo(HibernateRuleSupport.VIOLATION);
+        assertThat(result.severity()).isEqualTo(HibernateRuleSupport.INFO);
+        assertThat(result.sampleViolations())
+                .anySatisfy(sample -> assertThat(sample).contains("children", "cardinalities stay bounded"));
+    }
+
+    @Test
+    void sqlCommentsRuleFlagsEnabledComments() {
+        TestEnvironment environment = new TestEnvironment().withProperty("hibernate.use_sql_comments", "true");
+
+        HibernateRuleResultDto result = new SqlCommentsRule().evaluate(context(environment));
+
+        assertThat(result.status()).isEqualTo(HibernateRuleSupport.VIOLATION);
+        assertThat(result.severity()).isEqualTo(HibernateRuleSupport.INFO);
+    }
+
+    @Test
+    void oracleJdbcFetchSizeRuleFlagsMissingAndSmallValues() {
+        for (String fetchSize : List.of("", "10")) {
+            TestEnvironment environment = new TestEnvironment()
+                    .withProperty("spring.datasource.url", "jdbc:oracle:thin:@localhost:1521/FREEPDB1");
+            if (!fetchSize.isEmpty()) {
+                environment.withProperty("hibernate.jdbc.fetch_size", fetchSize);
+            }
+
+            HibernateRuleResultDto result = new OracleJdbcFetchSizeRule().evaluate(context(environment));
+
+            assertThat(result.status()).isEqualTo(HibernateRuleSupport.VIOLATION);
+        }
+    }
+
+    @Test
+    void oracleJdbcFetchSizeRulePassesForMeasuredLargerValue() {
+        TestEnvironment environment = new TestEnvironment()
+                .withProperty("quarkus.datasource.db-kind", "oracle")
+                .withProperty("hibernate.jdbc.fetch_size", "50");
+
+        HibernateRuleResultDto result = new OracleJdbcFetchSizeRule().evaluate(context(environment));
+
+        assertThat(result.status()).isEqualTo(HibernateRuleSupport.PASS);
+    }
+
+    @Test
+    void oracleJdbcFetchSizeRuleSkipsOtherDatabases() {
+        TestEnvironment environment =
+                new TestEnvironment().withProperty("spring.datasource.url", "jdbc:postgresql://localhost/app");
+
+        HibernateRuleResultDto result = new OracleJdbcFetchSizeRule().evaluate(context(environment));
+
+        assertThat(result.status()).isEqualTo(HibernateRuleSupport.SKIPPED);
+    }
+
+    @Test
+    void oracleJdbcFetchSizeRuleDoesNotMatchOracleInAnUnrelatedJdbcUrlSegment() {
+        TestEnvironment environment =
+                new TestEnvironment().withProperty("spring.datasource.url", "jdbc:postgresql://oracle-migration/app");
+
+        HibernateRuleResultDto result = new OracleJdbcFetchSizeRule().evaluate(context(environment));
+
+        assertThat(result.status()).isEqualTo(HibernateRuleSupport.SKIPPED);
+    }
+
     // --- HIB-ENTITY-009 ----------------------------------------------------------
 
     @Test
@@ -1782,5 +1873,15 @@ class HibernateRulesTests {
         Long id;
 
         String isbn;
+    }
+
+    @Entity
+    static class SubselectCollectionEntity {
+        @Id
+        Long id;
+
+        @OneToMany
+        @Fetch(FetchMode.SUBSELECT)
+        List<SequenceEntity> children;
     }
 }
