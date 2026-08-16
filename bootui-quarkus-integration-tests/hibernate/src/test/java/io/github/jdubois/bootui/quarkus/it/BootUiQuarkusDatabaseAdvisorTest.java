@@ -10,6 +10,8 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -94,6 +96,47 @@ class BootUiQuarkusDatabaseAdvisorTest {
         assertThat(scanned.path("rulesEvaluated").asInt())
                 .as("the shared rule registry (schema + dialect + Hibernate cross-reference rules) must have run")
                 .isGreaterThanOrEqualTo(8);
+
+        // Arc reports two DataSource beans here: the real Agroal pool and BootUI's own @Alternative SQL Trace
+        // wrapper around it. Introspecting both would analyze the same physical database twice, under two
+        // names, and double every finding — so the provider de-duplicates by the physical pool behind the
+        // proxy and keeps the datasource's real (qualifier-derived) name.
+        List<String> dataSourceNames = new ArrayList<>();
+        for (JsonNode name : scanned.path("dataSourceNames")) {
+            dataSourceNames.add(name.asText());
+        }
+        assertThat(dataSourceNames)
+                .as("the wrapped and wrapping DataSource beans must resolve to one datasource")
+                .containsExactly("default");
+        assertThat(scanned.path("dataSources").size())
+                .as("the per-datasource read status is reported for the single datasource")
+                .isEqualTo(1);
+        JsonNode dataSource = scanned.path("dataSources").get(0);
+        assertThat(dataSource.path("name").asText()).isEqualTo("default");
+        assertThat(dataSource.path("status").asText())
+                .as("the H2 datasource is fully readable")
+                .isEqualTo("AVAILABLE");
+        assertThat(scanned.path("truncated").asBoolean())
+                .as("the sample schema is far below every scan bound")
+                .isFalse();
+
+        // Rules that could not run are reported as diagnostics, never as passing checks or findings.
+        assertThat(scanned.path("rulesSkipped").asInt())
+                .as("the PostgreSQL and MySQL rules cannot run against H2 and must say so")
+                .isGreaterThan(0);
+        assertThat(scanned.path("rulesErrored").asInt())
+                .as("no rule may fail to evaluate on the sample schema")
+                .isZero();
+        List<String> diagnosticSources = new ArrayList<>();
+        for (JsonNode diagnostic : scanned.path("diagnostics")) {
+            diagnosticSources.add(diagnostic.path("source").asText());
+        }
+        assertThat(diagnosticSources).contains("DB-PG-001", "DB-MYSQL-001");
+        for (JsonNode result : scanned.path("results")) {
+            assertThat(result.path("status").asText())
+                    .as("only violations are listed in results")
+                    .isEqualTo("VIOLATION");
+        }
 
         // The result is cached, so a subsequent GET reflects the scan without re-running it.
         Response cached = probe().get("/bootui/api/database-advisor");

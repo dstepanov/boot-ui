@@ -23,7 +23,8 @@ abstract class AbstractDatabaseAdvisorRule implements DatabaseAdvisorRule {
         try {
             return evaluateRule(context);
         } catch (RuntimeException | LinkageError ex) {
-            return DatabaseAdvisorRuleSupport.error(definition, "Rule could not be evaluated: " + ex.getMessage());
+            String reason = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+            return DatabaseAdvisorRuleSupport.error(definition, "Rule could not be evaluated: " + reason);
         }
     }
 

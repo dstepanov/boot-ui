@@ -1,4 +1,5 @@
 <script setup>
+import {computed, ref} from 'vue'
 import {useAdvisorPanel} from '../utils/useAdvisorPanel.js'
 import {panelProps} from '../utils/panelState.js'
 import AdvisorSummary from './components/AdvisorSummary.vue'
@@ -14,6 +15,65 @@ const panel = useAdvisorPanel(props, {
   emptyNoFindings: 'No Database findings',
   countNoun: 'finding'
 })
+
+const showDiagnostics = ref(false)
+
+const DATA_SOURCE_STATUS_CLASSES = {
+  AVAILABLE: 'text-bg-success',
+  PARTIAL: 'text-bg-warning',
+  FAILED: 'text-bg-danger'
+}
+
+const DATA_SOURCE_STATUS_LABELS = {
+  AVAILABLE: 'Read',
+  PARTIAL: 'Partly read',
+  FAILED: 'Unreadable'
+}
+
+const DIAGNOSTIC_CLASSES = {
+  ERROR: 'text-bg-danger',
+  WARNING: 'text-bg-warning',
+  INFO: 'text-bg-secondary'
+}
+
+// Falls back to the plain name list so a report from an older adapter still renders every datasource.
+const dataSources = computed(() => {
+  const detailed = panel.report?.dataSources
+  if (detailed && detailed.length > 0) return detailed
+  return (panel.report?.dataSourceNames || []).map((name) => ({name, status: 'AVAILABLE'}))
+})
+
+const diagnostics = computed(() => panel.report?.diagnostics || [])
+
+const incompleteScanMessage = computed(() => {
+  const report = panel.report
+  if (!report || !panel.hasScanData) return null
+  const reasons = []
+  const unreadable = dataSources.value.filter((dataSource) => dataSource.status === 'FAILED').length
+  if (unreadable > 0) {
+    reasons.push(`${unreadable} ${panel.pluralize(unreadable, 'datasource')} could not be read`)
+  }
+  if (report.truncated) {
+    reasons.push('a scan bound was reached, so some findings may be missing')
+  }
+  if (report.rulesErrored > 0) {
+    reasons.push(`${report.rulesErrored} ${panel.pluralize(report.rulesErrored, 'rule')} failed to evaluate`)
+  }
+  if (reasons.length === 0) return null
+  return `${reasons.join('; ')}. These are reported below as diagnostics and are not counted as findings.`
+})
+
+function dataSourceStatusClass(status) {
+  return DATA_SOURCE_STATUS_CLASSES[status] || 'text-bg-secondary'
+}
+
+function dataSourceStatusLabel(status) {
+  return DATA_SOURCE_STATUS_LABELS[status] || status
+}
+
+function diagnosticClass(level) {
+  return DIAGNOSTIC_CLASSES[level] || 'text-bg-light border text-dark'
+}
 </script>
 
 <template>
@@ -51,13 +111,24 @@ const panel = useAdvisorPanel(props, {
         :metrics="[
           {label: 'Rules evaluated', value: panel.report.rulesEvaluated},
           {label: 'Advisor findings', value: panel.report.violationsFound},
-          {label: 'Tables analysed', value: panel.report.tablesAnalyzed}
+          {label: 'Tables analysed', value: panel.report.tablesAnalyzed},
+          {
+            label: 'Rules not run',
+            value: (panel.report.rulesSkipped || 0) + (panel.report.rulesErrored || 0),
+            hint: 'Skipped or errored — see diagnostics'
+          }
         ]"
       />
       <div class="alert alert-info">
         <strong>Heuristic database schema rules.</strong>
         {{ panel.report.disclaimer }}
         <span v-if="panel.readOnly">Scanning is read-only. {{ panel.readOnlyReason }}</span>
+      </div>
+
+      <div v-if="incompleteScanMessage" class="alert alert-warning" role="status">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        <strong>Incomplete scan.</strong>
+        {{ incompleteScanMessage }}
       </div>
 
       <div class="row g-3 mb-3">
@@ -98,17 +169,52 @@ const panel = useAdvisorPanel(props, {
           <div class="card h-100">
             <div class="card-header fw-semibold">Datasources</div>
             <div class="card-body">
-              <div v-if="!panel.report.dataSourceNames || panel.report.dataSourceNames.length === 0" class="text-muted">
-                No DataSource bean was detected.
-              </div>
+              <div v-if="dataSources.length === 0" class="text-muted">No DataSource bean was detected.</div>
               <ul v-else class="list-unstyled mb-0">
-                <li v-for="name in panel.report.dataSourceNames" :key="name" class="font-monospace small">
-                  <i class="bi bi-hdd-stack me-1"></i>{{ name }}
+                <li v-for="dataSource in dataSources" :key="dataSource.name" class="mb-2">
+                  <div class="d-flex flex-wrap align-items-center gap-2">
+                    <span :class="dataSourceStatusClass(dataSource.status)" class="badge">{{
+                      dataSourceStatusLabel(dataSource.status)
+                    }}</span>
+                    <span class="font-monospace small"><i class="bi bi-hdd-stack me-1"></i>{{ dataSource.name }}</span>
+                    <span v-if="dataSource.product" class="text-muted small">{{ dataSource.product }}</span>
+                    <span v-if="dataSource.identifierCase" class="text-muted small"
+                      >{{ dataSource.identifierCase.toLowerCase() }}-case identifiers</span
+                    >
+                    <span v-if="dataSource.truncated" class="badge text-bg-warning">Truncated</span>
+                  </div>
+                  <div v-if="dataSource.message" class="small text-muted font-monospace">{{ dataSource.message }}</div>
                 </li>
               </ul>
             </div>
           </div>
         </div>
+      </div>
+
+      <div v-if="diagnostics.length > 0" class="card mb-3">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div>
+            <div class="fw-semibold">Scan diagnostics</div>
+            <div class="text-muted small">
+              {{ diagnostics.length }} {{ panel.pluralize(diagnostics.length, 'note') }} — not counted as findings
+            </div>
+          </div>
+          <button
+            class="btn btn-sm btn-outline-secondary"
+            type="button"
+            :aria-expanded="showDiagnostics"
+            @click="showDiagnostics = !showDiagnostics"
+          >
+            {{ showDiagnostics ? 'Hide' : 'Show' }} diagnostics
+          </button>
+        </div>
+        <ul v-if="showDiagnostics" class="list-group list-group-flush">
+          <li v-for="(diagnostic, index) in diagnostics" :key="index" class="list-group-item small">
+            <span :class="diagnosticClass(diagnostic.level)" class="badge me-2">{{ diagnostic.level }}</span>
+            <span class="font-monospace">{{ diagnostic.source }}</span>
+            <span class="ms-2">{{ diagnostic.message }}</span>
+          </li>
+        </ul>
       </div>
 
       <div class="card">

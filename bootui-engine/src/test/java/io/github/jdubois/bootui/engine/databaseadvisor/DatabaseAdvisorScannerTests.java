@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.engine.databaseadvisor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.jdubois.bootui.core.dto.DatabaseAdvisorDataSourceDto;
 import io.github.jdubois.bootui.core.dto.DatabaseAdvisorReport;
 import io.github.jdubois.bootui.engine.hibernate.EntityDiscovery;
 import io.github.jdubois.bootui.spi.NamedDataSource;
@@ -11,6 +12,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -21,6 +23,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/**
+ * End-to-end scanner behavior against a live in-memory H2 database, plus the failure paths that must never be
+ * presented as a clean scan.
+ */
 class DatabaseAdvisorScannerTests {
 
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
@@ -48,86 +54,51 @@ class DatabaseAdvisorScannerTests {
         }
     }
 
+    private DatabaseAdvisorScanner scannerFor(List<NamedDataSource> dataSources) {
+        return DatabaseAdvisorScanner.using(() -> dataSources, () -> EntityDiscovery.empty(null), FIXED_CLOCK);
+    }
+
     @Test
     void initialReportIsNotScannedAndHasNoResults() {
-        DatabaseAdvisorScanner scanner =
-                DatabaseAdvisorScanner.using(List::of, () -> EntityDiscovery.empty(null), FIXED_CLOCK);
-        DatabaseAdvisorReport report = scanner.initialReport();
+        DatabaseAdvisorReport report = scannerFor(List.of()).initialReport();
         assertThat(report.scan().status()).isEqualTo("NOT_SCANNED");
         assertThat(report.results()).isEmpty();
+        assertThat(report.diagnostics()).isEmpty();
+        assertThat(report.dataSources()).isEmpty();
+        assertThat(report.truncated()).isFalse();
     }
 
     @Test
     void scanReportsDisabledWhenNoDataSourceIsAvailable() {
-        DatabaseAdvisorScanner scanner =
-                DatabaseAdvisorScanner.using(List::of, () -> EntityDiscovery.empty(null), FIXED_CLOCK);
-        DatabaseAdvisorReport report = scanner.scan();
+        DatabaseAdvisorReport report = scannerFor(List.of()).scan();
         assertThat(report.scan().status()).isEqualTo("DISABLED");
         assertThat(report.dataSourceNames()).isEmpty();
         assertThat(report.results()).isEmpty();
     }
 
     @Test
-    void scanReportsDisabledWhenEveryDataSourceFailsToIntrospect() {
-        DataSource brokenDataSource = new DataSource() {
-            @Override
-            public Connection getConnection() throws SQLException {
-                throw new SQLException("connection refused");
-            }
+    void scanReportsErrorWithRedactedDiagnosticsWhenEveryDataSourceFailsToIntrospect() {
+        DataSource broken = new FailingDataSource(
+                "connection refused for jdbc:postgresql://app:sup3rs3cret@db.internal:5432/orders");
+        DatabaseAdvisorReport report =
+                scannerFor(List.of(new NamedDataSource("broken", broken))).scan();
 
-            @Override
-            public Connection getConnection(String username, String password) throws SQLException {
-                throw new SQLException("connection refused");
-            }
-
-            @Override
-            public PrintWriter getLogWriter() {
-                return null;
-            }
-
-            @Override
-            public void setLogWriter(PrintWriter out) {}
-
-            @Override
-            public void setLoginTimeout(int seconds) {}
-
-            @Override
-            public int getLoginTimeout() {
-                return 0;
-            }
-
-            @Override
-            public Logger getParentLogger() {
-                return Logger.getGlobal();
-            }
-
-            @Override
-            public <T> T unwrap(Class<T> iface) {
-                return iface.cast(this);
-            }
-
-            @Override
-            public boolean isWrapperFor(Class<?> iface) {
-                return iface.isInstance(this);
-            }
-        };
-        DatabaseAdvisorScanner scanner = DatabaseAdvisorScanner.using(
-                () -> List.of(new NamedDataSource("broken", brokenDataSource)),
-                () -> EntityDiscovery.empty(null),
-                FIXED_CLOCK);
-        DatabaseAdvisorReport report = scanner.scan();
-        assertThat(report.scan().status()).isEqualTo("DISABLED");
+        assertThat(report.scan().status()).isEqualTo("ERROR");
         assertThat(report.dataSourceNames()).containsExactly("broken");
         assertThat(report.results()).isEmpty();
+        assertThat(report.dataSources())
+                .singleElement()
+                .satisfies(status -> assertThat(status.status()).isEqualTo("FAILED"));
+        assertThat(report.diagnostics()).isNotEmpty();
+        assertThat(report.diagnostics().get(0).message())
+                .doesNotContain("sup3rs3cret")
+                .contains("******@db.internal");
     }
 
     @Test
     void scanIntrospectsThePhysicalSchemaAndFlagsAMissingPrimaryKey() {
-        DatabaseAdvisorScanner scanner = DatabaseAdvisorScanner.using(
-                () -> List.of(new NamedDataSource("primary", dataSource)),
-                () -> EntityDiscovery.empty(null),
-                FIXED_CLOCK);
-        DatabaseAdvisorReport report = scanner.scan();
+        DatabaseAdvisorReport report =
+                scannerFor(List.of(new NamedDataSource("primary", dataSource))).scan();
 
         assertThat(report.scan().status()).isEqualTo("SCANNED");
         assertThat(report.dataSourceNames()).containsExactly("primary");
@@ -136,8 +107,8 @@ class DatabaseAdvisorScannerTests {
 
         // H2 automatically creates a supporting index for the "orders.customer_id" foreign key column, so
         // DB-SCHEMA-002 (missing FK index) is exercised directly against synthetic models in
-        // DatabaseAdvisorRulesTests instead; this end-to-end scan only asserts the primary-key check, which
-        // genuinely requires the JDBC DatabaseMetaData round trip this test exists to cover.
+        // DatabaseAdvisorSchemaRulesTests instead; this end-to-end scan only asserts the primary-key check,
+        // which genuinely requires the JDBC DatabaseMetaData round trip this test exists to cover.
         assertThat(report.results()).anySatisfy(result -> {
             assertThat(result.id()).isEqualTo("DB-SCHEMA-001");
             assertThat(result.status()).isEqualTo("VIOLATION");
@@ -146,12 +117,62 @@ class DatabaseAdvisorScannerTests {
     }
 
     @Test
-    void scanNeverIncludesPassingOrSkippedRulesInTheResultsList() {
+    void scanReportsTheDatasourceProductAndDialectItRead() {
+        DatabaseAdvisorReport report =
+                scannerFor(List.of(new NamedDataSource("primary", dataSource))).scan();
+
+        assertThat(report.dataSources()).singleElement().satisfies(status -> {
+            assertThat(status.name()).isEqualTo("primary");
+            assertThat(status.status()).isEqualTo("AVAILABLE");
+            assertThat(status.product()).containsIgnoringCase("H2");
+            assertThat(status.dialect()).isEqualTo("Generic JDBC");
+            assertThat(status.tablesAnalyzed()).isEqualTo(3);
+        });
+    }
+
+    @Test
+    void scanReportsPartialWhenOnlySomeDatasourcesCouldBeRead() {
+        DatabaseAdvisorReport report = scannerFor(List.of(
+                        new NamedDataSource("primary", dataSource),
+                        new NamedDataSource("secondary", new FailingDataSource("connection refused"))))
+                .scan();
+
+        assertThat(report.scan().status()).isEqualTo("PARTIAL");
+        assertThat(report.scan().message()).contains("1 datasource(s) could not be read");
+        assertThat(report.dataSources())
+                .extracting(DatabaseAdvisorDataSourceDto::status)
+                .containsExactlyInAnyOrder("AVAILABLE", "FAILED");
+        assertThat(report.diagnostics())
+                .anySatisfy(diagnostic -> assertThat(diagnostic.source()).isEqualTo("secondary"));
+    }
+
+    @Test
+    void scanReportsTruncationAsPartialInsteadOfSilentlyDroppingTables() {
+        DatabaseAdvisorLimits tightLimits =
+                new DatabaseAdvisorLimits(1, 300, 100, 500, Duration.ofSeconds(20), Duration.ofSeconds(5));
         DatabaseAdvisorScanner scanner = DatabaseAdvisorScanner.using(
                 () -> List.of(new NamedDataSource("primary", dataSource)),
                 () -> EntityDiscovery.empty(null),
-                FIXED_CLOCK);
+                FIXED_CLOCK,
+                tightLimits);
+
         DatabaseAdvisorReport report = scanner.scan();
+
+        assertThat(report.scan().status()).isEqualTo("PARTIAL");
+        assertThat(report.truncated()).isTrue();
+        assertThat(report.tablesAnalyzed()).isEqualTo(1);
+        assertThat(report.diagnostics())
+                .anySatisfy(diagnostic -> assertThat(diagnostic.message()).contains("Only the first 1 tables"));
+        assertThat(report.dataSources()).singleElement().satisfies(status -> {
+            assertThat(status.truncated()).isTrue();
+            assertThat(status.status()).isEqualTo("PARTIAL");
+        });
+    }
+
+    @Test
+    void scanNeverIncludesPassingOrSkippedRulesInTheResultsList() {
+        DatabaseAdvisorReport report =
+                scannerFor(List.of(new NamedDataSource("primary", dataSource))).scan();
         assertThat(report.results())
                 .allSatisfy(result -> assertThat(result.status()).isEqualTo("VIOLATION"));
         assertThat(report.rulesEvaluated())
@@ -159,11 +180,25 @@ class DatabaseAdvisorScannerTests {
     }
 
     @Test
-    void applyDismissalsMarksDismissedResultsAndReducesTheViolationCount() {
-        DatabaseAdvisorScanner scanner = DatabaseAdvisorScanner.using(
-                () -> List.of(new NamedDataSource("primary", dataSource)),
-                () -> EntityDiscovery.empty(null),
-                FIXED_CLOCK);
+    void scanReportsSkippedRulesAsDiagnosticsWithoutCountingThemAsViolations() {
+        DatabaseAdvisorReport report =
+                scannerFor(List.of(new NamedDataSource("primary", dataSource))).scan();
+
+        // The PostgreSQL/MySQL vendor rules cannot run against H2, and the Hibernate cross-reference rules
+        // have no metamodel here: all of them must be visible as skipped, none as findings.
+        assertThat(report.rulesSkipped()).isGreaterThan(0);
+        assertThat(report.rulesErrored()).isZero();
+        assertThat(report.diagnostics())
+                .anySatisfy(diagnostic -> assertThat(diagnostic.source()).isEqualTo("DB-PG-001"));
+        assertThat(report.diagnostics())
+                .filteredOn(diagnostic -> diagnostic.source().startsWith("DB-"))
+                .allSatisfy(diagnostic -> assertThat(diagnostic.level()).isIn("INFO", "WARNING"));
+        assertThat(report.violationsFound()).isEqualTo(report.results().size());
+    }
+
+    @Test
+    void applyDismissalsMarksDismissedResultsAndPreservesDiagnostics() {
+        DatabaseAdvisorScanner scanner = scannerFor(List.of(new NamedDataSource("primary", dataSource)));
         DatabaseAdvisorReport report = scanner.scan();
         String dismissedId = report.results().get(0).id();
 
@@ -173,6 +208,9 @@ class DatabaseAdvisorScannerTests {
                 .filteredOn(result -> result.id().equals(dismissedId))
                 .allSatisfy(result -> assertThat(result.dismissed()).isTrue());
         assertThat(updated.violationsFound()).isEqualTo(report.violationsFound() - 1);
+        assertThat(updated.diagnostics()).isEqualTo(report.diagnostics());
+        assertThat(updated.dataSources()).isEqualTo(report.dataSources());
+        assertThat(updated.rulesSkipped()).isEqualTo(report.rulesSkipped());
     }
 
     @Test
@@ -183,12 +221,11 @@ class DatabaseAdvisorScannerTests {
                 },
                 () -> EntityDiscovery.empty(null),
                 FIXED_CLOCK);
-        DatabaseAdvisorReport report = scanner.scan();
-        assertThat(report.scan().status()).isEqualTo("DISABLED");
+        assertThat(scanner.scan().scan().status()).isEqualTo("DISABLED");
     }
 
     /** Minimal H2-backed {@link DataSource} that opens a fresh connection per call, like a real pool. */
-    private static final class H2DataSource implements DataSource {
+    private static final class H2DataSource extends TestDataSource {
 
         private final String url;
 
@@ -200,10 +237,28 @@ class DatabaseAdvisorScannerTests {
         public Connection getConnection() throws SQLException {
             return DriverManager.getConnection(url);
         }
+    }
+
+    /** A datasource that always refuses to hand out a connection. */
+    private static final class FailingDataSource extends TestDataSource {
+
+        private final String message;
+
+        private FailingDataSource(String message) {
+            this.message = message;
+        }
+
+        @Override
+        public Connection getConnection() throws SQLException {
+            throw new SQLException(message);
+        }
+    }
+
+    private abstract static class TestDataSource implements DataSource {
 
         @Override
         public Connection getConnection(String username, String password) throws SQLException {
-            return DriverManager.getConnection(url, username, password);
+            return getConnection();
         }
 
         @Override

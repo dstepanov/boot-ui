@@ -23,9 +23,32 @@ record DatabaseAdvisorContext(
         return schemas.stream().filter(SchemaSnapshot::available).toList();
     }
 
+    /** Every readable schema of one dialect family, for the vendor rules. */
+    List<SchemaSnapshot> schemasOf(Dialect dialect) {
+        return availableSchemas().stream()
+                .filter(schema -> schema.dialect() == dialect)
+                .toList();
+    }
+
+    /** Every readable MySQL or MariaDB schema; the two share the same {@code information_schema} rules. */
+    List<SchemaSnapshot> mySqlFamilySchemas() {
+        return availableSchemas().stream()
+                .filter(schema -> schema.dialect().isMySqlFamily())
+                .toList();
+    }
+
     int tableCount() {
         return availableSchemas().stream()
                 .mapToInt(schema -> schema.tables().size())
                 .sum();
+    }
+
+    /**
+     * The tables a schema-hygiene rule should evaluate: PostgreSQL child partitions are excluded because they
+     * inherit their structure from the partitioned parent, which is analyzed in their place — otherwise one
+     * missing index on a monthly-partitioned table would be reported once per month.
+     */
+    static List<TableModel> analyzableTables(SchemaSnapshot schema) {
+        return schema.tables().stream().filter(table -> !table.partitionChild()).toList();
     }
 }
