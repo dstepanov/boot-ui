@@ -1830,15 +1830,16 @@ The panel explains what the server does and lists every tool it exposes. Tools r
 rather than reimplementing anything, so every tool returns the same masked, bounded shape as the REST API, in three
 groups:
 
-- **Advisor scans (actions):** `architecture_scan`, `spring_scan`, `hibernate_scan`, `memory_scan`, `security_scan`,
-  `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`, `vulnerabilities_scan`. Each triggers the same scan the
-  panel's action button runs and returns the report DTO; `vulnerabilities_scan` additionally makes outbound calls to
-  OSV.dev.
+- **Advisor scans (actions):** `architecture_scan`, `spring_scan`, `hibernate_scan`, `database_advisor_scan`,
+  `memory_scan`, `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`,
+  `vulnerabilities_scan`. Each triggers the same scan the panel's action button runs and returns the report DTO;
+  `vulnerabilities_scan` additionally makes outbound calls to OSV.dev.
 - **Diagnostics reads:** `get_live_activity`, `get_exceptions`, `get_exception_detail`, `get_security_logs`,
-  `get_sql_traces`, `get_traces`, `get_log_tail`, `get_http_exchanges`. `get_live_activity` returns the correlated feed
-  the [Live Activity panel](#live-activity) shows (HTTP requests, SQL statements, exceptions, security events,
-  scheduled-task runs, and — Spring only — cache accesses, grouped by request/trace); `get_exception_detail` takes a required `id` (from `get_exceptions` or
-  `get_live_activity`) and returns that exception group's full stack trace, causes, and individual occurrences.
+  `get_sql_traces`, `get_transactions` (Spring MVC/WebFlux only), `get_traces`, `get_log_tail`, `get_http_exchanges`.
+  `get_live_activity` returns the correlated feed the [Live Activity panel](#live-activity) shows (HTTP requests, SQL
+  statements, exceptions, security events, scheduled-task runs, and — Spring only — cache accesses, grouped by
+  request/trace); `get_exception_detail` takes a required `id` (from `get_exceptions` or `get_live_activity`) and returns
+  that exception group's full stack trace, causes, and individual occurrences.
 - **Core context reads:** `get_overview`, `get_health`, `get_config` (masked), `get_beans`, `get_mappings`,
   `get_loggers`, `get_conditions` (Spring MVC/WebFlux only — Quarkus has no runtime condition-match graph),
   `get_scheduled_tasks`, `get_cache_stats`, `get_database_connection_pools`.
