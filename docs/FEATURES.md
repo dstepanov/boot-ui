@@ -284,10 +284,12 @@ the reactive adapter.
 
 #### Live flow (service map)
 
-Live Activity has a second reading of the same evidence: a **Live flow** mode, reached from the Feed / Live flow switch
-next to the panel title. Where the feed answers "what just happened, in order?", the map answers "what does this
-application actually talk to?" — the running application at the centre, a single generic **Local HTTP clients** lane
-feeding into it, and one node per outbound dependency, grouped by safe identity. It is served by
+Live Activity opens with a compact **Live flow** service map between the KPI summary and the feed controls. Its viewport
+adapts to the graph's content (up to a bounded scrolling height for dense maps) and centres on **This application**.
+Developers who want a denser event-first view can minimize the map; that preference is remembered in the browser, while
+the feed remains visible and usable underneath. Where the feed answers "what just happened, in order?", the map answers
+"what does this application actually talk to?" — the running application at the centre, a single generic **Local HTTP
+clients** lane feeding into it, and one node per outbound dependency, grouped by safe identity. It is served by
 `GET /bootui/api/activity/service-map` on Spring MVC, Spring WebFlux, and Quarkus.
 
 Nothing new is instrumented and nothing is contacted. The map is assembled entirely from bounded buffers other panels

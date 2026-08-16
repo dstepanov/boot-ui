@@ -208,12 +208,11 @@ test.describe('Live Activity view', () => {
     await page.request.get('/api/sample/product-search')
 
     await openView('activity', 'Live Activity')
-    await page.getByRole('button', {name: 'Live flow view'}).click()
 
     const map = page.locator('.flow-map')
     await expect(map).toBeVisible({timeout: 15_000})
-    // The feed is replaced, not stacked beside the map.
-    await expect(page.locator('.activity-table')).toHaveCount(0)
+    // The map is shown inline without replacing the event feed.
+    await expect(page.locator('.activity-table')).toBeVisible()
     // The running application is the centre of the map, and the map states plainly that it contacts nothing.
     await expect(map.locator('.flow-node--app')).toBeVisible()
     await expect(map).toContainText('contacts nothing and probes nothing')
@@ -236,7 +235,6 @@ test.describe('Live Activity view', () => {
     await page.request.get('/api/sample/product-search')
 
     await openView('activity', 'Live Activity')
-    await page.getByRole('button', {name: 'Live flow view'}).click()
 
     const map = page.locator('.flow-map')
     await expect(map.locator('.flow-node[role="button"]').first()).toBeVisible({timeout: 15_000})

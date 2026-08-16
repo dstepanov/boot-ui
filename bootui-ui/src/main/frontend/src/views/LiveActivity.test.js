@@ -121,6 +121,7 @@ describe('LiveActivity', () => {
   afterEach(() => {
     wrapper?.unmount()
     wrapper = null
+    safeLocalStorage.removeItem('bootui.activity.flowCollapsed')
     vi.unstubAllGlobals()
   })
 
@@ -574,36 +575,51 @@ describe('LiveActivity', () => {
     expect(switchButton.attributes('disabled')).toBeDefined()
   })
 
-  it('opens on the feed and offers Live flow as a second reading of the same evidence', async () => {
-    vi.stubGlobal('fetch', stubFetch(activityReport(), requestProfile()))
-
-    wrapper = mountLiveActivity()
-    await flushPromises()
-
-    const options = wrapper.findAll('.activity-view-switcher__option')
-    expect(options.map((option) => option.text())).toEqual(['Feed', 'Live flow'])
-    expect(options[0].attributes('aria-pressed')).toBe('true')
-    expect(options[1].attributes('aria-pressed')).toBe('false')
-    expect(wrapper.find('.activity-table').exists()).toBe(true)
-  })
-
-  it('swaps the feed for the Live flow map without fetching the map until that mode is opened', async () => {
+  it('shows Live flow between the KPI summary and activity feed controls by default', async () => {
     const fetchMock = stubFetch(activityReport(), requestProfile())
     vi.stubGlobal('fetch', fetchMock)
 
     wrapper = mountLiveActivity()
     await flushPromises()
-    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('service-map'))).toBe(false)
 
-    await wrapper.findAll('.activity-view-switcher__option')[1].trigger('click')
-    await flushPromises()
+    const toggle = wrapper.get('[aria-controls="activity-live-flow"]')
+    expect(toggle.text()).toContain('Minimize map')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('.flow-map').isVisible()).toBe(true)
+    expect(wrapper.find('.activity-table').exists()).toBe(true)
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('service-map'))).toBe(true)
 
-    expect(wrapper.find('.activity-table').exists()).toBe(false)
-    expect(wrapper.findAll('.activity-view-switcher__option')[1].attributes('aria-pressed')).toBe('true')
+    const kpis = wrapper.get('.activity-kpis').element
+    const flow = wrapper.get('.activity-flow').element
+    const controls = wrapper.get('.activity-feed-controls').element
+    expect(kpis.compareDocumentPosition(flow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(flow.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('keeps feed unavailability scoped to Feed while Live flow renders configured JDBC evidence', async () => {
-    safeLocalStorage.removeItem('bootui.activity.mode')
+  it('remembers when Live flow is minimized without hiding the activity feed', async () => {
+    vi.stubGlobal('fetch', stubFetch(activityReport(), requestProfile()))
+
+    wrapper = mountLiveActivity()
+    await flushPromises()
+
+    await wrapper.get('[aria-controls="activity-live-flow"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[aria-controls="activity-live-flow"]').text()).toContain('Show map')
+    expect(wrapper.get('[aria-controls="activity-live-flow"]').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('.flow-map').isVisible()).toBe(false)
+    expect(wrapper.find('.activity-table').exists()).toBe(true)
+    expect(safeLocalStorage.getItem('bootui.activity.flowCollapsed')).toBe('true')
+
+    wrapper.unmount()
+    wrapper = mountLiveActivity()
+    await flushPromises()
+
+    expect(wrapper.get('[aria-controls="activity-live-flow"]').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('.flow-map').isVisible()).toBe(false)
+  })
+
+  it('shows configured Live flow evidence alongside the unavailable feed state', async () => {
     const configuredJdbcMap = {
       available: true,
       unavailableReason: null,
@@ -676,15 +692,11 @@ describe('LiveActivity', () => {
     const feedUnavailable =
       'No live activity sources are available yet. Enable HTTP exchange recording, SQL tracing, REST client tracing, exception capture, or security logs to populate this stream.'
     expect(wrapper.text()).toContain(feedUnavailable)
-    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('service-map'))).toBe(false)
-
-    await wrapper.findAll('.activity-view-switcher__option')[1].trigger('click')
     await vi.waitFor(() => {
       expect(fetchMock.mock.calls.some(([url]) => String(url).includes('service-map'))).toBe(true)
     })
     await flushPromises()
 
-    expect(wrapper.text()).not.toContain(feedUnavailable)
     const jdbcNode = wrapper.get('.flow-node--jdbc')
     expect(jdbcNode.attributes('aria-label')).toContain('jdbc:postgresql://localhost:5432/shop')
     expect(jdbcNode.attributes('aria-label')).toContain('configured, no recent evidence')

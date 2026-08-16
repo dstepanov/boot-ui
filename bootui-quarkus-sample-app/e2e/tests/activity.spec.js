@@ -274,11 +274,10 @@ test.describe('Live Activity view (Quarkus)', () => {
     await page.request.get('/api/sample/product-search')
 
     await openView('activity', 'Live Activity')
-    await page.getByRole('button', {name: 'Live flow view'}).click()
 
     const map = page.locator('.flow-map')
     await expect(map).toBeVisible({timeout: 15_000})
-    await expect(page.locator('.activity-table')).toHaveCount(0)
+    await expect(page.locator('.activity-table')).toBeVisible()
     await expect(map.locator('.flow-node--app')).toBeVisible()
     await expect(map).toContainText('contacts nothing and probes nothing')
 

@@ -258,7 +258,9 @@ describe('layoutServiceMap', () => {
 
     expect(first).toEqual(second)
     expect(first.width).toBeLessThanOrEqual(MAX_SERVICE_MAP_WIDTH)
-    expect(first.height).toBeGreaterThanOrEqual(320)
+    expect(first.application.x).toBe(first.width / 2)
+    expect(first.height).toBeGreaterThanOrEqual(124)
+    if (count <= 1) expect(first.height).toBe(124)
     if (count === 28) expect(first.height).toBe(1046)
     expect(first.height).toBeLessThanOrEqual(1046)
     for (let left = 0; left < boxes.length; left += 1) {
@@ -342,7 +344,7 @@ describe('layoutServiceMap', () => {
     const result = layoutServiceMap(mapWith(28))
 
     expect(result.mode).toBe('rack')
-    expect(result.width).toBe(1040)
+    expect(result.width).toBe(1228)
     expect(result.height).toBe(1046)
     expect(Math.max(...result.edges.map(routeLength))).toBeLessThanOrEqual(665)
   })
