@@ -452,6 +452,21 @@ class BootUiSampleApplicationIntegrationTests {
     }
 
     @Test
+    void hibernateSecondLevelCacheSampleProducesMissPutAndHit() {
+        ResponseEntity<Map> response = getMap("/api/sample/hibernate-second-level-cache");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<?, ?> body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.get("loads")).isEqualTo(2);
+        assertThat(((Number) body.get("missCountDelta")).longValue()).isGreaterThanOrEqualTo(1);
+        assertThat(((Number) body.get("putCountDelta")).longValue()).isGreaterThanOrEqualTo(1);
+        assertThat(((Number) body.get("hitCountDelta")).longValue()).isGreaterThanOrEqualTo(1);
+        assertThat(body.get("regionName")).isEqualTo(Product.class.getName());
+        assertThat(((Map<?, ?>) body.get("product")).get("name")).isNotNull();
+    }
+
+    @Test
     void rootIndexPageIntroducesTheSampleApp() {
         ResponseEntity<String> response = getString("/");
 
@@ -544,6 +559,47 @@ class BootUiSampleApplicationIntegrationTests {
         assertThat((Iterable<?>) after.get("entries"))
                 .anySatisfy(entry -> assertThat(((Map<?, ?>) entry).get("methodName"))
                         .isEqualTo("io.github.jdubois.bootui.sample.catalog.SampleCatalog.searchProducts"));
+    }
+
+    @Test
+    void transactionSamplesProduceRepresentativeBoundaries() {
+        Map<?, ?> before = getMap("/bootui/api/transactions").getBody();
+        assertThat(before).isNotNull();
+        long capturedBefore = ((Number) before.get("totalCaptured")).longValue();
+
+        ResponseEntity<Map> sampleResponse = getMap("/api/sample/transaction-samples");
+        assertThat(sampleResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(sampleResponse.getBody()).containsEntry("slowMillis", 650);
+
+        Map<?, ?> after = getMap("/bootui/api/transactions").getBody();
+        assertThat(after).isNotNull();
+        assertThat(((Number) after.get("totalCaptured")).longValue()).isGreaterThanOrEqualTo(capturedBefore + 5);
+        Iterable<?> entries = (Iterable<?>) after.get("entries");
+        assertThat(entries).anySatisfy(entry -> {
+            Map<?, ?> transaction = (Map<?, ?>) entry;
+            assertThat(transaction.get("methodName"))
+                    .isEqualTo("io.github.jdubois.bootui.sample.catalog.SampleTransactionScenarios.commit");
+            assertThat(transaction.get("status")).isEqualTo("COMMITTED");
+        });
+        assertThat(entries).anySatisfy(entry -> {
+            Map<?, ?> transaction = (Map<?, ?>) entry;
+            assertThat(transaction.get("methodName"))
+                    .isEqualTo("io.github.jdubois.bootui.sample.catalog.SampleTransactionScenarios.slowCommit");
+            assertThat(transaction.get("status")).isEqualTo("COMMITTED");
+            assertThat(transaction.get("slow")).isEqualTo(true);
+        });
+        assertThat(entries).anySatisfy(entry -> {
+            Map<?, ?> transaction = (Map<?, ?>) entry;
+            assertThat(transaction.get("methodName"))
+                    .isEqualTo("io.github.jdubois.bootui.sample.catalog.SampleTransactionScenarios.rollBack");
+            assertThat(transaction.get("status")).isEqualTo("ROLLED_BACK");
+        });
+        assertThat(entries).anySatisfy(entry -> {
+            Map<?, ?> transaction = (Map<?, ?>) entry;
+            assertThat(transaction.get("methodName"))
+                    .isEqualTo("io.github.jdubois.bootui.sample.catalog.SampleNestedTransactionStep.run");
+            assertThat(transaction.get("parentId")).isNotNull();
+        });
     }
 
     @Test

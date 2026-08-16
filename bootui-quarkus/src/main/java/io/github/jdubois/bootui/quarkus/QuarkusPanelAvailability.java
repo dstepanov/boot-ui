@@ -396,6 +396,7 @@ public class QuarkusPanelAvailability {
      */
     private static final Map<String, String> CAPABILITY_ABSENT = Map.ofEntries(
             Map.entry(BootUiPanels.HIBERNATE, HIBERNATE_ABSENT),
+            Map.entry(BootUiPanels.HIBERNATE_STATISTICS, HIBERNATE_ABSENT),
             Map.entry(BootUiPanels.SCHEDULED, SCHEDULED_ABSENT),
             Map.entry(BootUiPanels.CACHE, CACHE_ABSENT),
             Map.entry(BootUiPanels.FLYWAY, FLYWAY_ABSENT),
@@ -524,6 +525,7 @@ public class QuarkusPanelAvailability {
         this.accessConfig = new QuarkusPanelAccessConfig(config);
         this.dynamicAvailability = Map.ofEntries(
                 Map.entry(BootUiPanels.HIBERNATE, hibernatePresent),
+                Map.entry(BootUiPanels.HIBERNATE_STATISTICS, hibernatePresent),
                 Map.entry(BootUiPanels.SCHEDULED, schedulingPresent),
                 Map.entry(BootUiPanels.CACHE, cachePresent),
                 Map.entry(BootUiPanels.FLYWAY, flywayPresent),

@@ -169,14 +169,16 @@ those fields so the same UI build renders the correct sidebar and status on each
 > the canonical JSON `409` response, while Heap Dump capture/analyze/delete share one mutation-domain admission. MCP
 > returns the same busy message in-band, and passive reads continue serving the last completed report.
 
-### 5.1 Ported as-is — framework-agnostic or same library (18)
+### 5.1 Ported as-is — framework-agnostic or same library (19)
 
 Logic lives entirely in `bootui-core` + `bootui-engine`; the Quarkus adapter adds at most a trivial supplier.
 
 `Memory` · `Live Memory` · `JVM Tuning` · `Heap Dump` · `Threads` (pure JVM MXBeans) · `Metrics` (Micrometer — same API)
 · `Hibernate` advisor (same 72-rule registry/report contract; mapping and configuration rules port, while Spring Data
-query rules skip when repository metadata is unavailable) · `Vulnerabilities` (classpath Maven
-metadata + OSV) · `Pentesting` · `HTTP Probe` (local HTTP probing) · `AI Framework` · `Traces` (OTLP — a standard;
+query rules skip when repository metadata is unavailable) · `Hibernate Statistics` (standalone Database-section panel
+over `org.hibernate.stat.Statistics`, gated on the same Hibernate ORM capability as the advisor; its explicit
+runtime-enable action has the same read-only and cross-site-write protection as Spring) · `Vulnerabilities` (classpath
+Maven metadata + OSV) · `Pentesting` · `HTTP Probe` (local HTTP probing) · `AI Framework` · `Traces` (OTLP — a standard;
 Quarkus/LangChain4j export it) · `GitHub` (`HttpClient`) · `Copilot` · `Claude Code` (read `~/.copilot` / `~/.claude`) ·
 `MCP Server` (**Implemented** — full JSON-RPC bridge: the shared engine `McpDispatcher` owns method routing/gating/tool
 lookup, a thin Jackson-2 `QuarkusMcpEnvelope` codec + `QuarkusMcpTools` catalog + working enable toggle sit behind the
@@ -380,10 +382,10 @@ No equivalent, low value, or superseded by Quarkus's own tooling:
 - `JMS` uses Spring JMS (`JmsTemplate` and `@JmsListener`) today. Quarkus users can use the implemented Kafka and RabbitMQ
   panels while a Quarkus-native JMS capture layer remains unimplemented.
 
-**Result:** 44 of the 54 panels ship on Quarkus: 26 are statically available and 18 are capability/detector-gated. The
+**Result:** 45 of the 55 panels ship on Quarkus: 26 are statically available and 19 are capability/detector-gated. The
 remaining 10 panels do not ship: 9 are intentionally not applicable (GraalVM, CRaC, Conditions, Startup Timeline, HTTP
 Sessions, Spring Data, Spring Security, DevTools, Transactions), and 1 (`JMS`) is not yet available. By portability
-strategy, the 44 shipped panels comprise 18 ported as-is, 11 source-swapped, 12 capture-rebuilt, and 3 replaced with a
+strategy, the 45 shipped panels comprise 19 ported as-is, 11 source-swapped, 12 capture-rebuilt, and 3 replaced with a
 Quarkus-native panel. The Overview dashboard panel is available (its scoring dashboard renders client-side from the
 advisor endpoints, and the shell-chrome `GET /bootui/api/overview` endpoint is served on both adapters).
 
@@ -571,7 +573,8 @@ Pentesting, HTTP Probe, MCP Server) need no special ingredients — they work ag
 | Threads             | as-is       | Port    | ThreadMXBean reader              | —                                           |
 | Metrics             | as-is       | Port    | Micrometer reader                | `MeterRegistrySupplier`                     |
 | Hibernate           | as-is       | Port    | Hibernate advisor engine         | `EntityManagerFactoryProvider`              |
-| Database Advisor    | as-is       | Port    | Database advisor rule engine     | `DataSourceProvider` (positional datasource naming; `javax.sql.DataSource` is unconditional, no capability gating) |
+| Hibernate Statistics | as-is      | Port    | `HibernateStatisticsService`     | `HibernateStatisticsProvider` (same Hibernate ORM capability gate as the Hibernate advisor) |
+| Database            | as-is       | Port    | Database advisor rule engine     | `DataSourceProvider` (positional datasource naming; `javax.sql.DataSource` is unconditional, no capability gating) |
 | Vulnerabilities     | as-is       | Port    | OSV scanner + dependency catalog | —                                           |
 | Pentesting          | as-is       | Port    | Pentesting engine                | CORS/OIDC/TLS metadata; Spring endpoint inventory explicitly unavailable |
 | HTTP Probe          | as-is       | Port    | HTTP probe service               | —                                           |

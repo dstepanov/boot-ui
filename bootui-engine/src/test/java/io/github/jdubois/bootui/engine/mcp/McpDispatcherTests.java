@@ -427,6 +427,7 @@ class McpDispatcherTests {
     @Test
     void interruptedDispatchReleasesCapacity() throws Exception {
         CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch finished = new CountDownLatch(1);
         AtomicInteger calls = new AtomicInteger();
         McpTool interruptible = new McpTool("slow", "Slow.", McpToolSchema.NONE, "overview", false, args -> {
             if (calls.incrementAndGet() == 1) {
@@ -435,6 +436,8 @@ class McpDispatcherTests {
                     Thread.sleep(5_000);
                 } catch (InterruptedException ex) {
                     Thread.currentThread().interrupt();
+                } finally {
+                    finished.countDown();
                 }
             }
             return Map.of("ok", true);
@@ -446,6 +449,7 @@ class McpDispatcherTests {
 
         interruptedCaller.interrupt();
         interruptedCaller.join(5_000);
+        assertThat(finished.await(5, TimeUnit.SECONDS)).isTrue();
 
         assertThat(dispatcher.dispatch(call("slow"))).isInstanceOf(ToolCallResult.class);
         assertThat(dispatcher.runtimeStats().snapshot().callCount()).isEqualTo(2);

@@ -14,6 +14,7 @@ const Transactions = () => import('./views/Transactions.vue')
 const RestClientTrace = () => import('./views/RestClientTrace.vue')
 const Data = () => import('./views/Data.vue')
 const Hibernate = () => import('./views/Hibernate.vue')
+const HibernateStatistics = () => import('./views/HibernateStatistics.vue')
 const Flyway = () => import('./views/Flyway.vue')
 const Liquibase = () => import('./views/Liquibase.vue')
 const Startup = () => import('./views/Startup.vue')
@@ -172,6 +173,28 @@ export const routes = [
         'actuator',
         'framework',
         'runtime'
+      ]
+    }
+  },
+  {
+    path: '/database-advisor',
+    name: 'database-advisor',
+    component: DatabaseAdvisor,
+    meta: {
+      group: groups.advisors,
+      icon: 'bi-hdd-rack',
+      title: 'Database',
+      shortcut: 'da',
+      keywords: [
+        'schema',
+        'indexes',
+        'index',
+        'foreign key',
+        'primary key',
+        'postgres',
+        'mysql',
+        'discrepancy',
+        'jdbc metadata'
       ]
     }
   },
@@ -543,6 +566,29 @@ export const routes = [
     }
   },
   {
+    path: '/hibernate-statistics',
+    name: 'hibernate-statistics',
+    component: HibernateStatistics,
+    meta: {
+      group: groups.database,
+      icon: 'bi-graph-up',
+      title: 'Hibernate Statistics',
+      shortcut: 'hg',
+      keywords: [
+        'hibernate',
+        'session factory',
+        'statistics',
+        'generate_statistics',
+        'query cache',
+        'second-level cache',
+        'entities',
+        'collections',
+        'sessions',
+        'monitoring'
+      ]
+    }
+  },
+  {
     path: '/data',
     name: 'data',
     component: Data,
@@ -576,28 +622,6 @@ export const routes = [
       title: 'Liquibase',
       shortcut: 'lb',
       keywords: ['migrations', 'changelog', 'changesets', 'schema', 'db migration']
-    }
-  },
-  {
-    path: '/database-advisor',
-    name: 'database-advisor',
-    component: DatabaseAdvisor,
-    meta: {
-      group: groups.database,
-      icon: 'bi-hdd-rack',
-      title: 'Database Advisor',
-      shortcut: 'da',
-      keywords: [
-        'schema',
-        'indexes',
-        'index',
-        'foreign key',
-        'primary key',
-        'postgres',
-        'mysql',
-        'discrepancy',
-        'jdbc metadata'
-      ]
     }
   },
   {

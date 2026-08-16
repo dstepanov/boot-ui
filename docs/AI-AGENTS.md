@@ -89,14 +89,17 @@ the classpath) are simply not advertised.
 
 - **Advisor scans (actions):** `architecture_scan`, `spring_scan`, `hibernate_scan`, `database_advisor_scan`,
   `memory_scan`, `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`, and
-  `vulnerabilities_scan`. Each runs the same scan as the panel's action button; `vulnerabilities_scan` additionally
-  makes outbound calls to OSV.dev.
+  `vulnerabilities_scan`. Each runs the same scan as the panel's action button and returns the report DTO;
+  `vulnerabilities_scan` additionally makes outbound calls to OSV.dev.
 - **Cached advisor reports:** matching `get_*_report` tools return the last completed report without starting another
   scan, including `get_database_advisor_report`, `get_graalvm_report`, and `get_crac_report` where applicable.
 - **Diagnostics reads:** `get_live_activity`, `get_exceptions`, `get_exception_detail`, `get_security_logs`,
-  `get_sql_traces`, `get_transactions` (Spring only), `get_traces`, `get_log_tail`, `get_http_exchanges`, and
-  `get_rest_client_traces`. `get_exception_detail` takes an `id` and returns the full stack trace, causes, and
-  occurrences.
+  `get_sql_traces`, `get_transactions` (Spring MVC/WebFlux only), `get_traces`, `get_log_tail`, `get_http_exchanges`,
+  and `get_rest_client_traces`.
+  `get_live_activity` returns the correlated feed the [Live Activity panel](FEATURES.md) shows (HTTP requests, SQL
+  statements, exceptions, and security events grouped by request/trace); `get_exception_detail` takes a required `id`
+  (from `get_exceptions` or `get_live_activity`) and returns that exception group's full stack trace, causes, and
+  individual occurrences.
 - **Core context reads:** `get_overview`, `get_health`, `get_config` (masked), `get_beans`, `get_mappings`,
   `get_loggers`, `get_conditions` (Spring MVC/WebFlux only), `get_scheduled_tasks`, `get_cache_stats`,
   `get_database_connection_pools`, `get_metrics`, `get_live_memory`, `get_jvm_tuning`, `get_heap_dump_report`,

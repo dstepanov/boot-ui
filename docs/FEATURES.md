@@ -35,7 +35,7 @@ After a run-all, a dismissible tip points to the MCP Server panel, since enablin
 read these same scan results and fix the findings for you.
 
 Each scanner card shows its own 0–100 score, status, and severity counts. The severity-based scanners are Architecture, Memory,
-REST API, Spring, Hibernate, Security, Pentesting, and Vulnerabilities; scores start at 100
+REST API, Spring, Database, Hibernate, Security, Pentesting, and Vulnerabilities; scores start at 100
 and subtract a fixed weighted
 penalty per finding (critical 25, high 10, medium 3, low 1), so a clean scan stays at 100. The GitHub card is not a
 severity scanner: it connects to the local repository and, only when the credential is connected and authenticated,
@@ -534,6 +534,53 @@ the same `/spring` route, `/bootui/api/spring` endpoint, and report contract —
 [QUARKUS-ADVISOR-CHECKS.md](QUARKUS-ADVISOR-CHECKS.md) for the full rule catalogue and remediation links.
 
 ![BootUI Quarkus panel](./images/bootui-quarkus.webp)
+
+### Database
+
+The Database panel introspects the physical schema of every discovered application `DataSource` bean through
+plain JDBC `DatabaseMetaData` — tables, columns, primary keys, foreign keys, and indexes — and evaluates a fixed,
+on-demand ruleset of deterministic, low-false-positive structural checks (a missing primary key, a foreign-key column
+with no supporting index, duplicate/overlapping indexes, a foreign-key column whose type disagrees with the
+referenced primary key's type, and a redundant unique index duplicating the primary key). It reuses the same
+proxy-aware datasource discovery as Database Connection Pools and SQL Trace, skipping Spring's delegating/routing
+`DataSource` wrappers so a wrapped datasource is never introspected twice. It never executes DDL, never queries
+application data, and fails closed with a stable empty report and an explanatory status when no `DataSource` bean is
+present or no datasource can be read. If only some datasources fail introspection, readable datasources are still
+evaluated and the report status is `PARTIAL`.
+
+For **PostgreSQL** and **MySQL** — the two most widely used relational databases among Java developers — a small amount
+of dialect-specific catalog augmentation runs in addition to the generic checks: PostgreSQL invalid/broken indexes
+(`pg_index.indisvalid = false`, e.g. left behind by a failed `CREATE INDEX CONCURRENTLY`), a PostgreSQL sequence
+nearing exhaustion of its underlying type's numeric range (`pg_sequences.last_value`), MySQL tables using a
+non-`InnoDB` storage engine, and MySQL columns using a character set other than `utf8mb4`. The dialect is detected from
+`DatabaseMetaData.getDatabaseProductName()` and the JDBC URL; every other database (H2, SQL Server, Oracle, MariaDB, etc.)
+still runs the full generic ruleset through the standard JDBC metadata fallback — it is never treated as unsupported. Both
+dialect-specific queries fail soft (an empty result) rather than propagating, since they may be blocked by restricted
+database privileges on some hosts.
+
+When a Hibernate `EntityManagerFactory`/metamodel is also available for the same application, the panel additionally
+cross-references the physical schema against the mapped JPA entities the shared Hibernate metamodel reader already
+reads (the same reader `Hibernate` uses): a `@ManyToOne`/`@JoinColumn` foreign-key column with no supporting physical
+index (the highest-confidence check), an explicitly-`@Table`-named entity with no matching physical table, basic
+type-family/nullability mismatches between a mapped `@Column` and its physical column, a mapped `@Column(length=...)`
+longer than the physical column can hold (a truncation risk), and a mapped unique constraint
+(`@Column(unique=true)`/`@Table(uniqueConstraints=...)`) with no backing physical unique index. Only entities with an
+*explicit* `@Table(name = ...)` are cross-referenced — entities relying on the default naming strategy are skipped rather
+than guessed, keeping the false-positive rate low. This half of the panel is skipped (with a clear reason, not silently
+dropped) when either a `DataSource` or a Hibernate metamodel is unavailable. See
+[DATABASE-ADVISOR-CHECKS.md](DATABASE-ADVISOR-CHECKS.md) for the full rule catalogue and remediation links.
+
+Out of scope by design: this panel proposes no query/workload-based optimizations, runs no execution-plan analysis,
+performs no partition discovery/management, and never suggests new indexes based on observed usage — it is a
+structural, deterministic advisor in the same spirit as the Hibernate Advisor, not a tuning engine.
+
+On Quarkus the panel is identical, running the same shared rule engine over the same report contract: `DataSource`
+beans are discovered through `@Any Instance<DataSource>` (unconditionally — `javax.sql.DataSource` is core JDK, so no
+capability gating is needed), and the Hibernate cross-reference half reuses the same `EntityDiscoverySource` the
+Hibernate panel produces when `quarkus-hibernate-orm` is present. One reduced-fidelity difference: since the
+per-datasource name is only discoverable through an Agroal-specific qualifier this panel intentionally avoids
+importing, datasources are named positionally (`default`, `datasource-2`, ...) rather than by their configured Quarkus
+datasource name.
 
 ### Hibernate
 
@@ -1187,6 +1234,40 @@ cleanly while never leaking ORM parameter values. Both feeders are wired in dev/
 
 ![BootUI SQL Trace panel](./images/bootui-sql-trace.webp)
 
+### Hibernate Statistics
+
+The Hibernate Statistics panel is a standalone, Database-section runtime-monitoring panel that exposes a live,
+read-only snapshot of Hibernate's own `org.hibernate.stat.Statistics` for the application's `SessionFactory`:
+session/transaction counts (opened/closed sessions, flushes, connections, transactions, successful transactions),
+entity and collection load/fetch/insert/update/delete/recreate/remove counts, query execution counts (and the
+slowest recorded query), and — when enabled — query-cache and second-level-cache hit/miss/put counters, including
+per-region second-level cache breakdowns. It is deliberately separate from the Hibernate Advisor panel: the advisor
+runs static, on-demand checks and reports findings, while this panel is a continuously-refreshing runtime monitor,
+closer in spirit to Database Connection Pools or SQL Trace than to an advisor.
+
+- **Availability gating**: the panel requires a resolvable Hibernate `SessionFactory` (via
+  `EntityManagerFactory#unwrap(SessionFactory.class)`). When statistics collection is disabled, the panel offers an
+  explicit **Enable for this runtime** action. It calls `Statistics#setStatisticsEnabled(true)`, starts collecting from
+  that moment, and does not rewrite application configuration. The persistent startup alternatives remain
+  `hibernate.generate_statistics=true` and `quarkus.hibernate-orm.statistics=true`; this is the same HIB-CONFIG-007
+  recommendation the static advisor makes (see [HIBERNATE-CHECKS.md](HIBERNATE-CHECKS.md)).
+- **Read-mostly**: the only mutation enables future collection for the current runtime and is covered by BootUI's
+  localhost, cross-site-write, and panel read-only policy. There is no reset/clear action, so BootUI never discards
+  Hibernate's counters.
+- **Out of scope for this iteration**: no per-entity or per-query drill-down beyond what `Statistics` itself
+  exposes (e.g. no per-entity-class breakdown, no query-by-query cache stats); only the **first** resolved
+  `EntityManagerFactory`/`SessionFactory` is inspected, so multi-persistence-unit applications only see statistics
+  for one persistence unit — a known limitation for a future iteration.
+- **Not filtered by `bootui.monitoring.exclude-self`**: Hibernate statistics are process-global counters on the
+  `SessionFactory`, not per-request/per-caller data, so there is nothing to attribute to "self" the way HTTP
+  exchange or SQL-trace filtering does. BootUI's own entity-metamodel introspection for the advisor scan does not
+  open sessions or transactions, so it does not inflate these counters in practice, but this is a documented
+  limitation rather than an enforced filter.
+
+On Quarkus the panel is identical, running over the same framework-neutral `HibernateStatisticsService` and report
+contract, backed by a `HibernateStatisticsProvider` gated on the same Hibernate ORM capability as the Hibernate
+advisor panel.
+
 ### Transactions
 
 The Transactions panel shows the `@Transactional` boundaries your application recently ran — begin, commit, and rollback
@@ -1219,7 +1300,10 @@ or when a WebFlux application uses only a `ReactiveTransactionManager` (R2DBC), 
 listener hook exists solely on the blocking `PlatformTransactionManager` SPI. Capture, the initial recording state, buffer
 size, and the slow-transaction and connection-hold thresholds are all configurable under `bootui.transactions.*`.
 The Spring sample's product list and uncached product-search operations use explicit read-only service transactions, so
-loading or checking products produces representative entries in this panel as well as SQL Trace.
+loading or checking products produces representative entries in this panel as well as SQL Trace. Its sample action lab
+also has a one-click transaction scenario set that generates committed, slow, rolled-back, and nested boundaries, plus a
+Hibernate second-level cache action that loads one entity through two persistence contexts to produce visible miss, put,
+and hit counters in Hibernate Statistics.
 
 Like SQL Trace, the panel refreshes over **Server-Sent Events**: the browser subscribes to
 `/bootui/api/transactions/stream` and the server pushes a small coalesced notification whenever a transaction completes,
@@ -1280,53 +1364,6 @@ for trusted local sessions and is blocked by `bootui.read-only=true` or `bootui.
 and degrades to a clear empty state when Liquibase is not on the classpath or no Liquibase databases are present.
 
 ![BootUI Liquibase panel](./images/bootui-liquibase.webp)
-
-### Database Advisor
-
-The Database Advisor panel introspects the physical schema of every discovered application `DataSource` bean through
-plain JDBC `DatabaseMetaData` — tables, columns, primary keys, foreign keys, and indexes — and evaluates a fixed,
-on-demand ruleset of deterministic, low-false-positive structural checks (a missing primary key, a foreign-key column
-with no supporting index, duplicate/overlapping indexes, a foreign-key column whose type disagrees with the
-referenced primary key's type, and a redundant unique index duplicating the primary key). It reuses the same
-proxy-aware datasource discovery as Database Connection Pools and SQL Trace, skipping Spring's delegating/routing
-`DataSource` wrappers so a wrapped datasource is never introspected twice. It never executes DDL, never queries
-application data, and fails closed with a stable empty report and an explanatory status when no `DataSource` bean is
-present or no datasource can be read. If only some datasources fail introspection, readable datasources are still
-evaluated and the report status is `PARTIAL`.
-
-For **PostgreSQL** and **MySQL** — the two most widely used relational databases among Java developers — a small amount
-of dialect-specific catalog augmentation runs in addition to the generic checks: PostgreSQL invalid/broken indexes
-(`pg_index.indisvalid = false`, e.g. left behind by a failed `CREATE INDEX CONCURRENTLY`), a PostgreSQL sequence
-nearing exhaustion of its underlying type's numeric range (`pg_sequences.last_value`), MySQL tables using a
-non-`InnoDB` storage engine, and MySQL columns using a character set other than `utf8mb4`. The dialect is detected from
-`DatabaseMetaData.getDatabaseProductName()` and the JDBC URL; every other database (H2, SQL Server, Oracle, MariaDB, etc.)
-still runs the full generic ruleset through the standard JDBC metadata fallback — it is never treated as unsupported. Both
-dialect-specific queries fail soft (an empty result) rather than propagating, since they may be blocked by restricted
-database privileges on some hosts.
-
-When a Hibernate `EntityManagerFactory`/metamodel is also available for the same application, the panel additionally
-cross-references the physical schema against the mapped JPA entities the shared Hibernate metamodel reader already
-reads (the same reader `Hibernate` uses): a `@ManyToOne`/`@JoinColumn` foreign-key column with no supporting physical
-index (the highest-confidence check), an explicitly-`@Table`-named entity with no matching physical table, basic
-type-family/nullability mismatches between a mapped `@Column` and its physical column, a mapped `@Column(length=...)`
-longer than the physical column can hold (a truncation risk), and a mapped unique constraint
-(`@Column(unique=true)`/`@Table(uniqueConstraints=...)`) with no backing physical unique index. Only entities with an
-*explicit* `@Table(name = ...)` are cross-referenced — entities relying on the default naming strategy are skipped rather
-than guessed, keeping the false-positive rate low. This half of the panel is skipped (with a clear reason, not silently
-dropped) when either a `DataSource` or a Hibernate metamodel is unavailable. See
-[DATABASE-ADVISOR-CHECKS.md](DATABASE-ADVISOR-CHECKS.md) for the full rule catalogue and remediation links.
-
-Out of scope by design: this panel proposes no query/workload-based optimizations, runs no execution-plan analysis,
-performs no partition discovery/management, and never suggests new indexes based on observed usage — it is a
-structural, deterministic advisor in the same spirit as the Hibernate Advisor, not a tuning engine.
-
-On Quarkus the panel is identical, running the same shared rule engine over the same report contract: `DataSource`
-beans are discovered through `@Any Instance<DataSource>` (unconditionally — `javax.sql.DataSource` is core JDK, so no
-capability gating is needed), and the Hibernate cross-reference half reuses the same `EntityDiscoverySource` the
-Hibernate panel produces when `quarkus-hibernate-orm` is present. One reduced-fidelity difference: since the
-per-datasource name is only discoverable through an Agroal-specific qualifier this panel intentionally avoids
-importing, datasources are named positionally (`default`, `datasource-2`, ...) rather than by their configured Quarkus
-datasource name.
 
 ## Security
 
@@ -1798,8 +1835,10 @@ groups:
   `crac_scan`, and `vulnerabilities_scan`. Matching `get_*_report` tools return the last report without rerunning the
   scan. `vulnerabilities_scan` additionally makes outbound calls to OSV.dev.
 - **Diagnostics reads:** `get_live_activity`, `get_exceptions`, `get_exception_detail`, `get_security_logs`,
-  `get_sql_traces`, `get_transactions` (Spring only), `get_traces`, `get_log_tail`, `get_http_exchanges`, and
-  `get_rest_client_traces`.
+  `get_sql_traces`, `get_transactions` (Spring MVC/WebFlux only), `get_traces`, `get_log_tail`, `get_http_exchanges`,
+  and `get_rest_client_traces`. `get_live_activity` returns the correlated feed this panel shows, including HTTP
+  requests, SQL statements, exceptions, security events, scheduled-task runs, and, on Spring, cache accesses grouped by
+  request or trace. `get_exception_detail` returns a selected exception group's stack trace, causes, and occurrences.
 - **Runtime and integration reads:** the existing core context tools plus safe passive views for metrics, live memory,
   JVM tuning, heap-dump metadata, threads, startup, profile differences, Spring Data, Flyway, Liquibase, Spring
   Security, AI telemetry, messaging activity, DevTools/Dev Services, the cached GitHub dashboard, and local

@@ -26,6 +26,7 @@ const allPanelLinks = [
   {id: 'transactions', title: 'Transactions', heading: /^Transactions/},
   {id: 'sql-trace', title: 'SQL Trace', heading: /SQL Trace/},
   {id: 'data', title: 'Spring Data', heading: /Spring Data repositories/},
+  {id: 'database-advisor', title: 'Database', heading: /^Database$/},
   {id: 'hibernate', title: 'Hibernate', heading: /^Hibernate/},
   {id: 'flyway', title: 'Flyway', heading: /Flyway migrations/},
   {id: 'liquibase', title: 'Liquibase', heading: /Liquibase change sets/},
@@ -312,7 +313,7 @@ test.describe('BootUI app shell', () => {
     await page.goto('/bootui/')
 
     const groups = [
-      {title: 'Advisors', count: 8},
+      {title: 'Advisors', count: 9},
       {title: 'Runtime', count: 10},
       {title: 'Configuration', count: 6},
       {title: 'Database', count: 7},
@@ -332,6 +333,7 @@ test.describe('BootUI app shell', () => {
       'Architecture',
       'REST API',
       'Spring',
+      'Database',
       'Hibernate',
       'Memory',
       'Security',
@@ -344,10 +346,10 @@ test.describe('BootUI app shell', () => {
       'Database Connection Pools',
       'Transactions',
       'SQL Trace',
+      'Hibernate Statistics',
       'Spring Data',
       'Flyway',
-      'Liquibase',
-      'Database Advisor'
+      'Liquibase'
     ])
 
     await page.getByRole('button', {name: /Security\s+2/}).click()
