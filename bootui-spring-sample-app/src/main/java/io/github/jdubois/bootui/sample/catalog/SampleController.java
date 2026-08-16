@@ -32,6 +32,7 @@ public class SampleController {
 
     private final SampleSettings settings;
     private final SampleCatalog catalog;
+    private final SampleHibernateCacheScenarios hibernateCacheScenarios;
     private final SampleTransactionScenarios transactionScenarios;
     private final ObservationRegistry observationRegistry;
     private final Counter ordersProcessedCounter;
@@ -41,12 +42,14 @@ public class SampleController {
     public SampleController(
             SampleSettings settings,
             SampleCatalog catalog,
+            SampleHibernateCacheScenarios hibernateCacheScenarios,
             SampleTransactionScenarios transactionScenarios,
             MeterRegistry meterRegistry,
             ObservationRegistry observationRegistry,
             RestClient quarkusRestClient) {
         this.settings = settings;
         this.catalog = catalog;
+        this.hibernateCacheScenarios = hibernateCacheScenarios;
         this.transactionScenarios = transactionScenarios;
         this.observationRegistry = observationRegistry;
         this.quarkusRestClient = quarkusRestClient;
@@ -71,6 +74,11 @@ public class SampleController {
     @GetMapping("/product-search")
     public List<ProductSummary> productSearch(@RequestParam(name = "term", defaultValue = "console") String term) {
         return catalog.searchProducts(term);
+    }
+
+    @GetMapping("/hibernate-second-level-cache")
+    public Map<String, Object> hibernateSecondLevelCache() {
+        return hibernateCacheScenarios.run();
     }
 
     @GetMapping("/transaction-samples")

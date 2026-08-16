@@ -265,6 +265,11 @@
           <small>Inspect: SQL Trace, Spring Data</small>
         </article>
         <article class="test-action">
+          <button class="button" id="hibernate-cache-button" type="button">Test Hibernate second-level cache</button>
+          <p>Loads one entity twice in separate persistence contexts to produce a cache miss, put, and hit.</p>
+          <small>Inspect: Hibernate Statistics</small>
+        </article>
+        <article class="test-action">
           <button class="button" id="transaction-samples-button" type="button">Generate transaction samples</button>
           <p>Creates committed, slow, rolled-back, and nested transaction boundaries in one safe request.</p>
           <small>Inspect: Transactions</small>
@@ -390,6 +395,7 @@
   const chatResult = document.getElementById('ai-chat-result')
   const productsButton = document.getElementById('products-button')
   const sqlQueryButton = document.getElementById('sql-query-button')
+  const hibernateCacheButton = document.getElementById('hibernate-cache-button')
   const transactionSamplesButton = document.getElementById('transaction-samples-button')
   const greetingButton = document.getElementById('greeting-button')
   const publicApiButton = document.getElementById('public-api-button')
@@ -515,6 +521,24 @@
       showSampleResult(
         `Ran a live SQL SELECT and matched ${products.length} product(s) for "${term}"`,
         `${names}\n\nOpen BootUI SQL Trace to inspect the captured statement.`
+      )
+    })
+  )
+
+  hibernateCacheButton.addEventListener('click', () =>
+    runSampleAction(hibernateCacheButton, 'Testing Hibernate second-level cache...', async () => {
+      const response = await fetch('/api/sample/hibernate-second-level-cache', {
+        headers: {Accept: 'application/json'}
+      })
+      const body = await response.json()
+      if (!response.ok) {
+        throw new Error(body.error || `Hibernate cache request failed with HTTP ${response.status}`)
+      }
+      showSampleResult(
+        `Observed ${body.hitCountDelta} second-level cache hit(s) across ${body.loads} entity loads`,
+        `Product: ${body.product.name}\nRegion: ${body.regionName}\n` +
+          `Misses: +${body.missCountDelta}\nPuts: +${body.putCountDelta}\nHits: +${body.hitCountDelta}\n\n` +
+          'Open BootUI Hibernate Statistics to inspect the region and cumulative counters.'
       )
     })
   )

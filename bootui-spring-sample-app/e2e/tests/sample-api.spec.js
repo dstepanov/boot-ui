@@ -17,6 +17,7 @@ test.describe('Sample application REST API', () => {
     expect(body).not.toContain('BootUI console')
     expect(body).toContain('Sample action lab')
     expect(body).toContain('GET /api/sample/products')
+    expect(body).toContain('Test Hibernate second-level cache')
     expect(body).toContain('Create session data')
     expect(body).toContain('Secure API as admin')
     expect(body).toContain('Secure SQL request as admin')
@@ -33,6 +34,10 @@ test.describe('Sample application REST API', () => {
     await page.getByRole('button', {name: 'Run an SQL query'}).click()
     await expect(page.locator('#sample-action-status')).toContainText(/Ran a live SQL SELECT and matched \d+ product/)
     await expect(page.locator('#sample-action-result')).toContainText('Sample Console')
+
+    await page.getByRole('button', {name: 'Test Hibernate second-level cache'}).click()
+    await expect(page.locator('#sample-action-status')).toContainText(/Observed \d+ second-level cache hit/)
+    await expect(page.locator('#sample-action-result')).toContainText('Hits: +1')
 
     await page.getByRole('button', {name: 'Create session data'}).click()
     await expect(page.locator('#session-data-status')).toContainText('Added 5 attributes')
@@ -96,6 +101,17 @@ test.describe('Sample application REST API', () => {
     const names = products.map((p) => p.name)
     expect(names).toContain('Sample Console')
     expect(names).not.toContain('BootUI Starter')
+  })
+
+  test('GET /api/sample/hibernate-second-level-cache produces a cache hit', async ({request}) => {
+    const response = await request.get('/api/sample/hibernate-second-level-cache')
+    expect(response.status()).toBe(200)
+    const body = await response.json()
+    expect(body.loads).toBe(2)
+    expect(body.missCountDelta).toBeGreaterThanOrEqual(1)
+    expect(body.putCountDelta).toBeGreaterThanOrEqual(1)
+    expect(body.hitCountDelta).toBeGreaterThanOrEqual(1)
+    expect(body.regionName).toBe('io.github.jdubois.bootui.sample.catalog.Product')
   })
 
   test('GET /api/sample/metrics-burst records custom meters', async ({request}) => {

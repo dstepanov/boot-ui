@@ -452,6 +452,21 @@ class BootUiSampleApplicationIntegrationTests {
     }
 
     @Test
+    void hibernateSecondLevelCacheSampleProducesMissPutAndHit() {
+        ResponseEntity<Map> response = getMap("/api/sample/hibernate-second-level-cache");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<?, ?> body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.get("loads")).isEqualTo(2);
+        assertThat(((Number) body.get("missCountDelta")).longValue()).isGreaterThanOrEqualTo(1);
+        assertThat(((Number) body.get("putCountDelta")).longValue()).isGreaterThanOrEqualTo(1);
+        assertThat(((Number) body.get("hitCountDelta")).longValue()).isGreaterThanOrEqualTo(1);
+        assertThat(body.get("regionName")).isEqualTo(Product.class.getName());
+        assertThat(((Map<?, ?>) body.get("product")).get("name")).isNotNull();
+    }
+
+    @Test
     void rootIndexPageIntroducesTheSampleApp() {
         ResponseEntity<String> response = getString("/");
 

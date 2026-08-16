@@ -1301,7 +1301,9 @@ listener hook exists solely on the blocking `PlatformTransactionManager` SPI. Ca
 size, and the slow-transaction and connection-hold thresholds are all configurable under `bootui.transactions.*`.
 The Spring sample's product list and uncached product-search operations use explicit read-only service transactions, so
 loading or checking products produces representative entries in this panel as well as SQL Trace. Its sample action lab
-also has a one-click transaction scenario set that generates committed, slow, rolled-back, and nested boundaries.
+also has a one-click transaction scenario set that generates committed, slow, rolled-back, and nested boundaries, plus a
+Hibernate second-level cache action that loads one entity through two persistence contexts to produce visible miss, put,
+and hit counters in Hibernate Statistics.
 
 Like SQL Trace, the panel refreshes over **Server-Sent Events**: the browser subscribes to
 `/bootui/api/transactions/stream` and the server pushes a small coalesced notification whenever a transaction completes,
