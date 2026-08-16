@@ -22,6 +22,16 @@
         flyway-present and flyway-absent paths are each proven in isolation — the same split used for the
         Cache-present/absent and SmallRye-Health-present/absent coverage.</description>
 
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.h2database</groupId>
+                <artifactId>h2</artifactId>
+                <version>${flyway-verified-h2.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <!--
         Uses an in-memory H2 datasource (quarkus-jdbc-h2), so a @QuarkusTest boots without Docker. Never published.
     -->
