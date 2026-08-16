@@ -16,9 +16,12 @@ BootUI's safely exposable features.
 ### Added
 
 - **Database advisor on Spring MVC, Spring WebFlux, and Quarkus.** A bounded, metadata-only scan inspects every
-  application datasource for schema, key, index, type, and portability risks, with PostgreSQL, MySQL/MariaDB, and
-  Hibernate cross-reference checks. Per-datasource diagnostics make truncation, timeouts, unsupported metadata, and
-  partial reads explicit instead of reporting a clean result (#760, #795).
+  application datasource for schema, key, index, type, and portability risks, with PostgreSQL, MySQL/MariaDB, Oracle
+  Database 19c+, and Hibernate cross-reference checks. Its 27 bounded rules include Oracle invalid-constraint,
+  unusable-index, and sequence-exhaustion diagnostics alongside cross-database checks for duplicate foreign keys,
+  composite-key nullability, generated-key width, nullable composite uniqueness, sequence allocation mismatches, and
+  PostgreSQL replica identity. Per-datasource diagnostics make truncation, timeouts, unsupported metadata, and partial
+  reads explicit instead of reporting a clean result (#760, #795, #807).
 - **Transactions panel for Spring MVC and WebFlux.** BootUI now records bounded `@Transactional` boundaries with
   propagation, isolation, commit/rollback outcome, duration, parent/child nesting, and correlated SQL/connection counts,
   together with pause, resume, clear, filtering, and SSE updates. R2DBC-only WebFlux applications and Quarkus report the
@@ -42,7 +45,10 @@ BootUI's safely exposable features.
 - **Advisor accuracy was audited across Architecture, Spring, Quarkus, Hibernate, Security, REST API, JVM Tuning,
   Memory, Vulnerabilities, GraalVM, CRaC, Pentesting, and Database.** Rules now model current framework behavior more
   precisely, use stronger evidence, skip honestly when evidence is unavailable, and keep their check documentation
-  synchronized (#743–#755, #775, #782, #795).
+  synchronized. The Hibernate advisor now includes 75 rules, adding checks for `@Fetch(SUBSELECT)`, generated SQL
+  comments, ineffective JDBC batch size, and Oracle fetch sizing, while database metadata handling more accurately
+  covers identifiers, composite foreign keys, Hibernate cross-references, PostgreSQL indexes and sequences, and
+  MySQL/MariaDB charset and auto-increment behavior (#743–#755, #775, #782, #795, #806, #807).
 - **Advisor scores now penalize every concrete finding, not only each violated rule once.** Panels and Overview therefore
   apply the documented severity weights consistently when one rule reports multiple affected items (#803).
 - **SSE health and auto-refresh are one control.** Live Activity, Exceptions, SQL Trace, Security Logs, REST Client, and
