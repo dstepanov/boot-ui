@@ -13,6 +13,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -25,6 +26,11 @@ class BackendPanelCatalogConsistencyTest {
     private static final Pattern PANEL_ACCESS_ROW = Pattern.compile(
             "^\\|\\s*[^|]+\\|\\s*([^|]+?)\\s*\\|\\s*`([^`]+)`\\s*\\|\\s*`([^`]+)`\\s*\\|\\s*(.*?)\\s*\\|$",
             Pattern.MULTILINE);
+    private static final Pattern ENDPOINT_ROW =
+            Pattern.compile("^\\|\\s*`/bootui/api([^`]*)`\\s*\\|\\s*([^|]+?)\\s*\\|", Pattern.MULTILINE);
+    private static final Pattern MCP_TOOL_NAME = Pattern.compile("(?:Map\\.entry\\(|case)\\s*\"([a-z0-9_]+)\"");
+    private static final Pattern SCREENSHOT_ENTRY =
+            Pattern.compile("\\[\\s*'[^']+'\\s*,\\s*'[^']+'\\s*,\\s*'(bootui-[^']+\\.webp)'\\s*,", Pattern.DOTALL);
 
     private static final List<ManifestResource> MANIFEST_RESOURCES = List.of(
             new ManifestResource("/io/github/jdubois/bootui/conformance/expected-panels-spring.json", "spring-boot"),
@@ -109,6 +115,74 @@ class BackendPanelCatalogConsistencyTest {
     }
 
     @Test
+    void readContractCatalogIsDocumentedInSpecificationEndpointTable() {
+        String specification = readDocumentation("SPECIFICATION.md");
+        String endpointTable = section(specification, "### 6.4 API design", "### 6.5 Configuration properties");
+        Matcher rows = ENDPOINT_ROW.matcher(endpointTable);
+        Set<String> documentedGetEndpoints = new LinkedHashSet<>();
+        while (rows.find()) {
+            if (rows.group(2).contains("GET")) {
+                documentedGetEndpoints.add(rows.group(1));
+            }
+        }
+
+        for (BootUiApiContractCatalog.ReadContract contract : BootUiApiContractCatalog.reads()) {
+            assertThat(documentedGetEndpoints)
+                    .as("docs/SPECIFICATION.md section 6.4 GET endpoint for panel '%s'", contract.panelId())
+                    .contains(contract.relativePath());
+        }
+    }
+
+    @Test
+    void mcpToolCatalogIsDocumentedInEveryCanonicalToolList() {
+        String descriptions = readRepositoryFile(
+                "bootui-engine/src/main/java/io/github/jdubois/bootui/engine/mcp/McpToolDescriptions.java");
+        Set<String> toolNames = matches(descriptions, MCP_TOOL_NAME);
+        assertThat(toolNames).as("MCP tools registered in McpToolDescriptions").isNotEmpty();
+
+        List<DocumentationSection> toolLists = List.of(
+                new DocumentationSection(
+                        "docs/AI-AGENTS.md",
+                        section(readDocumentation("AI-AGENTS.md"), "### Tools the agent can call", "### Safety model")),
+                new DocumentationSection(
+                        "docs/FEATURES.md",
+                        section(readDocumentation("FEATURES.md"), "### MCP Server", "### DevTools")),
+                new DocumentationSection(
+                        "docs/SPECIFICATION.md",
+                        section(
+                                readDocumentation("SPECIFICATION.md"),
+                                "### 6.7 MCP server for AI agents",
+                                "## 7. UX specification")));
+
+        for (DocumentationSection toolList : toolLists) {
+            for (String toolName : toolNames) {
+                assertThat(toolList.content())
+                        .as("%s MCP tool '%s'", toolList.filename(), toolName)
+                        .contains("`" + toolName + "`");
+            }
+        }
+    }
+
+    @Test
+    void screenshotCaptureManifestHasFilesAndFeatureEmbeds() {
+        String captureScript = readRepositoryFile("bootui-spring-sample-app/e2e/scripts/capture-docs-screenshots.mjs");
+        String screenshotManifest = section(captureScript, "const screenshots = [", "const baseScreenshots =");
+        Set<String> screenshots = matches(screenshotManifest, SCREENSHOT_ENTRY);
+        assertThat(screenshots).as("documentation screenshot capture manifest").isNotEmpty();
+
+        Path images = repositoryRoot().resolve("docs/images");
+        String features = readFeaturesMarkdown();
+        for (String screenshot : screenshots) {
+            assertThat(images.resolve(screenshot))
+                    .as("docs image for screenshot manifest entry '%s'", screenshot)
+                    .isRegularFile();
+            assertThat(features)
+                    .as("docs/FEATURES.md embed for screenshot manifest entry '%s'", screenshot)
+                    .contains("](./images/" + screenshot + ")");
+        }
+    }
+
+    @Test
     void readContractCatalogCoversEveryDataPanelExactlyOnce() {
         Set<String> expected = BootUiPanels.all().stream()
                 .map(Panel::id)
@@ -178,13 +252,34 @@ class BackendPanelCatalogConsistencyTest {
     }
 
     private static String readDocumentation(String filename) {
-        Path root = findRepositoryRoot(Path.of(".").toAbsolutePath());
-        Path documentation = root.resolve("docs").resolve(filename);
+        return readRepositoryFile("docs/" + filename);
+    }
+
+    private static String readRepositoryFile(String relativePath) {
+        Path file = repositoryRoot().resolve(relativePath);
         try {
-            return Files.readString(documentation);
+            return Files.readString(file);
         } catch (IOException ex) {
-            throw new UncheckedIOException("Failed to read " + documentation, ex);
+            throw new UncheckedIOException("Failed to read " + file, ex);
         }
+    }
+
+    private static String section(String content, String startMarker, String endMarker) {
+        int start = content.indexOf(startMarker);
+        int end = content.indexOf(endMarker, start + startMarker.length());
+        if (start < 0 || end < 0) {
+            throw new IllegalStateException("Unable to find section from '" + startMarker + "' to '" + endMarker + "'");
+        }
+        return content.substring(start, end);
+    }
+
+    private static Set<String> matches(String content, Pattern pattern) {
+        Matcher matcher = pattern.matcher(content);
+        Set<String> matches = new LinkedHashSet<>();
+        while (matcher.find()) {
+            matches.add(matcher.group(1));
+        }
+        return matches;
     }
 
     private static String markdownCodeValue(String value) {
@@ -208,9 +303,15 @@ class BackendPanelCatalogConsistencyTest {
         throw new IllegalStateException("Unable to locate repository root from " + start);
     }
 
+    private static Path repositoryRoot() {
+        return findRepositoryRoot(Path.of(".").toAbsolutePath());
+    }
+
     private record ManifestResource(String path, String platform) {}
 
     private record PanelMetadata(String id, String title, boolean actionCapable) {}
 
     private record PanelAccessMetadata(String title, String id, String enabledProperty, String readOnlyProperty) {}
+
+    private record DocumentationSection(String filename, String content) {}
 }
