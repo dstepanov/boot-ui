@@ -91,8 +91,10 @@ the classpath) are simply not advertised.
   `memory_scan`, `security_scan`, `pentest_scan`, `rest_api_scan`, `graalvm_scan`, `crac_scan`, and
   `vulnerabilities_scan`. Each runs the same scan as the panel's action button and returns the report DTO;
   `vulnerabilities_scan` additionally makes outbound calls to OSV.dev.
-- **Cached advisor reports:** matching `get_*_report` tools return the last completed report without starting another
-  scan, including `get_database_advisor_report`, `get_graalvm_report`, and `get_crac_report` where applicable.
+- **Cached advisor reports:** `get_architecture_report`, `get_spring_report`, `get_hibernate_report`,
+  `get_database_advisor_report`, `get_memory_report`, `get_security_report`, `get_pentest_report`,
+  `get_rest_api_report`, `get_graalvm_report`, `get_crac_report`, and `get_vulnerabilities_report` return the last
+  completed report without starting another scan.
 - **Diagnostics reads:** `get_live_activity`, `get_exceptions`, `get_exception_detail`, `get_security_logs`,
   `get_sql_traces`, `get_transactions` (Spring MVC/WebFlux only), `get_traces`, `get_log_tail`, `get_http_exchanges`,
   and `get_rest_client_traces`.
@@ -100,17 +102,19 @@ the classpath) are simply not advertised.
   statements, exceptions, and security events grouped by request/trace); `get_exception_detail` takes a required `id`
   (from `get_exceptions` or `get_live_activity`) and returns that exception group's full stack trace, causes, and
   individual occurrences.
-- **Core context reads:** `get_overview`, `get_health`, `get_config` (masked), `get_beans`, `get_mappings`,
-  `get_loggers`, `get_conditions` (Spring MVC/WebFlux only), `get_scheduled_tasks`, `get_cache_stats`,
+- **Core context and integration reads:** `get_overview`, `get_health`, `get_config` (masked), `get_beans`,
+  `get_mappings`, `get_loggers`, `get_conditions`, `get_http_sessions`, `get_scheduled_tasks`, `get_cache_stats`,
   `get_database_connection_pools`, `get_metrics`, `get_live_memory`, `get_jvm_tuning`, `get_heap_dump_report`,
   `get_threads`, `get_startup_timeline`, `get_profile_diff`, `get_spring_data_repositories`,
-  `get_flyway_migrations`, `get_liquibase_changesets`, `get_spring_security`, `get_ai_overview`, messaging activity,
-  DevTools/Dev Services, GitHub's cached dashboard, and local Copilot/Claude Code session summaries. Stack-specific or
-  unavailable capabilities are omitted.
-- **Bounded controls (actions):** tools can clear in-memory exception/trace buffers, pause or resume SQL,
-  transaction, and REST-client recording, analyze an existing heap dump, and trigger Spring DevTools LiveReload.
-  They never capture or download a heap dump, execute an HTTP probe, mutate a database, clear a cache, write GitHub
-  state, restart a dev service, or run an agent command.
+  `get_flyway_migrations`, `get_liquibase_changesets`, `get_spring_security`, `get_ai_overview`, `get_emails`,
+  `get_kafka_activity`, `get_rabbitmq_activity`, `get_jms_activity`, `get_devtools_status`, `get_dev_services`,
+  `get_github_dashboard`, `get_copilot_sessions`, and `get_claude_code_sessions`. Stack-specific or unavailable
+  capabilities are omitted.
+- **Bounded controls (actions):** `clear_exceptions`, `clear_sql_traces`, `pause_sql_trace_recording`,
+  `resume_sql_trace_recording`, `clear_transactions`, `pause_transaction_recording`, `resume_transaction_recording`,
+  `clear_traces`, `clear_rest_client_traces`, `pause_rest_client_recording`, `resume_rest_client_recording`,
+  `analyze_heap_dump`, and `trigger_devtools_livereload`. They never capture or download a heap dump, execute an HTTP
+  probe, mutate a database, clear a cache, write GitHub state, restart a dev service, or run an agent command.
 
 ### Safety model
 

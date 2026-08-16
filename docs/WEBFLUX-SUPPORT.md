@@ -107,13 +107,14 @@ reactive binding (e.g. a `WebFilter` capturing into the same engine store) · `R
 capture layer replacing a servlet-only primitive · `Not yet ported` = deliberately deferred, no reactive
 implementation wired yet · `Not applicable` = no faithful reactive analog exists for this panel's concept.
 
-### 6.1 Ported as-is (40 panels)
+### 6.1 Ported as-is (41 panels)
 
 Bulk-imported from the servlet adapter's `@RestController`s with no code changes at all — confirming these
 controllers were already framework-neutral in practice, not just in the engine underneath them:
 
 Overview · GitHub · Beans · Conditions · Configuration · Mappings · Health · Loggers · Startup Timeline · Spring Data ·
-Hibernate · Hibernate Statistics · Flyway · Liquibase · Database Connection Pools · Cache · Dev Services · Vulnerabilities · Scheduled Tasks ·
+Database · Hibernate · Hibernate Statistics · Flyway · Liquibase · Database Connection Pools · Cache · Dev Services ·
+Vulnerabilities · Scheduled Tasks ·
 HTTP Probe · Pentesting · Heap Dump · Architecture · REST API advisor · Profile Diff · Spring advisor[^spring-advisor-reactive] ·
 Live Memory · JVM Tuning · Metrics · DevTools · Traces · AI Framework · GraalVM · CRaC · Threads · Memory · Email · Kafka ·
 RabbitMQ · JMS. `KafkaController`, `RabbitController`, and `JmsController`, plus their template/listener-factory
