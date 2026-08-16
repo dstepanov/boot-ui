@@ -1584,6 +1584,44 @@ Acceptance criteria:
 - Spring MVC, Spring WebFlux, and Quarkus report equivalent statistics data through the same
   `/bootui/api/hibernate-statistics` contract wherever Hibernate ORM is present.
 
+### 5.17.1.2 Database Panel
+
+Purpose: answer "Does my application's physical schema hold up structurally, and does it still match what my entities
+assume?"
+
+Data sources:
+
+- Every discovered application `DataSource` bean, read through JDBC `DatabaseMetaData` (tables, columns, primary and
+  foreign keys, indexes) over a short-lived, read-only connection.
+- Read-only PostgreSQL `pg_catalog` and MySQL/MariaDB `information_schema` augmentation, selected from the detected
+  dialect and reported server version.
+- The same JPA metamodel the Hibernate panel reads, when one is available for the same application.
+
+Features:
+
+- Run explicit, read-only, bounded physical-schema checks and cross-reference them against mapped entities.
+- Report findings by severity with sample evidence and remediation guidance, cached until the next explicit scan.
+- Report per-datasource read status (`AVAILABLE`/`PARTIAL`/`FAILED`) with the detected product and dialect.
+- Report every datasource, table, catalog augmentation, bound and rule that could not be evaluated as a diagnostic,
+  separately from findings.
+
+Out of scope for the current release surface:
+
+- Executing DDL, querying application data, analysing query plans or workload, or proposing indexes from observed usage.
+
+Acceptance criteria:
+
+- The scan is bounded in tables, columns, indexes, catalog rows and wall-clock time, and reaching a bound is reported
+  rather than silently truncating the result.
+- The connection's original read-only state is restored before it returns to the pool.
+- A failed datasource, an unreadable table, a blocked catalog view, a truncated scan, or a skipped/errored rule is never
+  reported as a passing check and never counted as a violation; the scan status is `SCANNED` only when everything was
+  read completely.
+- Credentials in a JDBC URL or driver error message are redacted from every message, independently of the value
+  exposure policy.
+- Rule ids are stable across releases so dismissals keep applying.
+- The scan action is blocked by global read-only mode and the panel's read-only policy.
+
 ### 5.17.2 Flyway Panel
 
 Purpose: answer "Which Flyway-managed databases exist, what schema version is applied, which migrations are applied or
@@ -2029,6 +2067,8 @@ Initial endpoints:
 | `/bootui/api/hibernate/scan`         | POST   | Run explicit read-only Hibernate/JPA advisor checks                                    |
 | `/bootui/api/hibernate-statistics`   | GET    | Live read-only Hibernate `SessionFactory` statistics (Hibernate Statistics panel)      |
 | `/bootui/api/hibernate-statistics/enable` | POST | Enable Hibernate statistics collection for the current runtime                         |
+| `/bootui/api/database-advisor`       | GET    | Latest Database advisor report, with per-datasource read status and scan diagnostics   |
+| `/bootui/api/database-advisor/scan`  | POST   | Run explicit read-only, bounded physical-schema checks                                 |
 | `/bootui/api/architecture`                   | GET    | Latest Architecture scan report                                                        |
 | `/bootui/api/architecture/scan`              | POST   | Run explicit ArchUnit hygiene checks                                                   |
 | `/bootui/api/rest-api`                   | GET    | Latest REST API Advisor scan report                                                    |

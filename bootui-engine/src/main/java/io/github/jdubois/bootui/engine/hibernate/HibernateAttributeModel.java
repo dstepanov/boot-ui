@@ -240,6 +240,11 @@ public record HibernateAttributeModel(
         return annotation(JOIN_COLUMN);
     }
 
+    /** The composite {@code @JoinColumns} container, or {@code null} for a single or absent join column. */
+    Annotation joinColumnsAnnotation() {
+        return annotation(JOIN_COLUMNS);
+    }
+
     Annotation associationAnnotation() {
         for (String typeName : List.of(MANY_TO_ONE, ONE_TO_ONE, ONE_TO_MANY, MANY_TO_MANY)) {
             Annotation annotation = annotation(typeName);

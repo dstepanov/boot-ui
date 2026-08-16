@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.autoconfigure.databaseadvisor;
 
 import io.github.jdubois.bootui.spi.DatabaseAdvisorDataSourceProvider;
 import io.github.jdubois.bootui.spi.NamedDataSource;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -18,8 +19,16 @@ import org.springframework.beans.factory.ObjectProvider;
  * (which forward to another {@code DataSource} bean that is discovered on its own) the same way SQL
  * Trace's {@code SqlTraceDataSourceBeanPostProcessor} skips them, so a wrapped datasource is never
  * introspected twice under two different names.
+ *
+ * <p>De-duplication is by <em>physical</em> identity: a bean wrapped by BootUI's own SQL Trace proxy is
+ * reduced to the pool behind it (through the JDBC {@code unwrap} contract the proxy delegates) before being
+ * compared, so a traced datasource and the same pool exposed under a second bean name are introspected once,
+ * not twice — which would otherwise double every finding in the report.</p>
  */
 public final class SpringDatabaseAdvisorDataSourceProvider implements DatabaseAdvisorDataSourceProvider {
+
+    private static final String TRACED_DATA_SOURCE_MARKER =
+            "io.github.jdubois.bootui.engine.sqltrace.SqlTracedDataSource";
 
     private static final String[] DELEGATING_WRAPPERS = {
         "org.springframework.jdbc.datasource.DelegatingDataSource",
@@ -42,7 +51,10 @@ public final class SpringDatabaseAdvisorDataSourceProvider implements DatabaseAd
         Set<DataSource> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         for (String beanName : beanNamesForType(factory)) {
             DataSource dataSource = bean(factory, beanName);
-            if (dataSource == null || isDelegatingWrapper(dataSource.getClass()) || !seen.add(dataSource)) {
+            if (dataSource == null || isDelegatingWrapper(dataSource.getClass())) {
+                continue;
+            }
+            if (!seen.add(physicalDataSource(dataSource))) {
                 continue;
             }
             dataSources.add(new NamedDataSource(strip(beanName), dataSource));
@@ -65,6 +77,28 @@ public final class SpringDatabaseAdvisorDataSourceProvider implements DatabaseAd
         } catch (BeansException ex) {
             return null;
         }
+    }
+
+    /** The pool behind a BootUI SQL Trace proxy; anything else is already its own physical datasource. */
+    private static DataSource physicalDataSource(DataSource dataSource) {
+        if (!isTracingProxy(dataSource)) {
+            return dataSource;
+        }
+        try {
+            DataSource unwrapped = dataSource.unwrap(DataSource.class);
+            return unwrapped == null ? dataSource : unwrapped;
+        } catch (SQLException | RuntimeException ex) {
+            return dataSource;
+        }
+    }
+
+    private static boolean isTracingProxy(DataSource dataSource) {
+        for (Class<?> interfaceType : dataSource.getClass().getInterfaces()) {
+            if (TRACED_DATA_SOURCE_MARKER.equals(interfaceType.getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isDelegatingWrapper(Class<?> type) {

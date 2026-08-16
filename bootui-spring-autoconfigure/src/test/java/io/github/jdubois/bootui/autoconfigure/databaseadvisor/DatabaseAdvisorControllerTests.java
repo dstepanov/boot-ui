@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
+import io.github.jdubois.bootui.core.dto.DatabaseAdvisorDataSourceDto;
 import io.github.jdubois.bootui.core.dto.DatabaseAdvisorReport;
 import io.github.jdubois.bootui.core.dto.DatabaseAdvisorScanStatusDto;
 import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
@@ -35,12 +36,18 @@ class DatabaseAdvisorControllerTests {
                 true,
                 "disclaimer",
                 List.of("dataSource"),
+                List.of(new DatabaseAdvisorDataSourceDto(
+                        "dataSource", "H2 2.3", "Generic JDBC", "UPPER", "AVAILABLE", null, 4, false)),
                 4,
                 8,
                 violationsFound,
+                0,
+                0,
+                false,
                 List.of(),
                 new DatabaseAdvisorScanStatusDto(
                         "BootUI Database Advisor", status, "message", null, 8, 4, violationsFound),
+                List.of(),
                 List.of());
     }
 

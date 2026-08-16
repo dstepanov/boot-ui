@@ -1,19 +1,28 @@
 package io.github.jdubois.bootui.engine.databaseadvisor;
 
-import io.github.jdubois.bootui.core.dto.DatabaseAdvisorRuleResultDto;
 import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedColumnFacts;
 import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedEntityFacts;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Cross-references mapped {@code @Column(name=...)} attributes against the physical column: a coarse
- * type-family mismatch (e.g. a {@code String} attribute mapped to a numeric column) or a nullability
- * mismatch where the database is stricter than the mapping (a {@code NOT NULL} column mapped to a
- * nullable attribute, or vice versa) usually surfaces at runtime as a surprising constraint violation or
- * class-cast/conversion failure rather than at compile time.
+ * type-family mismatch (a {@code String} attribute on a numeric column) or a nullability disagreement, both
+ * of which surface at runtime as a conversion failure or a constraint violation rather than at compile time.
+ *
+ * <p>Both halves are deliberately narrowed to what the mapping actually states:</p>
+ *
+ * <ul>
+ *   <li><strong>Type</strong> comparison is skipped whenever an {@code @Convert}, an {@code @Enumerated} or an
+ *       {@code @Lob} decides the persisted shape — a converter legitimately stores a {@code String} in an
+ *       {@code int} column, and an enum can be either — and whenever the physical column's type cannot be
+ *       classified confidently.</li>
+ *   <li><strong>Nullability</strong> is compared only when the attribute declares {@code @Column(nullable)}
+ *       explicitly. JPA defaults {@code nullable} to {@code true}, so the previous behavior reported every
+ *       {@code NOT NULL} column whose attribute simply never mentioned nullability — advice the developer
+ *       cannot act on and which contradicts idiomatic Hibernate mappings.</li>
+ * </ul>
  */
-final class HibernateColumnMismatchRule extends AbstractDatabaseAdvisorRule {
+final class HibernateColumnMismatchRule extends AbstractHibernateCrossReferenceRule {
 
     HibernateColumnMismatchRule() {
         super(new DatabaseAdvisorRuleDefinition(
@@ -21,74 +30,65 @@ final class HibernateColumnMismatchRule extends AbstractDatabaseAdvisorRule {
                 "Mapped column type/nullability mismatch",
                 DatabaseAdvisorCategory.HIBERNATE_MAPPING,
                 DatabaseAdvisorRuleSupport.MEDIUM,
-                "Cross-references mapped @Column(name=...) attributes against the physical column's reported JDBC "
-                        + "type family and nullability.",
+                "Cross-references mapped @Column(name=...) attributes against the physical column's JDBC type "
+                        + "family and nullability. Converter/@Enumerated/@Lob attributes are skipped for the type "
+                        + "comparison, and nullability is only compared when @Column(nullable=...) is explicit.",
                 "Align the entity mapping with the physical column: a coarse type-family mismatch (text vs. "
                         + "numeric vs. date/time) usually fails at read/conversion time, and a NOT NULL column "
-                        + "mapped as nullable can throw a constraint violation only under specific code paths.",
+                        + "explicitly mapped as nullable can throw a constraint violation only under specific code "
+                        + "paths.",
                 "https://jakarta.ee/specifications/persistence/3.2/jakarta-persistence-spec-3.2.html"));
     }
 
     @Override
-    DatabaseAdvisorRuleResultDto evaluateRule(DatabaseAdvisorContext context) {
-        if (!context.hibernateAvailable()) {
-            return skipped("No EntityManagerFactory/Hibernate metamodel is available to cross-reference.");
-        }
-        if (context.availableSchemas().isEmpty()) {
-            return skipped("No physical schema could be read to cross-reference against.");
-        }
-        List<String> details = new ArrayList<>();
-        for (MappedEntityFacts entity : context.hibernateEntities()) {
-            if (entity.explicitTableName() == null) {
+    void checkEntity(SchemaSnapshot schema, TableModel table, MappedEntityFacts entity, List<String> details) {
+        for (MappedColumnFacts column : entity.columns()) {
+            ColumnModel physical = table.column(column.columnName());
+            if (physical == null) {
+                // A mapped column with no physical counterpart is DB-HIB-006's finding.
                 continue;
             }
-            TableModel table = findTable(context, entity.explicitTableName());
-            if (table == null) {
-                continue;
-            }
-            for (MappedColumnFacts column : entity.columns()) {
-                ColumnModel physical = table.column(column.columnName());
-                if (physical == null) {
-                    continue;
-                }
-                checkTypeFamily(entity, column, physical, details);
-                checkNullability(entity, column, physical, details);
-            }
+            checkTypeFamily(schema, table, column, physical, details);
+            checkNullability(schema, table, column, physical, details);
         }
-        return violation(details);
     }
 
     private void checkTypeFamily(
-            MappedEntityFacts entity, MappedColumnFacts column, ColumnModel physical, List<String> details) {
-        JdbcTypeFamily javaFamily = JdbcTypeFamily.ofJavaType(column.javaTypeSimpleName());
-        JdbcTypeFamily columnFamily = JdbcTypeFamily.ofJdbcType(physical.typeName());
-        if (javaFamily != JdbcTypeFamily.OTHER && columnFamily != JdbcTypeFamily.OTHER && javaFamily != columnFamily) {
-            details.add(column.attributeDescription() + " (" + column.javaTypeSimpleName() + ") maps column "
-                    + entity.explicitTableName() + "." + column.columnName() + " (" + physical.typeName()
-                    + "), a type-family mismatch.");
+            SchemaSnapshot schema,
+            TableModel table,
+            MappedColumnFacts column,
+            ColumnModel physical,
+            List<String> details) {
+        if (column.ambiguousType()) {
+            return;
         }
+        JdbcTypeFamily javaFamily = JdbcTypeFamily.ofJavaType(column.javaTypeSimpleName());
+        JdbcTypeFamily columnFamily = JdbcTypeFamily.of(physical);
+        if (javaFamily == JdbcTypeFamily.OTHER || columnFamily == JdbcTypeFamily.OTHER || javaFamily == columnFamily) {
+            return;
+        }
+        details.add(schema.dataSourceName() + ": " + column.attributeDescription() + " ("
+                + column.javaTypeSimpleName() + ") maps column " + table.qualifiedName() + "." + column.columnName()
+                + " (" + physical.describeType() + "), a type-family mismatch.");
     }
 
     private void checkNullability(
-            MappedEntityFacts entity, MappedColumnFacts column, ColumnModel physical, List<String> details) {
-        if (!physical.nullable() && column.nullable()) {
-            details.add(column.attributeDescription() + " maps column " + entity.explicitTableName() + "."
-                    + column.columnName()
-                    + ", which is NOT NULL in the database but is mapped as nullable in the entity.");
+            SchemaSnapshot schema,
+            TableModel table,
+            MappedColumnFacts column,
+            ColumnModel physical,
+            List<String> details) {
+        if (column.nullable() == null || physical.nullability() == ColumnModel.Nullability.UNKNOWN) {
+            return;
+        }
+        if (physical.notNull() && column.nullable()) {
+            details.add(schema.dataSourceName() + ": " + column.attributeDescription() + " maps column "
+                    + table.qualifiedName() + "." + column.columnName()
+                    + ", which is NOT NULL in the database but is explicitly mapped as nullable.");
         } else if (physical.nullable() && !column.nullable()) {
-            details.add(column.attributeDescription() + " maps column " + entity.explicitTableName() + "."
-                    + column.columnName()
-                    + ", which allows NULL in the database but is mapped as non-nullable in the entity.");
+            details.add(schema.dataSourceName() + ": " + column.attributeDescription() + " maps column "
+                    + table.qualifiedName() + "." + column.columnName()
+                    + ", which allows NULL in the database but is explicitly mapped as non-nullable.");
         }
-    }
-
-    private TableModel findTable(DatabaseAdvisorContext context, String tableName) {
-        for (SchemaSnapshot schema : context.availableSchemas()) {
-            TableModel table = schema.table(tableName);
-            if (table != null) {
-                return table;
-            }
-        }
-        return null;
     }
 }
