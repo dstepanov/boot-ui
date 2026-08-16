@@ -97,6 +97,20 @@
             <artifactId>jakarta.persistence-api</artifactId>
             <optional>true</optional>
         </dependency>
+        <!--
+          Hibernate ORM, optional (not transitive): needed solely to compile the Hibernate Session
+          Monitoring panel (SpringHibernateStatisticsProvider), which unwraps the application's
+          EntityManagerFactory to org.hibernate.SessionFactory and reads org.hibernate.stat.Statistics.
+          optional=true keeps it out of a Hibernate-absent application's classpath; the provider class is
+          only loaded (JVM class-loading, not just referenced) from within the
+          @ConditionalOnClass(name = {"jakarta.persistence.EntityManagerFactory", "org.hibernate.SessionFactory"})
+          HibernateAdvisorConfiguration nested class, so R2 (no optional-dependency classloading trap) holds.
+        -->
+        <dependency>
+            <groupId>org.hibernate.orm</groupId>
+            <artifactId>hibernate-core</artifactId>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>com.zaxxer</groupId>
             <artifactId>HikariCP</artifactId>

@@ -126,7 +126,16 @@ class PanelsControllerTests {
                     .andExpect(jsonPath(panelPath(BootUiPanels.HIBERNATE) + ".available")
                             .value(false))
                     .andExpect(jsonPath(panelPath(BootUiPanels.HIBERNATE) + ".unavailableReason")
-                            .value("Hibernate ORM is not on the classpath"))
+                            // hibernate-core is now an optional bootui-spring-autoconfigure dependency (used by
+                            // SpringHibernateStatisticsProvider), so org.hibernate.SessionFactory is present on
+                            // this plain GenericApplicationContext test's classpath; only the EntityManagerFactory
+                            // bean is genuinely absent here.
+                            .value("No EntityManagerFactory beans are available"))
+                    .andExpect(jsonPath(panelPath(BootUiPanels.HIBERNATE_STATISTICS) + ".available")
+                            .value(false))
+                    .andExpect(jsonPath(panelPath(BootUiPanels.HIBERNATE_STATISTICS) + ".unavailableReason")
+                            // Same availability check as the Hibernate advisor panel above.
+                            .value("No EntityManagerFactory beans are available"))
                     .andExpect(jsonPath(panelPath(BootUiPanels.HTTP_EXCHANGES) + ".available")
                             .value(false))
                     .andExpect(jsonPath(panelPath(BootUiPanels.HTTP_EXCHANGES) + ".unavailableReason")

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.jdubois.bootui.autoconfigure.BootUiAutoConfiguration;
 import io.github.jdubois.bootui.engine.hibernate.HibernateScanner;
+import io.github.jdubois.bootui.engine.hibernate.HibernateStatisticsService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.FilteredClassLoader;
@@ -33,6 +34,7 @@ class HibernateAdvisorAbsenceTest {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(HibernateScanner.class);
                     assertThat(context).doesNotHaveBean(HibernateController.class);
+                    assertThat(context).doesNotHaveBean(HibernateStatisticsService.class);
                 });
     }
 }

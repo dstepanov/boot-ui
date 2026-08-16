@@ -36,6 +36,7 @@ const PANEL_HEADINGS = {
   'sql-trace': /SQL Trace/,
   data: /Spring Data repositories/,
   hibernate: /^Hibernate/,
+  'hibernate-statistics': /^Hibernate Statistics/,
   flyway: /Flyway migrations/,
   liquibase: /Liquibase change sets/,
   'spring-security': /Spring Security/,

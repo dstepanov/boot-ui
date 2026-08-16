@@ -22,8 +22,11 @@ import jakarta.ws.rs.core.MediaType;
  * caching the result. Dismissed rule IDs from the shared {@link DismissedRulesStore} are applied on read,
  * exactly as on Spring.</p>
  *
+ * <p>The Hibernate Statistics panel (live {@code SessionFactory} statistics) is a separate
+ * Database-group panel served by {@link HibernateStatisticsResource}, not this advisor resource.</p>
+ *
  * <p>The resource is produced <em>unconditionally</em> and the engine {@code HibernateScanner} is always
- * wired (it holds no {@code jakarta.persistence} types): when {@code quarkus-hibernate-orm} is absent the
+ * wired (it holds no {@code jakarta.persistence} type): when {@code quarkus-hibernate-orm} is absent the
  * scanner's entity-discovery source is unsatisfied, so {@code POST /scan} renders a DISABLED report rather
  * than failing. Availability of the <em>panel</em> in the manifest, by contrast, tracks the
  * {@code HIBERNATE_ORM} capability (see {@code QuarkusPanelAvailability}).</p>

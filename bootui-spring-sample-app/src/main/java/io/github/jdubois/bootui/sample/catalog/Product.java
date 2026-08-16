@@ -1,9 +1,13 @@
 package io.github.jdubois.bootui.sample.catalog;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.Cache;
+import org.hibernate.annotations.CacheConcurrencyStrategy;
 
 @Entity
 @Table(name = "sample_products")
+@Cacheable
+@Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
 // Hibernate Advisor demo: the IDENTITY id below intentionally triggers HIB-ID-001.
 public class Product {
 

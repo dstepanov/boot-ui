@@ -124,8 +124,8 @@ const panel = useAdvisorPanel(props, {
             <div class="fw-semibold">Rule results</div>
             <div class="text-muted small">
               <template v-if="panel.hasScanData && panel.visibleResults.length > 0">
-                {{ panel.visibleResults.length }} {{ panel.pluralize(panel.visibleResults.length, 'violating rule') }},
-                sorted by importance
+                {{ panel.visibleResults.length }}
+                {{ panel.pluralize(panel.visibleResults.length, 'violating rule') }}, sorted by importance
               </template>
               <template v-else>{{ panel.visibleResults.length }} advisor finding(s)</template>
             </div>
