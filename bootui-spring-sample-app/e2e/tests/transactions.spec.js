@@ -19,4 +19,19 @@ test.describe('Transactions view', () => {
     await expect(executions).toContainText('SampleCatalog.searchProducts')
     await expect(executions).toContainText('COMMITTED')
   })
+
+  test('generates representative transaction samples from the sample app', async ({openView, page}) => {
+    await page.goto('/')
+    await page.getByRole('button', {name: 'Generate transaction samples'}).click()
+    await expect(page.locator('#sample-action-status')).toContainText('Generated 4 transaction scenarios')
+
+    await openView('transactions', 'Transactions')
+    const executions = page.locator('section').filter({hasText: 'Recent transactions'})
+    await expect(executions).toContainText('SampleTransactionScenarios.commit')
+    await expect(executions).toContainText('SampleTransactionScenarios.slowCommit')
+    await expect(executions).toContainText('SampleTransactionScenarios.rollBack')
+    await expect(executions).toContainText('ROLLED_BACK')
+    await expect(executions).toContainText('slow')
+    await expect(executions).toContainText('nested')
+  })
 })

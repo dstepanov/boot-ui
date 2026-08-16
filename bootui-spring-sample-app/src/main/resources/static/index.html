@@ -265,6 +265,11 @@
           <small>Inspect: SQL Trace, Spring Data</small>
         </article>
         <article class="test-action">
+          <button class="button" id="transaction-samples-button" type="button">Generate transaction samples</button>
+          <p>Creates committed, slow, rolled-back, and nested transaction boundaries in one safe request.</p>
+          <small>Inspect: Transactions</small>
+        </article>
+        <article class="test-action">
           <button class="button" id="session-data-button" type="button">Create session data</button>
           <p>Adds demo attributes, including a fake token, to this browser session.</p>
           <small>Inspect: HTTP Sessions</small>
@@ -385,6 +390,7 @@
   const chatResult = document.getElementById('ai-chat-result')
   const productsButton = document.getElementById('products-button')
   const sqlQueryButton = document.getElementById('sql-query-button')
+  const transactionSamplesButton = document.getElementById('transaction-samples-button')
   const greetingButton = document.getElementById('greeting-button')
   const publicApiButton = document.getElementById('public-api-button')
   const secureAdminButton = document.getElementById('secure-admin-button')
@@ -509,6 +515,22 @@
       showSampleResult(
         `Ran a live SQL SELECT and matched ${products.length} product(s) for "${term}"`,
         `${names}\n\nOpen BootUI SQL Trace to inspect the captured statement.`
+      )
+    })
+  )
+
+  transactionSamplesButton.addEventListener('click', () =>
+    runSampleAction(transactionSamplesButton, 'Generating transaction samples...', async () => {
+      const response = await fetch('/api/sample/transaction-samples', {headers: {Accept: 'application/json'}})
+      const body = await response.json()
+      if (!response.ok) {
+        throw new Error(body.error || `Transaction samples request failed with HTTP ${response.status}`)
+      }
+      showSampleResult(
+        `Generated ${body.scenarios.length} transaction scenarios`,
+        `${body.scenarios.map(scenario => `- ${scenario}`).join('\n')}\n\n` +
+          `The slow transaction held its boundary for ${body.slowMillis} ms. ` +
+          `Open BootUI Transactions to inspect outcomes, timing, SQL counts, and nesting.`
       )
     })
   )
