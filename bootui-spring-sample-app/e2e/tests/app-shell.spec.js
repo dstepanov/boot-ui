@@ -342,9 +342,9 @@ test.describe('BootUI app shell', () => {
     await page.getByRole('button', {name: /Database\s+8/}).click()
     await expect(page.getByRole('group', {name: 'Database panels'}).locator('.bootui-nav-link__label')).toHaveText([
       'Database Connection Pools',
+      'Transactions',
       'SQL Trace',
       'Hibernate Statistics',
-      'Transactions',
       'Spring Data',
       'Flyway',
       'Liquibase',
