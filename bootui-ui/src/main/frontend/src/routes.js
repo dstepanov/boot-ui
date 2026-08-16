@@ -176,6 +176,28 @@ export const routes = [
     }
   },
   {
+    path: '/database-advisor',
+    name: 'database-advisor',
+    component: DatabaseAdvisor,
+    meta: {
+      group: groups.advisors,
+      icon: 'bi-hdd-rack',
+      title: 'Database',
+      shortcut: 'da',
+      keywords: [
+        'schema',
+        'indexes',
+        'index',
+        'foreign key',
+        'primary key',
+        'postgres',
+        'mysql',
+        'discrepancy',
+        'jdbc metadata'
+      ]
+    }
+  },
+  {
     path: '/hibernate',
     name: 'hibernate',
     component: Hibernate,
@@ -576,28 +598,6 @@ export const routes = [
       title: 'Liquibase',
       shortcut: 'lb',
       keywords: ['migrations', 'changelog', 'changesets', 'schema', 'db migration']
-    }
-  },
-  {
-    path: '/database-advisor',
-    name: 'database-advisor',
-    component: DatabaseAdvisor,
-    meta: {
-      group: groups.database,
-      icon: 'bi-hdd-rack',
-      title: 'Database Advisor',
-      shortcut: 'da',
-      keywords: [
-        'schema',
-        'indexes',
-        'index',
-        'foreign key',
-        'primary key',
-        'postgres',
-        'mysql',
-        'discrepancy',
-        'jdbc metadata'
-      ]
     }
   },
   {

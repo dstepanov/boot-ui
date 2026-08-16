@@ -35,7 +35,7 @@ After a run-all, a dismissible tip points to the MCP Server panel, since enablin
 read these same scan results and fix the findings for you.
 
 Each scanner card shows its own 0–100 score, status, and severity counts. The severity-based scanners are Architecture, Memory,
-REST API, Spring, Hibernate, Security, Pentesting, and Vulnerabilities; scores start at 100
+REST API, Spring, Database, Hibernate, Security, Pentesting, and Vulnerabilities; scores start at 100
 and subtract a fixed weighted
 penalty per finding (critical 25, high 10, medium 3, low 1), so a clean scan stays at 100. The GitHub card is not a
 severity scanner: it connects to the local repository and, only when the credential is connected and authenticated,
@@ -532,6 +532,53 @@ the same `/spring` route, `/bootui/api/spring` endpoint, and report contract —
 [QUARKUS-ADVISOR-CHECKS.md](QUARKUS-ADVISOR-CHECKS.md) for the full rule catalogue and remediation links.
 
 ![BootUI Quarkus panel](./images/bootui-quarkus.webp)
+
+### Database
+
+The Database panel introspects the physical schema of every discovered application `DataSource` bean through
+plain JDBC `DatabaseMetaData` — tables, columns, primary keys, foreign keys, and indexes — and evaluates a fixed,
+on-demand ruleset of deterministic, low-false-positive structural checks (a missing primary key, a foreign-key column
+with no supporting index, duplicate/overlapping indexes, a foreign-key column whose type disagrees with the
+referenced primary key's type, and a redundant unique index duplicating the primary key). It reuses the same
+proxy-aware datasource discovery as Database Connection Pools and SQL Trace, skipping Spring's delegating/routing
+`DataSource` wrappers so a wrapped datasource is never introspected twice. It never executes DDL, never queries
+application data, and fails closed with a stable empty report and an explanatory status when no `DataSource` bean is
+present or no datasource can be read. If only some datasources fail introspection, readable datasources are still
+evaluated and the report status is `PARTIAL`.
+
+For **PostgreSQL** and **MySQL** — the two most widely used relational databases among Java developers — a small amount
+of dialect-specific catalog augmentation runs in addition to the generic checks: PostgreSQL invalid/broken indexes
+(`pg_index.indisvalid = false`, e.g. left behind by a failed `CREATE INDEX CONCURRENTLY`), a PostgreSQL sequence
+nearing exhaustion of its underlying type's numeric range (`pg_sequences.last_value`), MySQL tables using a
+non-`InnoDB` storage engine, and MySQL columns using a character set other than `utf8mb4`. The dialect is detected from
+`DatabaseMetaData.getDatabaseProductName()` and the JDBC URL; every other database (H2, SQL Server, Oracle, MariaDB, etc.)
+still runs the full generic ruleset through the standard JDBC metadata fallback — it is never treated as unsupported. Both
+dialect-specific queries fail soft (an empty result) rather than propagating, since they may be blocked by restricted
+database privileges on some hosts.
+
+When a Hibernate `EntityManagerFactory`/metamodel is also available for the same application, the panel additionally
+cross-references the physical schema against the mapped JPA entities the shared Hibernate metamodel reader already
+reads (the same reader `Hibernate` uses): a `@ManyToOne`/`@JoinColumn` foreign-key column with no supporting physical
+index (the highest-confidence check), an explicitly-`@Table`-named entity with no matching physical table, basic
+type-family/nullability mismatches between a mapped `@Column` and its physical column, a mapped `@Column(length=...)`
+longer than the physical column can hold (a truncation risk), and a mapped unique constraint
+(`@Column(unique=true)`/`@Table(uniqueConstraints=...)`) with no backing physical unique index. Only entities with an
+*explicit* `@Table(name = ...)` are cross-referenced — entities relying on the default naming strategy are skipped rather
+than guessed, keeping the false-positive rate low. This half of the panel is skipped (with a clear reason, not silently
+dropped) when either a `DataSource` or a Hibernate metamodel is unavailable. See
+[DATABASE-ADVISOR-CHECKS.md](DATABASE-ADVISOR-CHECKS.md) for the full rule catalogue and remediation links.
+
+Out of scope by design: this panel proposes no query/workload-based optimizations, runs no execution-plan analysis,
+performs no partition discovery/management, and never suggests new indexes based on observed usage — it is a
+structural, deterministic advisor in the same spirit as the Hibernate Advisor, not a tuning engine.
+
+On Quarkus the panel is identical, running the same shared rule engine over the same report contract: `DataSource`
+beans are discovered through `@Any Instance<DataSource>` (unconditionally — `javax.sql.DataSource` is core JDK, so no
+capability gating is needed), and the Hibernate cross-reference half reuses the same `EntityDiscoverySource` the
+Hibernate panel produces when `quarkus-hibernate-orm` is present. One reduced-fidelity difference: since the
+per-datasource name is only discoverable through an Agroal-specific qualifier this panel intentionally avoids
+importing, datasources are named positionally (`default`, `datasource-2`, ...) rather than by their configured Quarkus
+datasource name.
 
 ### Hibernate
 
@@ -1278,53 +1325,6 @@ for trusted local sessions and is blocked by `bootui.read-only=true` or `bootui.
 and degrades to a clear empty state when Liquibase is not on the classpath or no Liquibase databases are present.
 
 ![BootUI Liquibase panel](./images/bootui-liquibase.webp)
-
-### Database Advisor
-
-The Database Advisor panel introspects the physical schema of every discovered application `DataSource` bean through
-plain JDBC `DatabaseMetaData` — tables, columns, primary keys, foreign keys, and indexes — and evaluates a fixed,
-on-demand ruleset of deterministic, low-false-positive structural checks (a missing primary key, a foreign-key column
-with no supporting index, duplicate/overlapping indexes, a foreign-key column whose type disagrees with the
-referenced primary key's type, and a redundant unique index duplicating the primary key). It reuses the same
-proxy-aware datasource discovery as Database Connection Pools and SQL Trace, skipping Spring's delegating/routing
-`DataSource` wrappers so a wrapped datasource is never introspected twice. It never executes DDL, never queries
-application data, and fails closed with a stable empty report and an explanatory status when no `DataSource` bean is
-present or no datasource can be read. If only some datasources fail introspection, readable datasources are still
-evaluated and the report status is `PARTIAL`.
-
-For **PostgreSQL** and **MySQL** — the two most widely used relational databases among Java developers — a small amount
-of dialect-specific catalog augmentation runs in addition to the generic checks: PostgreSQL invalid/broken indexes
-(`pg_index.indisvalid = false`, e.g. left behind by a failed `CREATE INDEX CONCURRENTLY`), a PostgreSQL sequence
-nearing exhaustion of its underlying type's numeric range (`pg_sequences.last_value`), MySQL tables using a
-non-`InnoDB` storage engine, and MySQL columns using a character set other than `utf8mb4`. The dialect is detected from
-`DatabaseMetaData.getDatabaseProductName()` and the JDBC URL; every other database (H2, SQL Server, Oracle, MariaDB, etc.)
-still runs the full generic ruleset through the standard JDBC metadata fallback — it is never treated as unsupported. Both
-dialect-specific queries fail soft (an empty result) rather than propagating, since they may be blocked by restricted
-database privileges on some hosts.
-
-When a Hibernate `EntityManagerFactory`/metamodel is also available for the same application, the panel additionally
-cross-references the physical schema against the mapped JPA entities the shared Hibernate metamodel reader already
-reads (the same reader `Hibernate` uses): a `@ManyToOne`/`@JoinColumn` foreign-key column with no supporting physical
-index (the highest-confidence check), an explicitly-`@Table`-named entity with no matching physical table, basic
-type-family/nullability mismatches between a mapped `@Column` and its physical column, a mapped `@Column(length=...)`
-longer than the physical column can hold (a truncation risk), and a mapped unique constraint
-(`@Column(unique=true)`/`@Table(uniqueConstraints=...)`) with no backing physical unique index. Only entities with an
-*explicit* `@Table(name = ...)` are cross-referenced — entities relying on the default naming strategy are skipped rather
-than guessed, keeping the false-positive rate low. This half of the panel is skipped (with a clear reason, not silently
-dropped) when either a `DataSource` or a Hibernate metamodel is unavailable. See
-[DATABASE-ADVISOR-CHECKS.md](DATABASE-ADVISOR-CHECKS.md) for the full rule catalogue and remediation links.
-
-Out of scope by design: this panel proposes no query/workload-based optimizations, runs no execution-plan analysis,
-performs no partition discovery/management, and never suggests new indexes based on observed usage — it is a
-structural, deterministic advisor in the same spirit as the Hibernate Advisor, not a tuning engine.
-
-On Quarkus the panel is identical, running the same shared rule engine over the same report contract: `DataSource`
-beans are discovered through `@Any Instance<DataSource>` (unconditionally — `javax.sql.DataSource` is core JDK, so no
-capability gating is needed), and the Hibernate cross-reference half reuses the same `EntityDiscoverySource` the
-Hibernate panel produces when `quarkus-hibernate-orm` is present. One reduced-fidelity difference: since the
-per-datasource name is only discoverable through an Agroal-specific qualifier this panel intentionally avoids
-importing, datasources are named positionally (`default`, `datasource-2`, ...) rather than by their configured Quarkus
-datasource name.
 
 ## Security
 

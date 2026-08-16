@@ -569,7 +569,7 @@ Pentesting, HTTP Probe, MCP Server) need no special ingredients — they work ag
 | Threads             | as-is       | Port    | ThreadMXBean reader              | —                                           |
 | Metrics             | as-is       | Port    | Micrometer reader                | `MeterRegistrySupplier`                     |
 | Hibernate           | as-is       | Port    | Hibernate advisor engine         | `EntityManagerFactoryProvider`              |
-| Database Advisor    | as-is       | Port    | Database advisor rule engine     | `DataSourceProvider` (positional datasource naming; `javax.sql.DataSource` is unconditional, no capability gating) |
+| Database            | as-is       | Port    | Database advisor rule engine     | `DataSourceProvider` (positional datasource naming; `javax.sql.DataSource` is unconditional, no capability gating) |
 | Vulnerabilities     | as-is       | Port    | OSV scanner + dependency catalog | —                                           |
 | Pentesting          | as-is       | Port    | Pentesting engine                | CORS/OIDC/TLS metadata; Spring endpoint inventory explicitly unavailable |
 | HTTP Probe          | as-is       | Port    | HTTP probe service               | —                                           |

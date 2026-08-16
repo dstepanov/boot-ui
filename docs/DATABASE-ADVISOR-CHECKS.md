@@ -1,11 +1,11 @@
-# Database Advisor checks
+# Database checks
 
-The Database Advisor panel runs a fixed, on-demand ruleset against the physical schema of every discovered
+The Database panel runs a fixed, on-demand ruleset against the physical schema of every discovered
 application `DataSource` bean. It introspects tables, columns, primary keys, foreign keys, and indexes through plain
 JDBC `DatabaseMetaData` — it never executes DDL and never queries application data.
 
 The checks are deterministic, low-false-positive structural checks, not query/workload-based tuning suggestions. See
-[FEATURES.md](FEATURES.md#database-advisor) for scope, availability, and dialect-detection details.
+[FEATURES.md](FEATURES.md#database) for scope, availability, and dialect-detection details.
 
 ## Availability and bounds
 

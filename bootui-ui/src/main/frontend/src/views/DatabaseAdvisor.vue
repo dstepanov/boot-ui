@@ -8,10 +8,10 @@ import SpinnerButton from './components/SpinnerButton.vue'
 const props = defineProps(panelProps)
 const panel = useAdvisorPanel(props, {
   apiPath: 'api/database-advisor',
-  loadErrorMessage: 'Unable to load Database Advisor report',
+  loadErrorMessage: 'Unable to load Database report',
   scanErrorMessage: 'Unable to run Database checks',
   emptyScanPrompt: 'Run Database checks to inspect the physical schema',
-  emptyNoFindings: 'No Database Advisor findings',
+  emptyNoFindings: 'No Database findings',
   countNoun: 'finding'
 })
 </script>
@@ -20,7 +20,7 @@ const panel = useAdvisorPanel(props, {
   <div>
     <PanelHeader
       icon="bi-hdd-rack"
-      title="Database Advisor"
+      title="Database"
       subtitle="Read-only JDBC schema introspection (tables, columns, keys, indexes) plus Hibernate mapping cross-reference."
       :loading="panel.loading"
       :error="panel.error"
@@ -67,7 +67,7 @@ const panel = useAdvisorPanel(props, {
             <div class="card-body">
               <div v-if="!panel.hasScanData" class="text-center text-muted py-4">
                 <i class="bi bi-search fs-2 d-block mb-2"></i>
-                <div class="fw-semibold text-body">No Database Advisor data yet</div>
+                <div class="fw-semibold text-body">No Database data yet</div>
                 <div>Run Database checks to populate advisor findings.</div>
               </div>
               <div
