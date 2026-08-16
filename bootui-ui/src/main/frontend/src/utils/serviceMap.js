@@ -170,12 +170,10 @@ const MARGIN = 32
 const LANE_GAP = 112
 const FAN_RADIUS = 288
 const FAN_ROW_PITCH = 72
-const FAN_MIN_HEIGHT = 320
 const FAN_MIN_WIDTH = 800
 const RACK_GAP = 72
 const RACK_COLUMN_GAP = 32
 const RACK_ROW_GAP = 26
-const RACK_MIN_HEIGHT = 320
 export const FAN_DEPENDENCY_THRESHOLD = 6
 const EDGE_SOURCE_GAP = 4
 const EDGE_TARGET_GAP = 8
@@ -183,7 +181,7 @@ const TARGET_RING_PADDING = 5
 const TARGET_CHIP_WIDTH = 96
 const TARGET_CHIP_HEIGHT = 20
 const TARGET_CHIP_Y = -13
-export const MAX_SERVICE_MAP_WIDTH = 1040
+export const MAX_SERVICE_MAP_WIDTH = 1228
 
 function boxRect(box) {
   return {
@@ -426,10 +424,15 @@ export function layoutServiceMap(map, {nodeWidth = NODE_W, nodeHeight = NODE_H} 
     : count
       ? (count - 1) * FAN_ROW_PITCH + nodeHeight
       : APP_H
-  const height = Math.max(dense ? RACK_MIN_HEIGHT : FAN_MIN_HEIGHT, contentHeight + MARGIN * 2)
+  const height = Math.max(contentHeight, APP_H, inbound ? nodeHeight : 0) + MARGIN * 2
   const cy = height / 2
-  // Keep the application visually central even when filtering hides the inbound lane.
-  const cx = MARGIN + nodeWidth + LANE_GAP + APP_W / 2
+  const leftExtent = inbound ? APP_W / 2 + LANE_GAP + nodeWidth + MARGIN : APP_W / 2 + MARGIN
+  const rightExtent = dense
+    ? APP_W / 2 + RACK_GAP + nodeWidth * 2 + RACK_COLUMN_GAP + MARGIN
+    : FAN_RADIUS + nodeWidth / 2 + MARGIN
+  const halfWidth = Math.ceil(Math.max(FAN_MIN_WIDTH / 2, leftExtent, rightExtent))
+  const width = halfWidth * 2
+  const cx = halfWidth
   const firstRackX = cx + APP_W / 2 + RACK_GAP + nodeWidth / 2
 
   const positions = new Map()
@@ -448,9 +451,6 @@ export function layoutServiceMap(map, {nodeWidth = NODE_W, nodeHeight = NODE_H} 
   for (const box of dependencyBoxes) {
     positions.set(box.node.id, box)
   }
-
-  const furthestRight = Math.max(cx + APP_W / 2, ...dependencyBoxes.map((box) => box.x + box.w / 2))
-  const width = dense ? MAX_SERVICE_MAP_WIDTH : Math.max(FAN_MIN_WIDTH, Math.ceil(furthestRight + MARGIN))
 
   const edges = map.edges
     .map((edge) => {

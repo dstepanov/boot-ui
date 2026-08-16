@@ -24,15 +24,14 @@ import {
   nestEntries
 } from '../utils/activityStream.js'
 
-// Live Flow is a second reading of the same evidence, so it ships as a mode of this panel rather than a
-// panel of its own. Keeping it in a route-level async chunk means the feed — the default view — never
-// pays for the map's layout and motion code.
+// Live Flow is a second reading of the same evidence, so it ships inside this panel rather than as a
+// panel of its own. Keep its layout and motion code in a route-level async chunk.
 const LiveFlowMode = defineAsyncComponent(() => import('./LiveFlowMode.vue'))
 
 const TYPES = ['REQUEST', 'SQL', 'EXCEPTION', 'SECURITY', 'CACHE', 'SCHEDULED', 'MESSAGING', 'MAIL', 'REST_CLIENT']
 const SEVERITIES = ['OK', 'SLOW', 'WARN', 'ERROR']
 const FILTERS_STORAGE_KEY = 'bootui.activity.filters'
-const MODE_STORAGE_KEY = 'bootui.activity.mode'
+const FLOW_COLLAPSED_STORAGE_KEY = 'bootui.activity.flowCollapsed'
 const PERSISTENCE_DOCS_URL = 'https://www.julien-dubois.com/boot-ui/properties#live-activity-durable-persistence'
 
 const props = defineProps(panelProps)
@@ -43,9 +42,7 @@ const {message: banner, flash, clear: clearBanner} = useFlashMessage()
 const report = ref(null)
 const error = ref(null)
 const lastFetched = ref(null)
-// 'feed' (default) or 'flow'. Remembered per browser so a developer who works in the map does not have
-// to reselect it on every visit.
-const mode = ref(safeLocalStorage.getItem(MODE_STORAGE_KEY) === 'flow' ? 'flow' : 'feed')
+const flowCollapsed = ref(safeLocalStorage.getItem(FLOW_COLLAPSED_STORAGE_KEY) === 'true')
 // Incremented after every successful feed refresh so the map re-reads the same evidence off the same
 // SSE tick instead of running a second poll of its own.
 const flowRefreshTick = ref(0)
@@ -572,11 +569,9 @@ function clearFilters() {
   errorsOnly.value = false
 }
 
-const flowMode = computed(() => mode.value === 'flow')
-
-function setMode(next) {
-  mode.value = next
-  safeLocalStorage.setItem(MODE_STORAGE_KEY, next)
+function toggleFlow() {
+  flowCollapsed.value = !flowCollapsed.value
+  safeLocalStorage.setItem(FLOW_COLLAPSED_STORAGE_KEY, String(flowCollapsed.value))
 }
 </script>
 
@@ -595,32 +590,6 @@ function setMode(next) {
       @refresh="refreshNow"
       @retry-auto-refresh="retryConnection"
     >
-      <template #actions>
-        <div class="activity-view-switcher" role="group" aria-label="Live Activity view">
-          <button
-            type="button"
-            class="activity-view-switcher__option"
-            title="Reverse-chronological event feed"
-            aria-label="Feed view"
-            :aria-pressed="!flowMode"
-            @click="setMode('feed')"
-          >
-            <i class="bi bi-list-ul" aria-hidden="true"></i>
-            <span>Feed</span>
-          </button>
-          <button
-            type="button"
-            class="activity-view-switcher__option"
-            title="Service map of recently observed dependencies"
-            aria-label="Live flow view"
-            :aria-pressed="flowMode"
-            @click="setMode('flow')"
-          >
-            <i class="bi bi-diagram-2" aria-hidden="true"></i>
-            <span>Live flow</span>
-          </button>
-        </div>
-      </template>
       <template #subtitle-actions>
         <span v-if="report && !persistent">
           Currently saving {{ formatNumber(memoryEventCount) }} event{{ memoryEventCount === 1 ? '' : 's' }} in memory
@@ -689,14 +658,14 @@ function setMode(next) {
 
     <UnavailableState v-if="!manifestAvailable" icon="bi-broadcast" :message="manifestUnavailableReason" />
 
-    <UnavailableState
-      v-else-if="report && !available && !flowMode"
-      icon="bi-broadcast"
-      message="No live activity sources are available yet. Enable HTTP exchange recording, SQL tracing, REST client tracing, exception capture, or security logs to populate this stream."
-    />
-
     <template v-else-if="report">
-      <div v-if="kpis" class="row g-2 mb-3 activity-kpis">
+      <UnavailableState
+        v-if="!available"
+        icon="bi-broadcast"
+        message="No live activity sources are available yet. Enable HTTP exchange recording, SQL tracing, REST client tracing, exception capture, or security logs to populate this stream."
+      />
+
+      <div v-if="available && kpis" class="row g-2 mb-3 activity-kpis">
         <div class="col-6 col-lg-3">
           <div class="card h-100">
             <div class="card-body py-2">
@@ -848,10 +817,34 @@ function setMode(next) {
         </div>
       </div>
 
-      <LiveFlowMode v-if="flowMode" :refresh-tick="flowRefreshTick" :paused="paused" />
+      <section class="activity-flow mb-3" aria-labelledby="activity-flow-title">
+        <div class="activity-flow__header">
+          <div>
+            <h3 id="activity-flow-title" class="h5 mb-1">
+              <i class="bi bi-diagram-2 me-2" aria-hidden="true"></i>Live flow
+            </h3>
+            <p class="text-muted small mb-0">
+              A live service map assembled from the same retained activity as the feed.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-secondary"
+            :aria-expanded="!flowCollapsed"
+            aria-controls="activity-live-flow"
+            @click="toggleFlow"
+          >
+            <i :class="['bi', flowCollapsed ? 'bi-chevron-down' : 'bi-chevron-up', 'me-1']" aria-hidden="true"></i>
+            {{ flowCollapsed ? 'Show map' : 'Minimize map' }}
+          </button>
+        </div>
+        <div id="activity-live-flow" v-show="!flowCollapsed" class="activity-flow__body">
+          <LiveFlowMode :refresh-tick="flowRefreshTick" :paused="paused" :visible="!flowCollapsed" />
+        </div>
+      </section>
 
-      <template v-else>
-        <div class="d-flex flex-wrap align-items-end gap-2 mb-3">
+      <template v-if="available">
+        <div class="activity-feed-controls d-flex flex-wrap align-items-end gap-2 mb-3">
           <div class="activity-text-filter">
             <label class="form-label small mb-1" for="activity-text-filter">Filter</label>
             <input
@@ -1213,34 +1206,18 @@ function setMode(next) {
 </template>
 
 <style scoped>
-/* View switcher — same shape as the Beans panel's list/graph switcher so the two graph surfaces read
-   as one system. The gradient marks the selected option and nothing else. */
-.activity-view-switcher {
-  border: 1px solid var(--bootui-border-alt);
-  border-radius: var(--bootui-radius-pill);
-  display: inline-flex;
-  overflow: hidden;
+.activity-flow {
+  border-top: 1px solid var(--bootui-border);
+  padding-top: 1rem;
 }
 
-.activity-view-switcher__option {
+.activity-flow__header {
   align-items: center;
-  background: transparent;
-  border: 0;
-  color: var(--bootui-text-muted);
-  display: inline-flex;
-  font-size: 0.85rem;
-  gap: 0.35rem;
-  padding: 0.25rem 0.75rem;
-}
-
-.activity-view-switcher__option[aria-pressed='true'] {
-  background: var(--bootui-nav-active-bg);
-  color: #fff;
-}
-
-.activity-view-switcher__option:focus-visible {
-  outline: 2px solid var(--bootui-green-dark);
-  outline-offset: -2px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
 }
 
 .activity-drawer-backdrop {

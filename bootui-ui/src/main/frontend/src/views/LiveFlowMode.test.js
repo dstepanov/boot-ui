@@ -184,6 +184,35 @@ describe('LiveFlowMode', () => {
     expect(wrapper.findAll('.flow-edge')).toHaveLength(1)
   })
 
+  it('centres the compact viewport from the application hub rendered bounds', async () => {
+    vi.stubGlobal('fetch', stubFetch(serviceMap()))
+    stubMatchMedia(false)
+
+    wrapper = mountFlow()
+    await flushPromises()
+
+    const stage = wrapper.get('.flow-stage')
+    const application = wrapper.get('.flow-node--app')
+    stage.element.getBoundingClientRect = () => ({left: 0, top: 0, width: 600, height: 200})
+    application.element.getBoundingClientRect = () => ({left: 420, top: 80, width: 172, height: 60})
+
+    await wrapper.get('[aria-label="Zoom in"]').trigger('click')
+    await flushPromises()
+
+    expect(stage.element.scrollLeft).toBe(206)
+    expect(stage.element.scrollTop).toBe(10)
+  })
+
+  it('adapts the viewport height to small maps and caps dense maps', async () => {
+    vi.stubGlobal('fetch', stubFetch(serviceMap()))
+    stubMatchMedia(false)
+
+    wrapper = mountFlow()
+    await flushPromises()
+
+    expect(wrapper.get('.flow-stage').attributes('style')).toContain('height: 126px')
+  })
+
   it('distinguishes a configured dependency with no evidence from an observed one', async () => {
     vi.stubGlobal(
       'fetch',

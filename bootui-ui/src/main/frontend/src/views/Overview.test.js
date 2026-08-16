@@ -121,7 +121,7 @@ describe('Overview', () => {
     expect(wrapper.text()).toContain('Architecture')
     expect(wrapper.text()).not.toContain('Pentesting')
     expect(wrapper.text()).not.toContain('Hibernate')
-    expect(wrapper.text()).not.toContain('Database Advisor')
+    expect(wrapper.text()).not.toContain('Database')
     expect(wrapper.text()).not.toContain('Connect to GitHub')
   })
 
@@ -183,6 +183,38 @@ describe('Overview', () => {
     // 1 high finding => 100 - 10 = 90
     expect(wrapper.text()).toContain('90')
     expect(wrapper.text()).toContain('1 high')
+  })
+
+  it('includes the Database scanner in the overall score', async () => {
+    stubFetch({
+      'api/database-advisor/scan': severityReport([{severity: 'CRITICAL', count: 1}])
+    })
+    const wrapper = mountOverview({
+      panels: [
+        {id: 'architecture', available: false},
+        {id: 'memory', available: false},
+        {id: 'rest-api', available: false},
+        {id: 'spring', available: false},
+        {id: 'database-advisor', available: true},
+        {id: 'hibernate', available: false},
+        {id: 'security', available: false},
+        {id: 'pentesting', available: false},
+        {id: 'vulnerabilities', available: false},
+        {id: 'github', available: false}
+      ]
+    })
+    await flushPromises()
+
+    const runButton = wrapper.findAll('button').find((button) => button.text().includes('Run scan'))
+    await runButton.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('75')
+    expect(wrapper.text()).toContain('1 of 1 scanners scored')
+    const databaseCard = wrapper
+      .findAllComponents(ScannerScoreCard)
+      .find((component) => component.props('title') === 'Database')
+    expect(databaseCard.find('.scanner-score').text()).toBe('75')
   })
 
   it('accepts valid vulnerability findings when the summary includes UNKNOWN and NONE buckets', async () => {

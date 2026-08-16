@@ -80,12 +80,11 @@ test.describe('BootUI on Spring WebFlux', () => {
         .filter({hasText: /Live Activity/})
         .first()
     ).toBeVisible({timeout: 15_000})
-    await page.getByRole('button', {name: 'Live flow view'}).click()
 
     const flow = page.locator('.flow-map')
     await expect(flow).toBeVisible({timeout: 15_000})
     await expect(flow).toContainText('contacts nothing and probes nothing')
-    await expect(page.locator('.activity-table')).toHaveCount(0)
+    await expect(page.locator('.activity-table')).toBeVisible()
   })
 
   test('raw Spring Security panel exposes reactive chains and mappings without blocking', async ({

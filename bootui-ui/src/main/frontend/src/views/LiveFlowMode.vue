@@ -31,13 +31,17 @@ const props = defineProps({
    */
   refreshTick: {type: Number, default: 0},
   /** Whether the parent panel's live stream is currently paused. */
-  paused: {type: Boolean, default: false}
+  paused: {type: Boolean, default: false},
+  /** Whether the map viewport is currently visible and can be centered. */
+  visible: {type: Boolean, default: true}
 })
 
 const PROTOCOL_OPTIONS = ['HTTP_INBOUND', 'CACHE', 'HTTP', 'JDBC', 'KAFKA', 'RABBITMQ']
 const MIN_ZOOM = 0.6
 const MAX_ZOOM = 1.6
 const ZOOM_STEP = 0.2
+const MIN_STAGE_HEIGHT = 120
+const MAX_STAGE_HEIGHT = 384
 
 const report = ref(null)
 const error = ref(null)
@@ -102,6 +106,9 @@ const rovingId = computed(() => {
 const hasFilters = computed(() => Boolean(protocolFilter.value || textFilter.value.trim()))
 const dependencyCount = computed(() => filtered.value.nodes.filter((node) => node.kind === 'DEPENDENCY').length)
 const failingCount = computed(() => filtered.value.nodes.filter((node) => node.outcome === 'RETAINED_FAILURES').length)
+const stageHeight = computed(() =>
+  Math.min(MAX_STAGE_HEIGHT, Math.max(MIN_STAGE_HEIGHT, Math.round(layout.value.height * zoom.value + 2)))
+)
 
 async function loadServiceMap() {
   if (requestInFlight) {
@@ -119,10 +126,12 @@ async function loadServiceMap() {
     }
     const next = normalizeServiceMap(await response.json())
     if (unmounted) return
+    const firstLoad = report.value === null
     applyNewEvidence(next, animationEligibleAtStart && !props.paused && requestPauseGeneration === pauseGeneration)
     report.value = next
     error.value = null
     lastFetched.value = Date.now()
+    if (firstLoad) void centerApplication()
   } catch (err) {
     if (unmounted) return
     error.value = formatLoadError(err, 'Could not load the service map')
@@ -264,6 +273,17 @@ function resetZoom() {
   zoom.value = 1
 }
 
+async function centerApplication() {
+  await nextTick()
+  const stage = scrollElement.value
+  const application = svgElement.value?.querySelector('.flow-node--app')
+  if (!props.visible || !stage || !application) return
+  const stageBounds = stage.getBoundingClientRect()
+  const applicationBounds = application.getBoundingClientRect()
+  stage.scrollLeft += applicationBounds.left + applicationBounds.width / 2 - (stageBounds.left + stageBounds.width / 2)
+  stage.scrollTop += applicationBounds.top + applicationBounds.height / 2 - (stageBounds.top + stageBounds.height / 2)
+}
+
 function clearFilters() {
   protocolFilter.value = ''
   textFilter.value = ''
@@ -335,6 +355,15 @@ watch(
     if (!paused) return
     pauseGeneration += 1
     clearTransientEvidence()
+  }
+)
+
+watch(zoom, centerApplication)
+
+watch(
+  () => props.visible,
+  (visible) => {
+    if (visible) void centerApplication()
   }
 )
 
@@ -442,6 +471,7 @@ watch(selectedId, async (id) => {
         v-if="filtered.nodes.length"
         ref="scrollElement"
         class="flow-stage"
+        :style="{height: `${stageHeight}px`}"
         role="region"
         aria-label="Service map of this application's local integration surface"
       >
@@ -804,11 +834,11 @@ watch(selectedId, async (id) => {
   background: var(--bootui-surface-alt);
   border: 1px solid var(--bootui-border);
   border-radius: var(--bootui-radius-md);
-  height: clamp(22rem, 58vh, 38rem);
 }
 
 .flow-svg {
   display: block;
+  margin-inline: auto;
 }
 
 /* ── Edges ─────────────────────────────────────────────────────────────────── */
