@@ -12,7 +12,7 @@ reactive analog genuinely exists, and an honest "not yet ported" / "not applicab
 The WebFlux adapter serves the large majority of the panel surface — the same 53-panel manifest the servlet adapter
 reports, minus the one panel that stays unavailable for stack reasons described below. **Every action-capable panel
 that is available behaves identically to the servlet adapter**, behind the same shared `LocalhostGuard` write floor:
-Loggers (set level), HTTP Probe, Cache (clear), Flyway (migrate/clean), Liquibase (update), Heap Dump
+Loggers (set level), HTTP Probe, Cache (clear), Hibernate Statistics (runtime enable), Flyway (migrate/clean), Liquibase (update), Heap Dump
 (capture/analyze/delete/download), Threads (download), Traces (clear), SQL Trace (toggle recording/clear),
 Transactions (clear/toggle recording), REST Client (clear/toggle recording), the advisor scans (Architecture, Spring,
 Hibernate, Pentesting, REST API, Security, Memory, Vulnerabilities/OSV), and Exceptions triage.
@@ -107,13 +107,13 @@ reactive binding (e.g. a `WebFilter` capturing into the same engine store) · `R
 capture layer replacing a servlet-only primitive · `Not yet ported` = deliberately deferred, no reactive
 implementation wired yet · `Not applicable` = no faithful reactive analog exists for this panel's concept.
 
-### 6.1 Ported as-is (39 panels)
+### 6.1 Ported as-is (40 panels)
 
 Bulk-imported from the servlet adapter's `@RestController`s with no code changes at all — confirming these
 controllers were already framework-neutral in practice, not just in the engine underneath them:
 
 Overview · GitHub · Beans · Conditions · Configuration · Mappings · Health · Loggers · Startup Timeline · Spring Data ·
-Hibernate · Flyway · Liquibase · Database Connection Pools · Cache · Dev Services · Vulnerabilities · Scheduled Tasks ·
+Hibernate · Hibernate Statistics · Flyway · Liquibase · Database Connection Pools · Cache · Dev Services · Vulnerabilities · Scheduled Tasks ·
 HTTP Probe · Pentesting · Heap Dump · Architecture · REST API advisor · Profile Diff · Spring advisor[^spring-advisor-reactive] ·
 Live Memory · JVM Tuning · Metrics · DevTools · Traces · AI Framework · GraalVM · CRaC · Threads · Memory · Email · Kafka ·
 RabbitMQ · JMS. `KafkaController`, `RabbitController`, and `JmsController`, plus their template/listener-factory

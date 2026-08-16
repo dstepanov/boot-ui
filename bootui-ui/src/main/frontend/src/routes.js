@@ -14,6 +14,7 @@ const Transactions = () => import('./views/Transactions.vue')
 const RestClientTrace = () => import('./views/RestClientTrace.vue')
 const Data = () => import('./views/Data.vue')
 const Hibernate = () => import('./views/Hibernate.vue')
+const HibernateStatistics = () => import('./views/HibernateStatistics.vue')
 const Flyway = () => import('./views/Flyway.vue')
 const Liquibase = () => import('./views/Liquibase.vue')
 const Startup = () => import('./views/Startup.vue')
@@ -562,6 +563,29 @@ export const routes = [
       title: 'SQL Trace',
       shortcut: 'sq',
       keywords: ['sql', 'queries', 'slow queries', 'slow query', 'n+1', 'jdbc', 'statements', 'select', 'query log']
+    }
+  },
+  {
+    path: '/hibernate-statistics',
+    name: 'hibernate-statistics',
+    component: HibernateStatistics,
+    meta: {
+      group: groups.database,
+      icon: 'bi-graph-up',
+      title: 'Hibernate Statistics',
+      shortcut: 'hg',
+      keywords: [
+        'hibernate',
+        'session factory',
+        'statistics',
+        'generate_statistics',
+        'query cache',
+        'second-level cache',
+        'entities',
+        'collections',
+        'sessions',
+        'monitoring'
+      ]
     }
   },
   {

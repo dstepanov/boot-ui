@@ -12,10 +12,13 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Serves the Hibernate Advisor panel.
  *
- * <p>{@code GET} returns the last report (initially "not scanned"); {@code POST /scan} reads the
+ * <p>{@code GET} returns the last advisor report (initially "not scanned"); {@code POST /scan} reads the
  * Hibernate/JPA metamodel and evaluates a bounded, static ruleset against mapped application
  * entities. The scan logic lives in the engine {@link HibernateScanner}; this controller only caches
  * the last report and applies the adapter's dismissed-rule ids.</p>
+ *
+ * <p>The Hibernate Statistics panel (live {@code SessionFactory} statistics) is a separate
+ * Database-group panel served by {@link HibernateStatisticsController}, not this advisor.</p>
  */
 @RestController
 @ConditionalOnClass(name = {"jakarta.persistence.EntityManagerFactory", "org.hibernate.SessionFactory"})

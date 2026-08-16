@@ -25,7 +25,8 @@ import org.springframework.test.web.servlet.MockMvc;
  * {@link HibernateScanner} (covered by {@code HibernateScannerTests}/{@code HibernateRulesTests} in
  * {@code bootui-engine}), so here we only assert that {@code GET} returns the cached report, that
  * {@code POST /scan} refreshes the cache, and that both routes feed the adapter's dismissed-rule ids
- * through {@link HibernateScanner#applyDismissals} before serialization.
+ * through {@link HibernateScanner#applyDismissals} before serialization. Live Hibernate {@code SessionFactory}
+ * statistics are covered separately by {@code HibernateStatisticsControllerTests}.
  */
 class HibernateControllerTests {
 
