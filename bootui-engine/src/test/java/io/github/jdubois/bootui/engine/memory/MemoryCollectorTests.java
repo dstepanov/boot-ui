@@ -139,6 +139,14 @@ class MemoryCollectorTests {
     }
 
     @Test
+    void skipsCgroupDiscoveryWhenProcFilesAreUnavailable() {
+        ContainerMemoryLimitDetector detector = ContainerMemoryLimitDetector.fromProcFiles(
+                tempDir.resolve("missing-cgroup"), tempDir.resolve("missing-mountinfo"));
+
+        assertThat(detector.detect()).isEqualTo(ContainerMemoryLimitDetector.CgroupMemorySample.unavailable());
+    }
+
+    @Test
     void parsesTerabyteMemorySizesAcceptedByHotSpot() {
         assertThat(MemoryCollector.parseMemorySize("1t")).isEqualTo(1024L * 1024 * 1024 * 1024);
         assertThat(MemoryCollector.parseMemorySize("1T")).isEqualTo(1024L * 1024 * 1024 * 1024);

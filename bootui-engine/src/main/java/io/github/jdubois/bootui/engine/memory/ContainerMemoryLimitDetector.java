@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -168,6 +169,9 @@ final class ContainerMemoryLimitDetector {
 
     private static List<CgroupMemoryFiles> resolveProcessCgroupFiles(Path selfCgroupFile, Path selfMountinfoFile) {
         List<CgroupMemoryFiles> files = new ArrayList<>();
+        if (!Files.isRegularFile(selfCgroupFile) || !Files.isRegularFile(selfMountinfoFile)) {
+            return List.of();
+        }
         try {
             List<String> cgroupLines = Files.readAllLines(selfCgroupFile);
             List<CgroupMount> mounts = parseMounts(Files.readAllLines(selfMountinfoFile));
@@ -192,6 +196,8 @@ final class ContainerMemoryLimitDetector {
                     }
                 }
             }
+        } catch (NoSuchFileException ex) {
+            return List.of();
         } catch (IOException ex) {
             log.log(Level.DEBUG, "Could not resolve the process cgroup memory paths", ex);
         }
