@@ -338,11 +338,6 @@ const frameworkLabel = computed(() => {
   if (platform === 'spring-boot') return 'Spring Boot'
   return null
 })
-const footerText = computed(() =>
-  frameworkLabel.value
-    ? `BootUI - The missing developer UI for ${frameworkLabel.value}!`
-    : 'BootUI - The missing developer UI!'
-)
 const githubProjectUrl = 'https://github.com/jdubois/boot-ui'
 function navTitle(r) {
   return resolveRouteTitle(r, panels.value?.platform)
@@ -604,7 +599,6 @@ function onGlobalKeydown(e) {
       <div class="authentication-card">
         <span class="authentication-icon"><i class="bi bi-shield-lock"></i></span>
         <div>
-          <div class="eyebrow">Remote access</div>
           <h1 id="authentication-title">Unlock BootUI</h1>
           <p>
             This API requires authentication outside localhost. Copy the bearer token from the application startup log.
@@ -827,7 +821,6 @@ function onGlobalKeydown(e) {
               <i aria-hidden="true" class="bi bi-list"></i>
             </button>
             <div class="topbar-heading">
-              <div class="eyebrow">Inspecting</div>
               <h1 class="topbar-title">{{ applicationTitle }}</h1>
               <p class="topbar-subtitle mb-0">{{ runtimeSummary }}</p>
             </div>
@@ -907,8 +900,16 @@ function onGlobalKeydown(e) {
         </main>
 
         <footer class="bootui-footer">
+          <span class="bootui-footer__context">
+            <i aria-hidden="true" class="bi bi-shield-check"></i>
+            Local-only developer console
+            <span v-if="frameworkLabel" aria-hidden="true" class="bootui-footer__separator">·</span>
+            <span v-if="frameworkLabel">{{ frameworkLabel }}</span>
+          </span>
           <a :href="githubProjectUrl" rel="noopener noreferrer" target="_blank">
-            {{ footerText }}
+            <i aria-hidden="true" class="bi bi-github"></i>
+            View BootUI on GitHub
+            <i aria-hidden="true" class="bi bi-box-arrow-up-right bootui-footer__external"></i>
           </a>
         </footer>
       </div>
@@ -1386,8 +1387,7 @@ function onGlobalKeydown(e) {
   flex-shrink: 0;
   gap: 1.4rem;
   height: 100vh;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
   padding: 1.25rem;
   /* impeccable-disable-next-line layout-transition -- collapsible sidebar/drawer animates width by design */
@@ -1567,8 +1567,8 @@ function onGlobalKeydown(e) {
 
 .brand-card {
   align-items: center;
-  background: linear-gradient(135deg, rgba(25, 135, 84, 0.12), rgba(13, 110, 253, 0.1));
-  border: 1px solid rgba(25, 135, 84, 0.14);
+  background: var(--bootui-surface);
+  border: 1px solid var(--bootui-border);
   border-radius: 1.25rem;
   color: inherit;
   display: flex;
@@ -1618,20 +1618,19 @@ function onGlobalKeydown(e) {
 }
 
 .sidebar-nav {
+  flex: 1;
   gap: 0.45rem;
-}
-
-.eyebrow {
-  color: var(--bootui-text-muted);
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  margin-bottom: 0.55rem;
-  text-transform: uppercase;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0.15rem 0.25rem 0.75rem 0;
+  scrollbar-color: var(--bootui-border-alt) transparent;
+  scrollbar-width: thin;
 }
 
 .bootui-nav-link {
   align-items: center;
+  border-radius: var(--bootui-radius-md);
   color: var(--bootui-nav-link-color);
   display: flex;
   gap: 0.75rem;
@@ -1766,6 +1765,7 @@ function onGlobalKeydown(e) {
 .sidebar-bottom {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .contribute-card {
@@ -1812,10 +1812,16 @@ function onGlobalKeydown(e) {
 
 .topbar {
   align-items: center;
+  backdrop-filter: blur(18px);
+  background: var(--bootui-sidebar-bg);
+  border-bottom: 1px solid var(--bootui-border-subtle);
   display: flex;
   gap: 1rem;
   justify-content: space-between;
-  padding: 1.5rem 2rem 1rem;
+  padding: 1.25rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .topbar-lead {
@@ -1949,18 +1955,46 @@ function onGlobalKeydown(e) {
 }
 
 .bootui-footer {
+  align-items: center;
+  border-top: 1px solid var(--bootui-border-subtle);
   color: var(--bootui-text-muted);
+  display: flex;
   font-size: 0.82rem;
-  padding: 0 2rem 1.25rem;
-  text-align: center;
+  gap: 1rem;
+  justify-content: space-between;
+  margin: 0 2rem;
+  padding: 1rem 0 1.25rem;
 }
 
 .bootui-footer a {
+  align-items: center;
   color: inherit;
+  display: inline-flex;
+  gap: 0.4rem;
+  text-decoration: none;
 }
 
 .bootui-footer a:hover {
   color: var(--bootui-green-dark);
+}
+
+.bootui-footer__context {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.bootui-footer__context > .bi {
+  color: var(--bootui-green-dark);
+}
+
+.bootui-footer__separator {
+  color: var(--bootui-text-subtle);
+  margin-inline: 0.1rem;
+}
+
+.bootui-footer__external {
+  font-size: 0.7rem;
 }
 
 .page-slide-enter-active,
@@ -2000,6 +2034,11 @@ function onGlobalKeydown(e) {
     padding-left: 1.25rem;
     padding-right: 1.25rem;
   }
+
+  .bootui-footer {
+    margin-left: 0;
+    margin-right: 0;
+  }
 }
 
 @media (max-width: 575.98px) {
@@ -2023,6 +2062,12 @@ function onGlobalKeydown(e) {
   .bootui-footer {
     padding-left: 1rem;
     padding-right: 1rem;
+  }
+
+  .bootui-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.65rem;
   }
 
   :global(button),
