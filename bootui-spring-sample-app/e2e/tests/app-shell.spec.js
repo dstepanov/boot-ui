@@ -284,7 +284,8 @@ test.describe('BootUI app shell', () => {
         workspaceOverflowY: getComputedStyle(workspace).overflowY,
         workspaceScrollable: workspace.scrollHeight > workspace.clientHeight,
         sidebarOverflowY: getComputedStyle(sidebar).overflowY,
-        sidebarOverscroll: getComputedStyle(sidebar).overscrollBehaviorY
+        sidebarNavOverflowY: getComputedStyle(sidebar.querySelector('.sidebar-nav')).overflowY,
+        sidebarNavOverscroll: getComputedStyle(sidebar.querySelector('.sidebar-nav')).overscrollBehaviorY
       }
     })
 
@@ -292,9 +293,10 @@ test.describe('BootUI app shell', () => {
     expect(layout.shellOverflowY).toBe('hidden')
     expect(layout.workspaceOverflowY).toBe('auto')
     expect(layout.workspaceScrollable).toBe(true)
-    // The sidebar is its own scroll region and never chains into the rest of the page.
-    expect(layout.sidebarOverflowY).toBe('auto')
-    expect(layout.sidebarOverscroll).toBe('contain')
+    // Only the navigation list scrolls, keeping the brand and bottom actions fixed.
+    expect(layout.sidebarOverflowY).toBe('hidden')
+    expect(layout.sidebarNavOverflowY).toBe('auto')
+    expect(layout.sidebarNavOverscroll).toBe('contain')
 
     // Scrolling the main content moves only the content, not the sidebar or the document.
     const sidebar = page.locator('aside.bootui-sidebar')

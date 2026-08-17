@@ -79,7 +79,8 @@ test.describe('BootUI app shell (Quarkus)', () => {
 
   test('footer reflects the Quarkus platform', async ({page}) => {
     await page.goto('/bootui/')
-    await expect(page.locator('.bootui-footer')).toContainText('developer UI for Quarkus')
+    await expect(page.locator('.bootui-footer')).toContainText('Local-only developer console')
+    await expect(page.locator('.bootui-footer')).toContainText('Quarkus')
   })
 
   test('sidebar links to the BootUI GitHub project', async ({page}) => {

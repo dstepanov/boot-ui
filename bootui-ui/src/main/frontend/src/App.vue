@@ -902,9 +902,11 @@ function onGlobalKeydown(e) {
         <footer class="bootui-footer">
           <span class="bootui-footer__context">
             <i aria-hidden="true" class="bi bi-shield-check"></i>
-            Local-only developer console
-            <span v-if="frameworkLabel" aria-hidden="true" class="bootui-footer__separator">·</span>
-            <span v-if="frameworkLabel">{{ frameworkLabel }}</span>
+            <span class="bootui-footer__context-copy">
+              Local-only developer console
+              <span v-if="frameworkLabel" aria-hidden="true" class="bootui-footer__separator">·</span>
+              <span v-if="frameworkLabel">{{ frameworkLabel }}</span>
+            </span>
           </span>
           <a :href="githubProjectUrl" rel="noopener noreferrer" target="_blank">
             <i aria-hidden="true" class="bi bi-github"></i>
@@ -1623,6 +1625,7 @@ function onGlobalKeydown(e) {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0.15rem 0.25rem 0.75rem 0;
   scrollbar-color: var(--bootui-border-alt) transparent;
   scrollbar-width: thin;
@@ -1988,6 +1991,10 @@ function onGlobalKeydown(e) {
   color: var(--bootui-green-dark);
 }
 
+.bootui-footer__context-copy {
+  min-width: 0;
+}
+
 .bootui-footer__separator {
   color: var(--bootui-text-subtle);
   margin-inline: 0.1rem;
@@ -2047,6 +2054,7 @@ function onGlobalKeydown(e) {
     flex-direction: column;
     padding-left: 1rem;
     padding-right: 1rem;
+    position: static;
   }
 
   .topbar-actions {
