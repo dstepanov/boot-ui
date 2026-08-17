@@ -66,6 +66,14 @@ const PANEL_HEADINGS = {
   'claude-code': /^Claude Code/
 }
 
+async function expandAllSidebarGroups(page) {
+  const toggles = page.locator('aside .bootui-nav-group__toggle')
+  for (let index = 0; index < (await toggles.count()); index += 1) {
+    const toggle = toggles.nth(index)
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+  }
+}
+
 test.describe('BootUI app shell (Quarkus)', () => {
   test('navbar shows the application name and Quarkus / Java versions', async ({page}) => {
     await page.goto('/bootui/')
@@ -79,7 +87,8 @@ test.describe('BootUI app shell (Quarkus)', () => {
 
   test('footer reflects the Quarkus platform', async ({page}) => {
     await page.goto('/bootui/')
-    await expect(page.locator('.bootui-footer')).toContainText('developer UI for Quarkus')
+    await expect(page.locator('.bootui-footer')).toContainText('Local-only developer console')
+    await expect(page.locator('.bootui-footer')).toContainText('Quarkus')
   })
 
   test('sidebar links to the BootUI GitHub project', async ({page}) => {
@@ -88,6 +97,26 @@ test.describe('BootUI app shell (Quarkus)', () => {
     const contributeLink = page.getByRole('link', {name: /Contribute to the project/})
     await expect(contributeLink).toHaveAttribute('href', 'https://github.com/jdubois/boot-ui')
     await expect(contributeLink.locator('.bi-github')).toBeVisible()
+  })
+
+  test('expanded sidebar groups scroll without moving the footer actions', async ({page}) => {
+    await page.setViewportSize({width: 1280, height: 400})
+    await page.goto('/bootui/')
+    await expandAllSidebarGroups(page)
+
+    const layout = await page.locator('aside.bootui-sidebar').evaluate((sidebar) => {
+      const nav = sidebar.querySelector('.sidebar-nav')
+      const bottom = sidebar.querySelector('.sidebar-bottom').getBoundingClientRect()
+      return {
+        navScrollable: nav.scrollHeight > nav.clientHeight,
+        sectionsDoNotShrink: [...nav.querySelectorAll('.bootui-nav-section')].every(
+          (section) => getComputedStyle(section).flexShrink === '0'
+        ),
+        bottomVisible: bottom.top >= 0 && bottom.bottom <= innerHeight
+      }
+    })
+
+    expect(layout).toEqual({navScrollable: true, sectionsDoNotShrink: true, bottomVisible: true})
   })
 
   test('the Advisors sidebar group uses the framework-aware Quarkus label', async ({page}) => {

@@ -300,6 +300,29 @@ describe('App sidebar navigation', () => {
   })
 })
 
+describe('App shell chrome', () => {
+  beforeEach(() => {
+    stubLocalStorage()
+    mockShellFetch()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    restoreLocalStorage()
+    document.body.innerHTML = ''
+  })
+
+  it('keeps the header concise and identifies the local runtime in the footer', async () => {
+    const {wrapper} = await mountApp()
+
+    expect(wrapper.find('.topbar-heading .eyebrow').exists()).toBe(false)
+    expect(wrapper.find('.topbar-title').text()).toBe('bootui-sample')
+    expect(wrapper.find('.bootui-footer__context').text()).toContain('Local-only developer console')
+    expect(wrapper.find('.bootui-footer__context').text()).toContain('Spring Boot')
+    expect(wrapper.find('.bootui-footer a').text()).toContain('View BootUI on GitHub')
+  })
+})
+
 describe('App command palette', () => {
   beforeEach(() => {
     stubLocalStorage()
@@ -597,13 +620,15 @@ describe('App shell footer', () => {
     mockShellFetch('spring-boot')
     const {wrapper} = await mountApp()
 
-    expect(wrapper.find('.bootui-footer a').text()).toBe('BootUI - The missing developer UI for Spring Boot!')
+    expect(wrapper.find('.bootui-footer__context').text()).toContain('Spring Boot')
+    expect(wrapper.find('.bootui-footer a').text()).toContain('View BootUI on GitHub')
   })
 
   it('labels the footer for Quarkus when the manifest platform is quarkus', async () => {
     mockShellFetch('quarkus')
     const {wrapper} = await mountApp()
 
-    expect(wrapper.find('.bootui-footer a').text()).toBe('BootUI - The missing developer UI for Quarkus!')
+    expect(wrapper.find('.bootui-footer__context').text()).toContain('Quarkus')
+    expect(wrapper.find('.bootui-footer a').text()).toContain('View BootUI on GitHub')
   })
 })

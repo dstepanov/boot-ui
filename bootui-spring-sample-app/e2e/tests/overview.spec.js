@@ -69,7 +69,7 @@ test.describe('Overview view', () => {
   test('links to the BootUI GitHub project', async ({openView}) => {
     const page = await openView('overview', 'Overview')
 
-    await expect(page.getByRole('link', {name: /The missing developer UI for Spring Boot/})).toHaveAttribute(
+    await expect(page.getByRole('link', {name: /View BootUI on GitHub/})).toHaveAttribute(
       'href',
       'https://github.com/jdubois/boot-ui'
     )

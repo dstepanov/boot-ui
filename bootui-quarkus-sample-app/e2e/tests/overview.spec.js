@@ -78,10 +78,10 @@ test.describe('Overview view (Quarkus)', () => {
     await expect(tip).toHaveCount(0)
   })
 
-  test('links to the BootUI GitHub project with the Quarkus-flavored tagline', async ({openView}) => {
+  test('links to the BootUI GitHub project', async ({openView}) => {
     const page = await openView('overview', 'Overview')
 
-    await expect(page.getByRole('link', {name: /The missing developer UI for Quarkus/})).toHaveAttribute(
+    await expect(page.getByRole('link', {name: /View BootUI on GitHub/})).toHaveAttribute(
       'href',
       'https://github.com/jdubois/boot-ui'
     )

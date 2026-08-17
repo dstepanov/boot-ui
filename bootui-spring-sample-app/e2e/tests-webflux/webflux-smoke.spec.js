@@ -1,6 +1,14 @@
 // @ts-check
 import {expect, test} from '@playwright/test'
 
+async function expandAllSidebarGroups(page) {
+  const toggles = page.locator('aside .bootui-nav-group__toggle')
+  for (let index = 0; index < (await toggles.count()); index += 1) {
+    const toggle = toggles.nth(index)
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+  }
+}
+
 /**
  * Small smoke suite for the WebFlux (reactive) BootUI adapter.
  *
@@ -28,6 +36,26 @@ test.describe('BootUI on Spring WebFlux', () => {
     const subtitle = page.locator('.topbar-subtitle')
     await expect(subtitle).toContainText(/Spring Boot \d+\.\d+/)
     await expect(subtitle).toContainText(/Java /)
+  })
+
+  test('expanded sidebar groups scroll without moving the footer actions', async ({page}) => {
+    await page.setViewportSize({width: 1280, height: 400})
+    await page.goto('/bootui/')
+    await expandAllSidebarGroups(page)
+
+    const layout = await page.locator('aside.bootui-sidebar').evaluate((sidebar) => {
+      const nav = sidebar.querySelector('.sidebar-nav')
+      const bottom = sidebar.querySelector('.sidebar-bottom').getBoundingClientRect()
+      return {
+        navScrollable: nav.scrollHeight > nav.clientHeight,
+        sectionsDoNotShrink: [...nav.querySelectorAll('.bootui-nav-section')].every(
+          (section) => getComputedStyle(section).flexShrink === '0'
+        ),
+        bottomVisible: bottom.top >= 0 && bottom.bottom <= innerHeight
+      }
+    })
+
+    expect(layout).toEqual({navScrollable: true, sectionsDoNotShrink: true, bottomVisible: true})
   })
 
   test('redirects the root path to /overview', async ({page}) => {
