@@ -120,7 +120,7 @@ describe('HibernateStatistics panel', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('api/hibernate-statistics/enable', expect.objectContaining({method: 'POST'}))
     expect(wrapper.text()).toContain('Hibernate statistics enabled for this runtime')
-    expect(wrapper.text()).toContain('Sessions & transactions')
+    expect(wrapper.text()).toContain('Session lifecycle')
   })
 
   it('disables runtime activation when the panel is read-only', async () => {
@@ -155,11 +155,13 @@ describe('HibernateStatistics panel', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('Session statistics are unavailable')
-    expect(wrapper.text()).toContain('Sessions & transactions')
-    expect(wrapper.text()).toContain('Entities')
-    expect(wrapper.text()).toContain('Collections')
-    expect(wrapper.text()).toContain('Queries')
+    expect(wrapper.text()).toContain('Runtime overview')
+    expect(wrapper.text()).toContain('Session lifecycle')
+    expect(wrapper.text()).toContain('Entity activity')
+    expect(wrapper.text()).toContain('Collection activity')
+    expect(wrapper.text()).toContain('Query activity')
     expect(wrapper.text()).toContain('Second-level cache')
+    expect(wrapper.text()).toContain('8 / 8')
     expect(wrapper.text()).toContain('com.example.Widget')
   })
 
@@ -182,8 +184,8 @@ describe('HibernateStatistics panel', () => {
     wrapper = mount(HibernateStatistics)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Query cache is not in use')
-    expect(wrapper.text()).toContain('No second-level cache region has recorded activity')
+    expect(wrapper.text()).toContain('Query cache not in use')
+    expect(wrapper.text()).toContain('No cache region has recorded activity')
   })
 
   it('fetches from the dedicated hibernate-statistics endpoint', async () => {
