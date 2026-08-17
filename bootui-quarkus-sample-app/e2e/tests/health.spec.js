@@ -27,7 +27,9 @@ test.describe('Health view (Quarkus)', () => {
   test('renders nested component details in a readable table', async ({openView, page}) => {
     await openView('health', 'Health')
 
-    const dbSummary = page.locator('details.card > summary', {hasText: /Database connections health check/}).first()
+    const dbSummary = page
+      .locator('details.health-node > summary', {hasText: /Database connections health check/})
+      .first()
     const dbNode = dbSummary.locator('xpath=..')
     await expect(dbNode).toBeVisible()
     await expect(dbNode).toContainText('Details')
