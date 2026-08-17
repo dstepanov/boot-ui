@@ -85,6 +85,87 @@ jobs:
         working-directory: bootui-ui/src/main/frontend
         run: npm run format:check
 
+      - name: Publish Java test report
+        if: ${{ !cancelled() }}
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        with:
+          name: Java tests (Surefire)
+          path: '**/target/surefire-reports/TEST-*.xml'
+          reporter: java-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: Publish frontend unit test report
+        if: ${{ !cancelled() }}
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        with:
+          name: Frontend unit tests (Vitest)
+          path: bootui-ui/src/main/frontend/test-results/vitest-junit.xml
+          reporter: jest-junit
+          fail-on-error: false
+          fail-on-empty: false
+
+      - name: Upload JUnit test reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-test-reports
+          path: |
+            **/target/surefire-reports/TEST-*.xml
+            bootui-ui/src/main/frontend/test-results/vitest-junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload coverage reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-reports-java-${{ matrix.java }}
+          path: |
+            **/target/site/jacoco/
+            bootui-coverage/target/site/jacoco-aggregate/
+            bootui-ui/src/main/frontend/coverage/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload sample-app jar
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bootui-spring-sample-app
+          path: bootui-spring-sample-app/target/*.jar
+          if-no-files-found: warn
+          retention-days: 7
+
+  spring-e2e:
+    name: Spring end-to-end (Java 17)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: bootui-spring-sample-app/e2e/package-lock.json
+
+      # Install only the Spring sample apps and their dependencies so Playwright can start them.
+      # This intentionally runs in parallel with the full coverage reactor above.
+      - name: Build Spring sample apps
+        run: >
+          ./mvnw -T 1C -B -ntp
+          -pl bootui-spring-sample-app,bootui-spring-webflux-sample-app
+          -am -DskipTests install
+
       - name: Install Playwright dependencies
         working-directory: bootui-spring-sample-app/e2e
         run: npm ci --ignore-scripts
@@ -110,26 +191,6 @@ jobs:
         if: ${{ !cancelled() }}
         working-directory: bootui-spring-sample-app/e2e
         run: npm run test:custom-path
-
-      - name: Publish Java test report
-        if: ${{ !cancelled() }}
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
-        with:
-          name: Java tests (Surefire)
-          path: '**/target/surefire-reports/TEST-*.xml'
-          reporter: java-junit
-          fail-on-error: false
-          fail-on-empty: false
-
-      - name: Publish frontend unit test report
-        if: ${{ !cancelled() }}
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
-        with:
-          name: Frontend unit tests (Vitest)
-          path: bootui-ui/src/main/frontend/test-results/vitest-junit.xml
-          reporter: jest-junit
-          fail-on-error: false
-          fail-on-empty: false
 
       - name: Publish end-to-end test report
         if: ${{ !cancelled() }}
@@ -194,39 +255,16 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload JUnit test reports
+      - name: Upload end-to-end JUnit test reports
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: junit-test-reports
+          name: junit-test-reports-spring-e2e
           path: |
-            **/target/surefire-reports/TEST-*.xml
-            bootui-ui/src/main/frontend/test-results/vitest-junit.xml
             bootui-spring-sample-app/e2e/test-results/junit/results.xml
             bootui-spring-sample-app/e2e/test-results-webflux/junit/results.xml
             bootui-spring-sample-app/e2e/test-results-custom-path/junit/results.xml
           if-no-files-found: ignore
-          retention-days: 7
-
-      - name: Upload coverage reports
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-reports-java-${{ matrix.java }}
-          path: |
-            **/target/site/jacoco/
-            bootui-coverage/target/site/jacoco-aggregate/
-            bootui-ui/src/main/frontend/coverage/
-          if-no-files-found: warn
-          retention-days: 30
-
-      - name: Upload sample-app jar
-        if: success()
-        uses: actions/upload-artifact@v7
-        with:
-          name: bootui-spring-sample-app
-          path: bootui-spring-sample-app/target/*.jar
-          if-no-files-found: warn
           retention-days: 7
 
   quarkus-e2e:
