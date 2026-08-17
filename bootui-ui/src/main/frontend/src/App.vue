@@ -1648,6 +1648,7 @@ function onGlobalKeydown(e) {
 .bootui-nav-section {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   gap: 0.25rem;
 }
 

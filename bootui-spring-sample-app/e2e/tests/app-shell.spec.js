@@ -271,11 +271,14 @@ test.describe('BootUI app shell', () => {
     await page.setViewportSize({width: 1280, height: 400})
     await page.goto('/bootui/')
     await page.locator('main .page-panel h2').first().waitFor()
+    await expandAllSidebarGroups(page)
 
     const layout = await page.evaluate(() => {
       const shell = document.querySelector('.bootui-shell')
       const workspace = document.querySelector('.bootui-workspace')
       const sidebar = document.querySelector('aside.bootui-sidebar')
+      const sidebarNav = sidebar.querySelector('.sidebar-nav')
+      const sidebarBottom = sidebar.querySelector('.sidebar-bottom').getBoundingClientRect()
       const doc = document.scrollingElement
       return {
         // The page itself must not scroll: scrolling lives inside the app, not the document.
@@ -284,8 +287,13 @@ test.describe('BootUI app shell', () => {
         workspaceOverflowY: getComputedStyle(workspace).overflowY,
         workspaceScrollable: workspace.scrollHeight > workspace.clientHeight,
         sidebarOverflowY: getComputedStyle(sidebar).overflowY,
-        sidebarNavOverflowY: getComputedStyle(sidebar.querySelector('.sidebar-nav')).overflowY,
-        sidebarNavOverscroll: getComputedStyle(sidebar.querySelector('.sidebar-nav')).overscrollBehaviorY
+        sidebarNavOverflowY: getComputedStyle(sidebarNav).overflowY,
+        sidebarNavOverscroll: getComputedStyle(sidebarNav).overscrollBehaviorY,
+        sidebarNavScrollable: sidebarNav.scrollHeight > sidebarNav.clientHeight,
+        sidebarSectionsDoNotShrink: [...sidebarNav.querySelectorAll('.bootui-nav-section')].every(
+          (section) => getComputedStyle(section).flexShrink === '0'
+        ),
+        sidebarBottomVisible: sidebarBottom.top >= 0 && sidebarBottom.bottom <= innerHeight
       }
     })
 
@@ -297,6 +305,9 @@ test.describe('BootUI app shell', () => {
     expect(layout.sidebarOverflowY).toBe('hidden')
     expect(layout.sidebarNavOverflowY).toBe('auto')
     expect(layout.sidebarNavOverscroll).toBe('contain')
+    expect(layout.sidebarNavScrollable).toBe(true)
+    expect(layout.sidebarSectionsDoNotShrink).toBe(true)
+    expect(layout.sidebarBottomVisible).toBe(true)
 
     // Scrolling the main content moves only the content, not the sidebar or the document.
     const sidebar = page.locator('aside.bootui-sidebar')
@@ -308,6 +319,12 @@ test.describe('BootUI app shell', () => {
     expect(contentScrollTop).toBeGreaterThan(0)
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
     expect(await sidebar.evaluate((el) => el.getBoundingClientRect().top)).toBe(sidebarTopBefore)
+
+    const navScrollTop = await sidebar.locator('.sidebar-nav').evaluate((nav) => {
+      nav.scrollTop = nav.scrollHeight
+      return nav.scrollTop
+    })
+    expect(navScrollTop).toBeGreaterThan(0)
   })
 
   test('sidebar groups panels into collapsible sections', async ({page}) => {
