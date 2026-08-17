@@ -5,7 +5,7 @@ test.describe('Live Memory view', () => {
   test('renders heap and non-heap live memory cards without tuning panels', async ({openView, page}) => {
     await openView('live-memory', 'Live Memory')
 
-    await expect(page.locator('.card', {hasText: 'Heap Memory'}).first()).toBeVisible()
+    await expect(page.locator('.card', {hasText: 'Heap memory'}).first()).toBeVisible()
     await expect(page.locator('.card', {hasText: /Non[- ]?Heap/i}).first()).toBeVisible()
     await expect(page.locator('.card', {hasText: 'Recommended JVM Options'})).toHaveCount(0)
     await expect(page.locator('.card', {hasText: 'Kubernetes calculator'})).toHaveCount(0)

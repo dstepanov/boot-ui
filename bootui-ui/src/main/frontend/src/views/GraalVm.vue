@@ -8,6 +8,7 @@ import {hasScanResult, scanStatusBadgeClass, scanStatusLabel} from '../utils/sca
 import {panelProps, usePanelState} from '../utils/panelState.js'
 import {useConfirm} from '../utils/useConfirm.js'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
 import AdvisorSummary from './components/AdvisorSummary.vue'
 
@@ -18,6 +19,7 @@ const report = ref(null)
 const error = ref(null)
 const actionMessage = ref(null)
 const loading = ref(false)
+const initialLoading = ref(true)
 const installing = ref(false)
 const installResult = ref(null)
 const installingDockerfile = ref(false)
@@ -194,6 +196,8 @@ async function loadReport() {
     error.value = null
   } catch (e) {
     error.value = describeLoadError(e, 'Unable to load GraalVM readiness report')
+  } finally {
+    initialLoading.value = false
   }
 }
 
@@ -433,6 +437,8 @@ onBeforeUnmount(stopProgressPolling)
       </div>
     </div>
 
+    <PanelSkeleton v-if="initialLoading" />
+
     <template v-if="report">
       <div class="alert alert-info">
         <strong>Heuristic readiness checks.</strong>
@@ -461,7 +467,7 @@ onBeforeUnmount(stopProgressPolling)
       <div class="row g-3 mb-3">
         <div class="col-lg-5">
           <div class="card h-100">
-            <div class="card-header fw-semibold">Concerns by severity</div>
+            <div class="card-header"><h3>Concerns by severity</h3></div>
             <div class="card-body">
               <div v-if="!hasScanData" class="text-center text-muted py-4">
                 <i class="bi bi-search fs-2 d-block mb-2"></i>
@@ -814,7 +820,7 @@ onBeforeUnmount(stopProgressPolling)
               <span class="badge text-bg-warning">{{ finding.status }}</span>
               <span :class="severityClass(finding.severity)" class="badge">{{ finding.severity }}</span>
               <span class="badge text-bg-light border">{{ finding.category }}</span>
-              <span class="text-muted small">{{ finding.id }}</span>
+              <span class="text-muted small font-monospace">{{ finding.id }}</span>
             </div>
             <h3 class="h6 mb-1">{{ finding.name }}</h3>
             <div class="small text-muted mb-2">{{ finding.description }}</div>

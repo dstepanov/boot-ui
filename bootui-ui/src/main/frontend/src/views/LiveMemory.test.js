@@ -89,7 +89,7 @@ describe('LiveMemory', () => {
 
     expect(fetch).toHaveBeenCalledWith('api/live-memory')
     const renderedText = wrapper.text()
-    const panelOrder = ['Heap Memory', 'Non-Heap Memory', 'Memory Pools']
+    const panelOrder = ['Heap memory', 'Non-heap memory', 'Memory pools']
     const panelPositions = panelOrder.map((label) => {
       const position = renderedText.indexOf(label)
       expect(position).toBeGreaterThanOrEqual(0)
@@ -134,7 +134,7 @@ describe('LiveMemory', () => {
     wrapper.getComponent(PanelHeader).vm.$emit('refresh')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Heap Memory')
+    expect(wrapper.text()).toContain('Heap memory')
     expect(wrapper.getComponent(FlashBanner).text()).toContain('Showing the last successful snapshot')
     expect(wrapper.getComponent(FlashBanner).find('button.btn-close').exists()).toBe(false)
   })

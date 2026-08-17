@@ -562,7 +562,7 @@ watch(
     <PanelSkeleton v-if="initialLoading" />
     <div v-else-if="!available" class="card border-info">
       <div class="card-body">
-        <h5 class="card-title"><i class="bi bi-info-circle me-2"></i>{{ panelConfig.emptyTitle }}</h5>
+        <h3 class="h5 card-title"><i class="bi bi-info-circle me-2"></i>{{ panelConfig.emptyTitle }}</h3>
         <p class="card-text mb-1">
           BootUI looked for sessions under <code>{{ sessionStateDir }}</code
           >.
@@ -579,11 +579,10 @@ watch(
         Use <em>Reveal raw</em> on an event to inspect the source JSON locally.
       </div>
 
-      <section class="card border-0 shadow-sm mb-3">
-        <div class="card-body">
+      <section class="mb-3">
+        <div class="dashboard-band">
           <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
             <div>
-              <div class="text-uppercase small text-muted fw-semibold">Dashboard</div>
               <h3 class="mb-1">{{ panelConfig.title }} activity overview</h3>
               <div v-if="panelConfig.inspiration" class="small text-muted mt-1">
                 Inspired by
@@ -631,7 +630,7 @@ watch(
               <div class="card h-100">
                 <div class="card-body">
                   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                    <h5 class="card-title mb-0">Activity, last 24 hours</h5>
+                    <h3 class="h5 card-title mb-0">Activity, last 24 hours</h3>
                     <div class="d-flex align-items-center gap-3">
                       <div class="btn-group btn-group-sm" role="group" aria-label="Activity chart mode">
                         <input
@@ -705,7 +704,7 @@ watch(
 
                   <div class="border-top mt-4 pt-3">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                      <h5 class="card-title mb-0">Activity, last 7 days</h5>
+                      <h3 class="h5 card-title mb-0">Activity, last 7 days</h3>
                       <span class="small text-muted"
                         >{{ formatNumber(dashboard?.activeLast7Days ?? 0) }} active sessions</span
                       >
@@ -768,7 +767,7 @@ watch(
             <div class="col-xl-4">
               <div class="card h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Event mix</h5>
+                  <h3 class="h5 card-title">Event mix</h3>
                   <div v-if="categoryRows.length === 0" class="text-muted small">No categories recorded yet.</div>
                   <div v-for="row in categoryRows" v-else :key="row.label" class="mb-3">
                     <div class="d-flex justify-content-between small mb-1">
@@ -791,7 +790,7 @@ watch(
             <div class="col-lg-5">
               <div class="card h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Top tools</h5>
+                  <h3 class="h5 card-title">Top tools</h3>
                   <div v-if="topToolRows.length === 0" class="text-muted small">No tool calls recorded yet.</div>
                   <div
                     v-for="tool in topToolRows"
@@ -820,7 +819,7 @@ watch(
             <div class="col-lg-3">
               <div class="card h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Models</h5>
+                  <h3 class="h5 card-title">Models</h3>
                   <div v-if="modelRows.length === 0" class="text-muted small">No model metadata recorded.</div>
                   <div v-for="model in modelRows" v-else :key="model.label" class="mb-2">
                     <div class="d-flex justify-content-between small mb-1">
@@ -843,7 +842,7 @@ watch(
             <div class="col-lg-4">
               <div class="card h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Recent sessions</h5>
+                  <h3 class="h5 card-title">Recent sessions</h3>
                   <div v-if="(dashboard?.recentSessions ?? []).length === 0" class="text-muted small">
                     No recent sessions.
                   </div>
@@ -878,7 +877,7 @@ watch(
       <section class="card shadow-sm">
         <div class="card-header bg-body d-flex flex-wrap align-items-center justify-content-between gap-2">
           <div>
-            <h4 class="mb-0">Session explorer</h4>
+            <h3 class="h4 mb-0">Session explorer</h3>
             <div class="small text-muted d-flex flex-wrap gap-2">
               <span>Drill into sanitized events and reveal one raw event at a time when needed.</span>
               <span v-if="explorerMaxSessions">Limit: {{ formatNumber(explorerMaxSessions) }} sessions</span>
@@ -977,9 +976,9 @@ watch(
               <div v-else-if="detailLoading" class="text-muted">Loading session…</div>
               <div v-else-if="!detail" class="alert alert-warning">Session not found.</div>
               <template v-else>
-                <div class="card mb-3">
-                  <div class="card-body">
-                    <h5 class="card-title mb-2">
+                <div class="session-summary mb-3">
+                  <div class="session-summary__body">
+                    <h4 class="h5 mb-2">
                       <code>{{ detail.summary.id }}</code>
                       <span v-if="detail.summary.model" class="badge text-bg-primary ms-2">{{
                         detail.summary.model
@@ -987,7 +986,7 @@ watch(
                       <span v-if="detail.summary.status" class="badge text-bg-info ms-2">{{
                         detail.summary.status
                       }}</span>
-                    </h5>
+                    </h4>
                     <div class="small text-muted mb-2">
                       <span v-if="detail.summary.workingDirectory"
                         ><i class="bi bi-folder me-1"></i>{{ detail.summary.workingDirectory }}</span
@@ -1232,6 +1231,22 @@ watch(
 </template>
 
 <style scoped>
+/* Dashboard band and session summary group content without stacking a second
+   card inside a card. */
+.dashboard-band {
+  padding: 0 0 0.25rem;
+}
+
+.session-summary {
+  background: var(--bootui-surface);
+  border: 1px solid var(--bootui-border);
+  border-radius: var(--bootui-radius-lg);
+}
+
+.session-summary__body {
+  padding: 1.25rem;
+}
+
 .metric-card {
   border-color: var(--bs-border-color-translucent);
 }

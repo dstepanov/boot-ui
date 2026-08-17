@@ -9,6 +9,7 @@ import {useFlashMessage} from '../utils/useFlashMessage.js'
 import {getBootUiApiPath} from '../utils/bootUiPath.js'
 import FlashBanner from './components/FlashBanner.vue'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import ReadOnlyNotice from './components/ReadOnlyNotice.vue'
 import UnavailableState from './components/UnavailableState.vue'
 
@@ -110,9 +111,7 @@ const {autoRefresh, loading, load} = useAutoRefresh(fetchStatus, {enabled: manif
 
     <UnavailableState v-if="!manifestAvailable" icon="bi-plug" :message="manifestUnavailableReason" />
 
-    <div v-else-if="loading && !status" class="card">
-      <div class="card-body text-muted">Loading MCP server status…</div>
-    </div>
+    <PanelSkeleton v-else-if="loading && !status" />
 
     <template v-else-if="status">
       <!-- Toggle card -->
@@ -126,10 +125,10 @@ const {autoRefresh, loading, load} = useAutoRefresh(fetchStatus, {enabled: manif
               <i class="bi" :class="enabled ? 'bi-plug-fill' : 'bi-plug'"></i>
             </div>
             <div>
-              <h2 class="h5 fw-bold mb-1">
+              <h3 class="h5 fw-bold mb-1">
                 MCP server is
                 <span :class="enabled ? 'text-success' : 'text-secondary'">{{ enabled ? 'enabled' : 'disabled' }}</span>
-              </h2>
+              </h3>
               <p class="text-muted small mb-0">
                 Toggling here overrides the
                 <code>bootui.mcp.enabled</code> property at runtime (configured: <code>{{ status.configuredMode }}</code
@@ -251,7 +250,7 @@ const {autoRefresh, loading, load} = useAutoRefresh(fetchStatus, {enabled: manif
           </p>
 
           <div v-if="actionTools.length" class="mb-3">
-            <div class="text-uppercase text-muted small fw-semibold mb-2">Action tools</div>
+            <h4 class="fs-6 text-muted fw-semibold mb-2">Action tools</h4>
             <ul class="list-group list-group-flush">
               <li v-for="tool in actionTools" :key="tool.name" class="list-group-item px-0">
                 <div class="d-flex align-items-center justify-content-between gap-2">
@@ -268,7 +267,7 @@ const {autoRefresh, loading, load} = useAutoRefresh(fetchStatus, {enabled: manif
           </div>
 
           <div v-if="readTools.length">
-            <div class="text-uppercase text-muted small fw-semibold mb-2">Read tools</div>
+            <h4 class="fs-6 text-muted fw-semibold mb-2">Read tools</h4>
             <ul class="list-group list-group-flush">
               <li v-for="tool in readTools" :key="tool.name" class="list-group-item px-0">
                 <div class="d-flex align-items-center justify-content-between gap-2">

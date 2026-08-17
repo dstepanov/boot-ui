@@ -32,7 +32,7 @@ const gaugeLabel = computed(() =>
             <span class="advisor-summary__max">/ 100</span>
           </div>
           <div class="advisor-summary__band">
-            <div class="advisor-summary__eyebrow">Advisor score</div>
+            <div class="advisor-summary__band-label">Advisor score</div>
             <span :class="['badge', `text-bg-${bandTone}`, 'fs-6']">{{ bandLabel }}</span>
           </div>
         </div>
@@ -92,23 +92,26 @@ const gaugeLabel = computed(() =>
 }
 
 .advisor-summary__value {
-  font-size: 1.9rem;
+  font-family: var(--bs-font-monospace);
+  font-size: clamp(1.45rem, 2vw, 2.1rem);
   font-weight: 800;
+  letter-spacing: -0.03em;
   line-height: 1;
 }
 
 .advisor-summary__max {
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  opacity: 0.7;
+  /* Weight and size carry the demotion; opacity would drop the pair below AA. */
+  color: var(--bootui-text-muted);
 }
 
-.advisor-summary__eyebrow {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+/* Sentence-case metric label, not an uppercase tracked eyebrow: the
+   Eyebrow-Containment Rule reserves that treatment for sidebar nav groups. */
+.advisor-summary__band-label {
   color: var(--bootui-text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
   margin-bottom: 0.35rem;
 }
 
@@ -132,24 +135,26 @@ const gaugeLabel = computed(() =>
 }
 
 .advisor-summary__metric dt {
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--bootui-text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
   margin-bottom: 0.3rem;
 }
 
 .advisor-summary__metric dd {
-  font-size: 1.4rem;
+  font-family: var(--bs-font-monospace);
+  font-size: clamp(1.15rem, 2vw, 2.1rem);
   font-weight: 700;
+  letter-spacing: -0.03em;
   line-height: 1.1;
   color: var(--bootui-text);
   margin: 0;
 }
 
 .advisor-summary__metric--status dd {
+  font-family: inherit;
   font-size: 1rem;
+  letter-spacing: normal;
 }
 
 .advisor-summary__hint {

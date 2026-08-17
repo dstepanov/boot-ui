@@ -3,6 +3,7 @@ import {apiFetch} from '../api.js'
 import {computed, onMounted, ref} from 'vue'
 import {describeLoadError} from '../utils/loadError.js'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import UnavailableState from './components/UnavailableState.vue'
 
 const report = ref(null)
@@ -12,6 +13,7 @@ const filter = ref('')
 const storeFilter = ref('')
 const error = ref(null)
 const springDataPresent = ref(true)
+const initialLoading = ref(true)
 
 async function load() {
   try {
@@ -24,6 +26,8 @@ async function load() {
     report.value = await res.json()
   } catch (e) {
     error.value = describeLoadError(e, 'Unable to load Spring Data repositories')
+  } finally {
+    initialLoading.value = false
   }
 }
 
@@ -95,7 +99,9 @@ onMounted(load)
   <div>
     <PanelHeader icon="bi-database" title="Spring Data repositories" :error="error" />
 
-    <UnavailableState v-if="!springDataPresent" variant="info">
+    <PanelSkeleton v-if="initialLoading" />
+
+    <UnavailableState v-else-if="!springDataPresent" variant="info">
       Spring Data is not on the classpath of this application. Add a Spring Data starter (e.g.
       <code>spring-boot-starter-data-jpa</code>) to see repositories here.
     </UnavailableState>
@@ -162,7 +168,7 @@ onMounted(load)
           <div v-if="!detail" class="text-muted small">Select a repository to see its methods.</div>
           <div v-else class="card">
             <div class="card-body">
-              <h5 class="card-title mb-1">{{ shortName(detail.repositoryInterface) }}</h5>
+              <h3 class="h5 card-title mb-1">{{ shortName(detail.repositoryInterface) }}</h3>
               <div class="text-muted small mb-3">
                 <code class="bootui-break-anywhere">{{ detail.repositoryInterface }}</code>
               </div>
@@ -191,9 +197,9 @@ onMounted(load)
                 </template>
               </dl>
 
-              <h6 class="mb-2">
+              <h4 class="fs-6 mb-2">
                 Methods <span class="badge bg-secondary">{{ detail.methods.length }}</span>
-              </h6>
+              </h4>
               <div class="table-responsive bootui-table-scroll">
                 <table class="table table-sm table-hover bootui-data-table data-methods-table">
                   <thead>

@@ -3,6 +3,7 @@ import {useAdvisorPanel} from '../utils/useAdvisorPanel.js'
 import {panelProps} from '../utils/panelState.js'
 import AdvisorSummary from './components/AdvisorSummary.vue'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
 
 const props = defineProps(panelProps)
@@ -41,6 +42,8 @@ const panel = useAdvisorPanel(props, {
       {{ panel.actionMessage }}
     </div>
 
+    <PanelSkeleton v-if="panel.initialLoading" />
+
     <template v-if="panel.report">
       <AdvisorSummary
         :score="panel.score"
@@ -63,7 +66,7 @@ const panel = useAdvisorPanel(props, {
       <div class="row g-3 mb-3">
         <div class="col-lg-5">
           <div class="card h-100">
-            <div class="card-header fw-semibold">Violations by severity</div>
+            <div class="card-header"><h3>Violations by severity</h3></div>
             <div class="card-body">
               <div v-if="!panel.hasScanData" class="text-center text-muted py-4">
                 <i class="bi bi-search fs-2 d-block mb-2"></i>
@@ -96,7 +99,7 @@ const panel = useAdvisorPanel(props, {
 
         <div class="col-lg-7">
           <div class="card h-100">
-            <div class="card-header fw-semibold">Base packages</div>
+            <div class="card-header"><h3>Base packages</h3></div>
             <div class="card-body">
               <div v-if="!panel.report.basePackages || panel.report.basePackages.length === 0" class="text-muted">
                 No application base package was detected.
@@ -114,7 +117,7 @@ const panel = useAdvisorPanel(props, {
       <div class="card">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
           <div>
-            <div class="fw-semibold">Rule results</div>
+            <h3 class="fs-6 fw-semibold mb-0">Rule results</h3>
             <div class="text-muted small">
               <template v-if="panel.hasScanData && panel.visibleResults.length > 0">
                 {{ panel.visibleResults.length }} {{ panel.pluralize(panel.visibleResults.length, 'violating rule') }},
@@ -139,8 +142,8 @@ const panel = useAdvisorPanel(props, {
             <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
               <span :class="panel.statusClass(result.status)" class="badge">{{ result.status }}</span>
               <span :class="panel.severityClass(result.severity)" class="badge">{{ result.severity }}</span>
-              <span class="badge text-bg-light border">{{ result.category }}</span>
-              <span class="text-muted small">{{ result.id }}</span>
+              <span class="badge text-bg-light border font-monospace">{{ result.category }}</span>
+              <span class="text-muted small font-monospace">{{ result.id }}</span>
               <button
                 class="btn btn-sm btn-outline-secondary ms-auto"
                 type="button"
@@ -191,8 +194,8 @@ const panel = useAdvisorPanel(props, {
             <div v-for="result in panel.report.analysisErrors" :key="result.id" class="list-group-item">
               <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                 <span class="badge text-bg-secondary">{{ result.status }}</span>
-                <span class="badge text-bg-light border">{{ result.category }}</span>
-                <span class="text-muted small">{{ result.id }}</span>
+                <span class="badge text-bg-light border font-monospace">{{ result.category }}</span>
+                <span class="text-muted small font-monospace">{{ result.id }}</span>
               </div>
               <div class="small fw-semibold">{{ result.name }}</div>
               <ul v-if="result.sampleViolations && result.sampleViolations.length" class="small mb-0 mt-1">
@@ -211,8 +214,8 @@ const panel = useAdvisorPanel(props, {
               <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                 <span :class="panel.statusClass(result.status)" class="badge">{{ result.status }}</span>
                 <span :class="panel.severityClass(result.severity)" class="badge">{{ result.severity }}</span>
-                <span class="badge text-bg-light border">{{ result.category }}</span>
-                <span class="text-muted small">{{ result.id }}</span>
+                <span class="badge text-bg-light border font-monospace">{{ result.category }}</span>
+                <span class="text-muted small font-monospace">{{ result.id }}</span>
                 <button
                   class="btn btn-sm btn-outline-secondary ms-auto"
                   type="button"

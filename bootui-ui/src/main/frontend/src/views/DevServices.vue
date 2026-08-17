@@ -360,7 +360,7 @@ async function responseMessage(res) {
                 </dd>
               </dl>
 
-              <h6>Connection details</h6>
+              <h4 class="fs-6">Connection details</h4>
               <div v-if="detailEntries(selected).length === 0" class="text-muted small">
                 No connection detail values exposed.
               </div>
@@ -379,7 +379,7 @@ async function responseMessage(res) {
 
               <template v-if="logs">
                 <div class="d-flex justify-content-between align-items-center mt-3">
-                  <h6 class="mb-0">Logs</h6>
+                  <h4 class="fs-6 mb-0">Logs</h4>
                   <span v-if="logs.truncated" class="badge text-bg-warning">Tail {{ logs.maxBytes }} bytes</span>
                 </div>
                 <pre class="logs rounded border p-2 mt-2 mb-0"><code>{{
@@ -400,9 +400,10 @@ async function responseMessage(res) {
 </template>
 
 <style scoped>
+/* Container logs are terminal output and keep their own dark identity. */
 .logs {
-  background: #111827;
-  color: #f8f9fa;
+  background: var(--bootui-code-pane-bg);
+  color: var(--bootui-code-pane-text);
   max-height: 360px;
   overflow: auto;
   white-space: pre-wrap;
@@ -415,7 +416,7 @@ td code {
 }
 
 .selected-row > td {
-  --bs-table-bg: rgba(13, 110, 253, 0.08);
+  --bs-table-bg: var(--bootui-nav-hover-bg);
 }
 
 @media (max-width: 991.98px) {
@@ -441,10 +442,10 @@ td code {
   }
 
   tr {
-    background: #fff;
-    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: var(--bootui-surface);
+    border: 1px solid var(--bootui-border);
     border-radius: var(--bootui-radius-lg);
-    box-shadow: 0 0.75rem 1.75rem rgba(15, 23, 42, 0.06);
+    box-shadow: var(--bootui-shadow-sm);
     padding: 0.75rem;
   }
 
@@ -453,14 +454,15 @@ td code {
     padding: 0.35rem 0;
   }
 
+  /* Stacked-card column label. Sentence case: the uppercase tracked treatment is
+     reserved for sidebar nav groups. */
   td::before {
-    color: var(--bootui-secondary);
+    color: var(--bootui-text-muted);
     content: attr(data-label);
     display: block;
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0.85rem;
+    font-weight: 500;
     margin-bottom: 0.15rem;
-    text-transform: uppercase;
   }
 
   td.text-end {

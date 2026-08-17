@@ -79,7 +79,7 @@ describe('Conditions', () => {
     const wrapper = mount(Conditions)
     await flushPromises()
 
-    await wrapper.findAll('a.nav-link')[1].trigger('click')
+    await wrapper.findAll('button.nav-link')[1].trigger('click')
     await flushPromises() // flush Vue watcher so the debounce timer is set
     await vi.advanceTimersByTimeAsync(250)
     await flushPromises()
@@ -109,7 +109,7 @@ describe('Conditions', () => {
     expect(capturedSignal?.aborted).toBe(false)
 
     // Changing the tab calls scheduleReload via a Vue watcher.
-    await wrapper.findAll('a.nav-link')[1].trigger('click')
+    await wrapper.findAll('button.nav-link')[1].trigger('click')
     await flushPromises() // flush Vue watcher so scheduleReload() runs
     expect(capturedSignal?.aborted).toBe(true)
 
@@ -132,7 +132,7 @@ describe('Conditions', () => {
     await flushPromises()
     expect(wrapper.findComponent({name: 'ServerListFooter'}).exists()).toBe(true)
 
-    await wrapper.findAll('a.nav-link')[1].trigger('click')
+    await wrapper.findAll('button.nav-link')[1].trigger('click')
     await flushPromises()
 
     expect(wrapper.findComponent({name: 'ServerListFooter'}).exists()).toBe(false)
@@ -155,7 +155,7 @@ describe('Conditions', () => {
     vi.stubGlobal('fetch', staleFetch)
     const wrapper = mount(Conditions)
 
-    await wrapper.findAll('a.nav-link')[1].trigger('click')
+    await wrapper.findAll('button.nav-link')[1].trigger('click')
     await flushPromises()
     vi.stubGlobal(
       'fetch',
@@ -229,7 +229,7 @@ describe('Conditions', () => {
     vi.stubGlobal('fetch', fetchMock)
     const wrapper = mount(Conditions)
 
-    await wrapper.findAll('a.nav-link')[1].trigger('click')
+    await wrapper.findAll('button.nav-link')[1].trigger('click')
     await flushPromises()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(null, false, 500)))
     await vi.advanceTimersByTimeAsync(250)
@@ -264,7 +264,7 @@ describe('Conditions', () => {
     expect(appendSignal?.aborted).toBe(false)
 
     // A tab change causes scheduleReload which aborts the append.
-    await wrapper.findAll('a.nav-link')[1].trigger('click')
+    await wrapper.findAll('button.nav-link')[1].trigger('click')
     await flushPromises() // flush Vue watcher so scheduleReload() runs
     expect(appendSignal?.aborted).toBe(true)
 
@@ -294,5 +294,89 @@ describe('Conditions', () => {
     wrapper.unmount()
 
     expect(appendSignal?.aborted).toBe(true)
+  })
+
+  it('shows a skeleton on first paint instead of an empty list', async () => {
+    let resolveFetch
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise((resolve) => (resolveFetch = resolve)))
+    )
+
+    const wrapper = mount(Conditions)
+    await flushPromises()
+
+    expect(wrapper.find('.skeleton-wrapper').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('entries matched')
+
+    resolveFetch(jsonResponse(conditionsResponse()))
+    await flushPromises()
+
+    expect(wrapper.find('.skeleton-wrapper').exists()).toBe(false)
+    expect(wrapper.text()).toContain('1 of 1 positive entries matched')
+  })
+
+  it('separates "nothing was reported" from "nothing matched the filter"', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          conditionsResponse({
+            positiveMatches: [],
+            counts: {positiveMatched: 0, positiveTotal: 0, negativeMatched: 1, negativeTotal: 1}
+          })
+        )
+      )
+    )
+
+    const wrapper = mount(Conditions)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('No positive condition entries were reported.')
+    expect(wrapper.text()).not.toContain('match your filter')
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          conditionsResponse({
+            positiveMatches: [],
+            counts: {positiveMatched: 0, positiveTotal: 12, negativeMatched: 1, negativeTotal: 1}
+          })
+        )
+      )
+    )
+    await wrapper.find('input').setValue('nothing-matches-this')
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('No positive entries match your filter.')
+    expect(wrapper.text()).not.toContain('were reported')
+  })
+
+  it('exposes the outcome tabs as buttons so Space activates them', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(conditionsResponse())))
+
+    const wrapper = mount(Conditions)
+    await flushPromises()
+
+    const tabs = wrapper.findAll('button.nav-link')
+
+    expect(tabs).toHaveLength(2)
+    expect(wrapper.findAll('a.nav-link')).toHaveLength(0)
+    expect(tabs[0].attributes('role')).toBe('tab')
+    expect(tabs[0].attributes('aria-selected')).toBe('true')
+    expect(tabs[1].attributes('aria-selected')).toBe('false')
+  })
+
+  it('renders auto-configuration classes and conditions in the monospace stack', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(conditionsResponse())))
+
+    const wrapper = mount(Conditions)
+    await flushPromises()
+
+    expect(wrapper.find('code').text()).toContain('WebMvcAutoConfiguration')
+    expect(wrapper.find('.font-monospace').text()).toBe('OnClassCondition')
   })
 })

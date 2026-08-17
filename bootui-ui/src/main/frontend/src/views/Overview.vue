@@ -390,7 +390,7 @@ onActivated(refreshScores)
         <div class="card overall-card">
           <div class="card-body d-flex flex-column flex-lg-row align-items-lg-center gap-4">
             <div v-if="scoredCount > 0" class="flex-shrink-0 min-w-0">
-              <div class="text-uppercase text-muted fw-bold small">Overall score</div>
+              <h3 class="fs-6 text-muted fw-semibold mb-0">Overall score</h3>
               <div class="d-flex align-items-center gap-3 mt-2">
                 <div :class="['overall-gauge', `overall-gauge--${overallBandTone}`]">
                   <span class="overall-gauge__value">{{ Number.isFinite(overall) ? overall : '—' }}</span>
@@ -439,7 +439,7 @@ onActivated(refreshScores)
                 </p>
               </template>
               <div v-else>
-                <div class="text-uppercase text-muted fw-bold small">Overall score</div>
+                <h3 class="fs-6 text-muted fw-semibold mb-0">Overall score</h3>
                 <p class="text-muted small mb-0 mt-1">
                   {{ scoredCount }} of {{ totalCount }} scanners scored — run the advisors to compute a combined
                   security &amp; health score.

@@ -467,7 +467,7 @@ function securitySignalUrl(signal) {
             <div class="card-body">
               <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
-                  <div class="text-muted small text-uppercase fw-semibold">Repository</div>
+                  <h3 class="fs-6 text-muted fw-semibold mb-0">Repository</h3>
                   <h3 class="h4 mb-1">
                     <a
                       v-if="repository?.htmlUrl"
@@ -512,7 +512,7 @@ function securitySignalUrl(signal) {
         <div class="col-lg-4">
           <div class="card h-100">
             <div class="card-body">
-              <div class="text-muted small text-uppercase fw-semibold">Credential</div>
+              <h3 class="fs-6 text-muted fw-semibold mb-0">Credential</h3>
               <div class="fw-semibold mt-1">
                 {{ credential?.authenticated ? 'Authenticated' : 'Unauthenticated' }}
               </div>
@@ -997,5 +997,15 @@ function securitySignalUrl(signal) {
 .workflow-event-badge--default {
   background: var(--bs-tertiary-bg);
   color: var(--bs-secondary-color);
+}
+@media (prefers-reduced-motion: reduce) {
+  .metric-card {
+    transition: none;
+  }
+
+  .metric-card:hover,
+  .metric-card:focus-visible {
+    transform: none;
+  }
 }
 </style>

@@ -322,7 +322,7 @@ function downloadUrl(id) {
 }
 
 .email-drawer {
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--bootui-border);
 }
 
 .email-html-frame {

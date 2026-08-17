@@ -45,6 +45,9 @@ export function useAdvisorPanel(props, options) {
   const error = ref(null)
   const actionMessage = ref(null)
   const loading = ref(false)
+  // True only until the mount-time report GET settles, so a panel can show its
+  // skeleton on first paint without flashing it on every later refresh or scan.
+  const initialLoading = ref(true)
 
   const {dismissLoading, dismiss, restore} = useDismissedRules(loadReport)
 
@@ -167,9 +170,15 @@ export function useAdvisorPanel(props, options) {
     }, 6000)
   }
 
-  onMounted(() => {
-    if (manifestAvailable.value) {
-      loadReport()
+  onMounted(async () => {
+    if (!manifestAvailable.value) {
+      initialLoading.value = false
+      return
+    }
+    try {
+      await loadReport()
+    } finally {
+      initialLoading.value = false
     }
   })
 
@@ -182,6 +191,7 @@ export function useAdvisorPanel(props, options) {
     error,
     actionMessage,
     loading,
+    initialLoading,
     dismissLoading,
     dismiss,
     restore,

@@ -995,6 +995,16 @@ function onGlobalKeydown(e) {
   /* Skeleton loaders */
   --bootui-skeleton-base: #e2e8f0;
   --bootui-skeleton-shine: #f1f5f9;
+
+  /* Machine-output panes (log tails, stack traces, container logs). These stay
+     dark in both themes because they render terminal output, so they carry their
+     own foreground token rather than inheriting the surface text color. */
+  --bootui-code-pane-bg: #111827;
+  --bootui-code-pane-text: #f1f5f9;
+  --bootui-code-pane-border: rgba(15, 23, 42, 0.35);
+
+  /* Subtle highlight for a changed/overridden row (never a warm cream). */
+  --bootui-highlight-bg: rgba(255, 193, 7, 0.14);
 }
 
 .authentication-gate {
@@ -1117,6 +1127,11 @@ function onGlobalKeydown(e) {
   /* Skeleton loaders */
   --bootui-skeleton-base: #334155;
   --bootui-skeleton-shine: #475569;
+
+  /* Machine-output panes keep their terminal identity; only the hairline adapts. */
+  --bootui-code-pane-border: rgba(226, 232, 240, 0.14);
+
+  --bootui-highlight-bg: rgba(255, 193, 7, 0.16);
 }
 
 :global(body) {
@@ -1319,6 +1334,42 @@ function onGlobalKeydown(e) {
   border-radius: var(--bootui-radius-md);
 }
 
+/* DESIGN.md "Buttons": the primary action is solid Spring green, not Bootstrap's
+   default blue. Bootstrap 5.3 drives every `.btn` variant from local custom
+   properties, so re-pointing them here brands every primary action in the console
+   without each panel restating the palette. Signal blue keeps its own meaning on
+   `.text-primary`, `.bg-primary`, and chart series. */
+:global(.btn-primary) {
+  --bs-btn-bg: #198754;
+  --bs-btn-border-color: #198754;
+  --bs-btn-hover-bg: #146c43;
+  --bs-btn-hover-border-color: #146c43;
+  --bs-btn-active-bg: #146c43;
+  --bs-btn-active-border-color: #146c43;
+  --bs-btn-disabled-bg: #198754;
+  --bs-btn-disabled-border-color: #198754;
+  --bs-btn-focus-shadow-rgb: 25, 135, 84;
+}
+
+:global(.btn-outline-primary) {
+  --bs-btn-color: #146c43;
+  --bs-btn-border-color: #198754;
+  --bs-btn-hover-bg: #198754;
+  --bs-btn-hover-border-color: #198754;
+  --bs-btn-active-bg: #146c43;
+  --bs-btn-active-border-color: #146c43;
+  --bs-btn-disabled-color: #146c43;
+  --bs-btn-disabled-border-color: #198754;
+  --bs-btn-focus-shadow-rgb: 25, 135, 84;
+}
+
+/* Dark theme lifts only the outline text; the solid fill keeps #198754 so white
+   label text stays above 4.5:1 on both shells. */
+:global(:root[data-bootui-theme='dark'] .btn-outline-primary) {
+  --bs-btn-color: #34d068;
+  --bs-btn-disabled-color: #34d068;
+}
+
 :global(.progress) {
   border-radius: var(--bootui-radius-pill);
   overflow: hidden;
@@ -1329,6 +1380,12 @@ function onGlobalKeydown(e) {
   transition: width 500ms ease;
 }
 
+/* Every dense table lives in a scroll region. Bootstrap's `.table-responsive`
+   only sets `overflow-x: auto`, which lets an inner table widen its flex/grid
+   parent and chains the scroll to the workspace on touch. Owning those two
+   behaviours here keeps the containment identical on every panel instead of
+   depending on each one remembering the companion class. */
+:global(.table-responsive),
 :global(.bootui-table-scroll) {
   max-width: 100%;
   overscroll-behavior-inline: contain;
@@ -1339,10 +1396,43 @@ function onGlobalKeydown(e) {
   min-width: var(--bootui-table-min-width, 42rem);
 }
 
+/* A card header that carries a section title should be a real heading. Normalise
+   the heading metrics here so using `<h3>` instead of a styled `<div>` costs
+   nothing visually. */
+:global(.card-header > h2),
+:global(.card-header > h3),
+:global(.card-header > h4),
+:global(.card-header > h5),
+:global(.card-header > h6) {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0;
+}
+
+/* Bootstrap ships `code` in its own pink (#d63384), a hue that appears nowhere in
+   the BootUI palette — and `code` is the console's most common element (every bean
+   name, property key, class, and SQL fragment). Inheriting the surrounding colour
+   keeps the mono/sans split doing the work DESIGN.md assigns it, and makes code
+   inside a selected or tinted row adopt that row's foreground instead of staying
+   pink at unreadable contrast. */
+:global(code) {
+  color: inherit;
+}
+
 :global(.bootui-break-anywhere) {
   overflow-wrap: anywhere;
   white-space: normal;
   word-break: break-word;
+}
+
+/* Terminal-style output (log tails, stack traces, container logs). */
+:global(.bootui-code-pane) {
+  background: var(--bootui-code-pane-bg);
+  border: 1px solid var(--bootui-code-pane-border);
+  border-radius: var(--bootui-radius-md);
+  color: var(--bootui-code-pane-text);
+  font-family: var(--bs-font-monospace);
+  overflow: auto;
 }
 
 .bootui-shell {

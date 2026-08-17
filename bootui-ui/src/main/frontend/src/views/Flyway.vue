@@ -9,6 +9,7 @@ import FlashBanner from './components/FlashBanner.vue'
 import PanelHeader from './components/PanelHeader.vue'
 import ReadOnlyNotice from './components/ReadOnlyNotice.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import UnavailableState from './components/UnavailableState.vue'
 
 const props = defineProps(panelProps)
@@ -17,6 +18,7 @@ const {confirm} = useConfirm()
 const report = ref(null)
 const error = ref(null)
 const flywayPresent = ref(true)
+const initialLoading = ref(true)
 const filter = ref('')
 const {message: banner, flash, clear} = useFlashMessage()
 const busy = ref(null)
@@ -32,6 +34,8 @@ async function load() {
     report.value = await res.json()
   } catch (e) {
     error.value = describeLoadError(e, 'Unable to load Flyway migrations')
+  } finally {
+    initialLoading.value = false
   }
 }
 
@@ -121,7 +125,9 @@ onMounted(load)
 
     <FlashBanner :message="banner" @dismiss="clear" />
 
-    <UnavailableState v-if="!flywayPresent" variant="info">
+    <PanelSkeleton v-if="initialLoading" />
+
+    <UnavailableState v-else-if="!flywayPresent" variant="info">
       Flyway is not on the classpath of this application. Add the <code>flyway-core</code> dependency to see schema
       migrations here.
     </UnavailableState>
@@ -149,9 +155,9 @@ onMounted(load)
 
       <div v-for="db in databases" :key="db.name" class="card mb-3">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-          <span>
+          <h3 class="fs-6 fw-semibold mb-0">
             <i class="bi bi-database me-1"></i><code class="bootui-break-anywhere">{{ db.name }}</code>
-          </span>
+          </h3>
           <span class="small d-flex flex-wrap align-items-center gap-1">
             <span class="me-2"
               >Current: <strong>{{ db.currentVersion || '—' }}</strong></span

@@ -397,7 +397,7 @@ const {autoRefresh, loading, load} = useAutoRefresh(fetchTraces)
 .waterfall-track {
   position: relative;
   height: 16px;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--bootui-border);
   border-radius: var(--bootui-radius-xs);
 }
 
@@ -411,7 +411,7 @@ const {autoRefresh, loading, load} = useAutoRefresh(fetchTraces)
 }
 
 .trace-drawer {
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--bootui-border);
 }
 
 code {

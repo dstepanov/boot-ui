@@ -381,11 +381,11 @@ async function loadConditionEvidence() {
           </dl>
 
           <div v-if="focusedBean?.resource" class="bean-details__section">
-            <h4>Recorded resource</h4>
+            <h4 class="fs-6">Recorded resource</h4>
             <code>{{ focusedBean.resource }}</code>
           </div>
           <div v-if="focusedBean?.aliases?.length" class="bean-details__section">
-            <h4>Aliases</h4>
+            <h4 class="fs-6">Aliases</h4>
             <ul class="bean-details__compact-list">
               <li v-for="alias in focusedBean.aliases" :key="alias">
                 <code>{{ alias }}</code>
@@ -395,7 +395,7 @@ async function loadConditionEvidence() {
 
           <div class="bean-details__section">
             <div class="bean-details__section-heading">
-              <h4>Why this bean exists</h4>
+              <h4 class="fs-6">Why this bean exists</h4>
               <span v-if="conditionLoading" class="text-muted small" role="status">Loading…</span>
             </div>
             <div v-if="conditionError" class="alert alert-warning py-2 small mb-2" role="alert">

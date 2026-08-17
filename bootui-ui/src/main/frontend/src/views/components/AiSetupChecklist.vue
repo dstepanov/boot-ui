@@ -121,7 +121,7 @@ const otlpEndpoint = computed(() => getBootUiApiPath() + '/otlp/v1/traces')
   <div v-if="!frameworkDetected">
     <div class="d-flex align-items-center gap-2 mb-2">
       <i class="bi bi-stars text-warning"></i>
-      <h6 class="mb-0">{{ isQuarkus ? 'Set up AI instrumentation' : 'Choose a framework to instrument' }}</h6>
+      <h3 class="fs-6 mb-0">{{ isQuarkus ? 'Set up AI instrumentation' : 'Choose a framework to instrument' }}</h3>
     </div>
     <template v-if="isQuarkus">
       <p class="text-muted small">

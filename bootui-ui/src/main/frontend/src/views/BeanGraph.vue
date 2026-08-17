@@ -471,9 +471,19 @@ function centerFocusedNode() {
 }
 
 /* ── Nodes shared ───────────────────────────────────────────────────────────── */
+/* The SVG focus ring below replaces the UA outline, but only for
+   :focus-visible. Keep the native outline anywhere that selector does not
+   apply so keyboard focus is never silently removed. */
+.bg-node:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.bg-node:focus-visible {
+  outline: none;
+}
+
 .bg-node {
   cursor: pointer;
-  outline: none;
 }
 
 .bg-focus-ring {
@@ -484,12 +494,12 @@ function centerFocusedNode() {
 }
 
 .bg-focus-ring--outer {
-  stroke: #fff;
+  stroke: var(--bootui-surface-solid);
   stroke-width: 6;
 }
 
 .bg-focus-ring--inner {
-  stroke: #000;
+  stroke: var(--bootui-blue);
   stroke-width: 3;
 }
 

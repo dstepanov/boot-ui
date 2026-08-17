@@ -528,7 +528,7 @@ const detectedFrameworkLabel = computed(() => {
           <span class="text-info fs-3"><i class="bi bi-broadcast-pin"></i></span>
           <div>
             <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
-              <h5 class="mb-0">No AI chat completions recorded yet</h5>
+              <h3 class="h5 mb-0">No AI chat completions recorded yet</h3>
               <span class="badge text-bg-info">Telemetry ready</span>
             </div>
             <p class="text-muted mb-0">
@@ -601,7 +601,7 @@ const detectedFrameworkLabel = computed(() => {
         <div v-if="chart" class="card mb-3">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0">Token usage (last {{ series.minutes }} min)</h6>
+              <h3 class="fs-6 mb-0">Token usage (last {{ series.minutes }} min)</h3>
               <select
                 v-model="windowMinutes"
                 aria-label="Token usage time window"
@@ -721,7 +721,7 @@ const detectedFrameworkLabel = computed(() => {
 
         <div class="card mb-3">
           <div class="card-body">
-            <h6>Usage by model</h6>
+            <h3 class="fs-6">Usage by model</h3>
             <div class="table-responsive">
               <table class="table table-sm mb-0">
                 <caption class="visually-hidden">
@@ -816,7 +816,7 @@ const detectedFrameworkLabel = computed(() => {
           </div>
         </div>
 
-        <h5>Recent chats</h5>
+        <h3 class="h5">Recent chats</h3>
 
         <div class="row g-2 mb-2">
           <div class="col-md-4">
@@ -1027,7 +1027,7 @@ const detectedFrameworkLabel = computed(() => {
                           </dl>
 
                           <div v-if="miniTimeline" class="mb-3">
-                            <h6>Span timeline</h6>
+                            <h4 class="fs-6">Span timeline</h4>
                             <svg
                               :viewBox="'0 0 ' + miniTimeline.width + ' ' + miniTimeline.height"
                               class="w-100"
@@ -1048,7 +1048,7 @@ const detectedFrameworkLabel = computed(() => {
                           </div>
 
                           <div v-if="detail.toolCalls && detail.toolCalls.length" class="mb-3">
-                            <h6>Tool calls</h6>
+                            <h4 class="fs-6">Tool calls</h4>
                             <ul class="list-group">
                               <li
                                 v-for="tc in detail.toolCalls"
@@ -1064,7 +1064,7 @@ const detectedFrameworkLabel = computed(() => {
                           </div>
 
                           <div v-if="detail.vectorOperations && detail.vectorOperations.length" class="mb-3">
-                            <h6>Vector operations</h6>
+                            <h4 class="fs-6">Vector operations</h4>
                             <ul class="list-group">
                               <li
                                 v-for="vo in detail.vectorOperations"
@@ -1081,7 +1081,7 @@ const detectedFrameworkLabel = computed(() => {
                           </div>
 
                           <div v-if="detail.events && detail.events.length" class="mb-3">
-                            <h6>Events</h6>
+                            <h4 class="fs-6">Events</h4>
                             <ul class="list-group">
                               <li
                                 v-for="(ev, ei) in detail.events"
@@ -1095,7 +1095,7 @@ const detectedFrameworkLabel = computed(() => {
                           </div>
 
                           <div v-if="groupedAttributes.length">
-                            <h6>Span attributes ({{ detail.attributes.length }})</h6>
+                            <h4 class="fs-6">Span attributes ({{ detail.attributes.length }})</h4>
                             <details v-for="[ns, attrs] in groupedAttributes" :key="ns" class="mb-1">
                               <summary class="text-muted small">{{ ns }} ({{ attrs.length }})</summary>
                               <table class="table table-sm mt-1">

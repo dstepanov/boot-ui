@@ -136,7 +136,7 @@ watch(filter, scheduleMappingsReload)
                   <code>{{ r.pattern }}</code>
                 </td>
                 <td>
-                  <small>{{ r.handler }}</small>
+                  <code class="small">{{ r.handler }}</code>
                 </td>
               </tr>
             </tbody>

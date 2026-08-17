@@ -8,6 +8,7 @@ import {hasScanResult, scanStatusBadgeClass, scanStatusLabel} from '../utils/sca
 import {panelProps, usePanelState} from '../utils/panelState.js'
 import {useConfirm} from '../utils/useConfirm.js'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
 
 const props = defineProps(panelProps)
@@ -17,6 +18,7 @@ const report = ref(null)
 const error = ref(null)
 const actionMessage = ref(null)
 const loading = ref(false)
+const initialLoading = ref(true)
 const installingDockerfile = ref(false)
 const dockerInstallResult = ref(null)
 const installingEntrypoint = ref(false)
@@ -173,6 +175,8 @@ async function loadReport() {
     error.value = null
   } catch (e) {
     error.value = describeLoadError(e, 'Unable to load CRaC readiness report')
+  } finally {
+    initialLoading.value = false
   }
 }
 
@@ -327,6 +331,8 @@ onMounted(loadReport)
     </PanelHeader>
     <div v-if="actionMessage" class="alert alert-warning" role="status" aria-live="polite">{{ actionMessage }}</div>
 
+    <PanelSkeleton v-if="initialLoading" />
+
     <template v-if="report">
       <div v-if="runtime" class="card mb-3">
         <div class="card-header d-flex justify-content-between align-items-center">
@@ -391,7 +397,9 @@ onMounted(loadReport)
       </div>
 
       <div v-if="hasGeneratedFiles" class="card mb-3">
-        <div class="card-header fw-semibold"><i class="bi bi-box-seam me-1"></i>Container assets</div>
+        <div class="card-header">
+          <h3><i class="bi bi-box-seam me-1"></i>Container assets</h3>
+        </div>
         <div class="card-body">
           <p class="small text-muted mb-3">
             Generate a CRaC-enabled container for this application: a multi-stage
@@ -625,7 +633,7 @@ onMounted(loadReport)
       </div>
 
       <div class="card mb-3">
-        <div class="card-header fw-semibold">Concerns by severity</div>
+        <div class="card-header"><h3>Concerns by severity</h3></div>
         <div class="card-body">
           <div v-if="!hasScanData" class="text-center text-muted py-4">
             <i class="bi bi-search fs-2 d-block mb-2"></i>
@@ -733,7 +741,7 @@ onMounted(loadReport)
               <span class="badge text-bg-warning">{{ finding.status }}</span>
               <span :class="severityClass(finding.severity)" class="badge">{{ finding.severity }}</span>
               <span class="badge text-bg-light border">{{ finding.category }}</span>
-              <span class="text-muted small">{{ finding.id }}</span>
+              <span class="text-muted small font-monospace">{{ finding.id }}</span>
             </div>
             <h3 class="h6 mb-1">{{ finding.name }}</h3>
             <div class="small text-muted mb-2">{{ finding.description }}</div>

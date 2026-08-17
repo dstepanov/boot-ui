@@ -7,6 +7,7 @@ import {describeLoadError} from '../utils/loadError.js'
 import {panelProps, usePanelState} from '../utils/panelState.js'
 import {useConfirm} from '../utils/useConfirm.js'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
 
 const props = defineProps(panelProps)
@@ -17,6 +18,7 @@ const report = ref(null)
 const error = ref(null)
 const actionMessage = ref(null)
 const loading = ref(false)
+const initialLoading = ref(true)
 const live = ref(true)
 const filter = ref('')
 const smartFilter = ref('')
@@ -105,6 +107,8 @@ async function loadReport(options = {}) {
     error.value = null
   } catch (e) {
     if (requestId === reportRequestId) error.value = describeLoadError(e, 'Unable to load heap dump report')
+  } finally {
+    initialLoading.value = false
   }
 }
 
@@ -246,6 +250,8 @@ onBeforeUnmount(() => {
       <span v-if="readOnly">Capture and delete are read-only. {{ readOnlyReason }}</span>
     </div>
 
+    <PanelSkeleton v-if="initialLoading" />
+
     <template v-if="report">
       <div v-if="!report.hotspotAvailable" class="alert alert-secondary">
         Heap dumps are not supported on this JVM (the HotSpot diagnostic MXBean is unavailable).
@@ -385,7 +391,7 @@ onBeforeUnmount(() => {
 
         <div class="col-lg-4">
           <div class="card h-100">
-            <div class="card-header fw-semibold">Capture options</div>
+            <div class="card-header"><h3>Capture options</h3></div>
             <div class="card-body">
               <div class="form-check form-switch mb-3">
                 <input id="heapDumpLive" v-model="live" :disabled="readOnly" class="form-check-input" type="checkbox" />
@@ -409,7 +415,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="card">
-        <div class="card-header fw-semibold">Captured dumps</div>
+        <div class="card-header"><h3>Captured dumps</h3></div>
         <div v-if="report.dumps.length === 0" class="card-body text-center text-muted py-5">
           <i class="bi bi-folder2-open fs-2 d-block mb-2"></i>
           <div class="fw-semibold text-body">No heap dumps on disk</div>

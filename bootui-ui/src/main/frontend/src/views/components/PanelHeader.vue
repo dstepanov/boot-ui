@@ -140,7 +140,19 @@ onBeforeUnmount(stopRelativeTimer)
   align-items: center;
   display: flex;
   flex-shrink: 0;
+  flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+/* Below the drawer breakpoint the action cluster can exceed the viewport, so it
+   stops being an unshrinkable row and wraps under the title instead of pushing a
+   horizontal scrollbar onto the workspace. */
+@media (max-width: 575.98px) {
+  .panel-header__actions {
+    flex-shrink: 1;
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 .last-fetched-text {

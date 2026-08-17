@@ -125,16 +125,16 @@ function onRun() {
 
 <style scoped>
 .scanner-card {
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 1.1rem;
-  box-shadow: 0 0.75rem 2rem rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--bootui-border);
+  border-radius: var(--bootui-radius-lg);
+  box-shadow: var(--bootui-shadow-sm);
   transition:
     transform 160ms ease,
     box-shadow 160ms ease;
 }
 
 .scanner-card:hover {
-  box-shadow: 0 1rem 2.4rem rgba(15, 23, 42, 0.12);
+  box-shadow: var(--bootui-shadow-md);
   transform: translateY(-2px);
 }
 
@@ -151,7 +151,7 @@ function onRun() {
 
 .scanner-icon--primary {
   background: rgba(13, 110, 253, 0.12);
-  color: #0d6efd;
+  color: var(--bootui-blue);
 }
 
 .scanner-icon--danger {
@@ -171,11 +171,11 @@ function onRun() {
 
 .scanner-icon--success {
   background: rgba(25, 135, 84, 0.12);
-  color: #198754;
+  color: var(--bootui-green);
 }
 
 .scanner-status {
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   font-weight: 700;
 }
 
@@ -186,7 +186,7 @@ function onRun() {
 }
 
 .scanner-score--success {
-  color: #198754;
+  color: var(--bootui-green);
 }
 
 .scanner-score--warning {
@@ -203,5 +203,17 @@ function onRun() {
 
 .min-w-0 {
   min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanner-card {
+    transition: none;
+  }
+
+  .scanner-card:hover,
+  .scanner-card:focus-visible,
+  .scanner-card:focus-within {
+    transform: none;
+  }
 }
 </style>

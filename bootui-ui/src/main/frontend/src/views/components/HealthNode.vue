@@ -45,11 +45,11 @@ const hasDetails = (node) => detailCount(node) > 0
 </script>
 
 <template>
-  <details :open="depth < 2 || node.status !== 'UP'" class="card mb-2">
-    <summary class="card-header d-flex justify-content-between align-items-center gap-2">
-      <span class="d-flex align-items-center gap-2">
+  <details :open="depth < 2 || node.status !== 'UP'" :class="['health-node', {'health-node--nested': depth > 0}]">
+    <summary class="health-node__summary">
+      <span class="d-flex align-items-center gap-2 flex-wrap">
         <i :class="statusIcon(node.status)" class="bi"></i>
-        <strong>{{ node.name }}</strong>
+        <strong class="health-node__name">{{ node.name }}</strong>
         <span v-if="childCount(node)" class="text-muted small">
           {{ childCount(node) }} {{ childCount(node) === 1 ? 'component' : 'components' }}
         </span>
@@ -60,16 +60,67 @@ const hasDetails = (node) => detailCount(node) > 0
       <span :class="statusClass(node.status)" class="badge">{{ node.status }}</span>
     </summary>
 
-    <div v-if="childCount(node) || hasDetails(node)" class="card-body">
+    <div v-if="childCount(node) || hasDetails(node)" class="health-node__body">
       <section v-if="hasDetails(node)" class="mb-3">
-        <h6 class="text-muted text-uppercase small mb-2">Details</h6>
+        <p class="health-node__section-label">Details</p>
         <HealthDetails :value="node.details" />
       </section>
 
       <section v-if="childCount(node)">
-        <h6 v-if="hasDetails(node)" class="text-muted text-uppercase small mb-2">Components</h6>
+        <p v-if="hasDetails(node)" class="health-node__section-label">Components</p>
         <HealthNode v-for="c in node.components" :key="c.name" :depth="depth + 1" :node="c" />
       </section>
     </div>
   </details>
 </template>
+
+<style scoped>
+/* The tree is recursive, so this disclosure must never be a `.card` — that would
+   nest a card inside a card at every depth. A hairline-bordered disclosure row
+   carries the same separation without the stacked chrome. */
+.health-node {
+  background: var(--bootui-surface);
+  border: 1px solid var(--bootui-border);
+  border-radius: var(--bootui-radius-md);
+  margin-bottom: 0.5rem;
+}
+
+.health-node--nested {
+  background: var(--bootui-surface-alt);
+}
+
+.health-node:last-child {
+  margin-bottom: 0;
+}
+
+.health-node__summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.6rem 0.85rem;
+}
+
+.health-node__summary:focus-visible {
+  outline: 2px solid var(--bootui-blue);
+  outline-offset: -2px;
+}
+
+/* Contributor names come from the health backend, so they read as machine data. */
+.health-node__name {
+  font-family: var(--bs-font-monospace);
+}
+
+.health-node__body {
+  border-top: 1px solid var(--bootui-border);
+  padding: 0.85rem;
+}
+
+.health-node__section-label {
+  color: var(--bootui-text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+</style>

@@ -8,6 +8,7 @@ import {useAutoRefresh} from '../utils/useAutoRefresh.js'
 import {useFlashMessage} from '../utils/useFlashMessage.js'
 import FlashBanner from './components/FlashBanner.vue'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import ReadOnlyNotice from './components/ReadOnlyNotice.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
 import UnavailableState from './components/UnavailableState.vue'
@@ -163,9 +164,7 @@ onUnmounted(clearReconnectTimer)
       </div>
     </div>
 
-    <div v-if="loading && !status" class="card">
-      <div class="card-body text-muted">Loading DevTools status…</div>
-    </div>
+    <PanelSkeleton v-if="loading && !status" />
 
     <div v-else-if="status" class="row g-4">
       <div class="col-lg-6">

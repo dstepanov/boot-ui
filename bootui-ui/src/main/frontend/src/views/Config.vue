@@ -9,6 +9,7 @@ import {useFlashMessage} from '../utils/useFlashMessage.js'
 import FlashBanner from './components/FlashBanner.vue'
 import ServerListFooter from './components/ServerListFooter.vue'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 
 const MAX_PROPERTY_SUGGESTIONS = 200
 const props = defineProps(panelProps)
@@ -41,6 +42,7 @@ const {message: banner, flash, clear} = useFlashMessage(8000)
 const {
   data,
   error,
+  hasLoaded,
   items: visibleProperties,
   load,
   loadMore,
@@ -375,7 +377,9 @@ watch([filter, sourceFilter, showOnlyOverrides], scheduleReload)
       <span v-if="!data?.activeProfiles?.length">(none)</span>
     </p>
 
-    <div class="table-responsive">
+    <PanelSkeleton v-if="loading && !hasLoaded" :rows="8" />
+
+    <div v-else class="table-responsive">
       <table class="table table-sm align-middle">
         <thead class="table-light">
           <tr>
@@ -576,7 +580,9 @@ code.text-body {
   word-break: break-all;
 }
 
+/* The edited row keeps a cool amber tint from the shared token: a warm cream
+   surface is forbidden and would not survive the dark theme. */
 .table-active input {
-  background: #fffbe6;
+  background: var(--bootui-highlight-bg);
 }
 </style>

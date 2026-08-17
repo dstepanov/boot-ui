@@ -4,6 +4,7 @@ import {useAdvisorPanel} from '../utils/useAdvisorPanel.js'
 import {panelProps} from '../utils/panelState.js'
 import AdvisorSummary from './components/AdvisorSummary.vue'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
 
 const props = defineProps(panelProps)
@@ -101,6 +102,8 @@ function diagnosticClass(level) {
       {{ panel.actionMessage }}
     </div>
 
+    <PanelSkeleton v-if="panel.initialLoading" />
+
     <template v-if="panel.report">
       <AdvisorSummary
         :score="panel.score"
@@ -134,7 +137,7 @@ function diagnosticClass(level) {
       <div class="row g-3 mb-3">
         <div class="col-lg-5">
           <div class="card h-100">
-            <div class="card-header fw-semibold">Findings by severity</div>
+            <div class="card-header"><h3>Findings by severity</h3></div>
             <div class="card-body">
               <div v-if="!panel.hasScanData" class="text-center text-muted py-4">
                 <i class="bi bi-search fs-2 d-block mb-2"></i>
@@ -167,7 +170,7 @@ function diagnosticClass(level) {
 
         <div class="col-lg-7">
           <div class="card h-100">
-            <div class="card-header fw-semibold">Datasources</div>
+            <div class="card-header"><h3>Datasources</h3></div>
             <div class="card-body">
               <div v-if="dataSources.length === 0" class="text-muted">No DataSource bean was detected.</div>
               <ul v-else class="list-unstyled mb-0">
@@ -220,7 +223,7 @@ function diagnosticClass(level) {
       <div class="card">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
           <div>
-            <div class="fw-semibold">Rule results</div>
+            <h3 class="fs-6 fw-semibold mb-0">Rule results</h3>
             <div class="text-muted small">
               <template v-if="panel.hasScanData && panel.visibleResults.length > 0">
                 {{ panel.visibleResults.length }} {{ panel.pluralize(panel.visibleResults.length, 'violating rule') }},
@@ -245,8 +248,8 @@ function diagnosticClass(level) {
             <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
               <span :class="panel.statusClass(result.status)" class="badge">{{ result.status }}</span>
               <span :class="panel.severityClass(result.severity)" class="badge">{{ result.severity }}</span>
-              <span class="badge text-bg-light border">{{ result.category }}</span>
-              <span class="text-muted small">{{ result.id }}</span>
+              <span class="badge text-bg-light border font-monospace">{{ result.category }}</span>
+              <span class="text-muted small font-monospace">{{ result.id }}</span>
               <button
                 class="btn btn-sm btn-outline-secondary ms-auto"
                 type="button"
@@ -298,8 +301,8 @@ function diagnosticClass(level) {
               <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                 <span :class="panel.statusClass(result.status)" class="badge">{{ result.status }}</span>
                 <span :class="panel.severityClass(result.severity)" class="badge">{{ result.severity }}</span>
-                <span class="badge text-bg-light border">{{ result.category }}</span>
-                <span class="text-muted small">{{ result.id }}</span>
+                <span class="badge text-bg-light border font-monospace">{{ result.category }}</span>
+                <span class="text-muted small font-monospace">{{ result.id }}</span>
                 <button
                   class="btn btn-sm btn-outline-secondary ms-auto"
                   type="button"

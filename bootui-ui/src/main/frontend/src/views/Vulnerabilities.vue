@@ -7,6 +7,7 @@ import {panelProps, usePanelState} from '../utils/panelState.js'
 import {hasScanResult, scanStatusBadgeClass, scanStatusLabel} from '../utils/scanStatus.js'
 import {useDismissedRules} from '../utils/useDismissedRules.js'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
 import AdvisorSummary from './components/AdvisorSummary.vue'
 
@@ -16,6 +17,7 @@ const data = ref(null)
 const error = ref(null)
 const actionMessage = ref(null)
 const loading = ref(false)
+const initialLoading = ref(true)
 const search = ref('')
 const vulnerableOnly = ref(false)
 
@@ -202,6 +204,8 @@ async function loadDependencies() {
     error.value = null
   } catch (e) {
     error.value = describeLoadError(e, 'Unable to load dependencies')
+  } finally {
+    initialLoading.value = false
   }
 }
 
@@ -266,6 +270,8 @@ onMounted(loadDependencies)
     </PanelHeader>
     <div v-if="actionMessage" class="alert alert-warning" role="status" aria-live="polite">{{ actionMessage }}</div>
 
+    <PanelSkeleton v-if="initialLoading" />
+
     <template v-if="data">
       <div class="alert alert-info">
         <strong>On-demand external scan.</strong>
@@ -287,7 +293,7 @@ onMounted(loadDependencies)
       />
 
       <div class="card mb-3">
-        <div class="card-header fw-semibold">Severity breakdown</div>
+        <div class="card-header"><h3>Severity breakdown</h3></div>
         <div class="card-body">
           <div v-if="!hasScanData" class="text-center text-muted py-4">
             <i class="bi bi-search fs-2 d-block mb-2"></i>
