@@ -177,9 +177,10 @@ onBeforeUnmount(() => disconnect(false))
 </template>
 
 <style scoped>
+/* Terminal output keeps its own dark identity in both themes. */
 .log-pane {
-  background: #111827;
-  color: #f8f9fa;
+  background: var(--bootui-code-pane-bg);
+  color: var(--bootui-code-pane-text);
   font-family: var(--bs-font-monospace);
   font-size: 0.875rem;
   height: 70vh;

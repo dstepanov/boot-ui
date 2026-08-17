@@ -207,7 +207,7 @@ describe('Health', () => {
     expect(wrapper.text()).toContain('livenessState')
     expect(wrapper.text()).toContain('ping')
     expect(wrapper.text()).toContain('readinessState')
-    expect(wrapper.findAll('h6').filter((heading) => heading.text() === 'Details')).toHaveLength(0)
+    expect(wrapper.findAll('.health-node__section-label').filter((label) => label.text() === 'Details')).toHaveLength(0)
     expect(wrapper.text()).not.toContain('0 details')
   })
 

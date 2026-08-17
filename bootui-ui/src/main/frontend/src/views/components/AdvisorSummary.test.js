@@ -1,3 +1,6 @@
+import {readFileSync} from 'node:fs'
+import path from 'node:path'
+import {fileURLToPath} from 'node:url'
 import {mount} from '@vue/test-utils'
 import {describe, expect, it} from 'vitest'
 
@@ -64,5 +67,36 @@ describe('AdvisorSummary', () => {
   it('omits the dismissed note when nothing is dismissed', () => {
     const wrapper = mount(AdvisorSummary, {props: {...baseProps, score: 100, dismissedCount: 0}})
     expect(wrapper.text()).not.toContain('excluded from this score')
+  })
+
+  it('labels the score in sentence case rather than an uppercase tracked eyebrow', () => {
+    const wrapper = mount(AdvisorSummary, {props: {...baseProps, score: 90}})
+    const label = wrapper.find('.advisor-summary__band-label')
+
+    expect(label.exists()).toBe(true)
+    expect(label.text()).toBe('Advisor score')
+    expect(wrapper.find('.advisor-summary__eyebrow').exists()).toBe(false)
+    expect(wrapper.html()).not.toContain('text-uppercase')
+  })
+
+  it('keeps every metric label sentence case in the order the panel supplied', () => {
+    const wrapper = mount(AdvisorSummary, {props: {...baseProps, score: 90}})
+
+    expect(wrapper.findAll('.advisor-summary__metric dt').map((dt) => dt.text())).toEqual([
+      'Scan status',
+      'Rules evaluated',
+      'Advisor findings',
+      'Beans analysed'
+    ])
+  })
+
+  it('renders machine counters in the monospace stack and keeps labels sans', () => {
+    const source = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'AdvisorSummary.vue'), 'utf8')
+    const metricValue = source.slice(source.indexOf('.advisor-summary__metric dd {'))
+    const metricLabel = source.slice(source.indexOf('.advisor-summary__metric dt {'))
+
+    expect(metricValue.slice(0, metricValue.indexOf('}'))).toContain('font-family: var(--bs-font-monospace)')
+    expect(metricLabel.slice(0, metricLabel.indexOf('}'))).not.toContain('text-transform')
+    expect(source).not.toContain('text-transform: uppercase')
   })
 })

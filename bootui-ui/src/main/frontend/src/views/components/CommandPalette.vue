@@ -376,11 +376,11 @@ defineExpose({focusInput})
   font-weight: 600;
 }
 
+/* Per-result metadata, not a group header: the uppercase tracked treatment is
+   reserved for the nav-group headers themselves (.cp-section-label below). */
 .cp-item-group {
   color: var(--bootui-text-muted, #56667b);
   font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .cp-item-num {

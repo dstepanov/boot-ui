@@ -18,10 +18,11 @@ const history = ref([])
 const lastUpdated = ref(null)
 
 const SERIES = [
-  {key: 'active', label: 'Active', color: '#dc3545'},
-  {key: 'idle', label: 'Idle', color: '#198754'},
-  {key: 'total', label: 'Total', color: '#0d6efd'},
-  {key: 'pending', label: 'Pending', color: '#fd7e14'}
+  // Categorical chart series read from the theme tokens so both shells stay legible.
+  {key: 'active', label: 'Active', color: 'var(--bootui-danger)'},
+  {key: 'idle', label: 'Idle', color: 'var(--bootui-chart-calls)'},
+  {key: 'total', label: 'Total', color: 'var(--bootui-chart-input)'},
+  {key: 'pending', label: 'Pending', color: 'var(--bootui-chart-vector)'}
 ]
 
 const pools = computed(() => report.value?.pools ?? [])
@@ -179,7 +180,7 @@ watch(
       <div class="card-body d-flex align-items-start gap-3">
         <span class="text-warning fs-3"><i class="bi bi-info-circle"></i></span>
         <div>
-          <h5 class="mb-1">Database connection pool metrics are unavailable</h5>
+          <h3 class="h5 mb-1">Database connection pool metrics are unavailable</h3>
           <p class="text-muted mb-2">
             BootUI can inspect active, idle, total, and pending connection counts when the application exposes a
             supported JDBC connection pool bean. This application does not currently provide one.
@@ -201,7 +202,7 @@ watch(
       <div v-else class="row g-3">
         <div class="col-lg-4">
           <div class="card h-100">
-            <div class="card-header fw-semibold">Pools</div>
+            <div class="card-header"><h3>Pools</h3></div>
             <div class="list-group list-group-flush pool-list">
               <button
                 v-for="pool in pools"
@@ -345,8 +346,8 @@ watch(
 }
 
 .chart-box {
-  background: linear-gradient(180deg, rgba(13, 110, 253, 0.08), rgba(25, 135, 84, 0.06));
-  border: 1px solid rgba(13, 110, 253, 0.12);
+  background: var(--bootui-surface-alt);
+  border: 1px solid var(--bootui-border);
   border-radius: var(--bootui-radius-lg);
   min-height: 12rem;
   padding: 1rem;

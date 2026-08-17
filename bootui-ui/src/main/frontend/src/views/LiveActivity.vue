@@ -2,6 +2,7 @@
 import {computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {apiFetch} from '../api.js'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import UnavailableState from './components/UnavailableState.vue'
 import FlashBanner from './components/FlashBanner.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
@@ -129,6 +130,7 @@ async function loadActivity() {
 
 const {
   autoRefresh,
+  initialLoading,
   loading,
   load: refreshNow,
   retryConnection,
@@ -657,6 +659,8 @@ function toggleFlow() {
     </div>
 
     <UnavailableState v-if="!manifestAvailable" icon="bi-broadcast" :message="manifestUnavailableReason" />
+
+    <PanelSkeleton v-else-if="initialLoading && !report" :rows="8" />
 
     <template v-else-if="report">
       <UnavailableState
@@ -1375,5 +1379,10 @@ function toggleFlow() {
 
 .activity-spark-error {
   fill: var(--bs-danger, #dc3545);
+}
+@media (prefers-reduced-motion: reduce) {
+  .activity-kpi-link {
+    transition: none;
+  }
 }
 </style>

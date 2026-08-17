@@ -97,7 +97,7 @@ const statusMessage = computed(() => {
         <div class="card-body">
           <div class="health-summary__row">
             <div class="health-summary__status">
-              <div class="health-summary__eyebrow">Overall status</div>
+              <div class="health-summary__status-label">Overall status</div>
               <span
                 :class="{
                   'bg-success': root.status === 'UP',
@@ -137,10 +137,10 @@ const statusMessage = computed(() => {
 
       <div v-if="healthGuidance" class="card border-info mb-3">
         <div class="card-body">
-          <h5 class="card-title d-flex align-items-center gap-2">
+          <h3 class="h5 card-title d-flex align-items-center gap-2">
             <i class="bi bi-info-circle text-info"></i>
             {{ setupTitle }}
-          </h5>
+          </h3>
           <p class="text-muted mb-3">
             {{ setupIntro }}
           </p>
@@ -157,7 +157,7 @@ const statusMessage = computed(() => {
       </div>
 
       <template v-if="!healthUnavailable || hasHealthComponents">
-        <h5 class="mb-2">Component tree</h5>
+        <h3 class="h5 mb-2">Component tree</h3>
         <HealthNode :node="root" />
       </template>
     </template>
@@ -176,12 +176,14 @@ const statusMessage = computed(() => {
   flex-shrink: 0;
 }
 
-.health-summary__eyebrow {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+/* Sentence-case metric labels, not uppercase tracked eyebrows: the
+   Eyebrow-Containment Rule reserves that treatment for sidebar nav groups.
+   Metric values are machine counters, so they render in the mono stack — the
+   same pairing the Hibernate Statistics runtime overview uses. */
+.health-summary__status-label {
   color: var(--bootui-text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
   margin-bottom: 0.4rem;
 }
 
@@ -217,17 +219,17 @@ const statusMessage = computed(() => {
 }
 
 .health-summary__metric dt {
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--bootui-text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
   margin-bottom: 0.3rem;
 }
 
 .health-summary__metric dd {
-  font-size: 1.6rem;
+  font-family: var(--bs-font-monospace);
+  font-size: clamp(1.15rem, 2vw, 2.1rem);
   font-weight: 700;
+  letter-spacing: -0.03em;
   line-height: 1.1;
   color: var(--bootui-text);
   margin: 0 0 0.2rem;

@@ -9,6 +9,7 @@ import FlashBanner from './components/FlashBanner.vue'
 import PanelHeader from './components/PanelHeader.vue'
 import ReadOnlyNotice from './components/ReadOnlyNotice.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import UnavailableState from './components/UnavailableState.vue'
 
 const props = defineProps(panelProps)
@@ -19,6 +20,7 @@ const platform = computed(() => panels.value?.platform ?? 'spring-boot')
 const report = ref(null)
 const error = ref(null)
 const liquibasePresent = ref(true)
+const initialLoading = ref(true)
 const filter = ref('')
 const {message: banner, flash, clear} = useFlashMessage()
 const busy = ref(null)
@@ -34,6 +36,8 @@ async function load() {
     report.value = await res.json()
   } catch (e) {
     error.value = describeLoadError(e, 'Unable to load Liquibase change sets')
+  } finally {
+    initialLoading.value = false
   }
 }
 
@@ -117,7 +121,9 @@ onMounted(load)
 
     <FlashBanner :message="banner" @dismiss="clear" />
 
-    <UnavailableState v-if="!liquibasePresent" variant="info">
+    <PanelSkeleton v-if="initialLoading" />
+
+    <UnavailableState v-else-if="!liquibasePresent" variant="info">
       <template v-if="platform === 'quarkus'">
         Liquibase is not configured on this application. Add the <code>quarkus-liquibase</code> extension and a change
         log to see change sets here.
@@ -156,9 +162,9 @@ onMounted(load)
 
       <div v-for="db in databases" :key="db.name" class="card mb-3">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-          <span>
+          <h3 class="fs-6 fw-semibold mb-0">
             <i class="bi bi-database me-1"></i><code class="bootui-break-anywhere">{{ db.name }}</code>
-          </span>
+          </h3>
           <span class="d-flex flex-wrap align-items-center gap-1">
             <span class="badge bg-success me-1">{{ db.applied }} applied</span>
             <span v-if="db.pending > 0" class="badge bg-warning text-dark">{{ db.pending }} pending</span>

@@ -92,9 +92,13 @@ function directionLabel(direction) {
   return direction === 'PRODUCE' ? 'Produced' : 'Consumed'
 }
 
+function showReadOnlyMessage() {
+  flash(readOnlyReason.value, 'warning')
+}
+
 async function clearAll() {
   if (readOnly.value) {
-    flash(readOnlyReason.value, 'warning')
+    showReadOnlyMessage()
     return
   }
   if (

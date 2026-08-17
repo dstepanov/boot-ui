@@ -378,12 +378,12 @@ onMounted(() => {
                           <div v-if="detailLoading" class="text-muted small">Loading detail…</div>
                           <template v-else-if="detail">
                             <div v-if="detail.group && detail.group.message" class="mb-3">
-                              <div class="text-muted small text-uppercase">Message</div>
+                              <h4 class="fs-6 text-muted fw-semibold mb-0">Message</h4>
                               <div class="exception-message-full">{{ detail.group.message }}</div>
                             </div>
 
                             <div class="mb-3">
-                              <div class="text-muted small text-uppercase mb-1">Stack trace</div>
+                              <h4 class="fs-6 text-muted fw-semibold mb-1">Stack trace</h4>
                               <pre class="stack-pane rounded border p-2 mb-0"><code><span
                                 v-for="(f, i) in detail.frames"
                                 :key="i"
@@ -405,9 +405,9 @@ onMounted(() => {
                             </div>
 
                             <div v-if="detail.occurrences && detail.occurrences.length">
-                              <div class="text-muted small text-uppercase mb-1">
+                              <h4 class="fs-6 text-muted fw-semibold mb-1">
                                 Recent occurrences ({{ detail.occurrences.length }})
-                              </div>
+                              </h4>
                               <div class="table-responsive">
                                 <table class="table table-sm align-middle mb-0">
                                   <thead>
@@ -453,7 +453,7 @@ onMounted(() => {
 
 <style scoped>
 .exception-drawer {
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--bootui-border);
 }
 
 .exception-message {
@@ -465,9 +465,11 @@ onMounted(() => {
   word-break: break-word;
 }
 
+/* Terminal output keeps its own dark identity in both themes; the shared tokens
+   let the surrounding chrome stay theme-aware without re-declaring the palette. */
 .stack-pane {
-  background: #111827;
-  color: #e2e8f0;
+  background: var(--bootui-code-pane-bg);
+  color: var(--bootui-code-pane-text);
   font-family: var(--bs-font-monospace);
   font-size: 0.8rem;
   max-height: 22rem;

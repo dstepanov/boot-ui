@@ -239,9 +239,9 @@ async function clearAll() {
                   </td>
                   <td class="text-truncate small">
                     <template v-if="m.groupId || m.listenerId">
-                      <span v-if="m.groupId">{{ m.groupId }}</span>
+                      <span v-if="m.groupId" class="font-monospace">{{ m.groupId }}</span>
                       <span v-if="m.groupId && m.listenerId"> / </span>
-                      <span v-if="m.listenerId">{{ m.listenerId }}</span>
+                      <span v-if="m.listenerId" class="font-monospace">{{ m.listenerId }}</span>
                     </template>
                     <span v-else class="text-muted">—</span>
                   </td>

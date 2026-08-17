@@ -222,9 +222,9 @@ function showReadOnlyMessage() {
 
       <section class="mb-4">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-          <h5 class="mb-0">
+          <h3 class="h5 mb-0">
             Caches <span class="badge bg-secondary">{{ report.cacheCount }}</span>
-          </h5>
+          </h3>
           <input
             v-model="cacheFilter"
             aria-label="Filter caches"
@@ -256,7 +256,9 @@ function showReadOnlyMessage() {
                   <code>{{ cache.managerName }}</code>
                   <span v-if="cache.managerNoOp" class="badge text-bg-secondary ms-1">No-op</span>
                 </td>
-                <td class="fw-semibold">{{ cache.name }}</td>
+                <td>
+                  <code class="fw-semibold">{{ cache.name }}</code>
+                </td>
                 <td>
                   <code>{{ shortName(cache.nativeType) }}</code>
                   <div class="small text-muted">{{ cache.nativeType || 'No native cache reported' }}</div>
@@ -292,9 +294,9 @@ function showReadOnlyMessage() {
 
       <section v-if="platform !== 'quarkus'">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-          <h5 class="mb-0">
+          <h3 class="h5 mb-0">
             Annotation operations <span class="badge bg-secondary">{{ report.operationCount }}</span>
-          </h5>
+          </h3>
           <input
             v-model="operationFilter"
             aria-label="Filter cache operations"
@@ -376,7 +378,7 @@ function showReadOnlyMessage() {
       </section>
 
       <section v-else>
-        <h5 class="mb-2">Cached operations</h5>
+        <h3 class="h5 mb-2">Cached operations</h3>
         <div class="alert alert-secondary small mb-0">
           Quarkus binds caching with build-time annotations (<code>@CacheResult</code>,
           <code>@CacheInvalidate</code>, <code>@CacheInvalidateAll</code>) woven into your methods at compile time, so

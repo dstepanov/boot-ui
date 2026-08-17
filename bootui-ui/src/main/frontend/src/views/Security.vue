@@ -4,6 +4,7 @@ import {useAdvisorPanel} from '../utils/useAdvisorPanel.js'
 import {panelProps} from '../utils/panelState.js'
 import AdvisorSummary from './components/AdvisorSummary.vue'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
 import UnavailableState from './components/UnavailableState.vue'
 
@@ -12,6 +13,7 @@ const panels = inject('panels', ref(null))
 const isQuarkus = computed(() => panels.value?.platform === 'quarkus')
 const fwName = computed(() => (isQuarkus.value ? 'Quarkus' : 'Spring Security'))
 const policyNoun = computed(() => (isQuarkus.value ? 'Permission policies' : 'Filter chains'))
+const policyMetricLabel = computed(() => (isQuarkus.value ? 'Permission policies' : 'Filter chains analysed'))
 const panel = useAdvisorPanel(props, {
   apiPath: 'api/security',
   loadErrorMessage: 'Unable to load Security Advisor report',
@@ -53,6 +55,8 @@ const panel = useAdvisorPanel(props, {
       :message="panel.manifestUnavailableReason"
     />
 
+    <PanelSkeleton v-else-if="panel.initialLoading" />
+
     <template v-else-if="panel.report">
       <AdvisorSummary
         :score="panel.score"
@@ -63,22 +67,8 @@ const panel = useAdvisorPanel(props, {
         :metrics="[
           {label: 'Rules evaluated', value: panel.report.rulesEvaluated},
           {label: 'Advisor findings', value: panel.report.violationsFound},
-          {label: 'Filter chains analysed', value: panel.report.filterChainsAnalyzed}
+          {label: policyMetricLabel, value: panel.report.filterChainsAnalyzed}
         ]"
-        v-if="!isQuarkus"
-      />
-      <AdvisorSummary
-        :score="panel.score"
-        :dismissed-count="panel.dismissedResults.length"
-        :scan-status-label="panel.scanStatusLabel(panel.report.scan.status)"
-        :scan-status-class="panel.scanStatusBadgeClass(panel.report.scan.status)"
-        :scan-time="panel.scanTime()"
-        :metrics="[
-          {label: 'Rules evaluated', value: panel.report.rulesEvaluated},
-          {label: 'Advisor findings', value: panel.report.violationsFound},
-          {label: 'Permission policies', value: panel.report.filterChainsAnalyzed}
-        ]"
-        v-else
       />
       <div class="alert alert-info">
         <strong>Heuristic {{ fwName }} rules.</strong>
@@ -89,7 +79,7 @@ const panel = useAdvisorPanel(props, {
       <div class="row g-3 mb-3">
         <div class="col-lg-5">
           <div class="card h-100">
-            <div class="card-header fw-semibold">Findings by severity</div>
+            <div class="card-header"><h3>Findings by severity</h3></div>
             <div class="card-body">
               <div v-if="!panel.hasScanData" class="text-center text-muted py-4">
                 <i class="bi bi-search fs-2 d-block mb-2"></i>
@@ -122,7 +112,9 @@ const panel = useAdvisorPanel(props, {
 
         <div class="col-lg-7">
           <div class="card h-100">
-            <div class="card-header fw-semibold">{{ policyNoun }}</div>
+            <div class="card-header">
+              <h3>{{ policyNoun }}</h3>
+            </div>
             <div class="card-body">
               <div v-if="!panel.report.filterChains || panel.report.filterChains.length === 0" class="text-muted">
                 No {{ isQuarkus ? 'HTTP permission policy was' : 'Spring Security filter chain was' }} detected.
@@ -140,7 +132,7 @@ const panel = useAdvisorPanel(props, {
       <div class="card">
         <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
           <div>
-            <div class="fw-semibold">Rule results</div>
+            <h3 class="fs-6 fw-semibold mb-0">Rule results</h3>
             <div class="text-muted small">
               <template v-if="panel.hasScanData && panel.visibleResults.length > 0">
                 {{ panel.visibleResults.length }} {{ panel.pluralize(panel.visibleResults.length, 'violating rule') }},
@@ -165,8 +157,8 @@ const panel = useAdvisorPanel(props, {
             <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
               <span :class="panel.statusClass(result.status)" class="badge">{{ result.status }}</span>
               <span :class="panel.severityClass(result.severity)" class="badge">{{ result.severity }}</span>
-              <span class="badge text-bg-light border">{{ result.category }}</span>
-              <span class="text-muted small">{{ result.id }}</span>
+              <span class="badge text-bg-light border font-monospace">{{ result.category }}</span>
+              <span class="text-muted small font-monospace">{{ result.id }}</span>
               <button
                 class="btn btn-sm btn-outline-secondary ms-auto"
                 type="button"
@@ -217,8 +209,8 @@ const panel = useAdvisorPanel(props, {
             <div v-for="result in panel.report.analysisErrors" :key="result.id" class="list-group-item">
               <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                 <span class="badge text-bg-secondary">{{ result.status }}</span>
-                <span class="badge text-bg-light border">{{ result.category }}</span>
-                <span class="text-muted small">{{ result.id }}</span>
+                <span class="badge text-bg-light border font-monospace">{{ result.category }}</span>
+                <span class="text-muted small font-monospace">{{ result.id }}</span>
               </div>
               <div class="small fw-semibold">{{ result.name }}</div>
               <ul v-if="result.sampleViolations && result.sampleViolations.length" class="small mb-0 mt-1">
@@ -237,8 +229,8 @@ const panel = useAdvisorPanel(props, {
               <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                 <span :class="panel.statusClass(result.status)" class="badge">{{ result.status }}</span>
                 <span :class="panel.severityClass(result.severity)" class="badge">{{ result.severity }}</span>
-                <span class="badge text-bg-light border">{{ result.category }}</span>
-                <span class="text-muted small">{{ result.id }}</span>
+                <span class="badge text-bg-light border font-monospace">{{ result.category }}</span>
+                <span class="text-muted small font-monospace">{{ result.id }}</span>
                 <button
                   class="btn btn-sm btn-outline-secondary ms-auto"
                   type="button"

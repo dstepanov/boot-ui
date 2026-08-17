@@ -7,6 +7,7 @@ import {useServerPagedList} from '../utils/useServerPagedList.js'
 import FlashBanner from './components/FlashBanner.vue'
 import ServerListFooter from './components/ServerListFooter.vue'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import ReadOnlyNotice from './components/ReadOnlyNotice.vue'
 
 const props = defineProps(panelProps)
@@ -17,6 +18,7 @@ const {message, flash, clear} = useFlashMessage(3000)
 const {
   data,
   error,
+  hasLoaded,
   items: visibleLoggers,
   load,
   loadMore,
@@ -72,7 +74,7 @@ watch(filter, scheduleReload)
 
 <template>
   <div>
-    <PanelHeader icon="bi-journal-text" title="Loggers" :error="error" />
+    <PanelHeader icon="bi-journal-text" title="Loggers" :error="error" :loading="loading" @refresh="load" />
     <ReadOnlyNotice v-if="readOnly" :reason="readOnlyReason">Logger levels are read-only.</ReadOnlyNotice>
     <FlashBanner :message="message" @dismiss="clear" />
     <input
@@ -82,7 +84,9 @@ watch(filter, scheduleReload)
       placeholder="Filter loggers by name…"
     />
     <p v-if="data" class="small text-muted">{{ matchedCount }} of {{ totalCount }} loggers matched</p>
-    <div class="table-responsive">
+    <PanelSkeleton v-if="loading && !hasLoaded" :rows="6" />
+
+    <div v-else class="table-responsive">
       <table class="table table-sm table-hover loggers-table">
         <colgroup>
           <col class="loggers-table-name" />

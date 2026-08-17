@@ -3,11 +3,13 @@ import {apiFetch, getJson} from '../api.js'
 import {computed, inject, onMounted, ref} from 'vue'
 import {describeLoadError, formatLoadError} from '../utils/loadError.js'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
 
 const report = ref(null)
 const error = ref(null)
 const springSecurityPresent = ref(true)
+const initialLoading = ref(true)
 const panels = inject('panels', ref(null))
 const isReactive = computed(() => (panels.value?.platform ?? 'spring-boot') === 'spring-boot-reactive')
 
@@ -35,6 +37,8 @@ async function load() {
     }
   } catch (e) {
     error.value = describeLoadError(e, 'Unable to load Spring Security')
+  } finally {
+    initialLoading.value = false
   }
 }
 
@@ -155,7 +159,9 @@ onMounted(() => {
   <div>
     <PanelHeader icon="bi-person-lock" title="Spring Security" :error="error" />
 
-    <div v-if="!springSecurityPresent" class="alert alert-info">
+    <PanelSkeleton v-if="initialLoading" />
+
+    <div v-else-if="!springSecurityPresent" class="alert alert-info">
       <template v-if="isReactive">
         No application <code>SecurityWebFilterChain</code> was detected. Add
         <code>spring-boot-starter-security</code> and configure a reactive security chain to inspect it here.
@@ -174,10 +180,10 @@ onMounted(() => {
       </div>
 
       <!-- Filter chains -->
-      <h5 class="mt-3 mb-2">
+      <h3 class="h5 mt-3 mb-2">
         {{ isReactive ? 'WebFilter chains' : 'Filter chains' }}
         <span class="badge bg-secondary">{{ report.chains.length }}</span>
-      </h5>
+      </h3>
 
       <div v-if="report.chains.length === 0" class="alert alert-secondary">
         No {{ isReactive ? 'WebFilter' : 'filter' }} chains detected. Spring Security may be present but not configured.
@@ -235,7 +241,7 @@ onMounted(() => {
       </div>
 
       <!-- Authentication -->
-      <h5 class="mt-4 mb-2">Authentication</h5>
+      <h3 class="h5 mt-4 mb-2">Authentication</h3>
       <div v-if="report.auth">
         <dl class="row small">
           <template v-if="report.auth.authenticationProviderTypes.length">
@@ -281,7 +287,7 @@ onMounted(() => {
       </div>
 
       <!-- Endpoints -->
-      <h5 class="mt-4 mb-2">
+      <h3 class="h5 mt-4 mb-2">
         Endpoints
         <span v-if="endpoints" class="badge bg-secondary">{{ endpoints.total }}</span>
         <SpinnerButton
@@ -291,7 +297,7 @@ onMounted(() => {
           label="Reload"
           @click="loadEndpoints"
         />
-      </h5>
+      </h3>
       <p class="text-muted small">
         <template v-if="isReactive">
           Annotation-based Spring WebFlux mappings are evaluated against each reactive chain with a sanitized
@@ -370,7 +376,7 @@ onMounted(() => {
       <div v-else class="text-muted small">Loading endpoints…</div>
 
       <!-- Explain tool -->
-      <h5 class="mt-4 mb-2">Explain a request</h5>
+      <h3 class="h5 mt-4 mb-2">Explain a request</h3>
       <p class="text-muted small">
         <template v-if="isReactive">
           Enter a method and path to run each reactive chain's public matcher without reusing data from your current

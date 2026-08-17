@@ -211,7 +211,7 @@ function clearForm() {
         </div>
 
         <div v-if="response.headers && Object.keys(response.headers).length" class="mb-3">
-          <h6>Headers</h6>
+          <h4 class="fs-6">Headers</h4>
           <ul class="list-unstyled small mb-0">
             <li v-for="(value, name) in response.headers" :key="name">
               <code>{{ name }}</code
@@ -221,7 +221,7 @@ function clearForm() {
         </div>
 
         <div>
-          <h6>Body</h6>
+          <h4 class="fs-6">Body</h4>
           <div v-if="response.truncated" class="alert alert-warning mb-2 py-1 small">
             <i class="bi bi-scissors me-1"></i>Response body was truncated at the configured byte limit.
           </div>

@@ -537,7 +537,7 @@ const panelLoading = computed(() => loading.value || meterLoading.value || loadi
       </div>
     </template>
 
-    <div v-else class="text-muted">Loading metrics…</div>
+    <PanelSkeleton v-else :rows="8" />
   </div>
 </template>
 

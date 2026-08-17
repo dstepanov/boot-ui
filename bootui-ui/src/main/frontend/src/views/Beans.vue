@@ -3,6 +3,7 @@ import {defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {apiFetch} from '../api.js'
 import {isAbortError} from '../utils/loadError.js'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import {useServerPagedList} from '../utils/useServerPagedList.js'
 import ServerListFooter from './components/ServerListFooter.vue'
 
@@ -15,6 +16,7 @@ const classification = ref('')
 
 const {
   error,
+  hasLoaded,
   items: visibleBeans,
   load,
   loadMore,
@@ -150,7 +152,9 @@ function showBeanGraph(bean) {
         </div>
       </div>
 
-      <div class="table-responsive">
+      <PanelSkeleton v-if="loading && !hasLoaded" :rows="8" />
+
+      <div v-else class="table-responsive">
         <table class="table table-sm table-hover beans-table">
           <colgroup>
             <col class="beans-table-name" />
@@ -182,16 +186,16 @@ function showBeanGraph(bean) {
                 </button>
               </td>
               <td>
-                <small :title="b.type" class="text-truncate d-block">{{ b.type }}</small>
+                <code :title="b.type" class="small text-truncate d-block">{{ b.type }}</code>
               </td>
               <td>{{ b.scope }}</td>
               <td>
                 <span class="badge bg-light text-dark">{{ b.classification }}</span>
               </td>
               <td>
-                <small :title="b.dependencies.join(', ')" class="text-muted text-truncate d-block">{{
+                <code :title="b.dependencies.join(', ')" class="small text-muted text-truncate d-block">{{
                   b.dependencies.join(', ')
-                }}</small>
+                }}</code>
               </td>
             </tr>
             <tr v-if="!loading && matchedCount === 0">
@@ -312,5 +316,10 @@ function showBeanGraph(bean) {
 
 .beans-table-dependencies {
   width: 20%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .beans-view-switcher__option {
+    transition: none;
+  }
 }
 </style>

@@ -810,7 +810,7 @@ watch(selectedId, async (id) => {
 }
 
 .flow-note {
-  border-left: 3px solid var(--bootui-border-alt);
+  border-left: 1px solid var(--bootui-border-alt);
   padding: 0.15rem 0 0.15rem 0.6rem;
 }
 
@@ -938,9 +938,19 @@ watch(selectedId, async (id) => {
 }
 
 /* ── Nodes ─────────────────────────────────────────────────────────────────── */
+/* The SVG focus ring below replaces the UA outline, but only for
+   :focus-visible. Keep the native outline anywhere that selector does not
+   apply so keyboard focus is never silently removed. */
+.flow-node:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.flow-node:focus-visible {
+  outline: none;
+}
+
 .flow-node {
   cursor: pointer;
-  outline: none;
 }
 
 .flow-node--app {

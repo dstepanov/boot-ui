@@ -43,33 +43,32 @@ const staleMessage = {
           <div class="card h-100">
             <div class="card-header d-flex align-items-center gap-2">
               <i class="bi bi-stack text-success"></i>
-              <strong>Heap Memory</strong>
+              <h3>Heap memory</h3>
             </div>
             <div class="card-body">
               <div class="d-flex justify-content-between mb-1">
                 <span class="text-muted small">Used</span>
-                <span class="fw-semibold">{{ formatBytes(data.heap.usedBytes) }}</span>
+                <span class="fw-semibold font-monospace">{{ formatBytes(data.heap.usedBytes) }}</span>
               </div>
               <ProgressBar
                 :bar-class="memoryProgressClass(data.heap.usedPercent)"
-                class="mb-3"
                 label="Heap memory used"
                 :value="data.heap.usedPercent"
                 :value-text="`${data.heap.usedPercent}% of maximum used`"
-                style="height: 10px"
+                class="live-memory-bar mb-3"
               />
               <div class="row text-center g-2">
                 <div class="col-4">
                   <div class="text-muted small">Used</div>
-                  <div class="fw-semibold">{{ formatBytes(data.heap.usedBytes) }}</div>
+                  <div class="fw-semibold font-monospace">{{ formatBytes(data.heap.usedBytes) }}</div>
                 </div>
                 <div class="col-4">
                   <div class="text-muted small">Committed</div>
-                  <div class="fw-semibold">{{ formatBytes(data.heap.committedBytes) }}</div>
+                  <div class="fw-semibold font-monospace">{{ formatBytes(data.heap.committedBytes) }}</div>
                 </div>
                 <div class="col-4">
                   <div class="text-muted small">Max</div>
-                  <div class="fw-semibold">{{ formatBytes(data.heap.maxBytes) }}</div>
+                  <div class="fw-semibold font-monospace">{{ formatBytes(data.heap.maxBytes) }}</div>
                 </div>
               </div>
             </div>
@@ -81,33 +80,32 @@ const staleMessage = {
           <div class="card h-100">
             <div class="card-header d-flex align-items-center gap-2">
               <i class="bi bi-cpu text-info"></i>
-              <strong>Non-Heap Memory</strong>
+              <h3>Non-heap memory</h3>
             </div>
             <div class="card-body">
               <div class="d-flex justify-content-between mb-1">
                 <span class="text-muted small">Used</span>
-                <span class="fw-semibold">{{ formatBytes(data.nonHeap.usedBytes) }}</span>
+                <span class="fw-semibold font-monospace">{{ formatBytes(data.nonHeap.usedBytes) }}</span>
               </div>
               <ProgressBar
                 bar-class="bg-info"
-                class="mb-3"
                 label="Non-heap memory used"
                 :value="data.nonHeap.usedPercent"
                 :value-text="`${data.nonHeap.usedPercent}% used`"
-                style="height: 10px"
+                class="live-memory-bar mb-3"
               />
               <div class="row text-center g-2">
                 <div class="col-4">
                   <div class="text-muted small">Used</div>
-                  <div class="fw-semibold">{{ formatBytes(data.nonHeap.usedBytes) }}</div>
+                  <div class="fw-semibold font-monospace">{{ formatBytes(data.nonHeap.usedBytes) }}</div>
                 </div>
                 <div class="col-4">
                   <div class="text-muted small">Committed</div>
-                  <div class="fw-semibold">{{ formatBytes(data.nonHeap.committedBytes) }}</div>
+                  <div class="fw-semibold font-monospace">{{ formatBytes(data.nonHeap.committedBytes) }}</div>
                 </div>
                 <div class="col-4">
                   <div class="text-muted small">Max</div>
-                  <div class="fw-semibold">
+                  <div class="fw-semibold font-monospace">
                     {{ data.nonHeap.maxBytes < 0 ? 'Unlimited' : formatBytes(data.nonHeap.maxBytes) }}
                   </div>
                 </div>
@@ -119,7 +117,9 @@ const staleMessage = {
       </div>
 
       <div class="card mb-4">
-        <div class="card-header"><i class="bi bi-table me-2"></i>Memory Pools</div>
+        <div class="card-header">
+          <h3><i class="bi bi-table me-2"></i>Memory pools</h3>
+        </div>
         <div class="table-responsive">
           <table class="table table-sm table-hover mb-0">
             <thead class="table-light">
@@ -128,28 +128,30 @@ const staleMessage = {
                 <th class="text-end">Used</th>
                 <th class="text-end">Committed</th>
                 <th class="text-end">Max</th>
-                <th style="width: 140px">Usage</th>
+                <th class="live-memory-usage-column">Usage</th>
               </tr>
             </thead>
             <tbody>
+              <tr v-if="!data.pools || data.pools.length === 0">
+                <td class="text-muted py-3" colspan="5">The JVM did not report any memory pools for this runtime.</td>
+              </tr>
               <tr v-for="pool in data.pools" :key="pool.name">
                 <td>
                   <code>{{ pool.name }}</code>
                 </td>
-                <td class="text-end">{{ formatBytes(pool.usedBytes) }}</td>
-                <td class="text-end">{{ formatBytes(pool.committedBytes) }}</td>
-                <td class="text-end">{{ pool.maxBytes < 0 ? '∞' : formatBytes(pool.maxBytes) }}</td>
+                <td class="text-end font-monospace">{{ formatBytes(pool.usedBytes) }}</td>
+                <td class="text-end font-monospace">{{ formatBytes(pool.committedBytes) }}</td>
+                <td class="text-end font-monospace">{{ pool.maxBytes < 0 ? '∞' : formatBytes(pool.maxBytes) }}</td>
                 <td>
                   <div class="d-flex align-items-center gap-2">
                     <ProgressBar
                       :bar-class="memoryProgressClass(pool.usedPercent)"
-                      class="flex-grow-1"
+                      class="flex-grow-1 live-memory-bar live-memory-bar--row"
                       :label="`${pool.name} memory pool used`"
                       :value="pool.usedPercent"
                       :value-text="`${pool.usedPercent}% used`"
-                      style="height: 6px"
                     />
-                    <span class="text-muted small" style="width: 32px; text-align: right">{{ pool.usedPercent }}%</span>
+                    <span class="text-muted small live-memory-percent">{{ pool.usedPercent }}%</span>
                   </div>
                 </td>
               </tr>
@@ -165,3 +167,23 @@ const staleMessage = {
     />
   </div>
 </template>
+
+<style scoped>
+.live-memory-usage-column {
+  min-width: 8.75rem;
+}
+
+.live-memory-percent {
+  font-family: var(--bs-font-monospace);
+  min-width: 2.75rem;
+  text-align: right;
+}
+
+.live-memory-bar {
+  height: 0.625rem;
+}
+
+.live-memory-bar--row {
+  height: 0.375rem;
+}
+</style>

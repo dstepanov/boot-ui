@@ -2,6 +2,7 @@
 import {computed, onMounted, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
 import PanelHeader from './components/PanelHeader.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import ServerListFooter from './components/ServerListFooter.vue'
 import {formatNumber} from '../utils/format.js'
 import {useAutoRefresh} from '../utils/useAutoRefresh.js'
@@ -15,6 +16,7 @@ const expanded = ref(new Set())
 const {
   data,
   error,
+  hasLoaded,
   items: exchanges,
   load,
   loadMore,
@@ -192,7 +194,9 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="table-responsive">
+    <PanelSkeleton v-if="loading && !hasLoaded" :rows="8" />
+
+    <div v-else class="table-responsive">
       <table class="table table-sm align-middle http-exchanges-table">
         <thead>
           <tr>
@@ -345,7 +349,7 @@ onMounted(() => {
   border: 1px solid var(--bs-border-color);
   border-radius: 0.5rem;
   padding: 1rem;
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.04);
+  box-shadow: var(--bootui-shadow-sm);
 }
 
 .headers-list {

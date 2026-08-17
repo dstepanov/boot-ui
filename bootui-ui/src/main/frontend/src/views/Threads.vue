@@ -7,6 +7,8 @@ import {useAutoRefresh} from '../utils/useAutoRefresh.js'
 import {useConfirm} from '../utils/useConfirm.js'
 import {useServerPagedList} from '../utils/useServerPagedList.js'
 import PanelHeader from './components/PanelHeader.vue'
+import ReadOnlyNotice from './components/ReadOnlyNotice.vue'
+import PanelSkeleton from './components/PanelSkeleton.vue'
 import ServerListFooter from './components/ServerListFooter.vue'
 
 const props = defineProps(panelProps)
@@ -23,6 +25,7 @@ const downloadError = ref(null)
 const {
   data,
   error,
+  hasLoaded,
   items: threads,
   load: loadThreads,
   loadMore,
@@ -162,9 +165,7 @@ watch([filter, state], scheduleReload)
     </div>
 
     <template v-else>
-      <div v-if="readOnly" class="text-muted small mb-2">
-        <i class="bi bi-lock me-1"></i>Thread-dump download is read-only. {{ readOnlyReason }}
-      </div>
+      <ReadOnlyNotice v-if="readOnly" :reason="readOnlyReason">Thread-dump download is read-only.</ReadOnlyNotice>
       <div v-if="downloadError" class="alert alert-danger py-2" role="alert">{{ downloadError }}</div>
 
       <div v-if="deadlockDetected" class="alert alert-danger" role="alert">
@@ -200,7 +201,9 @@ watch([filter, state], scheduleReload)
         </div>
       </div>
 
-      <div class="table-responsive">
+      <PanelSkeleton v-if="listLoading && !hasLoaded" :rows="8" />
+
+      <div v-else class="table-responsive">
         <table class="table table-sm table-hover threads-table">
           <thead>
             <tr>

@@ -313,9 +313,9 @@ function clearTransactions() {
 
         <section>
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-            <h5 class="mb-0">
+            <h3 class="h5 mb-0">
               Recent transactions <span class="badge bg-secondary">{{ filteredEntries.length }}</span>
-            </h5>
+            </h3>
             <div class="d-flex flex-wrap gap-2">
               <select
                 v-model="statusFilter"
