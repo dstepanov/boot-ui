@@ -217,10 +217,13 @@ test.describe('Live Activity view', () => {
     await expect(map.locator('.flow-node--app')).toBeVisible()
     await expect(map).toContainText('contacts nothing and probes nothing')
 
-    // The configured H2 datasource is drawn as a dependency of this application.
+    // The configured datasource is drawn as a dependency in both the dev (H2) and Docker (PostgreSQL) profiles.
     const database = map.locator('.flow-node--jdbc').first()
     await expect(database).toBeVisible()
-    await expect(database).toHaveAttribute('aria-label', /jdbc:h2:mem:bootui_sample/)
+    await expect(database).toHaveAttribute(
+      'aria-label',
+      /jdbc:(?:h2:mem:bootui_sample|postgresql:\/\/[^/]+\/bootui_sample)/
+    )
 
     // Selecting it opens the evidence detail with a deep link back to the source panel.
     await database.click()
