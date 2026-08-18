@@ -7,7 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.14.0] - 2026-08-16
+## [1.14.0] - 2026-08-18
 
 Feature release headlined by three new database diagnostics — the **Database advisor**, **Transactions**, and
 **Hibernate Statistics** panels — plus Live Activity's animated **Live flow** service map and complete MCP access to
@@ -57,9 +57,14 @@ BootUI's safely exposable features.
 - **Panel documentation is now contract-checked.** Conformance tests keep backend manifests, feature headings, access
   properties, read endpoints, MCP tool lists, screenshot files, and screenshot embeds aligned with authoritative code
   catalogs (#797–#804).
-- **Build and release integrity is stricter.** CI adds focused coverage gates and deterministic OSV checks, while the
-  release workflow validates version transitions and immutable release commits/tags, publishes only the intended Maven
-  Central modules, and preserves resumable post-publication verification (#723, #731, #739, #741, #778).
+- **The complete console now follows one Calm Control Room visual system.** All 54 panel routes, the application shell,
+  and the new Hibernate Statistics surface have clearer hierarchy, responsive headers and tables, consistent loading and
+  empty states, accessible focus and heading treatment, reduced-motion support, and deliberate machine-output styling
+  without changing routes, APIs, availability, or safety boundaries (#812, #813, #816).
+- **Build and release integrity is stricter.** CI adds focused coverage gates and deterministic OSV checks, runs Spring
+  browser suites in parallel with the Java reactor, and removes warning-shaped build noise, while the release workflow
+  validates version transitions and immutable release commits/tags, publishes only the intended Maven Central modules,
+  and preserves resumable post-publication verification (#723, #731, #739, #741, #778, #811, #814).
 
 ### Fixed
 
@@ -84,6 +89,10 @@ BootUI's safely exposable features.
 - **Shared UI state is more resilient.** Data panels avoid stale-request races, platform-aware navigation recovers after
   manifest changes, keyboard behavior and chart contrast are improved, and responsive/reduced-motion layouts no longer
   hide or over-animate controls (#721, #722, #730, #735, #737).
+- **Expanded navigation stays inside the sidebar.** Sections remain in one vertically scrollable column instead of
+  wrapping into off-screen columns when the available height is exhausted (#815).
+- **Non-Linux hosts no longer log an expected cgroup discovery stack trace.** Missing procfs cgroup files are treated as
+  unavailable optional container-memory data (#817).
 - **Dev Services classification is consistent across Spring and Quarkus**, including datasource and messaging service
   type inference (#772).
 
