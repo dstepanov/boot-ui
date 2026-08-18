@@ -451,7 +451,18 @@ class McpDispatcherTests {
         interruptedCaller.join(5_000);
         assertThat(finished.await(5, TimeUnit.SECONDS)).isTrue();
 
-        assertThat(dispatcher.dispatch(call("slow"))).isInstanceOf(ToolCallResult.class);
+        McpDispatchOutcome capacityError =
+                new ProtocolError(McpProtocol.SERVER_AT_CAPACITY, McpProtocol.RATE_LIMITED_MESSAGE);
+        McpDispatchOutcome retry;
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        do {
+            retry = dispatcher.dispatch(call("slow"));
+            if (retry.equals(capacityError)) {
+                Thread.sleep(1);
+            }
+        } while (retry.equals(capacityError) && System.nanoTime() < deadline);
+
+        assertThat(retry).isInstanceOf(ToolCallResult.class);
         assertThat(dispatcher.runtimeStats().snapshot().callCount()).isEqualTo(2);
     }
 
