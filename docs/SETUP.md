@@ -25,7 +25,7 @@ it force-disables itself in `prod` / `production`.
 <dependency>
   <groupId>com.julien-dubois.bootui</groupId>
   <artifactId>bootui-spring-boot-starter</artifactId>
-  <version>1.13.1</version>
+  <version>1.14.0</version>
 </dependency>
 ```
 
@@ -33,12 +33,12 @@ it force-disables itself in `prod` / `production`.
 
 ```groovy
 // Groovy DSL (build.gradle)
-runtimeOnly 'com.julien-dubois.bootui:bootui-spring-boot-starter:1.13.1'
+runtimeOnly 'com.julien-dubois.bootui:bootui-spring-boot-starter:1.14.0'
 ```
 
 ```kotlin
 // Kotlin DSL (build.gradle.kts)
-runtimeOnly("com.julien-dubois.bootui:bootui-spring-boot-starter:1.13.1")
+runtimeOnly("com.julien-dubois.bootui:bootui-spring-boot-starter:1.14.0")
 ```
 
 :::
@@ -137,7 +137,7 @@ Spring Boot profile:
       <dependency>
         <groupId>com.julien-dubois.bootui</groupId>
         <artifactId>bootui-spring-boot-starter</artifactId>
-        <version>1.13.1</version>
+        <version>1.14.0</version>
       </dependency>
     </dependencies>
     <build>
@@ -166,7 +166,7 @@ sets the `dev` Spring Boot profile on `bootRun`:
 // Groovy DSL (build.gradle)
 if (project.hasProperty('dev')) {
     dependencies {
-        runtimeOnly 'com.julien-dubois.bootui:bootui-spring-boot-starter:1.13.1'
+        runtimeOnly 'com.julien-dubois.bootui:bootui-spring-boot-starter:1.14.0'
     }
     tasks.named('bootRun') {
         systemProperty 'spring.profiles.active', 'dev'
@@ -178,7 +178,7 @@ if (project.hasProperty('dev')) {
 // Kotlin DSL (build.gradle.kts)
 if (project.hasProperty("dev")) {
     dependencies {
-        "runtimeOnly"("com.julien-dubois.bootui:bootui-spring-boot-starter:1.13.1")
+        "runtimeOnly"("com.julien-dubois.bootui:bootui-spring-boot-starter:1.14.0")
     }
     tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
         systemProperty("spring.profiles.active", "dev")
@@ -233,7 +233,7 @@ same activation rule applies: BootUI ships dormant and only wakes up in local de
 <dependency>
   <groupId>com.julien-dubois.bootui</groupId>
   <artifactId>bootui-spring-boot-starter-reactive</artifactId>
-  <version>1.13.1</version>
+  <version>1.14.0</version>
 </dependency>
 ```
 
@@ -241,12 +241,12 @@ same activation rule applies: BootUI ships dormant and only wakes up in local de
 
 ```groovy
 // Groovy DSL (build.gradle)
-runtimeOnly 'com.julien-dubois.bootui:bootui-spring-boot-starter-reactive:1.13.1'
+runtimeOnly 'com.julien-dubois.bootui:bootui-spring-boot-starter-reactive:1.14.0'
 ```
 
 ```kotlin
 // Kotlin DSL (build.gradle.kts)
-runtimeOnly("com.julien-dubois.bootui:bootui-spring-boot-starter-reactive:1.13.1")
+runtimeOnly("com.julien-dubois.bootui:bootui-spring-boot-starter-reactive:1.14.0")
 ```
 
 :::
@@ -353,7 +353,7 @@ Add the BootUI Quarkus extension to your build — nothing else is required. Boo
 <dependency>
   <groupId>com.julien-dubois.bootui</groupId>
   <artifactId>bootui-quarkus</artifactId>
-  <version>1.13.1</version>
+  <version>1.14.0</version>
 </dependency>
 ```
 
@@ -361,12 +361,12 @@ Add the BootUI Quarkus extension to your build — nothing else is required. Boo
 
 ```groovy
 // Groovy DSL (build.gradle)
-implementation 'com.julien-dubois.bootui:bootui-quarkus:1.13.1'
+implementation 'com.julien-dubois.bootui:bootui-quarkus:1.14.0'
 ```
 
 ```kotlin
 // Kotlin DSL (build.gradle.kts)
-implementation("com.julien-dubois.bootui:bootui-quarkus:1.13.1")
+implementation("com.julien-dubois.bootui:bootui-quarkus:1.14.0")
 ```
 
 :::
