@@ -61,6 +61,22 @@ require_literal "if: env.RESUME_AFTER_PUBLISH != 'true'" 'deploy skip for public
 require_literal 'gh workflow run pages.yml --ref "$RELEASE_TAG"' 'tag-pinned documentation deployment'
 require_literal '-pl .,bootui-core,bootui-engine,bootui-spring-autoconfigure,bootui-spring-boot-starter,bootui-spring-boot-starter-reactive,bootui-ui,bootui-quarkus-parent,bootui-quarkus,bootui-quarkus-deployment' \
   'publication-only Maven reactor'
+require_literal 'create_spring_smoke_project "$MVC_SMOKE_DIR" "bootui-spring-boot-starter" "8080"' \
+  'standalone Spring MVC consumer smoke project'
+require_literal 'create_spring_smoke_project "$WEBFLUX_SMOKE_DIR" "bootui-spring-boot-starter-reactive" "8081"' \
+  'standalone Spring WebFlux consumer smoke project'
+require_literal '-f "$MVC_SMOKE_DIR/pom.xml"' 'external Spring MVC consumer invocation'
+require_literal '-f "$WEBFLUX_SMOKE_DIR/pom.xml"' 'external Spring WebFlux consumer invocation'
+
+smoke_test_step="$(
+  sed -n '/- name: Smoke test published distributions/,/- name: Redeploy documentation site/p' "$WORKFLOW"
+)"
+readonly smoke_test_step
+for sample_module in bootui-spring-sample-app bootui-spring-webflux-sample-app; do
+  if grep -Fq -- "-pl $sample_module" <<<"$smoke_test_step"; then
+    report_error "published-distribution smoke tests must not run unpublished reactor module '$sample_module'"
+  fi
+done
 
 excluded_artifacts="$(
   sed -n '/<excludeArtifacts>/,/<\/excludeArtifacts>/p' "$ROOT_POM"

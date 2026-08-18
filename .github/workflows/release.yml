@@ -436,6 +436,7 @@ jobs:
           set -euo pipefail
 
           VERSION="$(./mvnw -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
+          SPRING_BOOT_VERSION="$(./mvnw -q -N -DforceStdout help:evaluate -Dexpression=spring-boot.version | tail -n 1)"
           QUARKUS_VERSION="$(./mvnw -q -N -DforceStdout help:evaluate -Dexpression=quarkus.platform.version | tail -n 1)"
           echo "Smoke-testing BootUI ${VERSION} against the published Maven Central artifacts."
           echo "Distributions: Spring MVC (servlet starter), Spring WebFlux (reactive starter), Quarkus extension."
@@ -480,14 +481,71 @@ jobs:
             echo "${label}: BootUI served its index and bundled assets from Maven Central successfully."
           }
 
+          create_spring_smoke_project() {
+            local project_dir="$1" artifact_id="$2" port="$3"
+            mkdir -p "$project_dir/src/main/java/smoke" "$project_dir/src/main/resources"
+            cat > "$project_dir/pom.xml" << SPRING_POM
+          <?xml version="1.0" encoding="UTF-8"?>
+          <project xmlns="http://maven.apache.org/POM/4.0.0">
+            <modelVersion>4.0.0</modelVersion>
+            <parent>
+              <groupId>org.springframework.boot</groupId>
+              <artifactId>spring-boot-starter-parent</artifactId>
+              <version>${SPRING_BOOT_VERSION}</version>
+            </parent>
+            <groupId>smoke</groupId>
+            <artifactId>${artifact_id}-consumer-smoke</artifactId>
+            <version>1</version>
+            <properties>
+              <java.version>17</java.version>
+            </properties>
+            <dependencies>
+              <dependency>
+                <groupId>com.julien-dubois.bootui</groupId>
+                <artifactId>${artifact_id}</artifactId>
+                <version>${VERSION}</version>
+              </dependency>
+            </dependencies>
+            <build>
+              <plugins>
+                <plugin>
+                  <groupId>org.springframework.boot</groupId>
+                  <artifactId>spring-boot-maven-plugin</artifactId>
+                </plugin>
+              </plugins>
+            </build>
+          </project>
+          SPRING_POM
+            cat > "$project_dir/src/main/java/smoke/SmokeApplication.java" <<'SPRING_APPLICATION'
+          package smoke;
+
+          import org.springframework.boot.SpringApplication;
+          import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+          @SpringBootApplication
+          public class SmokeApplication {
+
+              public static void main(String[] args) {
+                  SpringApplication.run(SmokeApplication.class, args);
+              }
+          }
+          SPRING_APPLICATION
+            cat > "$project_dir/src/main/resources/application.properties" << SPRING_PROPERTIES
+          bootui.enabled=ON
+          server.port=${port}
+          SPRING_PROPERTIES
+          }
+
           # ── 1/3: Spring MVC — bootui-spring-boot-starter ─────────────────────────────
           echo "=== Smoke test 1/3: Spring MVC (bootui-spring-boot-starter) ==="
+          MVC_SMOKE_DIR="$(mktemp -d)"
+          create_spring_smoke_project "$MVC_SMOKE_DIR" "bootui-spring-boot-starter" "8080"
           LOG_MVC="$(mktemp)"
-          # No -am (do not rebuild reactor modules); no -o (must resolve from Central).
+          # Standalone project outside the reactor; no -o (must resolve from Central).
           # fork=false keeps the app in the Maven JVM so killing this PID stops it cleanly.
-          ./mvnw -ntp -pl bootui-spring-sample-app -Dmaven.test.skip=true \
+          ./mvnw -ntp -f "$MVC_SMOKE_DIR/pom.xml" -Dmaven.test.skip=true \
             -Dspring-boot.run.fork=false \
-            spring-boot:run -Dspring-boot.run.profiles=dev > "$LOG_MVC" 2>&1 &
+            spring-boot:run > "$LOG_MVC" 2>&1 &
           MVC_PID=$!
           cleanup_mvc() { kill "$MVC_PID" 2>/dev/null || true; wait "$MVC_PID" 2>/dev/null || true; }
           trap cleanup_mvc EXIT
@@ -498,10 +556,12 @@ jobs:
 
           # ── 2/3: Spring WebFlux — bootui-spring-boot-starter-reactive ─────────────────
           echo "=== Smoke test 2/3: Spring WebFlux (bootui-spring-boot-starter-reactive) ==="
+          WEBFLUX_SMOKE_DIR="$(mktemp -d)"
+          create_spring_smoke_project "$WEBFLUX_SMOKE_DIR" "bootui-spring-boot-starter-reactive" "8081"
           LOG_WEBFLUX="$(mktemp)"
-          ./mvnw -ntp -pl bootui-spring-webflux-sample-app -Dmaven.test.skip=true \
+          ./mvnw -ntp -f "$WEBFLUX_SMOKE_DIR/pom.xml" -Dmaven.test.skip=true \
             -Dspring-boot.run.fork=false \
-            spring-boot:run -Dspring-boot.run.profiles=dev > "$LOG_WEBFLUX" 2>&1 &
+            spring-boot:run > "$LOG_WEBFLUX" 2>&1 &
           WEBFLUX_PID=$!
           cleanup_webflux() { kill "$WEBFLUX_PID" 2>/dev/null || true; wait "$WEBFLUX_PID" 2>/dev/null || true; }
           trap cleanup_webflux EXIT
@@ -516,9 +576,9 @@ jobs:
           # artifacts are resolved from Maven Central and the extension augments successfully.
           # No HTTP server is started; a clean Quarkus build-time augmentation is the bar.
           echo "=== Smoke test 3/3: Quarkus extension (bootui-quarkus + bootui-quarkus-deployment) ==="
-          SMOKE_DIR="$(mktemp -d)"
-          mkdir -p "$SMOKE_DIR/src/main/java"
-          cat > "$SMOKE_DIR/pom.xml" << QUARKUS_POM
+          QUARKUS_SMOKE_DIR="$(mktemp -d)"
+          mkdir -p "$QUARKUS_SMOKE_DIR/src/main/java"
+          cat > "$QUARKUS_SMOKE_DIR/pom.xml" << QUARKUS_POM
           <?xml version="1.0" encoding="UTF-8"?>
           <project xmlns="http://maven.apache.org/POM/4.0.0">
             <modelVersion>4.0.0</modelVersion>
@@ -575,7 +635,7 @@ jobs:
           </project>
           QUARKUS_POM
           # No -am (standalone project outside the reactor); no -o (must resolve from Central).
-          ./mvnw -B -ntp -f "$SMOKE_DIR/pom.xml" package -Dmaven.test.skip=true
+          ./mvnw -B -ntp -f "$QUARKUS_SMOKE_DIR/pom.xml" package -Dmaven.test.skip=true
           echo "Quarkus extension smoke test passed."
 
           echo "All BootUI ${VERSION} distribution smoke tests passed (Spring MVC, Spring WebFlux, Quarkus)."
