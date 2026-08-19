@@ -113,6 +113,10 @@ will therefore be additive rather than an extension of the SQL-specific panels.
 | Done     | Live Activity — new event types       | Diagnostics   | Cache, scheduled-task, messaging, mail, and REST capture | No (capture only) | Shipped |
 | Done     | Transactions                          | Database      | Spring `TransactionExecutionListener` capture (Spring-only) | Yes (clear/pause) | Shipped |
 
+Beyond the MongoDB workstream, §3.7 records an unscheduled backlog of candidate panels and panel improvements drawn from
+a survey of the most popular Spring Boot starters. Those candidates are ideas, not commitments: each needs its own scoped
+specification before it enters this table.
+
 The Trace ↔ Log ↔ Request correlation work in §3.1 has shipped as the **Live Activity** panel, building on the
 already-shipped HTTP Exchanges panel and the existing Traces and Log Tail panels. The E-mail Viewer (§3.3) has shipped as
 the **Email** panel (Services group): a `JavaMailSender` `BeanPostProcessor` captures every outgoing message
@@ -590,6 +594,68 @@ Acceptance criteria (met):
 - The panel remains usable by keyboard and screen reader and at desktop and mobile widths.
 - The feature ships inside Live Activity rather than as its own sidebar entry, so the cross-panel synthesis has to earn
   attention next to the feed it complements before it would ever justify a route of its own.
+
+### 3.7 Ecosystem survey backlog — candidates 📋 Not scheduled
+
+These candidates come from a survey of the 50 most-starred Spring Boot starter projects on GitHub. Almost all of them
+are pure integration libraries with no introspection of their own: they wire up rich runtime state that nobody can see.
+The items below are **not scheduled** and rank behind the MongoDB workstream in §3.5; each still needs its own scoped
+specification before it can be picked up. Every one of them must respect the panel rules in §1 and §4 — read-only or
+confirmation-gated, fail-closed when the dependency is absent, masked through the existing exposure policy, and honestly
+reported as unavailable on a stack that cannot support it rather than forked into a stack-specific UI contract.
+
+#### 3.7.1 Candidate new panels
+
+- **A1. Declarative HTTP client registry — Services.** The REST Client panel shows calls that happened; nothing shows
+  which clients are _declared_ and how they resolve. Enumerate `@HttpExchange` interfaces, Feign clients, and
+  `RestClient`/`WebClient` builder beans on Spring plus `@RegisterRestClient` interfaces on Quarkus, with base URL,
+  resolved URL after property interpolation, effective timeout/pool/retry configuration, and inherited-versus-overridden
+  provenance for each value. Cross-link each client to its recent calls in REST Client trace. Read-only, no network on
+  render, available on all three stacks. Highest value-to-effort item in this list.
+- **A2. Resilience — Services.** Rate limiting, retry, and circuit breaking are invisible at runtime except as raw
+  meters. Show live circuit-breaker state (closed/open/half-open), per-method retry and bulkhead configuration, and
+  rate-limit rules with consumed/rejected counts, over Resilience4j on Spring and SmallRye Fault Tolerance on Quarkus.
+  Breaker state transitions are a natural additional Live Activity event type.
+- **A3. GraphQL — Services.** The Mappings panel is HTTP-route-only, so a GraphQL application is near-invisible today.
+  Show the introspected schema, registered queries/mutations/subscriptions, the resolver bean and method behind each
+  field, registered `DataLoader`s, and batch-loading gaps, backed by Spring for GraphQL and Quarkus SmallRye GraphQL.
+  Pair it with an N+1 heuristic sourced from existing SQL Trace evidence rather than a new capture path.
+- **A4. gRPC — Services.** Mirror for gRPC what Mappings does for HTTP: registered services and methods, method types
+  (unary/streaming), listening port, TLS state, interceptors, and per-method call/duration/status-code counts. Most of
+  the data is already published by the common Spring gRPC starters and by Quarkus gRPC.
+- **A5. Spring Batch — Services.** `JobExplorer`/`JobRepository` expose deployed jobs, executions with parameters,
+  per-step read/write/skip/commit counts, exit status, and failure exceptions entirely read-only. BootUI has Scheduled
+  Tasks but nothing for batch. Spring-only; Quarkus reports it honestly unavailable, like Transactions.
+- **A6. WebSocket / messaging endpoints — Services.** Declared endpoints and paths, active session count,
+  subscriptions, and metadata-only recent frame activity (matching the Kafka panel's payload rule), over Spring
+  `@MessageMapping`/STOMP and Quarkus WebSockets Next registries.
+- **Lower priority.** A Pulsar panel as a fourth Messaging panel beside Kafka/RabbitMQ/JMS, reusing the existing
+  `MESSAGING` recorder. An object-storage panel is tempting but would have to stay configuration-only, since listing
+  buckets on render would violate the no-network-on-page-load rule.
+
+#### 3.7.2 Candidate improvements to existing panels
+
+- **B1. Error-contract catalogue — REST API and Exceptions.** The Exceptions panel shows what was thrown; nothing shows
+  the _declared_ mapping. Catalogue every `@ControllerAdvice`/`@ExceptionHandler` and `@Provider ExceptionMapper` with
+  its resolved status and body shape, plus RFC 9457 `ProblemDetail` usage, and add REST API advisor rules for endpoints
+  with no mapped handler, inconsistent error bodies across controllers, and stack traces leaking into responses.
+- **B2. Slow-SQL ranking and URI attribution — SQL Trace.** Reuse the thread/time-window correlation already built for
+  Transactions to attribute statements to the inbound request path, and add a top-N-by-total-time ranking of normalized
+  statements beside the existing N+1 detection. A Database advisor rule for string-concatenated SQL fits the same work.
+- **B3. Copy-as-cURL and bounded body capture — HTTP Exchanges.** A copy-as-cURL action closes the loop with the HTTP
+  Probe panel: capture a request, replay it with a tweak. Opt-in, size-bounded, masked body capture would follow the
+  Email panel's existing dev-trap precedent.
+- **B4. Correlation-id filtering — Live Activity.** Recognize the common correlation headers (`X-Correlation-ID`,
+  `X-Request-ID`, `X-Flow-ID`) explicitly, and add filter-by-id and copy-id actions on top of the existing trace ↔ log ↔
+  request correlation.
+- **B5. Meter provenance and explanation — Metrics.** Group meters by the integration that contributes them, with a
+  short explanation of what each family means. This applies the "explain before you dump" principle to the panel that is
+  still closest to a raw dump.
+- **B7. Cache tiering and hit ratios — Cache.** A multi-level cache looks like a single `CacheManager` from outside.
+  Surface the manager implementation type, tier structure, per-cache hit/miss/eviction statistics where the provider
+  exposes them, and distributed invalidation events as a Live Activity entry.
+- **B9. Session actions — HTTP Sessions.** Add invalidate-session as an explicit, write-policy-gated, clearly labelled
+  action, with the same treatment as the existing Flyway clean and Transactions clear actions.
 
 ## 4. Cross-cutting work for every new panel
 
