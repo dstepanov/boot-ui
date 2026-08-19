@@ -635,6 +635,9 @@ reported as unavailable on a stack that cannot support it rather than forked int
 
 #### 3.7.2 Candidate improvements to existing panels
 
+The identifiers below are the survey's own labels; the gaps in the sequence are deliberate, since a few surveyed ideas
+were reviewed and not carried into this backlog.
+
 - **B1. Error-contract catalogue — REST API and Exceptions.** The Exceptions panel shows what was thrown; nothing shows
   the _declared_ mapping. Catalogue every `@ControllerAdvice`/`@ExceptionHandler` and `@Provider ExceptionMapper` with
   its resolved status and body shape, plus RFC 9457 `ProblemDetail` usage, and add REST API advisor rules for endpoints
