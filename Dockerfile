@@ -56,14 +56,15 @@ FROM eclipse-temurin:25-jdk-noble AS build
 
 WORKDIR /app
 
-# Install curl so the Maven wrapper can download maven-wrapper.jar (this base image
-# ships without curl/wget, and the wrapper jar is not committed to the repository).
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
-    rm -rf /var/lib/apt/lists/*
-
 # Copy the whole multi-module project (see .dockerignore for exclusions).
 COPY . .
+
+# The wrapper jar is intentionally not committed. Fetch and verify it through BuildKit
+# before Maven starts instead of relying on the wrapper's unchecked runtime download.
+ADD --checksum=sha256:4e2fbf6554bc8a4702cdfdd3bef464f423393d784ddbb037216320ce55d5e4e1 \
+    https://repo.maven.apache.org/maven2/org/apache/maven/wrapper/maven-wrapper/3.3.4/maven-wrapper-3.3.4.jar \
+    .mvn/wrapper/maven-wrapper.jar
+
 RUN chmod +x mvnw
 
 # Build the sample app and its reactor dependencies. The Maven local repository

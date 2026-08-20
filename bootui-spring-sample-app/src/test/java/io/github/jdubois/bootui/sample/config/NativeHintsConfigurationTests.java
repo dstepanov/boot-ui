@@ -32,4 +32,12 @@ class NativeHintsConfigurationTests {
         assertThat(RuntimeHintsPredicates.resource().forResource("reference.conf"))
                 .accepts(hints);
     }
+
+    @Test
+    void registersCaffeineGeneratedNodeConstructors() {
+        assertThat(RuntimeHintsPredicates.reflection()
+                        .onType(TypeReference.of("com.github.benmanes.caffeine.cache.PSMS"))
+                        .withMemberCategory(MemberCategory.INVOKE_DECLARED_CONSTRUCTORS))
+                .accepts(hints);
+    }
 }

@@ -38,9 +38,10 @@ import org.springframework.context.annotation.ImportRuntimeHints;
  *   <li><b>Hibernate JCache region factory reflection</b> — Hibernate resolves the configured {@code
  *       jcache} region factory and instantiates {@code JCacheRegionFactory} reflectively through its
  *       public no-arg constructor, which is registered here.
- *   <li><b>Caffeine JCache configuration resources</b> — Typesafe Config loads the sample's {@code
- *       application.conf} and Caffeine's default {@code reference.conf} at runtime, so both resources
- *       are included in the native image.
+ *   <li><b>Caffeine JCache native support</b> — Typesafe Config loads the sample's {@code
+ *       application.conf} and Caffeine's default {@code reference.conf} at runtime. Caffeine then
+ *       loads the generated {@code PSMS} node implementation by name. The resources and the node's
+ *       constructors are included in the native image.
  *   <li><b>Hibernate identifier-array reflection</b> — Hibernate's multi-id entity loader
  *       reflectively instantiates a {@code UUID[]} array for the {@code SampleAuditEntry} {@code
  *       UUID} identifier. GraalVM requires the array type to be registered for reflective
@@ -114,6 +115,15 @@ class NativeHintsConfiguration {
             // not infer that lookup, so the native image otherwise starts without the "caffeine"
             // configuration root and fails while Hibernate creates its JCache regions.
             hints.resources().registerPattern("application.conf").registerPattern("reference.conf");
+
+            // The sample's maximum-size JCache configuration selects Caffeine's generated PSMS
+            // node implementation. NodeFactory loads it by name and invokes its package-private
+            // constructor, which native-image cannot infer from the application configuration.
+            hints.reflection()
+                    .registerTypeIfPresent(
+                            classLoader,
+                            "com.github.benmanes.caffeine.cache.PSMS",
+                            MemberCategory.INVOKE_DECLARED_CONSTRUCTORS);
 
             // Hibernate builds a multi-id entity loader for every entity and, for the
             // SampleAuditEntry UUID identifier, reflectively instantiates a UUID[] array through
