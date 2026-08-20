@@ -290,7 +290,8 @@ test.describe('BootUI on Spring WebFlux', () => {
     await expect(copyButton).toContainText('Copied')
 
     const copied = await page.evaluate(() => navigator.clipboard.readText())
-    await expect(curlAction.locator('.http-exchanges-curl-command')).toHaveText(copied)
+    // textContent, not toHaveText: the rendered command must match the clipboard byte for byte.
+    expect(await curlAction.locator('.http-exchanges-curl-command').textContent()).toBe(copied)
 
     const lines = copied.split(' \\\n')
     expect(lines[0]).toMatch(/^curl --globoff 'http:\/\/[^']+\/api\/greetings\/Ada\?curlProbe=VALUE&curlProbe=VALUE'$/)
@@ -299,6 +300,7 @@ test.describe('BootUI on Spring WebFlux', () => {
     }
     expect(lines).toContain("  -H 'Accept: application/json'")
     expect(copied).not.toContain('alpha')
+    expect(copied).not.toContain('beta')
     expect(copied.toLowerCase()).not.toContain('x-api-key')
     expect(copied).not.toContain('e2e-must-not-be-copied')
   })

@@ -152,8 +152,12 @@ function curlKey(exchange) {
 }
 
 async function copyCurl(exchange) {
-  const {command} = curlFor(exchange)
-  if (!command) return
+  const {command, unavailableReason} = curlFor(exchange)
+  if (!command) {
+    // The control stays focusable, so a click must still say why nothing happened.
+    copyStatus.value = unavailableReason || ''
+    return
+  }
   copyStatus.value = ''
   copyFailureId.value = null
   const copied = await copyToClipboard(command, curlKey(exchange))
@@ -310,6 +314,7 @@ onMounted(() => {
                       v-if="curlFor(exchange).command"
                       aria-label="Generated cURL command"
                       class="small mb-0 mt-2 http-exchanges-curl-command"
+                      role="group"
                       tabindex="0"
                     ><code>{{ curlFor(exchange).command }}</code></pre>
                     <p

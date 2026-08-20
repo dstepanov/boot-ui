@@ -73,7 +73,8 @@ test.describe('HTTP Exchanges view (Quarkus)', () => {
     await expect(page.locator('.http-exchanges-copy-status')).toContainText('cURL template copied')
 
     const copied = await page.evaluate(() => navigator.clipboard.readText())
-    await expect(curlAction.locator('.http-exchanges-curl-command')).toHaveText(copied)
+    // textContent, not toHaveText: the rendered command must match the clipboard byte for byte.
+    expect(await curlAction.locator('.http-exchanges-curl-command').textContent()).toBe(copied)
 
     const lines = copied.split(' \\\n')
     expect(lines[0]).toMatch(

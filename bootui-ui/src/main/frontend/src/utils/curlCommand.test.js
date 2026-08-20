@@ -4,6 +4,7 @@ import {
   buildCurlCommand,
   encodeUrlText,
   placeholderQuery,
+  rawUriPath,
   safeCurlHeaders,
   shellQuote,
   QUERY_VALUE_PLACEHOLDER,
@@ -63,6 +64,23 @@ describe('encodeUrlText', () => {
   })
 })
 
+describe('rawUriPath', () => {
+  it('returns the path exactly as recorded', () => {
+    expect(rawUriPath('http://h/p?x=1#f')).toBe('/p')
+    expect(rawUriPath('http://[::1]:8080/p')).toBe('/p')
+    expect(rawUriPath('http://h/a/%2e%2e/admin')).toBe('/a/%2e%2e/admin')
+    expect(rawUriPath('http://h//a//b')).toBe('//a//b')
+  })
+
+  it('returns nothing when the recorded URI carries no path', () => {
+    expect(rawUriPath('http://h')).toBe('')
+    expect(rawUriPath('http://h?x=1')).toBe('')
+    expect(rawUriPath('http://h#f')).toBe('')
+    expect(rawUriPath('/relative/only')).toBe('')
+    expect(rawUriPath(null)).toBe('')
+  })
+})
+
 describe('placeholderQuery', () => {
   it('returns nothing for missing or empty queries', () => {
     expect(placeholderQuery(null)).toEqual({query: '', count: 0, omitted: 0})
@@ -76,21 +94,19 @@ describe('placeholderQuery', () => {
     )
   })
 
-  it('preserves repeated, empty, valueless and encoded parameters', () => {
-    const {query, count} = placeholderQuery('tag=a&tag=b&empty=&bare&caf%C3%A9=x')
-    expect(query).toBe('tag=VALUE&tag=VALUE&empty=VALUE&bare&caf%C3%A9=VALUE')
-    expect(count).toBe(5)
+  it('preserves repeated, empty and encoded parameters', () => {
+    const {query, count} = placeholderQuery('tag=a&tag=b&empty=&caf%C3%A9=x')
+    expect(query).toBe('tag=VALUE&tag=VALUE&empty=VALUE&caf%C3%A9=VALUE')
+    expect(count).toBe(4)
   })
 
   it('drops malformed segments that carry no parameter name', () => {
     expect(placeholderQuery('&&=orphan&keep=1')).toEqual({query: 'keep=VALUE', count: 1, omitted: 1})
   })
 
-  it('drops a valueless segment that could be a bare token rather than a parameter name', () => {
-    const {query, count, omitted} = placeholderQuery(
-      'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9.c2lnbmF0dXJlLXZhbHVl&ok'
-    )
-    expect(query).toBe('ok')
+  it('never copies a segment without a value, which could be a bare token rather than a name', () => {
+    const {query, count, omitted} = placeholderQuery('debug&ok=1')
+    expect(query).toBe('ok=VALUE')
     expect(count).toBe(1)
     expect(omitted).toBe(1)
   })
@@ -352,8 +368,14 @@ describe('buildCurlCommand', () => {
 
   it('says so when no query parameter is copied, so a hidden query is never mistaken for none', () => {
     expect(buildCurlCommand(exchange({query: null})).notes).toContain(
-      'No query parameter is copied. Parameters hidden by masking or by the value exposure setting never reach the command.'
+      'This exchange has no query parameter in the retained metadata. Parameters hidden by masking or by the value exposure setting never reach the command either.'
     )
+  })
+
+  it('refuses a URI with no authority separator instead of guessing its path', () => {
+    const {command, unavailableReason} = buildCurlCommand(exchange({uri: 'http:/localhost/api/orders'}))
+    expect(command).toBeNull()
+    expect(unavailableReason).toContain('no recorded absolute http(s) request URL')
   })
 
   it('reports omitted query parameters and dropped header values', () => {

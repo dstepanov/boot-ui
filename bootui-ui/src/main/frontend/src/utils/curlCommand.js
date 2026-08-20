@@ -58,9 +58,6 @@ const UNSAFE_URL_CHARACTER = /[^\u0021-\u007e]|["'`<>\\^{}|#]/
 
 const METHOD_PATTERN = /^[A-Za-z]{1,20}$/
 
-/** Conservative shape for a query segment that carries no `=`; anything longer or stranger is dropped. */
-const BARE_QUERY_NAME_PATTERN = /^[A-Za-z0-9_.~-]{1,40}$/
-
 const BODY_CARRYING_METHODS = new Set(['POST', 'PUT', 'PATCH'])
 
 /**
@@ -101,7 +98,9 @@ export function encodeUrlText(text) {
 
 function parseRequestUrl(exchange) {
   const raw = typeof exchange?.uri === 'string' ? exchange.uri.trim() : ''
-  if (!raw) {
+  if (!raw || !raw.includes('://')) {
+    // Without an explicit authority separator the raw path cannot be located, and guessing one would
+    // risk copying a command that targets a different resource than the recorded exchange.
     return null
   }
   let parsed
@@ -162,8 +161,8 @@ export function rawUriPath(rawUri) {
  *
  * The raw string is split rather than parsed through `URLSearchParams` so repeated, empty, encoded
  * and malformed parameters survive exactly as recorded instead of being silently re-encoded. A
- * segment that carries no `=` has no name/value structure to trust, so it is kept only when it looks
- * like a short parameter flag; anything else — including a masked name — is dropped and counted.
+ * segment carrying no `=` has no name/value structure to trust — it can just as easily be a bare
+ * token as a parameter name — so it is never copied, and neither is a masked name.
  *
  * @param {string|null|undefined} rawQuery recorded query string, without the leading `?`
  * @returns {{query: string, count: number, omitted: number}} placeholder query, kept and dropped counts
@@ -180,18 +179,12 @@ export function placeholderQuery(rawQuery) {
       continue
     }
     const equalsIndex = segment.indexOf('=')
-    const rawName = equalsIndex >= 0 ? segment.slice(0, equalsIndex) : segment
+    const rawName = equalsIndex > 0 ? segment.slice(0, equalsIndex) : ''
     if (!rawName || rawName === MASKED_VALUE) {
       omitted++
       continue
     }
-    if (equalsIndex < 0 && !BARE_QUERY_NAME_PATTERN.test(rawName)) {
-      // Without an `=` the whole segment could be a bare token or credential rather than a name.
-      omitted++
-      continue
-    }
-    const name = encodeUrlText(rawName)
-    parameters.push(equalsIndex >= 0 ? `${name}=${QUERY_VALUE_PLACEHOLDER}` : name)
+    parameters.push(`${encodeUrlText(rawName)}=${QUERY_VALUE_PLACEHOLDER}`)
   }
   return {query: parameters.join('&'), count: parameters.length, omitted}
 }
@@ -296,7 +289,7 @@ export function buildCurlCommand(exchange) {
     )
   } else {
     notes.push(
-      'No query parameter is copied. Parameters hidden by masking or by the value exposure setting never reach the command.'
+      'This exchange has no query parameter in the retained metadata. Parameters hidden by masking or by the value exposure setting never reach the command either.'
     )
   }
   if (omittedQuery) {

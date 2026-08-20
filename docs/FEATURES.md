@@ -1845,8 +1845,8 @@ terminal. It is deliberately not a byte-for-byte replay, and the action explains
 - The generated command is shown in full before you copy it, so you can read exactly what will land on your clipboard —
   and still copy it by hand if the browser denies clipboard access.
 - Query-parameter names are preserved — including repeated, empty and encoded ones — but every value becomes a `VALUE`
-  placeholder, so retained values never reach the clipboard. A segment with no `=` is only kept when it looks like a
-  short parameter flag, because an unstructured segment can be a bare token rather than a name.
+  placeholder, so retained values never reach the clipboard. A masked name, or a segment with no `=` at all, is dropped
+  and reported, because an unstructured segment can be a bare token rather than a name.
 - Only a short allowlist of boring request headers is copied (`Accept`, `Accept-Language`, `Cache-Control`,
   `Content-Type` and `User-Agent`), and only while their values are actually exposed and unmasked. Authorization,
   cookies, proxy credentials, API keys, forwarding headers, tracing headers and unknown custom headers are omitted under

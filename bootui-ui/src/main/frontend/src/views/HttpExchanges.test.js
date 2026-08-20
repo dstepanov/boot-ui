@@ -180,6 +180,9 @@ describe('HTTP Exchanges', () => {
   })
 
   it('deactivates the action with a clear, announced reason when the request URL was not recorded', async () => {
+    const writeText = vi.fn().mockResolvedValue()
+    Object.assign(navigator, {clipboard: {writeText}})
+
     const wrapper = await openDetails({
       exchanges: [{...report().exchanges[0], uri: null, query: null}]
     })
@@ -193,5 +196,12 @@ describe('HTTP Exchanges', () => {
     expect(reason.text()).toContain('no recorded absolute http(s) request URL')
     expect(wrapper.find('.http-exchanges-curl-notes').exists()).toBe(false)
     expect(wrapper.find('.http-exchanges-curl-command').exists()).toBe(false)
+
+    // Clicking it copies nothing and announces why rather than failing silently.
+    await copyButton.trigger('click')
+    await flushPromises()
+    expect(writeText).not.toHaveBeenCalled()
+    expect(wrapper.find('.http-exchanges-curl [role="alert"]').exists()).toBe(false)
+    expect(wrapper.find('.http-exchanges-copy-status').text()).toContain('no recorded absolute http(s) request URL')
   })
 })
