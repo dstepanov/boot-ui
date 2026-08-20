@@ -101,10 +101,13 @@ RUN ./mvnw -B -ntp -DskipTests -pl bootui-quarkus-deployment,bootui-quarkus-samp
 ENV QUARKUS_HTTP_HOST=0.0.0.0
 ENV QUARKUS_HTTP_PORT=8082
 
-# Run Docker-free on in-memory H2 instead of the PostgreSQL Dev Service. db-kind is a build-time
-# setting, but dev mode re-augments at startup and reads these environment variables; the explicit URL
-# also disables datasource Dev Services so no container is required. Hibernate ORM builds the schema.
+# Run Docker-free on in-memory H2 instead of the PostgreSQL Dev Service. db-kind and db-version are
+# build-time settings, but dev mode re-augments at startup and reads these environment variables; the
+# explicit URL also disables datasource Dev Services so no container is required. Hibernate ORM builds
+# the schema. Keep the expected version aligned with the Flyway-compatible flyway-verified-h2.version
+# pin in the root POM so Hibernate accepts the deliberately older H2 driver at container startup.
 ENV QUARKUS_DATASOURCE_DB_KIND=h2
+ENV QUARKUS_DATASOURCE_DB_VERSION=2.3.232
 ENV QUARKUS_DATASOURCE_USERNAME=sa
 ENV QUARKUS_DATASOURCE_JDBC_URL="jdbc:h2:mem:bootui;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=false"
 
