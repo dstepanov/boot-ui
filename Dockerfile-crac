@@ -70,7 +70,7 @@ RUN chmod +x mvnw
 # not in the image. (Requires BuildKit, the default in modern Docker.)
 RUN --mount=type=cache,target=/root/.m2 \
     --mount=type=cache,target=/root/.npm \
-    ./mvnw -Pcrac -DskipTests -pl bootui-spring-sample-app -am clean package
+    ./mvnw -B -ntp -Pcrac -DskipTests -pl bootui-spring-sample-app -am clean package
 
 # Runtime stage with a CRaC-enabled JDK (BellSoft Liberica with CRaC support).
 FROM bellsoft/liberica-runtime-container:jdk-21-crac-slim-glibc

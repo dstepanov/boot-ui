@@ -130,7 +130,7 @@ jobs:
             exit 1
           fi
 
-          CURRENT_VERSION="$(./mvnw -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
+          CURRENT_VERSION="$(./mvnw -B -ntp -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
           echo "Preparing release $TAG from $CURRENT_VERSION"
 
           ./mvnw -B -ntp versions:set \
@@ -263,7 +263,7 @@ jobs:
         run: |
          set -euo pipefail
 
-         VERSION="$(./mvnw -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
+         VERSION="$(./mvnw -B -ntp -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
          EXPECTED_TAG="v$VERSION"
 
          if [[ "$VERSION" == *-SNAPSHOT ]]; then
@@ -334,7 +334,7 @@ jobs:
         run: |
          set -euo pipefail
 
-         VERSION="$(./mvnw -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
+         VERSION="$(./mvnw -B -ntp -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
          EXPECTED_TAG="v$VERSION"
 
          if [[ "$(git rev-parse HEAD)" != "$RELEASE_SHA" ]]; then
@@ -393,7 +393,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          VERSION="$(./mvnw -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
+          VERSION="$(./mvnw -B -ntp -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
           BASE="https://repo1.maven.org/maven2/com/julien-dubois/bootui"
 
           # Every published artifact: the parent POM and one JAR per published module.
@@ -435,9 +435,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          VERSION="$(./mvnw -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
-          SPRING_BOOT_VERSION="$(./mvnw -q -N -DforceStdout help:evaluate -Dexpression=spring-boot.version | tail -n 1)"
-          QUARKUS_VERSION="$(./mvnw -q -N -DforceStdout help:evaluate -Dexpression=quarkus.platform.version | tail -n 1)"
+          VERSION="$(./mvnw -B -ntp -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
+          SPRING_BOOT_VERSION="$(./mvnw -B -ntp -q -N -DforceStdout help:evaluate -Dexpression=spring-boot.version | tail -n 1)"
+          QUARKUS_VERSION="$(./mvnw -B -ntp -q -N -DforceStdout help:evaluate -Dexpression=quarkus.platform.version | tail -n 1)"
           echo "Smoke-testing BootUI ${VERSION} against the published Maven Central artifacts."
           echo "Distributions: Spring MVC (servlet starter), Spring WebFlux (reactive starter), Quarkus extension."
 
@@ -543,7 +543,7 @@ jobs:
           LOG_MVC="$(mktemp)"
           # Standalone project outside the reactor; no -o (must resolve from Central).
           # fork=false keeps the app in the Maven JVM so killing this PID stops it cleanly.
-          ./mvnw -ntp -f "$MVC_SMOKE_DIR/pom.xml" -Dmaven.test.skip=true \
+          ./mvnw -B -ntp -f "$MVC_SMOKE_DIR/pom.xml" -Dmaven.test.skip=true \
             -Dspring-boot.run.fork=false \
             spring-boot:run > "$LOG_MVC" 2>&1 &
           MVC_PID=$!
@@ -559,7 +559,7 @@ jobs:
           WEBFLUX_SMOKE_DIR="$(mktemp -d)"
           create_spring_smoke_project "$WEBFLUX_SMOKE_DIR" "bootui-spring-boot-starter-reactive" "8081"
           LOG_WEBFLUX="$(mktemp)"
-          ./mvnw -ntp -f "$WEBFLUX_SMOKE_DIR/pom.xml" -Dmaven.test.skip=true \
+          ./mvnw -B -ntp -f "$WEBFLUX_SMOKE_DIR/pom.xml" -Dmaven.test.skip=true \
             -Dspring-boot.run.fork=false \
             spring-boot:run > "$LOG_WEBFLUX" 2>&1 &
           WEBFLUX_PID=$!
