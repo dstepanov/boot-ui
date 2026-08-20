@@ -52,7 +52,6 @@ import io.github.jdubois.bootui.engine.graalvm.fixtures.SpelUser;
 import io.github.jdubois.bootui.engine.graalvm.fixtures.StandardMBeanSubclass;
 import io.github.jdubois.bootui.engine.graalvm.fixtures.SupplierBeanDefiner;
 import io.github.jdubois.bootui.engine.graalvm.fixtures.UnrelatedSupplierHolder;
-import io.github.jdubois.bootui.engine.graalvm.fixtures.UnsafeAllocator;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -152,8 +151,9 @@ class GraalVmChecksTests {
     }
 
     @Test
-    void unsafeAllocateInstanceCheckDetectsAllocateInstanceCall() {
-        GraalVmFindingDto finding = evaluate(new UnsafeAllocateInstanceCheck(), UnsafeAllocator.class);
+    void unsafeAllocateInstanceCheckDetectsAllocateInstanceCall(@TempDir Path directory) throws IOException {
+        JavaClasses classes = unsafeAllocateInstanceClasses(directory);
+        GraalVmFindingDto finding = evaluate(new UnsafeAllocateInstanceCheck(), classes);
         assertThat(finding.id()).isEqualTo("GRAAL-REFLECT-005");
         assertThat(finding.status()).isEqualTo("REVIEW");
         assertThat(evaluate(new UnsafeAllocateInstanceCheck(), CleanComponent.class)
@@ -162,8 +162,9 @@ class GraalVmChecksTests {
     }
 
     @Test
-    void nativeAccessCheckDoesNotFlagSupportedUnsafeMemoryOrAllocationApis() {
-        assertThat(evaluate(new NativeAccessCheck(), UnsafeAllocator.class).status())
+    void nativeAccessCheckDoesNotFlagSupportedUnsafeMemoryOrAllocationApis(@TempDir Path directory) throws IOException {
+        assertThat(evaluate(new NativeAccessCheck(), unsafeAllocateInstanceClasses(directory))
+                        .status())
                 .isEqualTo("OK");
     }
 
@@ -550,6 +551,34 @@ class GraalVmChecksTests {
     private static void writeSyntheticCallFixture(
             Path classFile, String className, String ownerName, String methodName, boolean interfaceCall)
             throws IOException {
+        writeSyntheticCallFixture(classFile, className, ownerName, methodName, "()V", 0, false, interfaceCall);
+    }
+
+    private static JavaClasses unsafeAllocateInstanceClasses(Path directory) throws IOException {
+        Path classFile = directory.resolve("synthetic/UnsafeAllocator.class");
+        Files.createDirectories(classFile.getParent());
+        writeSyntheticCallFixture(
+                classFile,
+                "synthetic/UnsafeAllocator",
+                "sun/misc/Unsafe",
+                "allocateInstance",
+                "(Ljava/lang/Class;)Ljava/lang/Object;",
+                1,
+                true,
+                false);
+        return new ClassFileImporter().importPath(directory);
+    }
+
+    private static void writeSyntheticCallFixture(
+            Path classFile,
+            String className,
+            String ownerName,
+            String methodName,
+            String descriptor,
+            int argumentCount,
+            boolean returnsValue,
+            boolean interfaceCall)
+            throws IOException {
         try (DataOutputStream out = new DataOutputStream(Files.newOutputStream(classFile))) {
             out.writeInt(0xCAFEBABE);
             out.writeShort(0);
@@ -568,7 +597,7 @@ class GraalVmChecksTests {
             out.writeByte(7);
             out.writeShort(8);
             writeUtf8(out, methodName);
-            writeUtf8(out, "()V");
+            writeUtf8(out, descriptor);
             out.writeByte(12);
             out.writeShort(10);
             out.writeShort(11);
@@ -586,17 +615,23 @@ class GraalVmChecksTests {
             out.writeShort(6);
             out.writeShort(1);
             out.writeShort(7);
-            int codeLength = interfaceCall ? 7 : 5;
+            int codeLength = 1 + argumentCount + (interfaceCall ? 5 : 3) + (returnsValue ? 1 : 0) + 1;
             out.writeInt(12 + codeLength);
-            out.writeShort(1);
+            out.writeShort(1 + argumentCount);
             out.writeShort(0);
             out.writeInt(codeLength);
             out.writeByte(0x01);
+            for (int i = 0; i < argumentCount; i++) {
+                out.writeByte(0x01);
+            }
             out.writeByte(interfaceCall ? 0xb9 : 0xb6);
             out.writeShort(13);
             if (interfaceCall) {
-                out.writeByte(1);
+                out.writeByte(1 + argumentCount);
                 out.writeByte(0);
+            }
+            if (returnsValue) {
+                out.writeByte(0x57);
             }
             out.writeByte(0xb1);
             out.writeShort(0);
