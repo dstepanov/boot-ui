@@ -61,7 +61,7 @@ test.describe('Metrics view', () => {
     await expect(provenanceCard).toBeVisible()
     await expect(provenanceCard.getByText(/Catalogue \d/)).toBeVisible()
 
-    const jvmChip = provenanceCard.getByRole('button', {name: /^JVM /})
+    const jvmChip = provenanceCard.getByRole('button', {name: /^JVM, \d+ meters$/})
     await expect(jvmChip).toBeVisible()
     await expect(jvmChip).toHaveAttribute('aria-pressed', 'false')
 
