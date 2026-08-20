@@ -15,8 +15,8 @@ and strengthens release verification against the artifacts consumers actually do
 ### Fixed
 
 - **Spring native images can start with the sample application's Hibernate second-level JCache configuration.**
-  Runtime hints now retain both the reflectively created `JCacheRegionFactory` constructor and Caffeine's
-  `application.conf` cache configuration (#832).
+  Runtime hints now retain the reflectively created `JCacheRegionFactory` constructor together with Caffeine's
+  `application.conf` and default `reference.conf` cache configuration resources (#832, #835).
 - **Docker image publishing works across the supported sample configurations.** Native AMD64 builds fetch and verify the
   pinned Maven Wrapper JAR before invoking the wrapper, Quarkus Docker startup accepts the intentionally pinned
   Flyway-compatible H2 driver, and the Spring Docker-profile Live Activity check recognizes its PostgreSQL datasource
