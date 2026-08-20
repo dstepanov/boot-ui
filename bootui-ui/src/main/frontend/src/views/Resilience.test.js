@@ -161,6 +161,21 @@ describe('Resilience', () => {
     expect(wrapper.text()).toContain('paymentGateway')
   })
 
+  it('still shows captured events when no policy is declared', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(jsonResponse(report({policies: [], totalPolicies: 0, policyCountsByType: {}}))))
+    )
+
+    wrapper = mount(Resilience)
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('No resilience policies declared yet.')
+    expect(text).toContain('inventoryRetry')
+    expect(wrapper.find('.resilience-event-table').exists()).toBe(true)
+  })
+
   it('surfaces backend warnings without hiding the rest of the report', async () => {
     vi.stubGlobal(
       'fetch',

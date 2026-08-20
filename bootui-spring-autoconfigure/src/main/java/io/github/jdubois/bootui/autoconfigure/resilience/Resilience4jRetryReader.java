@@ -56,7 +56,7 @@ final class Resilience4jRetryReader implements Resilience4jRegistryReader {
         Retry.Metrics metrics = retry.getMetrics();
 
         ResilienceSettings settings = new ResilienceSettings()
-                .add("maxAttempts", config.getMaxAttempts(), 3)
+                .add("maxAttempts", config.getMaxAttempts(), RetryConfig.DEFAULT_MAX_ATTEMPTS)
                 .addUnknownProvenance("firstRetryDelay", firstRetryDelay(config))
                 .add("failAfterMaxAttempts", config.isFailAfterMaxAttempts(), Boolean.FALSE);
 
@@ -102,10 +102,11 @@ final class Resilience4jRetryReader implements Resilience4jRegistryReader {
         if (registry == null) {
             return;
         }
-        registry.getEventPublisher().onEntryAdded(event -> subscribe(event.getAddedEntry(), recorder));
-        for (Retry retry : registry.getAllRetries()) {
-            subscribe(retry, recorder);
-        }
+        Resilience4jRegistryReader.registerRegistryCapture(
+                registry.getEventPublisher(),
+                registry.getAllRetries(),
+                entry -> subscribe(entry, recorder),
+                entry -> forget(entry));
     }
 
     private void subscribe(Retry retry, ResilienceEventRecorder recorder) {
@@ -133,5 +134,15 @@ final class Resilience4jRetryReader implements Resilience4jRegistryReader {
                         event.getNumberOfRetryAttempts(),
                         null,
                         ResilienceVocabulary.failureCategory(event.getLastThrowable())));
+    }
+
+    /**
+     * Drops the name guard for an entry the registry no longer holds, so a later entry registered
+     * under the same name is subscribed again instead of being mistaken for one already captured.
+     */
+    private void forget(Retry retry) {
+        if (retry != null) {
+            capturing.remove(retry.getName());
+        }
     }
 }

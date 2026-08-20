@@ -866,14 +866,27 @@ public class BootUiEngineConfiguration {
         /**
          * Gated on the Resilience panel itself: disabling the panel should stop the underlying capture
          * entirely rather than merely hide it, and the same buffer also feeds Live Activity.
+         *
+         * <p>Also gated on a supported library actually being present, using the same class-presence signal
+         * the panel catalog reports availability with. Without that gate an application with no resilience
+         * library at all would still advertise {@code Resilience} as a feeding Live Activity source, which
+         * is exactly the kind of claim BootUI must not make.</p>
          */
         @Bean
         @Lazy
         @ConditionalOnMissingBean
-        ResilienceEventRecorder bootUiResilienceEventRecorder(BootUiProperties properties) {
+        ResilienceEventRecorder bootUiResilienceEventRecorder(
+                BootUiProperties properties, ConfigurableListableBeanFactory beanFactory) {
             BootUiProperties.Resilience resilience = properties.getResilience();
-            boolean enabled = resilience.isEnabled() && properties.isPanelEnabled(BootUiPanels.RESILIENCE);
+            boolean enabled = resilience.isEnabled()
+                    && properties.isPanelEnabled(BootUiPanels.RESILIENCE)
+                    && resilienceLibraryPresent(beanFactory.getBeanClassLoader());
             return new ResilienceEventRecorder(enabled, resilience.getMaxEvents());
+        }
+
+        private static boolean resilienceLibraryPresent(ClassLoader classLoader) {
+            return ClassUtils.isPresent("io.github.resilience4j.core.Registry", classLoader)
+                    || ClassUtils.isPresent("org.springframework.retry.annotation.Retryable", classLoader);
         }
 
         /**
@@ -891,23 +904,36 @@ public class BootUiEngineConfiguration {
             return new Resilience4jPolicyProvider(beanFactory, recorder);
         }
 
-        @Bean
-        @Lazy
-        @ConditionalOnMissingBean
-        @ConditionalOnClass(name = "org.springframework.retry.annotation.Retryable")
-        SpringRetryPolicyProvider bootUiSpringRetryPolicyProvider(ConfigurableListableBeanFactory beanFactory) {
-            return new SpringRetryPolicyProvider(beanFactory);
-        }
-
         /**
-         * Spring Retry collects every {@code RetryListener} bean, so publishing one is enough to observe
-         * retries additively. It is not {@code @ConditionalOnMissingBean}: an application that declares its
-         * own listener must keep both.
+         * The Spring Retry bindings live in their own class-level {@code @ConditionalOnClass} configuration
+         * rather than behind method-level guards on the enclosing class, because
+         * {@link BootUiRetryListener} <em>implements</em> {@code RetryListener}: merely introspecting the
+         * declared methods of a class that returns it - which Spring does for every other condition
+         * evaluated on the same class - would load that type and fail with {@code NoClassDefFoundError} in
+         * a Spring-Retry-free application. A class-level guard is evaluated from ASM metadata, so the
+         * member class is never loaded when Spring Retry is absent.
          */
-        @Bean
-        @ConditionalOnClass(name = "org.springframework.retry.RetryListener")
-        BootUiRetryListener bootUiRetryListener(ResilienceEventRecorder recorder) {
-            return new BootUiRetryListener(recorder);
+        @Configuration(proxyBeanMethods = false)
+        @ConditionalOnClass(
+                name = {"org.springframework.retry.annotation.Retryable", "org.springframework.retry.RetryListener"})
+        static class SpringRetryResilienceConfiguration {
+
+            @Bean
+            @Lazy
+            @ConditionalOnMissingBean
+            SpringRetryPolicyProvider bootUiSpringRetryPolicyProvider(ConfigurableListableBeanFactory beanFactory) {
+                return new SpringRetryPolicyProvider(beanFactory);
+            }
+
+            /**
+             * Spring Retry collects every {@code RetryListener} bean, so publishing one is enough to observe
+             * retries additively. It is not {@code @ConditionalOnMissingBean}: an application that declares
+             * its own listener must keep both.
+             */
+            @Bean
+            BootUiRetryListener bootUiRetryListener(ResilienceEventRecorder recorder) {
+                return new BootUiRetryListener(recorder);
+            }
         }
 
         @Bean

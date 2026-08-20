@@ -77,10 +77,11 @@ final class Resilience4jThreadPoolBulkheadReader implements Resilience4jRegistry
         if (registry == null) {
             return;
         }
-        registry.getEventPublisher().onEntryAdded(event -> subscribe(event.getAddedEntry(), recorder));
-        for (ThreadPoolBulkhead bulkhead : registry.getAllBulkheads()) {
-            subscribe(bulkhead, recorder);
-        }
+        Resilience4jRegistryReader.registerRegistryCapture(
+                registry.getEventPublisher(),
+                registry.getAllBulkheads(),
+                entry -> subscribe(entry, recorder),
+                entry -> forget(entry));
     }
 
     /** Only rejections are captured, for the same buffer-pressure reason as the semaphore bulkhead. */
@@ -98,5 +99,15 @@ final class Resilience4jThreadPoolBulkheadReader implements Resilience4jRegistry
                         null,
                         null,
                         null));
+    }
+
+    /**
+     * Drops the name guard for an entry the registry no longer holds, so a later entry registered
+     * under the same name is subscribed again instead of being mistaken for one already captured.
+     */
+    private void forget(ThreadPoolBulkhead bulkhead) {
+        if (bulkhead != null) {
+            capturing.remove(bulkhead.getName());
+        }
     }
 }

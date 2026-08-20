@@ -350,6 +350,7 @@
                             <excludeArtifact>bootui-quarkus-otel-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-prod-shell-guard-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-rabbit-integration-tests</excludeArtifact>
+                            <excludeArtifact>bootui-quarkus-resilience-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-rest-client-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-scheduler-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-security-integration-tests</excludeArtifact>

@@ -80,10 +80,11 @@ final class Resilience4jRateLimiterReader implements Resilience4jRegistryReader 
         if (registry == null) {
             return;
         }
-        registry.getEventPublisher().onEntryAdded(event -> subscribe(event.getAddedEntry(), recorder));
-        for (RateLimiter limiter : registry.getAllRateLimiters()) {
-            subscribe(limiter, recorder);
-        }
+        Resilience4jRegistryReader.registerRegistryCapture(
+                registry.getEventPublisher(),
+                registry.getAllRateLimiters(),
+                entry -> subscribe(entry, recorder),
+                entry -> forget(entry));
     }
 
     /**
@@ -104,5 +105,15 @@ final class Resilience4jRateLimiterReader implements Resilience4jRegistryReader 
                         null,
                         null,
                         null));
+    }
+
+    /**
+     * Drops the name guard for an entry the registry no longer holds, so a later entry registered
+     * under the same name is subscribed again instead of being mistaken for one already captured.
+     */
+    private void forget(RateLimiter limiter) {
+        if (limiter != null) {
+            capturing.remove(limiter.getName());
+        }
     }
 }

@@ -77,6 +77,10 @@ public class QuarkusResiliencePolicyProvider implements ResiliencePolicyProvider
 
     private ResiliencePolicyDto toDto(RawResiliencePolicy raw, QuarkusCircuitBreakerStates states) {
         List<ResiliencePolicySettingDto> settings = new ArrayList<>();
+        if (!policyEnabled(raw)) {
+            settings.add(
+                    new ResiliencePolicySettingDto("enabled", "false", ResilienceVocabulary.PROVENANCE_CONFIGURED));
+        }
         for (RawResilienceSetting setting : raw.settings()) {
             settings.add(resolve(raw, setting));
         }
@@ -123,6 +127,54 @@ public class QuarkusResiliencePolicyProvider implements ResiliencePolicyProvider
             // A malformed or expression-valued override must never break the panel.
             return null;
         }
+    }
+
+    /**
+     * Whether MicroProfile Fault Tolerance configuration leaves this policy in effect.
+     *
+     * <p>The specification lets a deployment switch policies off without touching the code, through
+     * {@code <class>/<method>/<annotation>/enabled}, {@code <class>/<annotation>/enabled},
+     * {@code <annotation>/enabled} — consulted most specific first — and the global
+     * {@code MP_Fault_Tolerance_NonFallback_Enabled} switch, which an annotation-specific key overrides and
+     * which never disables {@code @Fallback}. A panel that rendered a switched-off policy as if it still
+     * guarded the method would be answering the one question it exists to answer incorrectly, so a disabled
+     * policy carries an explicit {@code enabled: false} row.</p>
+     */
+    private boolean policyEnabled(RawResiliencePolicy raw) {
+        String suffix = "/" + raw.annotationName() + "/enabled";
+        Boolean value = null;
+        if (!raw.methodName().isBlank()) {
+            value = configuredBoolean(raw.className() + "/" + raw.methodName() + suffix);
+        }
+        if (value == null) {
+            value = configuredBoolean(raw.className() + suffix);
+        }
+        if (value == null) {
+            value = configuredBoolean(raw.annotationName() + "/enabled");
+        }
+        if (value != null) {
+            return value;
+        }
+        if ("Fallback".equals(raw.annotationName())) {
+            return true;
+        }
+        Boolean nonFallback = configuredBoolean("MP_Fault_Tolerance_NonFallback_Enabled");
+        return nonFallback == null || nonFallback;
+    }
+
+    private Boolean configuredBoolean(String key) {
+        String value = configured(key);
+        if (value == null) {
+            return null;
+        }
+        if ("true".equalsIgnoreCase(value)) {
+            return Boolean.TRUE;
+        }
+        if ("false".equalsIgnoreCase(value)) {
+            return Boolean.FALSE;
+        }
+        // A value BootUI cannot read is not a claim it can make: fall through to the next key.
+        return null;
     }
 
     /**

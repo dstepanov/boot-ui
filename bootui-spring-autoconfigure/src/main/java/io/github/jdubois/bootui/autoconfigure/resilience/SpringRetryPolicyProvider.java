@@ -42,9 +42,15 @@ public class SpringRetryPolicyProvider implements ResiliencePolicyProvider {
         return ResilienceVocabulary.PROVIDER_SPRING_RETRY;
     }
 
+    /**
+     * Always {@code true}: this bean only exists when Spring Retry is on the classpath, which is precisely
+     * what the panel catalog reports availability on. Returning {@code false} for an application that has
+     * the library but has not annotated anything yet would contradict the sidebar, and would make the engine
+     * drop the events this provider's listener is still capturing.
+     */
     @Override
     public boolean available() {
-        return !policies().isEmpty();
+        return true;
     }
 
     @Override

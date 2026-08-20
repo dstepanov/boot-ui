@@ -50,6 +50,20 @@
 
         <!-- Plain JUnit 5 + AssertJ (versions managed by quarkus-bom) for the BasePackageRoots antichain
              unit test. The base-package reduction is pure logic, so it needs no Quarkus bootstrap. -->
+        <!-- Test-only: the MicroProfile / SmallRye Fault Tolerance annotations the resilience scan reads.
+             They are compiled into the test fixtures so the Jandex index the test builds is the real thing.
+             Deliberately not a compile dependency: the scan matches annotations by DotName and must stay
+             usable in an application that has no fault-tolerance extension at all. -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.fault-tolerance</groupId>
+            <artifactId>microprofile-fault-tolerance-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.smallrye</groupId>
+            <artifactId>smallrye-fault-tolerance-api</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

@@ -2,7 +2,9 @@ package io.github.jdubois.bootui.autoconfigure.resilience;
 
 import io.github.jdubois.bootui.core.dto.ResiliencePolicyDto;
 import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
+import io.github.resilience4j.core.Registry;
 import java.util.List;
+import java.util.function.Consumer;
 import org.springframework.beans.factory.ObjectProvider;
 
 /**
@@ -41,6 +43,34 @@ interface Resilience4jRegistryReader {
             return provider.getIfAvailable();
         } catch (RuntimeException ex) {
             return null;
+        }
+    }
+
+    /**
+     * Subscribes {@code subscribe} to every entry a Resilience4j registry holds now and to every entry it
+     * gains later, and drops the bookkeeping for entries the registry loses.
+     *
+     * <p>Registries are mutable: {@code replace(name, entry)} and {@code remove(name)} are part of their
+     * public API and Spring Cloud CircuitBreaker uses them. Listening to {@code onEntryAdded} alone would
+     * leave a replaced entry uncaptured forever — the reader's name-keyed guard would treat the replacement
+     * as already captured — and would let the guard grow without bound for applications that create
+     * dynamically named entries. Handling all three registry events keeps capture attached to whatever the
+     * registry currently holds.</p>
+     */
+    static <E> void registerRegistryCapture(
+            Registry.EventPublisher<E> publisher,
+            Iterable<? extends E> existing,
+            Consumer<E> subscribe,
+            Consumer<E> forget) {
+        publisher
+                .onEntryAdded(event -> subscribe.accept(event.getAddedEntry()))
+                .onEntryRemoved(event -> forget.accept(event.getRemovedEntry()))
+                .onEntryReplaced(event -> {
+                    forget.accept(event.getOldEntry());
+                    subscribe.accept(event.getNewEntry());
+                });
+        for (E entry : existing) {
+            subscribe.accept(entry);
         }
     }
 }

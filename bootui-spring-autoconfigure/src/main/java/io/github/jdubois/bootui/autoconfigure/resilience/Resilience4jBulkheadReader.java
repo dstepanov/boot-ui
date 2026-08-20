@@ -79,10 +79,11 @@ final class Resilience4jBulkheadReader implements Resilience4jRegistryReader {
         if (registry == null) {
             return;
         }
-        registry.getEventPublisher().onEntryAdded(event -> subscribe(event.getAddedEntry(), recorder));
-        for (Bulkhead bulkhead : registry.getAllBulkheads()) {
-            subscribe(bulkhead, recorder);
-        }
+        Resilience4jRegistryReader.registerRegistryCapture(
+                registry.getEventPublisher(),
+                registry.getAllBulkheads(),
+                entry -> subscribe(entry, recorder),
+                entry -> forget(entry));
     }
 
     /**
@@ -103,5 +104,15 @@ final class Resilience4jBulkheadReader implements Resilience4jRegistryReader {
                         null,
                         null,
                         null));
+    }
+
+    /**
+     * Drops the name guard for an entry the registry no longer holds, so a later entry registered
+     * under the same name is subscribed again instead of being mistaken for one already captured.
+     */
+    private void forget(Bulkhead bulkhead) {
+        if (bulkhead != null) {
+            capturing.remove(bulkhead.getName());
+        }
     }
 }

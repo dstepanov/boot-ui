@@ -40,6 +40,14 @@ public class BootUiRetryListener implements RetryListener {
     }
 
     private void record(RetryContext context, String outcome, int attempt, Throwable throwable) {
+        if (!recorder.isEnabled()) {
+            // The listener bean is published on class presence alone, because Spring Retry collects
+            // RetryListener beans when it builds its interceptors and a bean condition cannot express the
+            // full panel-enablement policy (property toggles plus include/exclude lists). Disabling the
+            // panel or bootui.resilience.enabled therefore makes the listener inert here, before any
+            // context attribute is read: BootUI observes nothing rather than merely hiding it.
+            return;
+        }
         recorder.record(
                 policyName(context),
                 ResilienceVocabulary.TYPE_RETRY,

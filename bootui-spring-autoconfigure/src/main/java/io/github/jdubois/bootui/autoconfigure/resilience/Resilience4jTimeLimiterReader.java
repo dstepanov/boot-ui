@@ -72,10 +72,11 @@ final class Resilience4jTimeLimiterReader implements Resilience4jRegistryReader 
         if (registry == null) {
             return;
         }
-        registry.getEventPublisher().onEntryAdded(event -> subscribe(event.getAddedEntry(), recorder));
-        for (TimeLimiter limiter : registry.getAllTimeLimiters()) {
-            subscribe(limiter, recorder);
-        }
+        Resilience4jRegistryReader.registerRegistryCapture(
+                registry.getEventPublisher(),
+                registry.getAllTimeLimiters(),
+                entry -> subscribe(entry, recorder),
+                entry -> forget(entry));
     }
 
     /** Only timeouts are captured; successes fire on every completed call. */
@@ -93,5 +94,15 @@ final class Resilience4jTimeLimiterReader implements Resilience4jRegistryReader 
                         null,
                         null,
                         null));
+    }
+
+    /**
+     * Drops the name guard for an entry the registry no longer holds, so a later entry registered
+     * under the same name is subscribed again instead of being mistaken for one already captured.
+     */
+    private void forget(TimeLimiter limiter) {
+        if (limiter != null) {
+            capturing.remove(limiter.getName());
+        }
     }
 }

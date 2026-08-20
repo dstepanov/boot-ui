@@ -128,7 +128,10 @@ plain beans with no servlet or reactive coupling, and Resilience4j's own event p
 `BootUiRetryListener` bean feed the shared `ResilienceEventRecorder` from whatever thread the protected call runs on. The
 WebFlux panel and its Live Activity `RESILIENCE` entries therefore work with zero adapter-specific code. Resilience4j's
 reactive operators (`ReactorCircuitBreaker` and friends) publish through the same registries and event publishers as the
-imperative ones, so reactive pipelines are covered by the same read path.
+imperative ones, so reactive pipelines are covered by the same read path. The reactive sample application declares
+Resilience4j (and deliberately *not* Spring Retry, so the two Spring samples between them cover both halves of the
+backend's optional-dependency guards) and exercises its policies from a `boundedElastic` scheduler thread, which
+`WebFluxResilienceIntegrationTest` asserts reaches the panel report.
 
 CRaC uses the same framework-neutral scanner and Spring runtime inventory on MVC and WebFlux. Its pool inventory includes
 R2DBC factories, and its task/scheduling checks use Spring context APIs rather than servlet types. Generated assets still

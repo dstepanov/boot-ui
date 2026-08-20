@@ -51,6 +51,18 @@ class QuarkusResiliencePolicyProviderTests {
                 List.of(new RawResilienceSetting("maxRetries", "3", ResilienceVocabulary.PROVENANCE_DEFAULT)));
     }
 
+    private static RawResiliencePolicy fallback(String className, String methodName) {
+        return new RawResiliencePolicy(
+                className + "#" + methodName,
+                ResilienceVocabulary.TYPE_FALLBACK,
+                "Fallback",
+                className,
+                methodName,
+                null,
+                List.of(new RawResilienceSetting(
+                        "fallbackMethod", "recover", ResilienceVocabulary.PROVENANCE_CONFIGURED)));
+    }
+
     private static QuarkusResiliencePolicyProvider provider(
             List<RawResiliencePolicy> policies, QuarkusCircuitBreakerStates states, Map<String, String> config) {
         return new QuarkusResiliencePolicyProvider(
@@ -104,6 +116,62 @@ class QuarkusResiliencePolicyProviderTests {
             assertThat(retries.value()).isEqualTo("3");
             assertThat(retries.provenance()).isEqualTo(ResilienceVocabulary.PROVENANCE_DEFAULT);
         });
+    }
+
+    @Test
+    void marksAPolicyDisabledThroughMicroProfileConfigurationAsSuch() {
+        Map<String, String> config = new HashMap<>();
+        config.put("com.example.OrderService/place/Retry/enabled", "false");
+        ResiliencePolicyDto policy = provider(List.of(retry("com.example.OrderService", "place")), null, config)
+                .policies()
+                .get(0);
+
+        assertThat(setting(policy, "enabled")).get().satisfies(enabled -> {
+            assertThat(enabled.value()).isEqualTo("false");
+            assertThat(enabled.provenance()).isEqualTo(ResilienceVocabulary.PROVENANCE_CONFIGURED);
+        });
+    }
+
+    @Test
+    void honoursTheGlobalNonFallbackSwitchWithoutTouchingFallback() {
+        Map<String, String> config = new HashMap<>();
+        config.put("MP_Fault_Tolerance_NonFallback_Enabled", "false");
+
+        ResiliencePolicyDto retry = provider(List.of(retry("com.example.OrderService", "place")), null, config)
+                .policies()
+                .get(0);
+        assertThat(setting(retry, "enabled"))
+                .get()
+                .extracting(ResiliencePolicySettingDto::value)
+                .isEqualTo("false");
+
+        ResiliencePolicyDto fallback = provider(List.of(fallback("com.example.OrderService", "place")), null, config)
+                .policies()
+                .get(0);
+        assertThat(setting(fallback, "enabled")).isEmpty();
+    }
+
+    @Test
+    void letsAnAnnotationSpecificSwitchOverrideTheGlobalOne() {
+        Map<String, String> config = new HashMap<>();
+        config.put("MP_Fault_Tolerance_NonFallback_Enabled", "false");
+        config.put("com.example.OrderService/place/Retry/enabled", "true");
+        ResiliencePolicyDto policy = provider(List.of(retry("com.example.OrderService", "place")), null, config)
+                .policies()
+                .get(0);
+
+        assertThat(setting(policy, "enabled")).isEmpty();
+    }
+
+    @Test
+    void keepsAPolicyEffectiveWhenTheSwitchIsNotABoolean() {
+        Map<String, String> config = new HashMap<>();
+        config.put("Retry/enabled", "${maybe}");
+        ResiliencePolicyDto policy = provider(List.of(retry("com.example.OrderService", "place")), null, config)
+                .policies()
+                .get(0);
+
+        assertThat(setting(policy, "enabled")).isEmpty();
     }
 
     @Test

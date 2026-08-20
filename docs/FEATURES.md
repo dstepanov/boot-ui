@@ -1486,9 +1486,11 @@ Three providers are supported, and several can be active at once:
   records retry attempts and exhaustion.
 - **SmallRye Fault Tolerance** (Quarkus) — `@CircuitBreaker`, `@Retry`, `@Timeout`, `@Bulkhead`, `@RateLimit`, and
   `@Fallback` annotations are captured from the Jandex index at build time, with MicroProfile Fault Tolerance
-  configuration overrides resolved at runtime and marked as `configured`. Live circuit breaker state and state-transition
-  events come from `CircuitBreakerMaintenance` for breakers carrying `@CircuitBreakerName`; SmallRye publishes no
-  per-call event stream, so retries and rejections are not individually captured there.
+  configuration overrides resolved at runtime and marked as `configured` — including the MicroProfile `enabled` switches,
+  so a policy disabled through configuration is listed with a leading `enabled` = `false` setting rather than shown as if
+  it still applied. Live circuit breaker state and state-transition events come from `CircuitBreakerMaintenance` for
+  breakers carrying `@CircuitBreakerName`; SmallRye publishes no per-call event stream, so retries and rejections are not
+  individually captured there.
 
 The panel is **strictly capture-only**. BootUI never opens, closes, resets, forces, or otherwise mutates a policy, and it
 never triggers a protected call itself. Event capture is metadata only: policy name, outcome, attempt number, duration,

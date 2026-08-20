@@ -65,13 +65,17 @@ final class ResilienceSettings {
     /**
      * Renders a value for display. Durations become an explicit millisecond count, floats keep one decimal,
      * and {@code null} is dropped entirely so an unavailable value is omitted rather than shown as "null".
+     *
+     * <p>A duration shorter than a millisecond keeps a finer unit: Resilience4j's default rate limiter
+     * refresh period is 500 nanoseconds, and rounding it to {@code 0 ms} would tell the developer the
+     * limiter refreshes instantly.</p>
      */
     static String render(Object value) {
         if (value == null) {
             return null;
         }
         if (value instanceof Duration duration) {
-            return duration.toMillis() + " ms";
+            return renderDuration(duration);
         }
         if (value instanceof Float floatValue) {
             return trimTrailingZero(String.format(java.util.Locale.ROOT, "%.1f", floatValue));
@@ -81,6 +85,14 @@ final class ResilienceSettings {
         }
         String text = String.valueOf(value);
         return text.isBlank() ? null : text;
+    }
+
+    private static String renderDuration(Duration duration) {
+        int nanos = duration.getNano();
+        if (duration.getSeconds() == 0 && nanos != 0 && nanos < 1_000_000) {
+            return nanos < 1_000 ? nanos + " ns" : nanos / 1_000 + " \u00b5s";
+        }
+        return duration.toMillis() + " ms";
     }
 
     private static String trimTrailingZero(String value) {

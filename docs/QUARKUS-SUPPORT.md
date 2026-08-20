@@ -212,7 +212,9 @@ action behind the same DTO contract) · `Scheduled Tasks`
 `registerResiliencePolicies` build step + `@Recorder` into a synthetic bean, then mapped onto the same
 `ResiliencePolicyProvider` SPI and DTO contract Spring's Resilience4j/Spring Retry providers use. MicroProfile Fault
 Tolerance configuration overrides (`<class>/<method>/<annotation>/<member>` and its two broader forms) are resolved at
-runtime through SmallRye Config and reported with `CONFIGURED` provenance. Live circuit-breaker state and state-transition
+runtime through SmallRye Config and reported with `CONFIGURED` provenance, including the `.../<annotation>/enabled`
+switches and `MP_Fault_Tolerance_NonFallback_Enabled`: a policy the application turned off through configuration is
+listed with a leading `enabled` = `false` setting instead of being silently shown as if it still applied. Live circuit-breaker state and state-transition
 events come from `CircuitBreakerMaintenance`, which SmallRye only exposes for breakers carrying `@CircuitBreakerName`;
 anonymous breakers honestly report `UNKNOWN`. **Honest fidelity gaps:** SmallRye publishes no per-call event stream, so
 retries, rejections and timeouts are not individually captured on Quarkus (only breaker state transitions are), and it

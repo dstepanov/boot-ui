@@ -80,11 +80,13 @@ class SpringRetryPolicyProviderTests {
     }
 
     @Test
-    void reportsUnavailableWhenNoBeanDeclaresRetryable() {
+    void staysAvailableWithNoPoliciesWhenNoBeanDeclaresRetryable() {
         SpringRetryPolicyProvider provider = provider(OrderService.class.getSuperclass());
 
         assertThat(provider.providerId()).isEqualTo(ResilienceVocabulary.PROVIDER_SPRING_RETRY);
-        assertThat(provider.available()).isFalse();
+        // Spring Retry is present, so the provider reports itself and the engine keeps the retry events its
+        // listener captures, even before the application annotates its first method.
+        assertThat(provider.available()).isTrue();
         assertThat(provider.policies()).isEmpty();
     }
 

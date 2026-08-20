@@ -96,14 +96,15 @@ public class Resilience4jPolicyProvider implements ResiliencePolicyProvider, Sma
         return ResilienceVocabulary.PROVIDER_RESILIENCE4J;
     }
 
+    /**
+     * Always {@code true}: this bean only exists when Resilience4j is on the classpath, the same signal the
+     * panel catalog reports availability on. An application that has the library but no registry bean yet
+     * (or only modules BootUI does not read) is reported as a present provider with no policies, rather than
+     * as an absent library — and its captured events are kept rather than dropped by the engine.
+     */
     @Override
     public boolean available() {
-        for (Resilience4jRegistryReader reader : readers) {
-            if (reader.available()) {
-                return true;
-            }
-        }
-        return false;
+        return true;
     }
 
     @Override

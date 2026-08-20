@@ -23,6 +23,22 @@ class ResilienceEventRecorderTests {
     }
 
     @Test
+    void keepsCapturingWhenAStreamSubscriberThrows() {
+        ResilienceEventRecorder recorder = new ResilienceEventRecorder(true, 10);
+        AtomicInteger healthyNotifications = new AtomicInteger();
+        recorder.subscribe(() -> {
+            throw new IllegalStateException("stream is gone");
+        });
+        recorder.subscribe(healthyNotifications::incrementAndGet);
+
+        recorder.record("orders", "RETRY", "resilience4j", "Target#a", "RETRY", 1, 12L, "IOException");
+
+        // A broken Live Activity subscriber must neither disrupt the protected call nor starve the others.
+        assertThat(recorder.recent()).extracting(CapturedEvent::policyName).containsExactly("orders");
+        assertThat(healthyNotifications).hasValue(1);
+    }
+
+    @Test
     void evictsOldestBeyondTheConfiguredBound() {
         ResilienceEventRecorder recorder = new ResilienceEventRecorder(true, 2);
 

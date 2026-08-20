@@ -12,7 +12,12 @@ import java.util.List;
  * guessed.</p>
  *
  * @param name policy name; the registry entry name where the library has one, otherwise the annotated
- *     operation's derived name. Unique together with {@code type} and {@code provider}.
+ *     operation's derived name. Unique together with {@code type} and {@code provider}, with one exception
+ *     the libraries themselves impose: Resilience4j keeps semaphore bulkheads and thread-pool bulkheads in
+ *     two independent registries that may both hold the same name, and both map to {@code BULKHEAD} because
+ *     that is what they are. Such a pair renders as two rows telling their settings apart (a semaphore
+ *     bulkhead reports {@code maxConcurrentCalls}, a thread-pool bulkhead reports its pool sizes) rather
+ *     than as one merged approximation.
  * @param type neutral policy type: {@code CIRCUIT_BREAKER}, {@code RETRY}, {@code RATE_LIMITER},
  *     {@code BULKHEAD}, {@code TIME_LIMITER} or {@code FALLBACK}
  * @param provider library that owns the policy: {@code resilience4j}, {@code spring-retry} or

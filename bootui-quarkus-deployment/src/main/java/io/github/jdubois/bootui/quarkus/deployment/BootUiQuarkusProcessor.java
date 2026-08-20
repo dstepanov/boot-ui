@@ -1526,29 +1526,41 @@ class BootUiQuarkusProcessor {
      * {@code Guard}/{@code FaultTolerance} builders are not, matching the panel's documented scope.</p>
      */
     @BuildStep
+    void registerResilienceBeans(
+            LaunchModeBuildItem launchMode,
+            Capabilities capabilities,
+            BuildProducer<AdditionalBeanBuildItem> additionalBeans,
+            BuildProducer<ExcludedTypeBuildItem> excludedTypes,
+            BuildProducer<RunTimeConfigurationDefaultBuildItem> runtimeDefaults) {
+        // No quarkus-smallrye-fault-tolerance (or production): keep the io.smallrye.faulttolerance-importing
+        // state port out of bean discovery so Arc never links the fault-tolerance API, and leave the panel
+        // unavailable (RESILIENCE_PRESENT_KEY defaults to false).
+        registerCapabilityGatedBeans(
+                resiliencePresent(launchMode, capabilities),
+                additionalBeans,
+                excludedTypes,
+                runtimeDefaults,
+                QuarkusPanelAvailability.RESILIENCE_PRESENT_KEY,
+                CIRCUIT_BREAKER_STATES_CLASS);
+    }
+
+    /**
+     * Second half of the Resilience build-time wiring: the Jandex scan and the synthetic policy bean.
+     *
+     * <p>This is deliberately a separate build step from {@link #registerResilienceBeans}. Arc's own
+     * {@code BeanArchiveProcessor} consumes {@link AdditionalBeanBuildItem} to produce the
+     * {@link BeanArchiveIndexBuildItem}, so a single step that both reads the index and registers an
+     * additional bean would form a build-chain cycle and fail augmentation.</p>
+     */
+    @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
     void registerResiliencePolicies(
             LaunchModeBuildItem launchMode,
             Capabilities capabilities,
             BeanArchiveIndexBuildItem beanArchiveIndex,
             ResiliencePoliciesRecorder recorder,
-            BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
-            BuildProducer<AdditionalBeanBuildItem> additionalBeans,
-            BuildProducer<ExcludedTypeBuildItem> excludedTypes,
-            BuildProducer<RunTimeConfigurationDefaultBuildItem> runtimeDefaults) {
-        boolean present = launchMode.getLaunchMode() != LaunchMode.NORMAL
-                && capabilities.isPresent(Capability.SMALLRYE_FAULT_TOLERANCE);
-        // No quarkus-smallrye-fault-tolerance (or production): keep the io.smallrye.faulttolerance-importing
-        // state port out of bean discovery so Arc never links the fault-tolerance API, and leave the panel
-        // unavailable (RESILIENCE_PRESENT_KEY defaults to false).
-        registerCapabilityGatedBeans(
-                present,
-                additionalBeans,
-                excludedTypes,
-                runtimeDefaults,
-                QuarkusPanelAvailability.RESILIENCE_PRESENT_KEY,
-                CIRCUIT_BREAKER_STATES_CLASS);
-        if (!present) {
+            BuildProducer<SyntheticBeanBuildItem> syntheticBeans) {
+        if (!resiliencePresent(launchMode, capabilities)) {
             return;
         }
         List<RawResiliencePolicy> policies = scanResiliencePolicies(beanArchiveIndex.getIndex());
@@ -1557,6 +1569,12 @@ class BootUiQuarkusProcessor {
                 .runtimeValue(recorder.create(policies))
                 .unremovable()
                 .done());
+    }
+
+    /** Both Resilience build steps gate on exactly the same decision, so they cannot drift apart. */
+    private static boolean resiliencePresent(LaunchModeBuildItem launchMode, Capabilities capabilities) {
+        return launchMode.getLaunchMode() != LaunchMode.NORMAL
+                && capabilities.isPresent(Capability.SMALLRYE_FAULT_TOLERANCE);
     }
 
     /**
@@ -1571,7 +1589,7 @@ class BootUiQuarkusProcessor {
      * {@code CONFIGURED}. Values overridden through MicroProfile Fault Tolerance configuration keys are
      * resolved later, at request time, by {@code QuarkusResiliencePolicyProvider}.</p>
      */
-    private static List<RawResiliencePolicy> scanResiliencePolicies(IndexView index) {
+    static List<RawResiliencePolicy> scanResiliencePolicies(IndexView index) {
         List<RawResiliencePolicy> policies = new ArrayList<>();
         collectResiliencePolicies(index, FT_CIRCUIT_BREAKER, "CIRCUIT_BREAKER", policies);
         collectResiliencePolicies(index, FT_RETRY, "RETRY", policies);
@@ -1617,6 +1635,15 @@ class BootUiQuarkusProcessor {
         return circuitBreakerName.value().asString();
     }
 
+    /**
+     * Maps one scanned annotation onto the raw policy record.
+     *
+     * <p>A circuit breaker carrying {@code @CircuitBreakerName} is named by that name rather than by the
+     * method it guards: the name is what SmallRye's {@code CircuitBreakerMaintenance} is keyed by, what the
+     * developer wrote, and what state-transition events report — so naming the policy anything else would
+     * split one breaker across two identities in the panel. The guarded method stays visible as
+     * {@code target}.</p>
+     */
     private static RawResiliencePolicy toRawResiliencePolicy(
             AnnotationInstance annotation,
             String type,
@@ -1626,7 +1653,8 @@ class BootUiQuarkusProcessor {
         String simpleAnnotation = annotation.name().withoutPackagePrefix();
         String className = declaringClass.name().toString();
         String simpleClass = declaringClass.simpleName();
-        String name = methodName.isEmpty() ? simpleClass : simpleClass + "#" + methodName;
+        String label = methodName.isEmpty() ? simpleClass : simpleClass + "#" + methodName;
+        String name = "CIRCUIT_BREAKER".equals(type) && !circuitBreakerName.isEmpty() ? circuitBreakerName : label;
         return new RawResiliencePolicy(
                 name,
                 type,
@@ -1702,10 +1730,33 @@ class BootUiQuarkusProcessor {
             }
             return;
         }
-        String rendered = value.kind() == AnnotationValue.Kind.ENUM ? value.asEnum() : value.toString();
+        String rendered = renderAnnotationValue(value);
         if (!rendered.isEmpty()) {
             settings.add(new RawResilienceSetting(member, rendered, "CONFIGURED"));
         }
+    }
+
+    /**
+     * Renders a Jandex annotation value the way a developer wrote it. {@code AnnotationValue#toString()} is
+     * deliberately not used: it renders {@code member = value} and quotes strings, so a threshold would reach
+     * the panel as {@code requestVolumeThreshold = 4} and a fallback as {@code "recover"}. Typed accessors are
+     * used per kind instead, and an unmodelled kind falls back to an empty string so the row is omitted rather
+     * than showing Jandex internals.
+     */
+    private static String renderAnnotationValue(AnnotationValue value) {
+        return switch (value.kind()) {
+            case ENUM -> value.asEnum();
+            case STRING -> value.asString();
+            case BOOLEAN -> Boolean.toString(value.asBoolean());
+            case BYTE -> Byte.toString(value.asByte());
+            case SHORT -> Short.toString(value.asShort());
+            case INTEGER -> Integer.toString(value.asInt());
+            case LONG -> Long.toString(value.asLong());
+            case FLOAT -> Float.toString(value.asFloat());
+            case DOUBLE -> Double.toString(value.asDouble());
+            case CHARACTER -> Character.toString(value.asChar());
+            default -> "";
+        };
     }
 
     private static final DotName SCHEDULED_ANNOTATION = DotName.createSimple("io.quarkus.scheduler.Scheduled");

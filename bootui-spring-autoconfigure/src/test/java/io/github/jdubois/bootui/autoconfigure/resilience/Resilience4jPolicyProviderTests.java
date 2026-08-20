@@ -58,11 +58,14 @@ class Resilience4jPolicyProviderTests {
     }
 
     @Test
-    void reportsUnavailableWhenNoRegistryBeanExists() {
+    void staysAvailableWithNoPoliciesWhenNoRegistryBeanExists() {
         Resilience4jPolicyProvider provider = new Resilience4jPolicyProvider(beanFactory(), recorder);
 
         assertThat(provider.providerId()).isEqualTo(ResilienceVocabulary.PROVIDER_RESILIENCE4J);
-        assertThat(provider.available()).isFalse();
+        // The library is on the classpath, which is exactly what the panel catalog reports availability on:
+        // saying "unavailable" here would contradict the sidebar and would make the engine drop captured
+        // events for an application that simply has not created a registry bean yet.
+        assertThat(provider.available()).isTrue();
         assertThat(provider.policies()).isEmpty();
     }
 
@@ -225,6 +228,41 @@ class Resilience4jPolicyProviderTests {
 
         assertThat(recorder.recent()).anySatisfy(event -> {
             assertThat(event.policyName()).isEqualTo("late");
+            assertThat(event.outcome()).isEqualTo(ResilienceVocabulary.OUTCOME_STATE_TRANSITION);
+        });
+    }
+
+    @Test
+    void capturesTheReplacementWhenARegistryEntryIsReplaced() {
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        registry.circuitBreaker("payments");
+        Resilience4jPolicyProvider provider = new Resilience4jPolicyProvider(beanFactory(registry), recorder);
+        provider.afterSingletonsInstantiated();
+
+        // replace(name, entry) is part of the registry's public API; the replacement is a different object
+        // and carries none of the original's consumers, so capture has to follow it.
+        CircuitBreaker replacement = CircuitBreaker.ofDefaults("payments");
+        registry.replace("payments", replacement);
+        replacement.transitionToOpenState();
+
+        assertThat(recorder.recent()).anySatisfy(event -> {
+            assertThat(event.policyName()).isEqualTo("payments");
+            assertThat(event.outcome()).isEqualTo(ResilienceVocabulary.OUTCOME_STATE_TRANSITION);
+        });
+    }
+
+    @Test
+    void capturesAnEntryRegisteredAgainUnderARemovedName() {
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        registry.circuitBreaker("payments");
+        Resilience4jPolicyProvider provider = new Resilience4jPolicyProvider(beanFactory(registry), recorder);
+        provider.afterSingletonsInstantiated();
+
+        registry.remove("payments");
+        registry.circuitBreaker("payments").transitionToOpenState();
+
+        assertThat(recorder.recent()).anySatisfy(event -> {
+            assertThat(event.policyName()).isEqualTo("payments");
             assertThat(event.outcome()).isEqualTo(ResilienceVocabulary.OUTCOME_STATE_TRANSITION);
         });
     }

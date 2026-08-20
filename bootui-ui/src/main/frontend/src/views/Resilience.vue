@@ -230,7 +230,7 @@ function hasMetrics(metrics) {
                       <li v-for="setting in policy.settings" :key="setting.name">
                         <span class="text-muted">{{ setting.name }}:</span> {{ setting.value }}
                         <span
-                          v-if="setting.provenance !== 'CONFIGURED'"
+                          v-if="setting.provenance && setting.provenance !== 'CONFIGURED'"
                           class="badge bg-light text-dark border ms-1 resilience-provenance"
                           >{{ setting.provenance.toLowerCase() }}</span
                         >
@@ -272,57 +272,55 @@ function hasMetrics(metrics) {
               </tbody>
             </table>
           </div>
-
-          <h2 class="h6">Recent events</h2>
-          <div v-if="!events.length" class="alert alert-secondary small py-2">
-            No resilience events captured yet. Events appear here when a call is retried, rejected, timed out or
-            short-circuited, or when a circuit breaker changes state.
-          </div>
-          <div v-else class="table-responsive">
-            <table class="table table-sm table-hover align-middle resilience-event-table">
-              <thead>
-                <tr>
-                  <th style="width: 110px">Time</th>
-                  <th style="width: 160px">Outcome</th>
-                  <th>Policy</th>
-                  <th>Protected operation</th>
-                  <th style="width: 90px">Attempt</th>
-                  <th style="width: 110px">Duration</th>
-                  <th>Detail</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="event in events" :key="event.id">
-                  <td class="text-muted small text-nowrap">{{ formatTimestamp(event.timestamp) }}</td>
-                  <td>
-                    <span :class="outcomeBadgeClass(event.outcome)" class="badge">{{ event.outcome }}</span>
-                  </td>
-                  <td>
-                    <code>{{ event.policyName }}</code>
-                    <span class="d-block text-muted small">{{ readableType(event.policyType) }}</span>
-                  </td>
-                  <td>
-                    <code v-if="event.target" class="small">{{ event.target }}</code>
-                    <span v-else class="text-muted">—</span>
-                  </td>
-                  <td>{{ event.attempt ?? '—' }}</td>
-                  <td>{{ formatDuration(event.durationMillis) }}</td>
-                  <td class="small">
-                    <span v-if="event.state" class="badge" :class="stateBadgeClass(event.state)">{{
-                      event.state
-                    }}</span>
-                    <code v-else-if="event.failureCategory">{{ event.failureCategory }}</code>
-                    <span v-else class="text-muted">—</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p class="text-muted small mb-0">
-            Showing the most recent {{ events.length }} of at most {{ report.maxEvents }} captured events. BootUI never
-            records method arguments, return values, payloads or raw exception messages.
-          </p>
         </template>
+
+        <h2 class="h6">Recent events</h2>
+        <div v-if="!events.length" class="alert alert-secondary small py-2">
+          No resilience events captured yet. Events appear here when a call is retried, rejected, timed out or
+          short-circuited, or when a circuit breaker changes state.
+        </div>
+        <div v-else class="table-responsive">
+          <table class="table table-sm table-hover align-middle resilience-event-table">
+            <thead>
+              <tr>
+                <th style="width: 110px">Time</th>
+                <th style="width: 160px">Outcome</th>
+                <th>Policy</th>
+                <th>Protected operation</th>
+                <th style="width: 90px">Attempt</th>
+                <th style="width: 110px">Duration</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="event in events" :key="event.id">
+                <td class="text-muted small text-nowrap">{{ formatTimestamp(event.timestamp) }}</td>
+                <td>
+                  <span :class="outcomeBadgeClass(event.outcome)" class="badge">{{ event.outcome }}</span>
+                </td>
+                <td>
+                  <code>{{ event.policyName }}</code>
+                  <span class="d-block text-muted small">{{ readableType(event.policyType) }}</span>
+                </td>
+                <td>
+                  <code v-if="event.target" class="small">{{ event.target }}</code>
+                  <span v-else class="text-muted">—</span>
+                </td>
+                <td>{{ event.attempt ?? '—' }}</td>
+                <td>{{ formatDuration(event.durationMillis) }}</td>
+                <td class="small">
+                  <span v-if="event.state" class="badge" :class="stateBadgeClass(event.state)">{{ event.state }}</span>
+                  <code v-else-if="event.failureCategory">{{ event.failureCategory }}</code>
+                  <span v-else class="text-muted">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-muted small mb-0">
+          Showing the most recent {{ events.length }} of at most {{ report.maxEvents }} captured events. BootUI never
+          records method arguments, return values, payloads or raw exception messages.
+        </p>
       </template>
     </template>
   </div>

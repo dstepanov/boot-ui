@@ -134,10 +134,11 @@ final class Resilience4jCircuitBreakerReader implements Resilience4jRegistryRead
         if (registry == null) {
             return;
         }
-        registry.getEventPublisher().onEntryAdded(event -> subscribe(event.getAddedEntry(), recorder));
-        for (CircuitBreaker breaker : registry.getAllCircuitBreakers()) {
-            subscribe(breaker, recorder);
-        }
+        Resilience4jRegistryReader.registerRegistryCapture(
+                registry.getEventPublisher(),
+                registry.getAllCircuitBreakers(),
+                entry -> subscribe(entry, recorder),
+                entry -> forget(entry));
     }
 
     private void subscribe(CircuitBreaker breaker, ResilienceEventRecorder recorder) {
@@ -170,5 +171,15 @@ final class Resilience4jCircuitBreakerReader implements Resilience4jRegistryRead
                         ResilienceVocabulary.PROVIDER_RESILIENCE4J,
                         null,
                         event.getStateTransition().getToState().name()));
+    }
+
+    /**
+     * Drops the name guard for an entry the registry no longer holds, so a later entry registered
+     * under the same name is subscribed again instead of being mistaken for one already captured.
+     */
+    private void forget(CircuitBreaker breaker) {
+        if (breaker != null) {
+            capturing.remove(breaker.getName());
+        }
     }
 }

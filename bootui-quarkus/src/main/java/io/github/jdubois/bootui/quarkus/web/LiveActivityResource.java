@@ -423,16 +423,26 @@ public class LiveActivityResource {
                                                 emailChangeSource()),
                                         restClientChangeSource()),
                                 sqlChangeSource()),
-                        exceptionStore::subscribe));
+                        combined(exceptionStore::subscribe, resilienceChangeSource())));
+    }
+
+    /**
+     * Ticks the merged stream whenever a resilience outcome is captured, so a breaker transition or a retry
+     * on a background path refreshes Live Activity instead of leaving it stale until an unrelated signal
+     * arrives. The recorder itself is inert when the panel is unavailable or capture is disabled, so no
+     * further gate is needed here.
+     */
+    private SseStreams.ChangeSource resilienceChangeSource() {
+        return resilienceRecorder::subscribe;
     }
 
     /**
      * Combines two {@link SseStreams.ChangeSource}s into one that notifies {@code onChange} when either
      * fires, so the merged Live Activity stream ticks on a new HTTP exchange, a new captured
      * {@code @Scheduled} execution, a new captured Kafka or RabbitMQ message, a new captured email, a REST
-     * Client call, a new traced SQL statement, <em>or</em> a newly captured exception (nested at the call
-     * site to fan in all of them) — mirroring the Spring adapter, whose single {@code BootUiChangeStream}
-     * already fans in every signal source to the same effect.
+     * Client call, a new traced SQL statement, a newly captured exception, <em>or</em> a newly captured
+     * resilience outcome (nested at the call site to fan in all of them) — mirroring the Spring adapter,
+     * whose single {@code BootUiChangeStream} already fans in every signal source to the same effect.
      *
      * <p>SQL and exception capture were previously the two sources that fed {@link #activity} but never
      * ticked this stream, so a purely database-driven or purely failing workload left the panel — and the
