@@ -618,12 +618,17 @@ Data sources:
 
 - Micrometer `MeterRegistry`.
 - Spring Boot Actuator metrics auto-configuration when present.
+- A curated, versioned BootUI catalogue of well-known meter families, used only when the registry itself
+  documents nothing.
 
 Features:
 
 - List meters by name, description, base unit, and Micrometer type.
+- Group meters by provenance: the integration family that registered them, with the contributing library named.
+- Explain a meter from its registry description first, then from the curated catalogue, and say which source was
+  used (`NATIVE`, `CURATED`, or `UNKNOWN`).
 - Search meters by name or description.
-- Filter meters by type.
+- Filter meters by type, provenance group, classified/unclassified provenance, and explanation source.
 - Inspect a meter's current measurements.
 - Show available tag keys and values for each meter.
 - Filter live values by tag key/value.
@@ -634,6 +639,21 @@ Acceptance criteria:
 
 - Missing Micrometer infrastructure produces a clear empty state.
 - Browser responses use BootUI DTOs, not raw registry internals.
+- Provenance is evidence-backed: classification uses meter names only, never tag values, and an unrecognized
+  meter is reported as unclassified with no invented explanation. Curated text is static BootUI content, so no
+  application value flows into an explanation and the panel keeps the metrics contract's existing exposure
+  posture: meter names, tag keys, and tag values are reported as the registry holds them and are not passed
+  through the property-masking policy, which applies to configuration values rather than telemetry.
+- Every matched meter belongs to exactly one provenance group, and group counts reconcile with the matched
+  total even when the returned page is truncated.
+- Groups are facets of the type-, search-, provenance-, and explanation-filtered set computed *before* the group
+  filter is applied, so selecting a group narrows the meter list without collapsing the group summary the user
+  is choosing from. With a group filter applied, that group's count equals the matched total.
+- Classification is name-based, so an application meter that borrows a binder-owned namespace
+  (`tomcat.orders.active`) is attributed to that binder. Prefixes an application is plausibly likely to reuse
+  (`http.server`, `http.client`, `kafka`, `executor`, `cache`) are narrowed to the sub-namespaces the
+  instrumentation actually publishes.
+- The report names the catalogue version that produced its curated explanations.
 - Tag values remain browser-bounded so high-cardinality meters do not freeze the UI.
 - Polling does not overlap slow requests.
 - Switching meter, tag filters, or statistic resets the live graph history.
@@ -2005,7 +2025,7 @@ Initial endpoints:
 | `/bootui/api/startup`                        | GET    | Startup timeline                                                                       |
 | `/bootui/api/threads`                        | GET    | Stable, paged live thread snapshot with state counts and deadlock info                 |
 | `/bootui/api/threads/download`               | POST   | Confirmation-gated raw text thread dump download                                       |
-| `/bootui/api/metrics`                        | GET    | Searchable/type-filtered Micrometer meter list, paged at 200 by default (1,000 maximum) |
+| `/bootui/api/metrics`                        | GET    | Micrometer meter list with search, type, `group`, `provenance`, and `explanation` filters, paged at 200 by default (1,000 maximum) |
 | `/bootui/api/metrics/detail`                 | GET    | Meter detail with tag filters and samples paged at 100 by default (1,000 maximum)       |
 | `/bootui/api/database-connection-pools/pools` | GET    | JDBC connection pool metadata                                                          |
 | `/bootui/api/database-connection-pools/pools/{name}/snapshot` | GET | Live connection pool utilization snapshot                                   |

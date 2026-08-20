@@ -16,7 +16,35 @@ public record MetricDetailDto(
         List<MetricSampleDto> samples,
         int totalSamples,
         PageMetadata samplePage,
-        boolean samplesTruncated) {
+        boolean samplesTruncated,
+        MetricProvenanceDto provenance) {
+
+    public MetricDetailDto(
+            boolean metricsAvailable,
+            String name,
+            String description,
+            String baseUnit,
+            String type,
+            List<MetricMeasurementDto> measurements,
+            List<MetricAvailableTagDto> availableTags,
+            List<MetricSampleDto> samples,
+            int totalSamples,
+            PageMetadata samplePage,
+            boolean samplesTruncated) {
+        this(
+                metricsAvailable,
+                name,
+                description,
+                baseUnit,
+                type,
+                measurements,
+                availableTags,
+                samples,
+                totalSamples,
+                samplePage,
+                samplesTruncated,
+                null);
+    }
 
     public MetricDetailDto(
             boolean metricsAvailable,

@@ -7,6 +7,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Meter provenance and explanation in the Metrics panel.** Meters are grouped by the integration family that
+  registered them (JVM, process, system, HTTP server and client, datasources, caches, messaging, resilience, gRPC,
+  framework internals, and application/unclassified), each group naming the contributing library, its registry
+  documentation coverage, the curated families that matched, and the tag keys its meters share. A meter's explanation
+  comes from its own registry description first (`NATIVE`), then from a curated, versioned BootUI catalogue of
+  well-known meter families (`CURATED`), and is reported as `UNKNOWN` rather than guessed when neither exists.
+  Classification uses meter names only — never tag values — so application meters are never absorbed into a curated
+  family. `GET /bootui/api/metrics` gained `group`, `provenance`, and `explanation` filters plus `groups` and
+  `catalogueVersion` in its response, identically on Spring MVC, Spring WebFlux, and Quarkus.
+
 ## [1.14.1] - 2026-08-20
 
 Patch release that restores Spring native and Quarkus Docker startup, fixes the native-image build bootstrap on AMD64,

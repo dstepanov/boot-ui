@@ -120,4 +120,79 @@ class BootUiQuarkusMetricsCaptureTest {
         assertThat(invalid.status()).isEqualTo(400);
         assertThat(invalid.json().path("error").asText()).isEqualTo("Metric limit must be between 1 and 1000");
     }
+
+    @Test
+    void metricsPanelExplainsMeterProvenanceAndFiltersOnIt() {
+        registry.counter("it.provenance.orders.processed").increment();
+        registry.counter("jvm.gc.pause.it").increment();
+
+        JsonNode root = probe().get("/bootui/api/metrics?limit=1000").json();
+        assertThat(root.path("catalogueVersion").asText())
+                .as("the curated catalogue version travels with the report")
+                .isNotBlank();
+
+        List<String> groupIds = new ArrayList<>();
+        int groupedMeters = 0;
+        for (JsonNode group : root.path("groups")) {
+            groupIds.add(group.path("id").asText());
+            groupedMeters += group.path("meterCount").asInt();
+        }
+        assertThat(groupIds).as("Quarkus meters are grouped by provenance").contains("jvm", "application");
+        assertThat(groupedMeters)
+                .as("every matched meter belongs to exactly one group")
+                .isEqualTo(root.path("page").path("matched").asInt());
+
+        assertThat(provenanceOf(root, "jvm.gc.pause.it").path("groupId").asText())
+                .as("catalogue classification works the same way on Quarkus")
+                .isEqualTo("jvm");
+        JsonNode application = provenanceOf(root, "it.provenance.orders.processed");
+        assertThat(application.path("classified").asBoolean(true)).isFalse();
+        assertThat(application.path("explanationSource").asText()).isEqualTo("UNKNOWN");
+        assertThat(application.path("explanation").isNull())
+                .as("BootUI does not invent an explanation for application meters")
+                .isTrue();
+
+        JsonNode filtered = probe().get("/bootui/api/metrics?limit=1000&group=jvm&provenance=classified")
+                .json();
+        for (JsonNode meter : filtered.path("meters")) {
+            assertThat(meter.path("provenance").path("groupId").asText()).isEqualTo("jvm");
+        }
+        assertThat(filtered.path("meters").size()).isPositive();
+
+        JsonNode unknown = probe().get("/bootui/api/metrics?limit=1000&explanation=UNKNOWN")
+                .json();
+        List<String> unknownNames = new ArrayList<>();
+        for (JsonNode meter : unknown.path("meters")) {
+            unknownNames.add(meter.path("name").asText());
+        }
+        assertThat(unknownNames).contains("it.provenance.orders.processed");
+
+        Response invalidGroup = probe().get("/bootui/api/metrics?group=not-a-group");
+        assertThat(invalidGroup.status()).isEqualTo(400);
+        assertThat(invalidGroup.json().path("error").asText()).startsWith("Metric group must be one of: application");
+
+        Response invalidProvenance = probe().get("/bootui/api/metrics?provenance=maybe");
+        assertThat(invalidProvenance.status()).isEqualTo(400);
+        assertThat(invalidProvenance.json().path("error").asText())
+                .isEqualTo("Metric provenance must be one of: classified, unclassified");
+
+        Response invalidExplanation = probe().get("/bootui/api/metrics?explanation=guessed");
+        assertThat(invalidExplanation.status()).isEqualTo(400);
+        assertThat(invalidExplanation.json().path("error").asText())
+                .isEqualTo("Metric explanation source must be one of: CURATED, NATIVE, UNKNOWN");
+
+        JsonNode detail =
+                probe().get("/bootui/api/metrics/detail?name=jvm.gc.pause.it").json();
+        assertThat(detail.path("provenance").path("familyId").asText()).isEqualTo("jvm.gc");
+        assertThat(detail.path("provenance").path("explanationSource").asText()).isEqualTo("CURATED");
+    }
+
+    private static JsonNode provenanceOf(JsonNode report, String meterName) {
+        for (JsonNode meter : report.path("meters")) {
+            if (meterName.equals(meter.path("name").asText())) {
+                return meter.path("provenance");
+            }
+        }
+        throw new AssertionError("No meter " + meterName + " in the report");
+    }
 }

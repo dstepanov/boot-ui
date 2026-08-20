@@ -32,7 +32,7 @@ test.describe('Metrics view', () => {
   test('filters meters by type on the server', async ({openView, page}) => {
     await openView('metrics', 'Metrics')
 
-    const typeSelect = page.locator('.card-body.border-bottom select')
+    const typeSelect = page.getByLabel('Filter meters by type')
     await expect.poll(async () => await typeSelect.locator('option').count()).toBeGreaterThan(1)
     const firstType = await typeSelect.locator('option').nth(1).getAttribute('value')
     expect(firstType).toBeTruthy()
@@ -44,7 +44,56 @@ test.describe('Metrics view', () => {
     await typeSelect.selectOption(firstType)
     await filteredRequest
     const firstMeter = page.locator('.meter-list .list-group-item').first()
-    await expect(firstMeter.locator('.badge')).toHaveText(firstType)
+    await expect(firstMeter.locator('.meter-type')).toHaveText(firstType)
     await expect(page.getByText(/Filters run on the server/)).toBeVisible()
+  })
+
+  test('groups meters by provenance and filters on a group', async ({openView, page}) => {
+    await openView('metrics', 'Metrics')
+
+    const provenanceCard = page.locator('.card', {hasText: 'Meter provenance'})
+    await expect(provenanceCard).toBeVisible()
+    await expect(provenanceCard.getByText(/Catalogue \d/)).toBeVisible()
+
+    const jvmChip = provenanceCard.getByRole('button', {name: /^JVM /})
+    await expect(jvmChip).toBeVisible()
+    await expect(jvmChip).toHaveAttribute('aria-pressed', 'false')
+
+    const groupedRequest = page.waitForRequest((request) => {
+      const url = new URL(request.url())
+      return url.pathname.endsWith('/api/metrics') && url.searchParams.get('group') === 'jvm'
+    })
+    await jvmChip.click()
+    await groupedRequest
+    await expect(jvmChip).toHaveAttribute('aria-pressed', 'true')
+    await expect(provenanceCard.getByText('Micrometer JVM binders').first()).toBeVisible()
+
+    const firstMeter = page.locator('.meter-list .list-group-item').first()
+    await expect(firstMeter.locator('.meter-provenance')).toContainText('JVM')
+
+    await firstMeter.click()
+    await expect(page.locator('.provenance-detail').last()).toBeVisible()
+  })
+
+  test('filters meters by explanation source on the server', async ({openView, page}) => {
+    await openView('metrics', 'Metrics')
+
+    const explanationRequest = page.waitForRequest((request) => {
+      const url = new URL(request.url())
+      return url.pathname.endsWith('/api/metrics') && url.searchParams.get('explanation') === 'CURATED'
+    })
+    await page.getByLabel('Filter meters by explanation source').selectOption('CURATED')
+    await explanationRequest
+
+    // Which meters carry a registry description depends on third-party metadata, so assert the invariant instead
+    // of a specific meter: everything rendered under this filter is explained by the catalogue.
+    const sources = page.locator('.meter-list .meter-source')
+    const rendered = await sources.count()
+    for (let index = 0; index < rendered; index += 1) {
+      await expect(sources.nth(index)).toContainText('BootUI catalogue')
+    }
+    if (rendered === 0) {
+      await expect(page.locator('.meter-list')).toContainText('No meters match')
+    }
   })
 })

@@ -892,6 +892,20 @@ while a selected meter's concrete tagged samples use 100-row pages (also capped 
 matching and displayed counts, provides load-more and sample Previous/Next controls, and keeps tag-value choices bounded to
 the first 100 sorted values per key with an explicit truncation badge.
 
+Meters are also grouped by **provenance**: the integration family that registered them (JVM binders, process and system
+binders, HTTP server and client instrumentation, datasource pools, caches, messaging clients, resilience libraries, gRPC,
+framework internals) with anything unrecognized filed under "Application / unclassified". Each group names the library
+that contributes it, how many of its meters the registry itself documents, the curated families that matched, and the tag
+keys most of its meters share. Selecting a group filters the meter list on the server; two additional filters narrow by
+provenance (known integration vs application/unclassified) and by explanation source.
+
+Explanations are honest about where they come from. A meter's own registry description always wins and is marked
+**Native description**; when the registry documents nothing, BootUI falls back to a curated, versioned catalogue of
+well-known meter families and marks the text **BootUI catalogue**; a meter that has neither is marked **Not documented**
+and BootUI says so instead of guessing. Classification matches meter names only — never tag values — on exact names or
+dot-segment prefixes, so an application meter such as `orders.processed` is never absorbed into a curated family. The
+report carries the catalogue version so an explanation can be traced back to the catalogue that produced it.
+
 On Quarkus the panel is identical, served over Micrometer directly (Quarkus has no Actuator): it reads the live composite
 `MeterRegistry` when the application adds a `quarkus-micrometer` registry (for example
 `quarkus-micrometer-registry-prometheus`), and otherwise renders as unavailable while staying in the sidebar. As on Spring
