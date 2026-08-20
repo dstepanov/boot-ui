@@ -76,7 +76,7 @@ RUN chmod +x mvnw
 # image size. (Requires BuildKit, the default in modern Docker.)
 RUN --mount=type=cache,target=/root/.m2 \
     --mount=type=cache,target=/root/.npm \
-    ./mvnw -DskipTests -pl bootui-spring-sample-app -am clean package
+    ./mvnw -B -ntp -DskipTests -pl bootui-spring-sample-app -am clean package
 
 # Explode the repackaged Spring Boot jar into its layers (dependencies,
 # spring-boot-loader, snapshot-dependencies, application). These are copied
