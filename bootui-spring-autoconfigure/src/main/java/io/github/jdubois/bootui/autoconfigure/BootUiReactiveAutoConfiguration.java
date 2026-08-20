@@ -238,6 +238,7 @@ import tools.jackson.databind.ObjectMapper;
     BootUiReactiveAutoConfiguration.ReactiveHttpExchangeRepositoryConfiguration.class,
     HttpExchangesController.class,
     ScheduledController.class,
+    ResilienceController.class,
     HttpProbeController.class,
     PentestingController.class,
     HeapDumpController.class,
@@ -317,6 +318,7 @@ public class BootUiReactiveAutoConfiguration {
             PentestingController.class.getName(),
             ProfileDiffController.class.getName(),
             ScheduledController.class.getName(),
+            ResilienceController.class.getName(),
             SpringController.class.getName(),
             StartupController.class.getName(),
             TracesController.class.getName(),
@@ -400,6 +402,7 @@ public class BootUiReactiveAutoConfiguration {
                 ObjectProvider<LoggersController> loggers,
                 ObjectProvider<ConditionsController> conditions,
                 ObjectProvider<ScheduledController> scheduled,
+                ObjectProvider<ResilienceController> resilience,
                 ObjectProvider<SpringCacheController> cache,
                 ObjectProvider<DatabaseConnectionPoolsController> connectionPools) {
             return new ReactiveBootUiMcpTools(
@@ -430,6 +433,7 @@ public class BootUiReactiveAutoConfiguration {
                     loggers,
                     conditions,
                     scheduled,
+                    resilience,
                     cache,
                     connectionPools);
         }

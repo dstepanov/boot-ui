@@ -1,0 +1,272 @@
+package io.github.jdubois.bootui.autoconfigure.resilience;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import io.github.jdubois.bootui.core.dto.ResiliencePolicyDto;
+import io.github.jdubois.bootui.core.dto.ResiliencePolicySettingDto;
+import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder.CapturedEvent;
+import io.github.jdubois.bootui.engine.resilience.ResilienceVocabulary;
+import io.github.resilience4j.bulkhead.BulkheadConfig;
+import io.github.resilience4j.bulkhead.BulkheadRegistry;
+import io.github.resilience4j.bulkhead.ThreadPoolBulkheadRegistry;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.ratelimiter.RateLimiterConfig;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
+import io.github.resilience4j.retry.RetryConfig;
+import io.github.resilience4j.retry.RetryRegistry;
+import io.github.resilience4j.timelimiter.TimeLimiterConfig;
+import io.github.resilience4j.timelimiter.TimeLimiterRegistry;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
+
+/**
+ * Verifies the Resilience4j binding: every module's registry is read live (so lazily created entries appear),
+ * settings carry honest provenance, metrics are normalized rather than invented, and capture registers on
+ * Resilience4j's own additive event publishers without decorating a call.
+ */
+class Resilience4jPolicyProviderTests {
+
+    private final ResilienceEventRecorder recorder = new ResilienceEventRecorder(true, 50);
+
+    private static DefaultListableBeanFactory beanFactory(Object... registries) {
+        DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
+        int index = 0;
+        for (Object registry : registries) {
+            beanFactory.registerSingleton("registry-" + index++, registry);
+        }
+        return beanFactory;
+    }
+
+    private static Optional<ResiliencePolicySettingDto> setting(ResiliencePolicyDto policy, String name) {
+        return policy.settings().stream()
+                .filter(candidate -> candidate.name().equals(name))
+                .findFirst();
+    }
+
+    private static ResiliencePolicyDto policy(List<ResiliencePolicyDto> policies, String name) {
+        return policies.stream()
+                .filter(candidate -> candidate.name().equals(name))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No policy named " + name + " in " + policies));
+    }
+
+    @Test
+    void reportsUnavailableWhenNoRegistryBeanExists() {
+        Resilience4jPolicyProvider provider = new Resilience4jPolicyProvider(beanFactory(), recorder);
+
+        assertThat(provider.providerId()).isEqualTo(ResilienceVocabulary.PROVIDER_RESILIENCE4J);
+        assertThat(provider.available()).isFalse();
+        assertThat(provider.policies()).isEmpty();
+    }
+
+    @Test
+    void readsCircuitBreakersLiveIncludingEntriesCreatedAfterTheFirstRead() {
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        Resilience4jPolicyProvider provider = new Resilience4jPolicyProvider(beanFactory(registry), recorder);
+        assertThat(provider.policies()).isEmpty();
+
+        registry.circuitBreaker("payments");
+
+        List<ResiliencePolicyDto> policies = provider.policies();
+        assertThat(provider.available()).isTrue();
+        assertThat(policies).hasSize(1);
+        ResiliencePolicyDto breaker = policies.get(0);
+        assertThat(breaker.type()).isEqualTo(ResilienceVocabulary.TYPE_CIRCUIT_BREAKER);
+        assertThat(breaker.provider()).isEqualTo(ResilienceVocabulary.PROVIDER_RESILIENCE4J);
+        assertThat(breaker.source()).isEqualTo(ResilienceVocabulary.SOURCE_REGISTRY);
+        assertThat(breaker.state()).isEqualTo(ResilienceVocabulary.STATE_CLOSED);
+    }
+
+    @Test
+    void derivesSettingProvenanceByComparingWithResilience4jsOwnDefaults() {
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        registry.circuitBreaker(
+                "payments",
+                CircuitBreakerConfig.custom().failureRateThreshold(25f).build());
+        Resilience4jPolicyProvider provider = new Resilience4jPolicyProvider(beanFactory(registry), recorder);
+
+        ResiliencePolicyDto breaker = provider.policies().get(0);
+
+        assertThat(setting(breaker, "failureRateThreshold")).get().satisfies(configured -> {
+            assertThat(configured.value()).isEqualTo("25%");
+            assertThat(configured.provenance()).isEqualTo(ResilienceVocabulary.PROVENANCE_CONFIGURED);
+        });
+        assertThat(setting(breaker, "slidingWindowSize"))
+                .get()
+                .extracting(ResiliencePolicySettingDto::provenance)
+                .isEqualTo(ResilienceVocabulary.PROVENANCE_DEFAULT);
+        // Resilience4j models the open-state wait as an IntervalFunction, so BootUI reports the first
+        // interval and refuses to claim whether it was configured.
+        assertThat(setting(breaker, "waitDurationInOpenState"))
+                .get()
+                .extracting(ResiliencePolicySettingDto::provenance)
+                .isEqualTo(ResilienceVocabulary.PROVENANCE_UNKNOWN);
+    }
+
+    @Test
+    void reportsAnUnfilledFailureRateAsAbsentRatherThanMinusOne() {
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        registry.circuitBreaker("payments");
+        Resilience4jPolicyProvider provider = new Resilience4jPolicyProvider(beanFactory(registry), recorder);
+
+        ResiliencePolicyDto breaker = provider.policies().get(0);
+
+        assertThat(breaker.metrics().failureRatePercent()).isNull();
+        assertThat(breaker.metrics().successfulCalls()).isZero();
+    }
+
+    @Test
+    void readsEveryModuleThroughOneProvider() {
+        CircuitBreakerRegistry breakers = CircuitBreakerRegistry.ofDefaults();
+        breakers.circuitBreaker("breaker");
+        RetryRegistry retries = RetryRegistry.ofDefaults();
+        retries.retry("retry", RetryConfig.custom().maxAttempts(5).build());
+        RateLimiterRegistry rateLimiters = RateLimiterRegistry.ofDefaults();
+        rateLimiters.rateLimiter(
+                "limiter", RateLimiterConfig.custom().limitForPeriod(7).build());
+        BulkheadRegistry bulkheads = BulkheadRegistry.ofDefaults();
+        bulkheads.bulkhead(
+                "bulkhead", BulkheadConfig.custom().maxConcurrentCalls(3).build());
+        ThreadPoolBulkheadRegistry threadPoolBulkheads = ThreadPoolBulkheadRegistry.ofDefaults();
+        threadPoolBulkheads.bulkhead("pool");
+        TimeLimiterRegistry timeLimiters = TimeLimiterRegistry.ofDefaults();
+        timeLimiters.timeLimiter(
+                "limit",
+                TimeLimiterConfig.custom()
+                        .timeoutDuration(Duration.ofSeconds(2))
+                        .build());
+
+        Resilience4jPolicyProvider provider = new Resilience4jPolicyProvider(
+                beanFactory(breakers, retries, rateLimiters, bulkheads, threadPoolBulkheads, timeLimiters), recorder);
+        List<ResiliencePolicyDto> policies = provider.policies();
+
+        assertThat(policies)
+                .extracting(ResiliencePolicyDto::type)
+                .contains(
+                        ResilienceVocabulary.TYPE_CIRCUIT_BREAKER,
+                        ResilienceVocabulary.TYPE_RETRY,
+                        ResilienceVocabulary.TYPE_RATE_LIMITER,
+                        ResilienceVocabulary.TYPE_BULKHEAD,
+                        ResilienceVocabulary.TYPE_TIME_LIMITER);
+        assertThat(setting(policy(policies, "retry"), "maxAttempts"))
+                .get()
+                .extracting(ResiliencePolicySettingDto::value)
+                .isEqualTo("5");
+        assertThat(setting(policy(policies, "limiter"), "limitForPeriod"))
+                .get()
+                .extracting(ResiliencePolicySettingDto::value)
+                .isEqualTo("7");
+        assertThat(setting(policy(policies, "bulkhead"), "maxConcurrentCalls"))
+                .get()
+                .extracting(ResiliencePolicySettingDto::value)
+                .isEqualTo("3");
+        assertThat(setting(policy(policies, "limit"), "timeoutDuration"))
+                .get()
+                .extracting(ResiliencePolicySettingDto::value)
+                .isEqualTo("2000 ms");
+    }
+
+    @Test
+    void capturesCircuitBreakerStateTransitionsAndShortCircuitsAsMetadataOnly() {
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        CircuitBreaker breaker = registry.circuitBreaker("payments");
+        Resilience4jPolicyProvider provider = new Resilience4jPolicyProvider(beanFactory(registry), recorder);
+        provider.afterSingletonsInstantiated();
+
+        breaker.transitionToOpenState();
+        breaker.tryAcquirePermission();
+
+        List<CapturedEvent> events = recorder.recent();
+        assertThat(events)
+                .extracting(CapturedEvent::outcome)
+                .contains(ResilienceVocabulary.OUTCOME_STATE_TRANSITION, ResilienceVocabulary.OUTCOME_SHORT_CIRCUITED);
+        CapturedEvent transition = events.stream()
+                .filter(event -> ResilienceVocabulary.OUTCOME_STATE_TRANSITION.equals(event.outcome()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(transition.policyName()).isEqualTo("payments");
+        assertThat(transition.state()).isEqualTo(ResilienceVocabulary.STATE_OPEN);
+        assertThat(transition.failureCategory()).isNull();
+    }
+
+    @Test
+    void capturesFailuresAsExceptionSimpleNamesWithoutTheirMessages() {
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        CircuitBreaker breaker = registry.circuitBreaker("payments");
+        Resilience4jPolicyProvider provider = new Resilience4jPolicyProvider(beanFactory(registry), recorder);
+        provider.afterSingletonsInstantiated();
+
+        breaker.onError(5, java.util.concurrent.TimeUnit.MILLISECONDS, new IOException("connect to db-42 failed"));
+
+        CapturedEvent event = recorder.recent().stream()
+                .filter(candidate -> ResilienceVocabulary.OUTCOME_ERROR.equals(candidate.outcome()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(event.failureCategory()).isEqualTo("IOException");
+        assertThat(recorder.recent())
+                .noneMatch(candidate -> String.valueOf(candidate).contains("db-42"));
+    }
+
+    @Test
+    void capturesBreakersCreatedLazilyAfterRegistration() {
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        Resilience4jPolicyProvider provider = new Resilience4jPolicyProvider(beanFactory(registry), recorder);
+        provider.afterSingletonsInstantiated();
+
+        CircuitBreaker created = registry.circuitBreaker("late");
+        created.transitionToOpenState();
+
+        assertThat(recorder.recent()).anySatisfy(event -> {
+            assertThat(event.policyName()).isEqualTo("late");
+            assertThat(event.outcome()).isEqualTo(ResilienceVocabulary.OUTCOME_STATE_TRANSITION);
+        });
+    }
+
+    @Test
+    void doesNotSubscribeTwiceWhenRegistrationRunsAgain() {
+        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
+        CircuitBreaker breaker = registry.circuitBreaker("payments");
+        Resilience4jPolicyProvider provider = new Resilience4jPolicyProvider(beanFactory(registry), recorder);
+        provider.afterSingletonsInstantiated();
+        provider.afterSingletonsInstantiated();
+
+        breaker.transitionToOpenState();
+
+        assertThat(recorder.recent())
+                .filteredOn(event -> ResilienceVocabulary.OUTCOME_STATE_TRANSITION.equals(event.outcome()))
+                .hasSize(1);
+    }
+
+    @Test
+    void capturesRetryOutcomesFromResilience4jsRetryPublisher() {
+        RetryRegistry registry = RetryRegistry.ofDefaults();
+        io.github.resilience4j.retry.Retry retry = registry.retry(
+                "orders",
+                RetryConfig.custom()
+                        .maxAttempts(2)
+                        .waitDuration(Duration.ofMillis(1))
+                        .build());
+        Resilience4jPolicyProvider provider = new Resilience4jPolicyProvider(beanFactory(registry), recorder);
+        provider.afterSingletonsInstantiated();
+
+        try {
+            retry.executeCallable(() -> {
+                throw new IOException("boom");
+            });
+        } catch (Exception expected) {
+            // The protected call still fails exactly as it would without BootUI.
+        }
+
+        assertThat(recorder.recent()).isNotEmpty();
+        assertThat(recorder.recent())
+                .allSatisfy(event -> assertThat(event.policyName()).isEqualTo("orders"));
+        assertThat(recorder.recent()).extracting(CapturedEvent::failureCategory).contains("IOException");
+    }
+}

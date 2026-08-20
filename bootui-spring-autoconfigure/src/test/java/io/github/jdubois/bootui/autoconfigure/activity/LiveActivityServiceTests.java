@@ -1121,6 +1121,7 @@ class LiveActivityServiceTests {
                 provider(kafka),
                 provider(jms),
                 provider(null),
+                provider(null),
                 properties);
     }
 
@@ -1154,6 +1155,7 @@ class LiveActivityServiceTests {
                 provider(kafka),
                 provider(jms),
                 provider(rabbit),
+                provider(null),
                 properties);
     }
 

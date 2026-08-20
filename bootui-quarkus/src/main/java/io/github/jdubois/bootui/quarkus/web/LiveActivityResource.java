@@ -31,6 +31,7 @@ import io.github.jdubois.bootui.engine.exceptions.ExceptionsService;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import io.github.jdubois.bootui.engine.security.SecurityEventBuffer;
@@ -148,6 +149,7 @@ public class LiveActivityResource {
     private final Instance<DataSource> dataSources;
     private final KafkaActivityRecorder kafkaRecorder;
     private final RabbitActivityRecorder rabbitRecorder;
+    private final ResilienceEventRecorder resilienceRecorder;
     private final RestClientTraceRecorder restClientTraceRecorder;
     private final SelfTelemetryClassifier selfClassifier;
     private final HttpExchangesService exchanges = new HttpExchangesService();
@@ -174,6 +176,7 @@ public class LiveActivityResource {
             Instance<DataSource> dataSources,
             KafkaActivityRecorder kafkaRecorder,
             RabbitActivityRecorder rabbitRecorder,
+            ResilienceEventRecorder resilienceRecorder,
             RestClientTraceRecorder restClientTraceRecorder,
             SelfTelemetryClassifier selfClassifier) {
         this.buffer = buffer;
@@ -191,6 +194,7 @@ public class LiveActivityResource {
         this.dataSources = dataSources;
         this.kafkaRecorder = kafkaRecorder;
         this.rabbitRecorder = rabbitRecorder;
+        this.resilienceRecorder = resilienceRecorder;
         this.restClientTraceRecorder = restClientTraceRecorder;
         this.selfClassifier = selfClassifier;
     }
@@ -310,6 +314,9 @@ public class LiveActivityResource {
         boolean emailAvailable = emailReport != null;
 
         boolean restClientAvailable = restClientActivityAvailable();
+        boolean resilienceAvailable = panelAvailability.isPanelAvailable(BootUiPanels.RESILIENCE)
+                && panelAvailability.isPanelEnabled(BootUiPanels.RESILIENCE)
+                && resilienceRecorder.isEnabled();
 
         LiveActivityReport report = assembler.report(
                 requests,
@@ -328,6 +335,10 @@ public class LiveActivityResource {
                 limit,
                 kafkaAvailable ? kafkaRecorder.recent() : List.of(),
                 kafkaAvailable,
+                // Quarkus has no JMS capture seam (jakarta.jms is a Spring-adapter concern), so the shared
+                // assembler's JMS slot is explicitly empty rather than approximated.
+                null,
+                false,
                 rabbitAvailable ? rabbitRecorder.recent() : List.of(),
                 rabbitAvailable,
                 emailAvailable ? emailReport.messages() : List.<EmailMessageDto>of(),
@@ -338,7 +349,9 @@ public class LiveActivityResource {
                                 .report(exposure.maskSecrets(), exposure.valueExposure())
                                 .entries()
                         : List.<RestClientTraceEntryDto>of(),
-                restClientAvailable);
+                restClientAvailable,
+                resilienceAvailable ? resilienceRecorder.recent() : List.<ResilienceEventRecorder.CapturedEvent>of(),
+                resilienceAvailable);
 
         // Adapter-side post-processing over the shared assembler's output — not a change to the engine's
         // own `profileable` default (which stays `false` for every entry it builds, unaffected by this

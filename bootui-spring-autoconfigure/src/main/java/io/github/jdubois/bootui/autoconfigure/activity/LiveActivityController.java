@@ -31,6 +31,7 @@ import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
 import io.github.jdubois.bootui.engine.jms.JmsActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
@@ -112,6 +113,7 @@ public class LiveActivityController {
             ObjectProvider<KafkaActivityRecorder> kafkaActivityRecorder,
             ObjectProvider<JmsActivityRecorder> jmsActivityRecorder,
             ObjectProvider<RabbitActivityRecorder> rabbitActivityRecorder,
+            ObjectProvider<ResilienceEventRecorder> resilienceEventRecorder,
             ObjectProvider<EmailCaptureService> emailCaptureService,
             SwitchableActivityStore activityStore,
             ActivityPersistenceSettings persistenceSettings,
@@ -132,6 +134,7 @@ public class LiveActivityController {
                 kafkaActivityRecorder,
                 jmsActivityRecorder,
                 rabbitActivityRecorder,
+                resilienceEventRecorder,
                 properties);
         this.correlator = new LiveActivityCorrelator(
                 httpExchanges,
@@ -176,6 +179,10 @@ public class LiveActivityController {
         RabbitActivityRecorder rabbitRecorder = rabbitActivityRecorder.getIfAvailable();
         if (rabbitRecorder != null) {
             unsubscribers.add(rabbitRecorder.subscribe(changeStream::signal));
+        }
+        ResilienceEventRecorder resilienceRecorder = resilienceEventRecorder.getIfAvailable();
+        if (resilienceRecorder != null) {
+            unsubscribers.add(resilienceRecorder.subscribe(changeStream::signal));
         }
         EmailCaptureService emailCapture = emailCaptureService.getIfAvailable();
         if (emailCapture != null) {

@@ -42,6 +42,8 @@ import io.github.jdubois.bootui.engine.pentesting.PentestingScanner;
 import io.github.jdubois.bootui.engine.quarkusapp.QuarkusAppScanner;
 import io.github.jdubois.bootui.engine.quarkussecurity.QuarkusSecurityScanner;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceService;
 import io.github.jdubois.bootui.engine.restapi.RestApiScanner;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.safety.ApiTokenAuthenticator;
@@ -63,6 +65,7 @@ import io.github.jdubois.bootui.quarkus.logging.QuarkusLoggerProvider;
 import io.github.jdubois.bootui.quarkus.mappings.QuarkusMappingProvider;
 import io.github.jdubois.bootui.quarkus.pentesting.QuarkusPentestingObservationCollector;
 import io.github.jdubois.bootui.quarkus.quarkusapp.QuarkusAppSnapshotProviderImpl;
+import io.github.jdubois.bootui.quarkus.resilience.QuarkusResiliencePolicyProvider;
 import io.github.jdubois.bootui.quarkus.scheduled.QuarkusScheduledTaskProvider;
 import io.github.jdubois.bootui.quarkus.security.QuarkusSecuritySnapshotProviderImpl;
 import io.github.jdubois.bootui.quarkus.web.GitHubApiClient;
@@ -963,6 +966,55 @@ public class BootUiEngineProducer {
     @Singleton
     public ScheduledTasksService scheduledTasksService(QuarkusScheduledTaskProvider provider) {
         return new ScheduledTasksService(provider);
+    }
+
+    /**
+     * The Resilience panel's bounded, metadata-only capture buffer. Produced <em>unconditionally</em> because
+     * {@link ResilienceEventRecorder} holds no fault-tolerance type of its own (only JDK types): the
+     * {@code io.smallrye.faulttolerance}-importing port ({@code SmallRyeCircuitBreakerStates}) that feeds it
+     * lives behind the {@code SMALLRYE_FAULT_TOLERANCE} capability gate (R2), and {@code LiveActivityResource}
+     * reads the recorder directly. When the extension is absent nothing is ever recorded and the buffer simply
+     * stays empty, so Live Activity renders no {@code RESILIENCE} entries.
+     *
+     * <p>The {@code bootui.resilience.*} keys and their defaults (enabled {@code true}, max-events
+     * {@code 200}) are kept unified with the Spring adapter's {@code BootUiProperties.Resilience}, so the same
+     * values size and gate capture identically on both frameworks. Disabling the Resilience panel also
+     * disables its underlying capture, and a disabled recorder registers no listener at all.</p>
+     */
+    @Produces
+    @Singleton
+    public ResilienceEventRecorder resilienceEventRecorder(Config config, Instance<TraceIdProvider> traceIdProvider) {
+        boolean enabled = config.getOptionalValue("bootui.resilience.enabled", Boolean.class)
+                        .orElse(true)
+                && config.getOptionalValue("bootui.panels.resilience.enabled", Boolean.class)
+                        .orElse(true);
+        int maxEvents = config.getOptionalValue("bootui.resilience.max-events", Integer.class)
+                .orElse(200);
+        ResilienceEventRecorder recorder = new ResilienceEventRecorder(enabled, maxEvents);
+        if (traceIdProvider.isResolvable()) {
+            recorder.setTraceIdProvider(traceIdProvider.get());
+        }
+        return recorder;
+    }
+
+    /**
+     * The Resilience panel report assembler. The engine {@link ResilienceService} owns only the neutral
+     * ordering, caps, per-type aggregation and availability wrapping; the Quarkus
+     * {@link QuarkusResiliencePolicyProvider} maps the build-time-captured SmallRye Fault Tolerance
+     * annotations to the neutral DTO. The concrete provider is injected (not the SPI) so resolution can never
+     * become ambiguous, mirroring the other producers.
+     *
+     * <p>Produced <em>unconditionally</em> (it holds no fault-tolerance type): when
+     * {@code quarkus-smallrye-fault-tolerance} is absent the provider's captured-policies {@code Instance} is
+     * unsatisfied, so it reports unavailable and the engine renders {@code resiliencePresent=false}.</p>
+     */
+    @Produces
+    @Singleton
+    public ResilienceService resilienceService(
+            Config config, QuarkusResiliencePolicyProvider provider, ResilienceEventRecorder recorder) {
+        int maxEvents = config.getOptionalValue("bootui.resilience.max-events", Integer.class)
+                .orElse(200);
+        return new ResilienceService(List.of(provider), recorder, maxEvents);
     }
 
     /**

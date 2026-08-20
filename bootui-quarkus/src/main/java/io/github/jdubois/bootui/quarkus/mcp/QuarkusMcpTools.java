@@ -40,6 +40,7 @@ import io.github.jdubois.bootui.quarkus.web.OverviewResource;
 import io.github.jdubois.bootui.quarkus.web.PentestingResource;
 import io.github.jdubois.bootui.quarkus.web.ProfileDiffResource;
 import io.github.jdubois.bootui.quarkus.web.RabbitResource;
+import io.github.jdubois.bootui.quarkus.web.ResilienceResource;
 import io.github.jdubois.bootui.quarkus.web.RestApiResource;
 import io.github.jdubois.bootui.quarkus.web.RestClientTraceResource;
 import io.github.jdubois.bootui.quarkus.web.ScheduledResource;
@@ -111,6 +112,7 @@ public class QuarkusMcpTools {
             VulnerabilitiesResource vulnerabilities,
             LoggersResource loggers,
             ScheduledResource scheduled,
+            ResilienceResource resilience,
             CacheResource cache,
             ConnectionPoolsResource connectionPools,
             MetricsResource metrics,
@@ -443,6 +445,14 @@ public class QuarkusMcpTools {
                         McpToolDescriptions.quarkus("get_scheduled_tasks"),
                         BootUiPanels.SCHEDULED,
                         args -> scheduled.scheduled()));
+        addIfAvailable(
+                registry,
+                availability,
+                read(
+                        "get_resilience",
+                        McpToolDescriptions.quarkus("get_resilience"),
+                        BootUiPanels.RESILIENCE,
+                        args -> resilience.resilience()));
         addIfAvailable(
                 registry,
                 availability,

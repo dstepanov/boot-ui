@@ -199,6 +199,10 @@ public class PanelsController {
             case BootUiPanels.KAFKA -> availability(kafkaAvailable(), "No KafkaTemplate bean is available");
             case BootUiPanels.RABBITMQ -> availability(rabbitAvailable(), "No RabbitTemplate bean is available");
             case BootUiPanels.JMS -> availability(jmsAvailable(), jmsUnavailableReason());
+            case BootUiPanels.RESILIENCE ->
+                availability(
+                        resilienceAvailable(),
+                        "No supported resilience library is present (Resilience4j or Spring Retry)");
             case BootUiPanels.SECURITY -> availability(securityAvailable(), securityUnavailableReason());
             case BootUiPanels.AI -> availability(aiAvailable(), aiUnavailableReason());
             case BootUiPanels.COPILOT ->
@@ -416,6 +420,17 @@ public class PanelsController {
     private boolean rabbitAvailable() {
         return classPresent("org.springframework.amqp.rabbit.core.RabbitTemplate")
                 && beanPresent("org.springframework.amqp.rabbit.core.RabbitTemplate");
+    }
+
+    /**
+     * The Resilience panel needs a resilience library, not a specific bean: Resilience4j registries are
+     * often created programmatically and Spring Retry has no registry at all. Presence of any supported
+     * entry point is therefore the availability signal, and the panel's own report explains precisely which
+     * providers answered.
+     */
+    private boolean resilienceAvailable() {
+        return classPresent("io.github.resilience4j.core.Registry")
+                || classPresent("org.springframework.retry.annotation.Retryable");
     }
 
     private boolean jmsAvailable() {
