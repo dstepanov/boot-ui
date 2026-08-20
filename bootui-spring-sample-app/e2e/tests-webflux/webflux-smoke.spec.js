@@ -16,9 +16,10 @@ async function expandAllSidebarGroups(page) {
  * bootui-conformance suite (WebFluxApiConformanceTest) and the servlet e2e spec-per-panel coverage - the
  * same Vue bundle is served either way, so once one adapter's UI is proven, the remaining risk specific
  * to WebFlux is (a) the shell actually boots and reports the right platform, (b) a representative sample
- * of panels that ARE ported render correctly, and (c) the panel that stays unavailable on this adapter
+ * of panels that ARE ported render correctly, (c) the panel that stays unavailable on this adapter
  * (HTTP Sessions) surfaces its WebFlux-specific explanation through the real
- * sidebar/alert UI rather than just the JSON contract.
+ * sidebar/alert UI rather than just the JSON contract, and (d) client-side actions that read a shared DTO
+ * - such as HTTP Exchanges' "Copy as cURL" - produce the same text from reactive-captured evidence.
  */
 test.describe('BootUI on Spring WebFlux', () => {
   test('panels manifest reports the reactive platform', async ({request, baseURL}) => {
@@ -252,6 +253,54 @@ test.describe('BootUI on Spring WebFlux', () => {
     await expect(page.getByRole('button', {name: 'Resume'})).toBeVisible()
     await page.getByRole('button', {name: 'Resume'}).click()
     await expect(page.getByRole('button', {name: 'Pause'})).toBeVisible()
+  })
+
+  test('HTTP Exchanges copies the same safe cURL template on the reactive stack', async ({
+    browserName,
+    context,
+    page,
+    request
+  }) => {
+    if (browserName === 'chromium') {
+      try {
+        await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+      } catch {
+        /* no-op */
+      }
+    }
+
+    const probe = await request.get('/api/greetings/Ada?curlProbe=alpha&curlProbe=beta', {
+      headers: {accept: 'application/json', 'x-api-key': 'e2e-must-not-be-copied'}
+    })
+    expect(probe.ok()).toBeTruthy()
+
+    await page.goto('/bootui/#/http-exchanges')
+    await page.locator('#http-exchanges-filter').fill('curlProbe')
+
+    const probeRow = page.locator('tbody tr', {hasText: 'curlProbe'}).first()
+    await expect(probeRow).toBeVisible({timeout: 15_000})
+    await probeRow.locator('.http-exchanges-detail-toggle').click()
+    // Precondition: the header really was recorded, so the absence assertions below cannot pass vacuously.
+    await expect(page.locator('.http-exchanges-detail').first()).toContainText(/x-api-key/i)
+
+    const curlAction = page.locator('.http-exchanges-curl').first()
+    const copyButton = curlAction.locator('.http-exchanges-curl-copy')
+    await copyButton.click()
+    // Wait for the confirmed copy before reading, so the clipboard cannot still hold older content.
+    await expect(copyButton).toContainText('Copied')
+
+    const copied = await page.evaluate(() => navigator.clipboard.readText())
+    await expect(curlAction.locator('.http-exchanges-curl-command')).toHaveText(copied)
+
+    const lines = copied.split(' \\\n')
+    expect(lines[0]).toMatch(/^curl --globoff 'http:\/\/[^']+\/api\/greetings\/Ada\?curlProbe=VALUE&curlProbe=VALUE'$/)
+    for (const line of lines.slice(1)) {
+      expect(line).toMatch(/^ {2}-H '(Accept|Accept-Language|Cache-Control|Content-Type|User-Agent): [^']*'$/)
+    }
+    expect(lines).toContain("  -H 'Accept: application/json'")
+    expect(copied).not.toContain('alpha')
+    expect(copied.toLowerCase()).not.toContain('x-api-key')
+    expect(copied).not.toContain('e2e-must-not-be-copied')
   })
 
   test('panels with no reactive equivalent yet explain why in the sidebar and panel alert', async ({page}) => {

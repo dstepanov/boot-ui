@@ -7,6 +7,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Copy as cURL in HTTP Exchanges on Spring MVC, Spring WebFlux, and Quarkus.** Request details now offer a
+  client-side action that turns the retained exchange metadata into a runnable cURL *template*: query-parameter names
+  survive but every value becomes a placeholder, only a short allowlist of unmasked request headers is copied
+  (authorization, cookies, proxy credentials, API keys, forwarding headers, tracing headers and unknown headers are
+  omitted under every exposure mode), and every argument is POSIX-quoted so captured metacharacters cannot escape.
+  Copying sends no request and changes no state, the command is shown in full before you copy it, the action explains
+  the omitted body, values and headers, and exchanges without a usable URL or method announce a clear reason instead of
+  a misleading command.
+
 ## [1.14.1] - 2026-08-20
 
 Patch release that restores Spring native and Quarkus Docker startup, fixes the native-image build bootstrap on AMD64,

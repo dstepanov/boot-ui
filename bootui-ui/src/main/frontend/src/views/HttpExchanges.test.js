@@ -104,4 +104,94 @@ describe('HTTP Exchanges', () => {
       expect.objectContaining({signal: expect.any(AbortSignal)})
     )
   })
+
+  async function openDetails(overrides) {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(report(overrides))))
+    const wrapper = mount(HttpExchanges)
+    await flushPromises()
+    await wrapper.find('.http-exchanges-detail-toggle').trigger('click')
+    return wrapper
+  }
+
+  it('copies a safe cURL template without secrets, values, or a request', async () => {
+    const writeText = vi.fn().mockResolvedValue()
+    Object.assign(navigator, {clipboard: {writeText}})
+
+    const wrapper = await openDetails()
+    const copyButton = wrapper.find('.http-exchanges-curl-copy')
+    expect(copyButton.attributes('aria-disabled')).toBeUndefined()
+    expect(copyButton.text()).toContain('Copy as cURL')
+
+    await copyButton.trigger('click')
+    await flushPromises()
+
+    expect(writeText).toHaveBeenCalledTimes(1)
+    const command = writeText.mock.calls[0][0]
+    expect(command).toBe(
+      [
+        "curl --globoff -X 'POST' 'http://localhost/api/orders?token=VALUE&page=VALUE' \\",
+        "  -H 'Accept: application/json'"
+      ].join('\n')
+    )
+    expect(command).not.toContain('Authorization')
+    expect(command).not.toContain('******')
+    // Only the initial list load happened: copying never calls the backend.
+    expect(fetch).toHaveBeenCalledTimes(1)
+
+    expect(wrapper.find('.http-exchanges-curl-copy').text()).toContain('Copied')
+    expect(wrapper.find('.http-exchanges-curl-command').text()).toBe(command)
+    const status = wrapper.find('.http-exchanges-copy-status')
+    expect(status.text()).toContain('cURL template copied')
+    // The announcement never repeats a recorded query value.
+    expect(status.text()).not.toContain('token')
+    expect(status.attributes('role')).toBe('status')
+  })
+
+  it('explains the omitted body, query values, and headers', async () => {
+    const wrapper = await openDetails()
+    const notes = wrapper.find('.http-exchanges-curl-notes').text()
+
+    expect(notes).toContain('BootUI never captures request bodies')
+    expect(notes).toContain('2 query parameter names are kept')
+    expect(notes).toContain('1 request header was omitted')
+    expect(notes).toContain('add your own --data')
+    expect(wrapper.find('.http-exchanges-curl-unavailable').exists()).toBe(false)
+  })
+
+  it('surfaces a clipboard denial instead of pretending the copy worked', async () => {
+    Object.assign(navigator, {clipboard: {writeText: vi.fn().mockRejectedValue(new Error('denied'))}})
+
+    const wrapper = await openDetails()
+    await wrapper.find('.http-exchanges-curl-copy').trigger('click')
+    await flushPromises()
+
+    const alert = wrapper.find('.http-exchanges-curl [role="alert"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain('blocked clipboard access')
+    // The fallback tells the user to copy the command manually, so it must be on screen.
+    expect(wrapper.find('.http-exchanges-curl-command').text()).toContain('curl --globoff')
+    expect(wrapper.find('.http-exchanges-curl-copy').text()).toContain('Copy as cURL')
+    expect(wrapper.find('.http-exchanges-copy-status').text()).toBe('')
+
+    // Collapsing the row clears the stale failure so reopening it does not show an old alert.
+    await wrapper.find('.http-exchanges-detail-toggle').trigger('click')
+    await wrapper.find('.http-exchanges-detail-toggle').trigger('click')
+    expect(wrapper.find('.http-exchanges-curl [role="alert"]').exists()).toBe(false)
+  })
+
+  it('deactivates the action with a clear, announced reason when the request URL was not recorded', async () => {
+    const wrapper = await openDetails({
+      exchanges: [{...report().exchanges[0], uri: null, query: null}]
+    })
+
+    const copyButton = wrapper.find('.http-exchanges-curl-copy')
+    // aria-disabled keeps the control focusable so assistive technology can reach its reason.
+    expect(copyButton.attributes('aria-disabled')).toBe('true')
+    expect(copyButton.attributes('disabled')).toBeUndefined()
+    const reason = wrapper.find('.http-exchanges-curl-unavailable')
+    expect(copyButton.attributes('aria-describedby')).toBe(reason.attributes('id'))
+    expect(reason.text()).toContain('no recorded absolute http(s) request URL')
+    expect(wrapper.find('.http-exchanges-curl-notes').exists()).toBe(false)
+    expect(wrapper.find('.http-exchanges-curl-command').exists()).toBe(false)
+  })
 })

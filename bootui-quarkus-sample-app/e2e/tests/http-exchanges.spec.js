@@ -31,4 +31,61 @@ test.describe('HTTP Exchanges view (Quarkus)', () => {
     await expect(page.locator('table')).toContainText('/api/secure', {timeout: 15_000})
     await expect(page.locator('table')).toContainText('401')
   })
+
+  test('copies a safe cURL template without values, secrets, or a replayed request', async ({
+    browserName,
+    context,
+    openView,
+    page
+  }) => {
+    if (browserName === 'chromium') {
+      try {
+        await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+      } catch {
+        /* no-op */
+      }
+    }
+
+    const probeResponse = await page.request.get('/api/sample/products?curlProbe=alpha&curlProbe=beta', {
+      headers: {accept: 'application/json', 'x-api-key': 'e2e-must-not-be-copied'}
+    })
+    expect(probeResponse.ok()).toBeTruthy()
+
+    await openView('http-exchanges', 'HTTP Exchanges')
+    await page.locator('#http-exchanges-filter').fill('curlProbe')
+
+    const probeRow = page.locator('tbody tr', {hasText: 'curlProbe'}).first()
+    await expect(probeRow).toBeVisible({timeout: 15_000})
+    await probeRow.locator('.http-exchanges-detail-toggle').click()
+
+    const detail = page.locator('.http-exchanges-detail').first()
+    // Precondition: the header really was recorded, so the absence assertions below cannot pass vacuously.
+    await expect(detail).toContainText(/x-api-key/i)
+
+    const curlAction = page.locator('.http-exchanges-curl').first()
+    await expect(curlAction).toContainText('BootUI never captures request bodies')
+    await expect(curlAction).toContainText('query parameter names are kept')
+
+    const copyButton = curlAction.locator('.http-exchanges-curl-copy')
+    await expect(copyButton).toBeEnabled()
+    await copyButton.click()
+    await expect(copyButton).toContainText('Copied')
+    await expect(page.locator('.http-exchanges-copy-status')).toContainText('cURL template copied')
+
+    const copied = await page.evaluate(() => navigator.clipboard.readText())
+    await expect(curlAction.locator('.http-exchanges-curl-command')).toHaveText(copied)
+
+    const lines = copied.split(' \\\n')
+    expect(lines[0]).toMatch(
+      /^curl --globoff 'http:\/\/[^']+\/api\/sample\/products\?curlProbe=VALUE&curlProbe=VALUE'$/
+    )
+    for (const line of lines.slice(1)) {
+      expect(line).toMatch(/^ {2}-H '(Accept|Accept-Language|Cache-Control|Content-Type|User-Agent): [^']*'$/)
+    }
+    expect(lines).toContain("  -H 'Accept: application/json'")
+    expect(copied).not.toContain('alpha')
+    expect(copied).not.toContain('beta')
+    expect(copied.toLowerCase()).not.toContain('x-api-key')
+    expect(copied).not.toContain('e2e-must-not-be-copied')
+  })
 })
