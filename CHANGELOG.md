@@ -7,6 +7,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **WebSockets panel.** A new `websockets` panel and stable `/bootui/api/websockets/**` contract report the WebSocket
+  endpoints an application declares, the connections currently open against them, STOMP subscriptions, and a bounded log
+  of recent frame **metadata** — direction, frame type, destination, and payload size. Message payloads are never read,
+  decoded, or stored on any stack, and provider session ids are replaced by a short one-way hash. Frame capture is
+  installed only through Spring MVC's public `WebSocketMessageBrokerConfigurer` seams; Spring WebFlux and Quarkus report
+  endpoints and live connections with `frameCaptureSupported=false` and a concrete reason rather than pretending. The
+  panel refreshes over Server-Sent Events and exposes local-only Pause/Resume and Clear actions, both gated by
+  `bootui.panels.websockets.read-only`. Configurable under `bootui.websockets.*`.
+
 ## [1.14.1] - 2026-08-20
 
 Patch release that restores Spring native and Quarkus Docker startup, fixes the native-image build bootstrap on AMD64,

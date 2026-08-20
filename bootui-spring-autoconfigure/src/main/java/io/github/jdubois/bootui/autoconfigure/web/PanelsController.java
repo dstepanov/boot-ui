@@ -10,6 +10,7 @@ import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels.Panel;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.telemetry.AiFrameworkDetector;
+import io.github.jdubois.bootui.engine.websocket.WebSocketService;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.regex.Pattern;
@@ -199,6 +200,7 @@ public class PanelsController {
             case BootUiPanels.KAFKA -> availability(kafkaAvailable(), "No KafkaTemplate bean is available");
             case BootUiPanels.RABBITMQ -> availability(rabbitAvailable(), "No RabbitTemplate bean is available");
             case BootUiPanels.JMS -> availability(jmsAvailable(), jmsUnavailableReason());
+            case BootUiPanels.WEBSOCKETS -> availability(webSocketsAvailable(), webSocketsUnavailableReason());
             case BootUiPanels.SECURITY -> availability(securityAvailable(), securityUnavailableReason());
             case BootUiPanels.AI -> availability(aiAvailable(), aiUnavailableReason());
             case BootUiPanels.COPILOT ->
@@ -423,6 +425,34 @@ public class PanelsController {
                 && classPresent("org.springframework.jms.core.JmsTemplate")
                 && classPresent("jakarta.jms.Message")
                 && beanPresent("org.springframework.jms.core.JmsTemplate");
+    }
+
+    /**
+     * The WebSockets panel is available when a WebSocket stack is present <em>and</em> the application
+     * actually declares an endpoint: the panel describes the application's own endpoints, so an empty
+     * topology means there is nothing to show rather than a degraded panel.
+     */
+    private boolean webSocketsAvailable() {
+        // Availability only, never a full report: the manifest is fetched on every page load and route
+        // change, and assembling the report would scan handler mappings and copy the activity buffer.
+        return webSocketService().map(WebSocketService::isAvailable).orElse(false);
+    }
+
+    private String webSocketsUnavailableReason() {
+        if (webSocketService().isEmpty()) {
+            return "No WebSocket support is on the classpath. Add spring-boot-starter-websocket "
+                    + "(Spring MVC) or a reactive WebSocketHandler mapping (WebFlux).";
+        }
+        return "No WebSocket endpoint is declared by this application";
+    }
+
+    private java.util.Optional<WebSocketService> webSocketService() {
+        try {
+            return applicationContext.getBeansOfType(WebSocketService.class, false, false).values().stream()
+                    .findFirst();
+        } catch (RuntimeException ex) {
+            return java.util.Optional.empty();
+        }
     }
 
     private String jmsUnavailableReason() {

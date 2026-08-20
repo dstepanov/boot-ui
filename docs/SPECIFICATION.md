@@ -2093,6 +2093,10 @@ Initial endpoints:
 | `/bootui/api/rest-client-trace/clear`        | POST   | Clear the retained REST client call buffer                                              |
 | `/bootui/api/rest-client-trace/recording`    | POST   | Pause/resume REST client call capture at runtime                                        |
 | `/bootui/api/rest-client-trace/stream`       | GET    | REST Client change notifications over Server-Sent Events (re-fetch trigger)             |
+| `/bootui/api/websockets`                     | GET    | Declared WebSocket endpoints, live sessions, STOMP subscriptions, and captured frame metadata |
+| `/bootui/api/websockets`                     | DELETE | Clear captured WebSocket frame metadata and per-session counters                        |
+| `/bootui/api/websockets/capture`             | POST   | Pause/resume WebSocket frame-metadata capture at runtime                                |
+| `/bootui/api/websockets/stream`              | GET    | WebSockets change notifications over Server-Sent Events (re-fetch trigger)              |
 | `/bootui/api/sql-trace`                      | GET    | Current bounded SQL trace snapshot and aggregate statistics                             |
 | `/bootui/api/transactions`                   | GET    | Current bounded transaction-boundary snapshot and aggregate statistics                 |
 | `/bootui/api/activity`                       | GET    | Merged Live Activity stream and KPI summary (params: `type`, `severity`, `since`, `limit`, plus `q`, `until`, `cursor`, `pageSize` when persistence is enabled) |
@@ -2367,6 +2371,7 @@ Top-level navigation:
 - Services:
   - Scheduled Tasks.
   - REST Client.
+  - WebSockets.
   - AI Framework.
   - Cache.
   - Email.

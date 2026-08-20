@@ -229,7 +229,35 @@ public final class BootUiApiContractCatalog {
             capabilityList("email", "/email", "messages", "total", fields("devTrapEnabled", JsonType.BOOLEAN)),
             capture("kafka", "/kafka", "messages"),
             capture("rabbitmq", "/rabbitmq", "messages"),
-            capture("jms", "/jms", "messages"));
+            capture("jms", "/jms", "messages"),
+            read(
+                    "websockets",
+                    "/websockets",
+                    fields(
+                            "available", JsonType.BOOLEAN,
+                            "unavailableReason", JsonType.NULLABLE_STRING,
+                            "framework", JsonType.NULLABLE_STRING,
+                            "capturing", JsonType.BOOLEAN,
+                            "frameCaptureSupported", JsonType.BOOLEAN,
+                            "frameCaptureUnavailableReason", JsonType.NULLABLE_STRING,
+                            "sessionTrackingSupported", JsonType.BOOLEAN,
+                            "sessionTrackingUnavailableReason", JsonType.NULLABLE_STRING,
+                            "brokerPrefixes", JsonType.ARRAY,
+                            "applicationDestinationPrefixes", JsonType.ARRAY,
+                            "userDestinationPrefix", JsonType.NULLABLE_STRING,
+                            "maxEndpoints", JsonType.INTEGER,
+                            "maxSessions", JsonType.INTEGER,
+                            "maxSubscriptions", JsonType.INTEGER,
+                            "maxActivityEntries", JsonType.INTEGER,
+                            "endpointsTruncated", JsonType.BOOLEAN,
+                            "sessionsTruncated", JsonType.BOOLEAN,
+                            "subscriptionsTruncated", JsonType.BOOLEAN,
+                            "endpoints", JsonType.ARRAY,
+                            "sessions", JsonType.ARRAY,
+                            "subscriptions", JsonType.ARRAY,
+                            "activity", JsonType.ARRAY,
+                            "stats", JsonType.OBJECT,
+                            "warnings", JsonType.ARRAY)));
 
     private static final List<ActionContract> ACTIONS = buildActions();
 
@@ -312,6 +340,8 @@ public final class BootUiApiContractCatalog {
         all(actions, "kafka.clear", "kafka", "DELETE", "/kafka");
         all(actions, "rabbitmq.clear", "rabbitmq", "DELETE", "/rabbitmq");
         spring(actions, "jms.clear", "jms", "DELETE", "/jms");
+        all(actions, "websockets.clear", "websockets", "DELETE", "/websockets");
+        all(actions, "websockets.capture", "websockets", "POST", "/websockets/capture");
 
         infrastructure(actions, "dismissed-rules.dismiss", "POST", "/dismissed-rules/conformance-rule", ALL, true);
         infrastructure(actions, "dismissed-rules.restore", "DELETE", "/dismissed-rules/conformance-rule", ALL, true);

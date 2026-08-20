@@ -193,6 +193,7 @@ Enforced identically on Spring and Quarkus (`PanelAccessFilter` / `QuarkusPanelA
 | Security        | Security Logs             | `security-logs`             | `bootui.panels.security-logs.enabled`             | Not applicable; view-only.                |
 | Services        | Scheduled Tasks           | `scheduled`                 | `bootui.panels.scheduled.enabled`                 | Not applicable; view-only.                |
 | Services        | REST Client               | `rest-client-trace`         | `bootui.panels.rest-client-trace.enabled`         | `bootui.panels.rest-client-trace.read-only` |
+| Services        | WebSockets                | `websockets`                | `bootui.panels.websockets.enabled`                | `bootui.panels.websockets.read-only`      |
 | Services        | AI Framework              | `ai`                        | `bootui.panels.ai.enabled`                        | Not applicable; view-only.                |
 | Services        | Cache                     | `cache`                     | `bootui.panels.cache.enabled`                     | `bootui.panels.cache.read-only`           |
 | Services        | Email                     | `email`                     | `bootui.panels.email.enabled`                     | `bootui.panels.email.read-only`           |
@@ -406,6 +407,23 @@ blocked when either `bootui.read-only=true` or `bootui.panels.database-advisor.r
 | `bootui.rest-client-trace.max-uri-length`             | `2000`  | Maximum retained length of the request URI and path; longer values are truncated. |
 | `bootui.rest-client-trace.max-header-value-length`    | `200`   | **Spring only:** maximum retained length of a captured header value. Quarkus captures no headers. |
 | `bootui.rest-client-trace.chatty-call-threshold`      | `5`     | Number of calls to the same method/host/path (with numeric and UUID path segments normalized) within the buffer before the group is flagged as a likely repeated-call access pattern (minimum `2`). |
+
+### WebSockets
+
+| Property                                    | Default | Description |
+| ------------------------------------------- | ------- | ----------- |
+| `bootui.panels.websockets.enabled`          | `true`  | Show the WebSockets panel with its endpoints, live sessions, subscriptions, and captured frame metadata. |
+| `bootui.panels.websockets.read-only`        | `false` | Disable the Pause/Resume and Clear actions while keeping the endpoint topology and captured metadata visible. |
+| `bootui.websockets.enabled`                 | `true`  | Install the frame-capture seam where the stack supports one (Spring MVC + STOMP). When `false`, the panel still reports endpoints, sessions, and subscriptions but captures no frame metadata. |
+| `bootui.websockets.capturing`               | `true`  | Initial frame-capture state. Capture can be paused and resumed at runtime from the panel without removing the instrumentation. |
+| `bootui.websockets.max-endpoints`           | `200`   | Maximum number of declared endpoints reported; the panel says when the list was truncated. |
+| `bootui.websockets.max-sessions`            | `200`   | Maximum number of sessions reported; the panel says when the list was truncated. |
+| `bootui.websockets.max-subscriptions`       | `500`   | Maximum number of STOMP subscriptions reported; the panel says when the list was truncated. |
+| `bootui.websockets.max-activity-entries`    | `500`   | Maximum frame-metadata entries retained in the bounded in-memory ring buffer. |
+| `bootui.websockets.max-tracked-sessions`    | `2000`  | Maximum number of sessions for which per-session frame and byte counters are retained. |
+
+BootUI never reads, decodes, or stores a WebSocket message payload on any stack; only frame size, direction, type, and
+destination are recorded, and provider session ids are replaced by a short one-way hash before they leave the process.
 
 ### AI Framework
 

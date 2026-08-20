@@ -214,7 +214,7 @@ captured after Arc build-time validation and overlaid on the retained runtime in
 Conditions evidence remain unavailable) · `Overview` (panel available; the scoring dashboard
 aggregates the advisor endpoints client-side, and `GET /bootui/api/overview` reports the Quarkus version + shell chrome).
 
-### 5.3 Kept, with a rebuilt capture layer or reduced fidelity (12)
+### 5.3 Kept, with a rebuilt capture layer or reduced fidelity (13)
 
 The DTO and UI are reused; the Quarkus adapter rebuilds the capture/source on the reactive stack.
 
@@ -232,6 +232,7 @@ The DTO and UI are reused; the Quarkus adapter rebuilds the capture/source on th
 | `Email`               | **Implemented** — captured via a CDI `@Observes SentMail` observer (`QuarkusEmailCapture`) into the shared `EmailCaptureService`, replacing Spring's `CapturingJavaMailSender` decorator; one observer catches the blocking/reactive/Mutiny send styles (all funnel through the internal mailer that fires `io.quarkus.mailer.SentMail` after each successful send, mock or real). Gated on `quarkus-mailer` — the sole `io.quarkus.mailer`-importing class (`QuarkusEmailCapture`) is `provided`-scoped and excluded by the deployment `registerEmail` build step (class-presence check on `io.quarkus.mailer.reactive.ReactiveMailer`, non-prod only) when absent, R2; the mailer-free `EmailResource`/`EmailCaptureService` are always wired, so `GET /bootui/api/email` renders `available:false` with a `quarkus-mailer` hint rather than throwing. The `.eml` download delegates to the shared engine renderer so the bytes match Spring. Reduced fidelity: because the event fires *after* the send, there is no BootUI dev-trap — the sent/not-sent distinction instead reflects the framework's own mock-mail mode (`quarkus.mailer.mock`, default in dev/test), labelled **mock** in the UI; attachment size is unknown (the sent-attachment API exposes none). Content masking is identical (revealed by default, decoupled from `bootui.expose-values`; opt in with `bootui.email.mask-content=true`). `clear` (DELETE) behind the `LocalhostGuard` write floor |
 | `Kafka`               | **Implemented** — the standalone panel over the same shared `KafkaActivityRecorder`/`Capability.KAFKA` gate described in the `Live Activity` row above; `GET`/`DELETE /bootui/api/kafka` mirror Spring's `KafkaController` contract exactly (list newest-first, clear), and the same reduced-fidelity notes carry over unchanged: metadata-only capture (never the payload), a null consumer group id (`IncomingKafkaRecordMetadata` exposes none), the channel name used as the listener id, and a null producer duration (the ack callback carries no send-start timestamp). Reports unavailable with a `quarkus-messaging-kafka` hint when the capability is absent. `clear` (DELETE) behind the `LocalhostGuard` write floor |
 | `RabbitMQ`            | **Implemented** — the standalone panel over the shared `RabbitActivityRecorder` and class-presence gate described in the `Live Activity` row above; `GET`/`DELETE /bootui/api/rabbitmq` mirror Spring's list/clear contract. Capture is metadata-only, correlation IDs are omitted by default and hashed when explicitly enabled, and failures use generic text. Reports unavailable with a `quarkus-messaging-rabbitmq` hint when the connector is absent. `clear` (DELETE) behind the shared write and panel read-only gates |
+| `WebSockets`          | **Implemented** — endpoint topology is captured at build time from the Jandex index (`@WebSocket` classes and their `@OnOpen`/`@OnTextMessage`/… callbacks) and replayed through a synthetic `QuarkusWebSockets` bean; live connections come from `OpenConnections` plus `@Observes @Open`/`@Closed WebSocketConnection` events. Reduced fidelity: WebSockets Next exposes no message-interception SPI, so the report states `frameCaptureSupported=false` with that reason and the panel shows endpoints and connections only — no frame log. Gated on `quarkus-websockets-next` class presence with the two websockets-importing beans excluded when absent |
 
 **Current Quarkus messaging interceptor limitations.** Incoming Kafka/RabbitMQ deliveries carry connector metadata and
 are captured normally. An outgoing message is captured only when it already carries the matching
@@ -382,10 +383,10 @@ No equivalent, low value, or superseded by Quarkus's own tooling:
 - `JMS` uses Spring JMS (`JmsTemplate` and `@JmsListener`) today. Quarkus users can use the implemented Kafka and RabbitMQ
   panels while a Quarkus-native JMS capture layer remains unimplemented.
 
-**Result:** 45 of the 55 panels ship on Quarkus: 26 are statically available and 19 are capability/detector-gated. The
+**Result:** 46 of the 56 panels ship on Quarkus: 26 are statically available and 20 are capability/detector-gated. The
 remaining 10 panels do not ship: 9 are intentionally not applicable (GraalVM, CRaC, Conditions, Startup Timeline, HTTP
 Sessions, Spring Data, Spring Security, DevTools, Transactions), and 1 (`JMS`) is not yet available. By portability
-strategy, the 45 shipped panels comprise 19 ported as-is, 11 source-swapped, 12 capture-rebuilt, and 3 replaced with a
+strategy, the 46 shipped panels comprise 19 ported as-is, 11 source-swapped, 13 capture-rebuilt, and 3 replaced with a
 Quarkus-native panel. The Overview dashboard panel is available (its scoring dashboard renders client-side from the
 advisor endpoints, and the shell-chrome `GET /bootui/api/overview` endpoint is served on both adapters).
 
@@ -607,6 +608,7 @@ Pentesting, HTTP Probe, MCP Server) need no special ingredients — they work ag
 | RabbitMQ            | **done**    | Rebuild | `RabbitActivityRecorder`         | SmallRye `Outgoing`/`IncomingInterceptor` (`quarkus-messaging-rabbitmq` class-presence-gated); same recorder as Live Activity |
 | JMS                 | spring-only | Not yet | `JmsActivityRecorder`            | Quarkus JMS capture not yet implemented; use Kafka/RabbitMQ panels |
 | REST Client         | **done**    | Rebuild | `RestClientTraceRecorder`        | `Capability.REST_CLIENT_REACTIVE`-gated generated `RestClientListener` service provider → metadata-only `QuarkusRestClientTraceFilter`; URI sanitization, status-0 transport failures, trace correlation, SSE/actions, and absent-extension type exclusion |
+| WebSockets          | **done**    | Rebuild | `WebSocketService`               | Build-time Jandex capture of `@WebSocket` endpoints into a synthetic `QuarkusWebSockets` bean plus live `OpenConnections`/`@Open`/`@Closed` session tracking (`quarkus-websockets-next` class-presence-gated, absent-extension type exclusion); metadata only — no message-interception SPI, so no frame capture |
 | Spring              | **done**    | Replace | Scanning engine                  | new `Quarkus` advisor ruleset               |
 | Cache               | **done**    | Replace | Cache model                      | `CacheProvider` → quarkus-cache             |
 | Beans               | **done**    | Adapt   | Beans service                    | `BeanProvider` → Arc (build-time; low fidelity) |

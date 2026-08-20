@@ -158,6 +158,8 @@ public class BootUiProperties {
      * {@code MESSAGING} entries.
      */
     private Rabbitmq rabbitmq = new Rabbitmq();
+    /** WebSockets panel capture settings and independent buffer caps. */
+    private WebSockets websockets = new WebSockets();
     /**
      * HTTP Sessions panel settings.
      */
@@ -462,6 +464,14 @@ public class BootUiProperties {
 
     public Jms getJms() {
         return jms;
+    }
+
+    public WebSockets getWebsockets() {
+        return websockets;
+    }
+
+    public void setWebsockets(WebSockets websockets) {
+        this.websockets = websockets == null ? new WebSockets() : websockets;
     }
 
     public void setJms(Jms jms) {
@@ -1503,11 +1513,100 @@ public class BootUiProperties {
     }
 
     /**
+     * WebSockets panel settings: capture toggle and the panel's independent result caps.
+     *
+     * <p>Frame <em>metadata</em> only — direction, kind, destination, and byte count. BootUI never
+     * captures, buffers, logs, or serializes a WebSocket message payload, so there is deliberately no
+     * property to turn payload capture on.</p>
+     */
+    public static class WebSockets {
+
+        /**
+         * Whether the WebSockets panel installs its capture bindings at all. When {@code false} no
+         * decorator or channel interceptor is contributed, and the panel reports endpoints only.
+         */
+        private boolean enabled = true;
+
+        /** Whether activity capture starts in the recording state. Toggleable at runtime from the panel. */
+        private boolean capturing = true;
+
+        /** Maximum number of endpoints serialized into one report. */
+        private int maxEndpoints = 200;
+
+        /** Maximum number of sessions serialized into one report. */
+        private int maxSessions = 200;
+
+        /** Maximum number of STOMP subscriptions serialized into one report. */
+        private int maxSubscriptions = 500;
+
+        /** Maximum number of activity entries retained in the bounded in-memory buffer. */
+        private int maxActivityEntries = 500;
+
+        /** Maximum number of sessions for which per-session counters are retained. */
+        private int maxTrackedSessions = 2000;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public boolean isCapturing() {
+            return capturing;
+        }
+
+        public void setCapturing(boolean capturing) {
+            this.capturing = capturing;
+        }
+
+        public int getMaxEndpoints() {
+            return maxEndpoints;
+        }
+
+        public void setMaxEndpoints(int maxEndpoints) {
+            this.maxEndpoints = maxEndpoints;
+        }
+
+        public int getMaxSessions() {
+            return maxSessions;
+        }
+
+        public void setMaxSessions(int maxSessions) {
+            this.maxSessions = maxSessions;
+        }
+
+        public int getMaxSubscriptions() {
+            return maxSubscriptions;
+        }
+
+        public void setMaxSubscriptions(int maxSubscriptions) {
+            this.maxSubscriptions = maxSubscriptions;
+        }
+
+        public int getMaxActivityEntries() {
+            return maxActivityEntries;
+        }
+
+        public void setMaxActivityEntries(int maxActivityEntries) {
+            this.maxActivityEntries = maxActivityEntries;
+        }
+
+        public int getMaxTrackedSessions() {
+            return maxTrackedSessions;
+        }
+
+        public void setMaxTrackedSessions(int maxTrackedSessions) {
+            this.maxTrackedSessions = maxTrackedSessions;
+        }
+    }
+
+    /**
      * RabbitMQ (AMQP) message capture settings, feeding the Live Activity stream's
      * {@code MESSAGING} entries (exactly like {@link Kafka}).
      */
     public static class Rabbitmq {
-
         /**
          * Whether BootUI captures {@code RabbitTemplate} publishes and
          * {@code @RabbitListener} deliveries into the Live Activity stream as

@@ -1548,6 +1548,63 @@ identical.
 
 ![BootUI REST Client panel](./images/bootui-rest-client-trace.webp)
 
+### WebSockets
+
+The WebSockets panel shows the WebSocket endpoints your application actually declares, the connections currently open
+against them, the STOMP destinations those connections have subscribed to, and a bounded log of recent frame **metadata**
+— never a message payload. It answers the questions a local WebSocket developer actually asks: *is my endpoint mapped
+where I think it is, did the client really connect, did the subscription land on the destination I expected, and are
+frames flowing in both directions?*
+
+**Endpoints** lists each declared endpoint with its path, kind (`STOMP` or `HANDLER` on Spring, `ENDPOINT` on Quarkus), a
+SockJS badge when the endpoint is SockJS-enabled, the handler class, the number of connections currently open against it,
+whether BootUI has a frame-capture seam installed for it, and the callbacks or `@MessageMapping` destinations it serves.
+When a STOMP broker is configured, the panel also shows the broker prefixes, application destination prefixes, and user
+destination prefix so a mis-prefixed `/topic` versus `/app` destination is obvious at a glance. **Sessions** lists live
+connections with an opaque session id, the negotiated path and subprotocol, open/closed state, per-session frame and byte
+counters, and the remote address. **Subscriptions** maps each STOMP subscription to its session and destination.
+**Activity** is the recent frame log: timestamp, direction, frame type (`OPEN`, `TEXT`, `BINARY`, `PING`, `PONG`,
+`CONNECT`, `SUBSCRIBE`, `UNSUBSCRIBE`, `CLOSE`), destination when the frame carries one, session, payload **size**, and
+success/error category.
+
+The panel is capture-only and metadata-only by construction. BootUI never reads, decodes, buffers, or stores a message
+payload on any stack: frame size comes from the transport's own `getPayloadLength()` (Spring) or from the length of an
+already-materialized `byte[]` on the messaging channel, and is simply omitted when neither is available, so no
+application message is ever consumed or copied. Raw provider session ids are never exposed either — each is replaced by
+a salted, per-process, one-way hash, and destinations are redacted on the way into the buffer, so Spring's resolved user
+destinations (`/queue/x-user<simpSessionId>`) surface as `/queue/x-user{session}` rather than leaking a live, addressable
+identifier. You can correlate rows across the tables without the panel handing out a value that could be replayed.
+Nothing about a WebSocket
+is touched on page load: BootUI reads the endpoint registry that Spring or Quarkus already built and the connections that
+already exist, and never opens, closes, probes, or writes to a connection. Local-only **Pause/Resume** (frame capture)
+and **Clear** (buffer and counters) actions are available where capture is supported, and both honor
+`bootui.panels.websockets.read-only`.
+
+Frame capture is installed only where the framework offers a sanctioned seam, and the panel says so honestly rather than
+pretending. On **Spring MVC** with `@EnableWebSocketMessageBroker`, BootUI registers a `WebSocketHandlerDecoratorFactory`
+plus inbound and outbound `ChannelInterceptor`s through the public `WebSocketMessageBrokerConfigurer` contract, so STOMP
+endpoints report `frameCaptureSupported=true` and their rows are badged **installed**. Native
+`WebSocketHandler` endpoints registered without the message broker are reported with their full topology but badged
+**metadata**, because decorating them would require reaching into non-public state. On **Spring WebFlux** and on
+**Quarkus**, the panel reports endpoints and live connections but `frameCaptureSupported=false` with the concrete reason:
+`@EnableWebSocketMessageBroker` is servlet-only, and Quarkus WebSockets Next exposes no message-interception SPI. Live
+session tracking is reported with the same honesty through `sessionTrackingSupported` and
+`sessionTrackingUnavailableReason`: Spring MVC and Quarkus observe connection lifecycle, while Spring WebFlux exposes no
+session registry, so its empty Sessions table says *not supported on this stack* instead of implying nothing is
+connected. Buffer
+sizes, initial capture state, and per-collection caps are configurable under `bootui.websockets.*`; every collection is
+independently truncated and the panel says when it was.
+
+The panel refreshes over **Server-Sent Events** on `/bootui/api/websockets/stream`, so a connection opening or a frame
+arriving pushes a small coalesced change notification rather than the UI polling on a timer. The push carries no data —
+the regular endpoint still applies every masking, ordering, and truncation rule.
+
+**WebSockets is available on Spring MVC (servlet), Spring WebFlux (reactive), and Quarkus adapters**, with the
+capture-capability difference described above. On Spring, the panel is gated on `spring-websocket` and `spring-messaging`
+being on the classpath; on Quarkus it is gated on `quarkus-websockets-next` being present and at least one `@WebSocket`
+endpoint being declared, with the endpoint topology captured at build time from the Jandex index and connection
+lifecycle observed through `@Open`/`@Closed` CDI events over `OpenConnections`.
+
 ### AI Framework
 
 The AI Framework panel summarizes Spring AI and LangChain4j activity collected from OpenTelemetry spans emitted by their
