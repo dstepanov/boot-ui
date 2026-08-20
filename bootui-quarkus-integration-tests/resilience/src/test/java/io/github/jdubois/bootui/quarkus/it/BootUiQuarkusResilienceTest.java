@@ -50,8 +50,8 @@ class BootUiQuarkusResilienceTest {
                 .as("the SmallRye provider is the only one on Quarkus")
                 .containsExactly("smallrye-fault-tolerance");
         assertThat(root.path("totalPolicies").asInt(0))
-                .as("all seven declarations are captured")
-                .isEqualTo(7);
+                .as("all eight declarations are captured")
+                .isEqualTo(8);
 
         JsonNode namedBreaker = policy(root, "inventory-service", "CIRCUIT_BREAKER");
         assertThat(namedBreaker.path("target").asText())
@@ -81,11 +81,8 @@ class BootUiQuarkusResilienceTest {
         JsonNode fallback = policy(root, "InventoryClient#reserve", "FALLBACK");
         assertThat(setting(fallback, "fallbackMethod")).isEqualTo("reserveUnavailable");
 
-        assertThat(root.path("events"))
-                .as("SmallRye publishes no per-call event stream, and BootUI invents none")
-                .isEmpty();
-        assertThat(root.path("captureEnabled").asBoolean(true))
-                .as("nothing in this app can produce a resilience event, but capture itself stays on")
+        assertThat(root.path("captureEnabled").asBoolean(false))
+                .as("event capture is on, even though SmallRye publishes no per-call event stream")
                 .isTrue();
     }
 

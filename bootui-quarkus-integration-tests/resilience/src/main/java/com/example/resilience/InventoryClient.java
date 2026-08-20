@@ -45,6 +45,18 @@ public class InventoryClient {
         return "settled " + orderId;
     }
 
+    /**
+     * The one method here that fails, so {@code BootUiQuarkusResilienceStateTransitionTest} can trip a named
+     * breaker and prove BootUI captures the transition. It is deliberately a <em>separate</em> breaker from
+     * {@code charge}: tripping it must not disturb the live-state assertions of the other tests, which share
+     * this application instance.
+     */
+    @CircuitBreaker(requestVolumeThreshold = 2, failureRatio = 1.0, delay = 10, delayUnit = ChronoUnit.SECONDS)
+    @CircuitBreakerName("payment-gateway")
+    public String pay(String orderId) {
+        throw new IllegalStateException("payment gateway unreachable for " + orderId);
+    }
+
     @Timeout(2000)
     public String exportReport() {
         return "exported";
