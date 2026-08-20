@@ -53,6 +53,7 @@ const PANEL_HEADINGS = {
   'http-exchanges': /HTTP Exchanges/,
   'http-probe': /HTTP Probe/,
   'rest-client-trace': /^REST Client/,
+  websockets: /^WebSockets/,
   email: /^Email/,
   kafka: /^Kafka/,
   rabbitmq: /^RabbitMQ/,
