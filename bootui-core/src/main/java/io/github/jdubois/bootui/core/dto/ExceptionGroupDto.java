@@ -15,6 +15,12 @@ package io.github.jdubois.bootui.core.dto;
  * no such provider wired at its {@code HandlerExceptionResolver} capture point and instead correlates by
  * serving thread (see {@code ActivityEntryDto.parentId}).</p>
  *
+ * <p>{@code errorContract} cross-links this group to the declared exception handler that would produce its
+ * HTTP error response, resolved against the REST API panel's error-contract catalogue. It is {@code null}
+ * whenever the retained evidence does not identify exactly one declaration — an unmapped exception type,
+ * several competing declarations, or a controller-scoped declaration the retained request evidence cannot
+ * confirm — so an unlinked group never implies an absent contract.</p>
+ *
  * <p>{@code status} is one of {@code OPEN} (default), {@code ACKNOWLEDGED}, or {@code RESOLVED} — the
  * triage workflow for this group. {@code regressionCount} counts how many times a {@code RESOLVED}
  * group has automatically reopened to {@code OPEN} after a new occurrence arrived (a Sentry-style
@@ -36,4 +42,5 @@ public record ExceptionGroupDto(
         String lastSource,
         String lastTraceId,
         String status,
-        long regressionCount) {}
+        long regressionCount,
+        ErrorContractLinkDto errorContract) {}

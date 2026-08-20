@@ -41,7 +41,7 @@ will therefore be additive rather than an extension of the SQL-specific panels.
 | Planned  | gRPC | Services | Spring gRPC / Quarkus gRPC registries and metrics | No | Planned |
 | Planned  | Spring Batch | Services | Spring Batch `JobExplorer` / `JobRepository` | No | Planned |
 | Planned  | WebSocket endpoints | Services | Spring WebSocket/STOMP / Quarkus WebSockets Next | No (capture only) | Planned |
-| Planned  | Error-contract catalogue | Services | Spring exception handlers / Quarkus exception mappers | No | Planned |
+| Planned  | Error-contract catalogue | Services | Spring exception handlers / Quarkus exception mappers | No | Delivered |
 | Planned  | Slow-SQL ranking and URI attribution | Database | Existing SQL Trace and HTTP exchange evidence | No | Planned |
 | Planned  | Copy as cURL | Diagnostics | Existing HTTP Exchanges metadata | No | Planned |
 | Planned  | Correlation-ID filtering | Diagnostics | Existing request and Live Activity capture | No (capture only) | Planned |
@@ -409,7 +409,13 @@ Acceptance criteria:
   multiple endpoints, active/closed sessions, subscriptions, inbound/outbound text and binary metadata, failures,
   disabled capture, and high-cardinality truncation without external services.
 
-### 3.11 Error-contract catalogue — REST API and Exceptions 📋 Planned
+### 3.11 Error-contract catalogue — REST API and Exceptions ✅ Delivered
+
+Delivered as a declaration-only catalogue on the existing REST API panel
+(`GET /bootui/api/rest-api/error-contract`), a conservative Exceptions cross-link, and three evidence-based
+REST API advisor rules (`RAPI-ERR-009`, `RAPI-ERR-010`, `RAPI-ERR-011`). Spring MVC, Spring WebFlux, and
+Quarkus are all supported; Quarkus discovery is captured from the build-time Jandex index because no
+runtime enumeration of resolved mappers exists.
 
 BootUI's Exceptions panel shows failures that have occurred, while the REST API panel explains declared endpoints. Neither
 shows which exception handlers define the application's error contract, which status and body shape each handler returns,
@@ -442,9 +448,12 @@ Architecture:
   handler registries and metadata where available, with classpath and capability gates for optional integrations.
 - Reuse the REST API panel and Exceptions data already retained by BootUI. Do not invoke handlers, synthesize requests,
   throw exceptions, or add another exception-capture path.
-- Route component names, exception types, media types, inferred schemas, and retained failure details through the existing
-  masking and exposure policy. Advisor findings must cite concrete configuration or declaration evidence and avoid claims
-  based solely on the absence of observed failures.
+- Report only declaration metadata: component, method, exception, status, body category, and media types are Java type
+  and constant names read from the application's own declarations, so they carry no property values and are shown
+  verbatim, exactly as the Mappings and Beans panels already show type names. Retained failure details stay behind the
+  Exceptions panel's existing masking and exposure policy; the catalogue adds a reference to a declaration and never a
+  new value. Advisor findings must cite concrete configuration or declaration evidence and avoid claims based solely on
+  the absence of observed failures.
 
 Out of scope for the first release:
 

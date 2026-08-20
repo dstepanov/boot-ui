@@ -10,6 +10,7 @@ import io.github.jdubois.bootui.autoconfigure.config.SpringMemoryRuntimeConfig;
 import io.github.jdubois.bootui.autoconfigure.crac.CracRuntimeInventoryCollector;
 import io.github.jdubois.bootui.autoconfigure.databaseadvisor.SpringDatabaseAdvisorDataSourceProvider;
 import io.github.jdubois.bootui.autoconfigure.datasource.SpringConnectionPoolProvider;
+import io.github.jdubois.bootui.autoconfigure.errorcontract.SpringErrorContractProvider;
 import io.github.jdubois.bootui.autoconfigure.flyway.SpringFlywayProvider;
 import io.github.jdubois.bootui.autoconfigure.graalvm.HttpReachabilityMetadataRepository;
 import io.github.jdubois.bootui.autoconfigure.health.SpringHealthGuidance;
@@ -51,6 +52,7 @@ import io.github.jdubois.bootui.engine.databaseadvisor.DatabaseAdvisorScanner;
 import io.github.jdubois.bootui.engine.datasource.ConnectionPoolService;
 import io.github.jdubois.bootui.engine.email.EmailCaptureService;
 import io.github.jdubois.bootui.engine.email.EmailStore;
+import io.github.jdubois.bootui.engine.errorcontract.ErrorContractService;
 import io.github.jdubois.bootui.engine.flyway.FlywayService;
 import io.github.jdubois.bootui.engine.graalvm.GraalVmDependencySettings;
 import io.github.jdubois.bootui.engine.graalvm.GraalVmReadinessScanner;
@@ -80,6 +82,7 @@ import io.github.jdubois.bootui.engine.threads.ThreadDumpService;
 import io.github.jdubois.bootui.engine.web.HttpProbeService;
 import io.github.jdubois.bootui.spi.BasePackageProvider;
 import io.github.jdubois.bootui.spi.BeanProvider;
+import io.github.jdubois.bootui.spi.ErrorContractProvider;
 import io.github.jdubois.bootui.spi.HealthProvider;
 import io.github.jdubois.bootui.spi.LoggerProvider;
 import io.github.jdubois.bootui.spi.MappingProvider;
@@ -217,6 +220,24 @@ public class BootUiEngineConfiguration {
                         "io.swagger.v3.oas.annotations.Operation", BootUiEngineConfiguration.class.getClassLoader()),
                 () -> isSpringMvcApiVersioningConfigured(environment),
                 Clock.systemUTC());
+    }
+
+    @Bean
+    @Lazy
+    @ConditionalOnMissingBean
+    ErrorContractProvider bootUiErrorContractProvider(ListableBeanFactory beanFactory) {
+        // The advice/controller declarations behind the REST API panel's error-contract catalogue live in
+        // spring-web, which both the servlet and the reactive stacks always have, so one provider serves
+        // Spring MVC and Spring WebFlux. Discovery is metadata-only: bean types are resolved without
+        // initializing FactoryBeans, and no handler is instantiated, invoked, or made to throw.
+        return new SpringErrorContractProvider(beanFactory);
+    }
+
+    @Bean
+    @Lazy
+    @ConditionalOnMissingBean
+    ErrorContractService bootUiErrorContractService(ObjectProvider<ErrorContractProvider> errorContractProviders) {
+        return new ErrorContractService(errorContractProviders.getIfAvailable());
     }
 
     @Bean

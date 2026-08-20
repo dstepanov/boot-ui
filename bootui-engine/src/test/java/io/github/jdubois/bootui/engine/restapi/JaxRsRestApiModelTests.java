@@ -40,6 +40,7 @@ class JaxRsRestApiModelTests {
                 false,
                 model.hasExceptionHandling(),
                 model.responseStatusExceptionClasses(),
+                model.thrownExceptions(),
                 model.framework());
     }
 

@@ -1361,7 +1361,8 @@ class LiveActivityAssemblerTests {
                 "web",
                 lastTraceId,
                 "OPEN",
-                0);
+                0,
+                null);
     }
 
     private static EmailMessageDto email(String id, String traceId, String thread, long timestamp) {
@@ -1404,6 +1405,7 @@ class LiveActivityAssemblerTests {
                 null,
                 null,
                 "OPEN",
-                0);
+                0,
+                null);
     }
 }

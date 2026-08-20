@@ -482,7 +482,7 @@ The REST API panel runs a curated, zero-config ruleset against the host applicat
 (`@RestController` / `@Controller` handler methods on Spring or JAX-RS resources on Quarkus) at runtime. Like the
 Architecture panel, it imports the compiled handlers from bounded application base packages and derives a read-only
 model — HTTP method(s), path(s), parameters and their annotations, return type, `produces`/`consumes`, validation flags,
-and declared throws. It then evaluates 53 REST best-practice rules across eight categories: routing
+and declared throws. It then evaluates 56 REST best-practice rules across eight categories: routing
 and HTTP-method mapping, resource naming, status codes and responses, input validation and binding, DTO and payload
 contracts, pagination, versioning and content negotiation, and error handling and documentation. The `RAPI-DOC-*`
 documentation rules only run when Swagger or MicroProfile OpenAPI annotations are on the host classpath.
@@ -493,6 +493,28 @@ identifier, category, severity, recommendation, and a learn-more link, and the r
 rules, sorted by severity and finding count. The heuristics complement — rather than replace — an API design review or
 contract testing. See [REST-API-CHECKS.md](REST-API-CHECKS.md) for the full catalogue of rules and what
 each one inspects.
+
+The panel also shows the application's **declared error contract**: every `@ControllerAdvice` /
+`@RestControllerAdvice` / `@ExceptionHandler` method on Spring MVC and WebFlux, and every Jakarta REST
+`@Provider` `ExceptionMapper` and Quarkus REST `@ServerExceptionMapper` on Quarkus. Each row names the handled
+exception type, the declaring component and method, the scope (application-wide, narrowed, or
+controller-local), the resolved precedence, the declared HTTP status, the response-body category (RFC 9457
+`ProblemDetail`, a custom object, a string, empty, or explicitly unresolved), and the declared media types.
+This is a pure declaration read: no handler is instantiated or invoked, no request is synthesized, and no
+exception is thrown to observe a response — so anything the declarations cannot prove is reported as
+unresolved rather than guessed. Only the application's own declarations are listed: the handlers the
+framework itself contributes (Spring Boot's `BasicErrorController`, Quarkus's built-in RESTEasy Reactive and
+Jackson mappers) are identical in every application, so an application that declares nothing shows an empty
+catalogue on all three stacks. When a retained failure in the Exceptions panel can be attributed to exactly
+one declared handler, that panel links straight to that declaration in this catalogue; ambiguous and unmatched
+failures stay unlinked.
+
+Three cases are deliberately reported as unresolved rather than guessed. An advice that implements `Ordered`
+chooses its position at runtime, so its whole precedence group is reported as ambiguous. A Spring handler
+without `@ResponseBody` (directly or through `@RestControllerAdvice`) renders a view rather than a body, so its
+body category is unresolved instead of being read from the return type. On Quarkus only `@Provider`-annotated
+`ExceptionMapper`s are listed, because an unregistered implementation never participates in exception
+resolution.
 
 > **Not available in GraalVM native images.** The advisor scans compiled `.class` files via ArchUnit's
 > `ClassFileImporter`, which is incompatible with a native executable; the panel is automatically hidden when the

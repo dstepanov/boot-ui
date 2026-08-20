@@ -110,6 +110,16 @@ public abstract class AbstractBootUiApiConformanceTest {
      * Available panels whose configured-path transport is supplied by a pending sibling adapter change.
      * Concrete custom-mount consumers may exclude only those known transport gaps.
      */
+    /**
+     * Components the running application declares exception handlers on, by simple name. A stack that
+     * returns a well-shaped but empty catalogue would otherwise satisfy every assertion in
+     * {@code errorContractEndpointReturnsAStableDeclarationOnlyCatalogue}, so each sample application
+     * names its own fixtures here and the test proves discovery actually works on that stack.
+     */
+    protected Set<String> expectedErrorContractComponents() {
+        return Set.of();
+    }
+
     protected Set<String> unsupportedReadContracts() {
         return Set.of();
     }
@@ -702,6 +712,113 @@ public abstract class AbstractBootUiApiConformanceTest {
         assertThat(noMatch.json().path("beans").isEmpty())
                 .as("GET /bootui/api/beans?q=<nonexistent> beans must be empty")
                 .isTrue();
+    }
+
+    @Test
+    void errorContractEndpointReturnsAStableDeclarationOnlyCatalogue() {
+        // The declared error contract is assembled by the engine's ErrorContractService from raw facts the
+        // Spring and Quarkus adapters read from bean metadata and the build-time Jandex index respectively.
+        // The engine owns classification, precedence and paging so all three stacks return one shape; this
+        // test pins that shape, the availability contract, and the fact that filtering and paging are
+        // honoured identically. It deliberately does not assert a specific handler: the sample applications
+        // differ, and the panel must never claim more than the declarations support.
+        assumeTrue(isPanelUsableInLiveManifest("rest-api"), "rest-api panel is not available in this environment");
+
+        Response root = probe().get(api("/rest-api/error-contract"));
+        assertThat(root.status())
+                .as("GET /bootui/api/rest-api/error-contract status")
+                .isEqualTo(200);
+        assertThat(root.isJson())
+                .as("GET /bootui/api/rest-api/error-contract content-type")
+                .isTrue();
+
+        JsonNode report = root.json();
+        assertThat(report.path("available").isBoolean())
+                .as("$.available must be a boolean (honest availability)")
+                .isTrue();
+        assertThat(report.path("entries").isArray())
+                .as("$.entries must be an array")
+                .isTrue();
+        assertThat(report.path("page").isObject())
+                .as("$.page must be an object (pagination metadata)")
+                .isTrue();
+        assertThat(report.path("truncated").isBoolean())
+                .as("$.truncated must be a boolean (bounded output)")
+                .isTrue();
+
+        if (!report.path("available").asBoolean()) {
+            assertThat(report.path("unavailableReason").asText(""))
+                    .as("an unavailable error contract must explain itself rather than look empty")
+                    .isNotBlank();
+            assertThat(report.path("entries").isEmpty())
+                    .as("an unavailable error contract must not report entries")
+                    .isTrue();
+            return;
+        }
+
+        for (JsonNode entry : report.path("entries")) {
+            assertThat(entry.path("id").asText(""))
+                    .as("every entry needs a stable id the UI can key on")
+                    .isNotBlank();
+            assertThat(entry.path("exceptionType").asText(""))
+                    .as("every entry names the exception type it declares it handles")
+                    .isNotBlank();
+            assertThat(entry.path("component").asText(""))
+                    .as("every entry names its declaring component")
+                    .isNotBlank();
+            assertThat(entry.path("source").asText(""))
+                    .as("every entry states where the declaration came from")
+                    .isNotBlank();
+            assertThat(entry.path("scope").asText(""))
+                    .as("every entry states its scope, using UNKNOWN rather than guessing")
+                    .isIn("GLOBAL", "SCOPED", "CONTROLLER", "UNKNOWN");
+            assertThat(entry.path("statusSource").asText(""))
+                    .as("a status is either declared, built at runtime, or honestly unresolved")
+                    .isIn("ANNOTATION", "DYNAMIC", "UNRESOLVED");
+            assertThat(entry.path("bodyCategory").asText(""))
+                    .as("a body category is classified by the engine, identically on every stack")
+                    .isIn("PROBLEM_DETAIL", "CUSTOM_OBJECT", "STRING", "EMPTY", "DYNAMIC", "UNRESOLVED");
+            assertThat(entry.path("precedenceSource").asText(""))
+                    .as("precedence is either declared, defaulted, or honestly unresolved")
+                    .isIn("DECLARED", "DEFAULT", "UNRESOLVED");
+            assertThat(entry.path("produces").isArray())
+                    .as("$.entries[].produces must be an array")
+                    .isTrue();
+        }
+
+        Set<String> expectedComponents = expectedErrorContractComponents();
+        if (!expectedComponents.isEmpty()) {
+            List<String> discovered = new ArrayList<>();
+            for (JsonNode entry : report.path("entries")) {
+                discovered.add(entry.path("componentSimpleName").asText(""));
+            }
+            assertThat(discovered)
+                    .as("this stack must actually discover the application's declared exception handlers,"
+                            + " not merely return a well-shaped empty catalogue")
+                    .containsAll(expectedComponents);
+        }
+
+        Response limited = probe().get(api("/rest-api/error-contract?limit=1"));
+        assertThat(limited.status())
+                .as("GET /bootui/api/rest-api/error-contract?limit=1 status")
+                .isEqualTo(200);
+        assertThat(limited.json().path("entries").size())
+                .as("limit=1 must return at most one entry")
+                .isLessThanOrEqualTo(1);
+
+        Response noMatch = probe().get(api("/rest-api/error-contract?q=conformanceprobexyz123nohandler"));
+        assertThat(noMatch.status())
+                .as("GET /bootui/api/rest-api/error-contract?q=<nonexistent> status")
+                .isEqualTo(200);
+        assertThat(noMatch.json().path("page").path("matched").asInt())
+                .as("a query that matches nothing must report zero matches")
+                .isZero();
+        assertThat(noMatch.json().path("entries").isEmpty())
+                .as("a query that matches nothing must return an empty page")
+                .isTrue();
+        assertThat(noMatch.json().path("total").asInt())
+                .as("the unfiltered total must survive filtering so the UI can say 'x of y'")
+                .isEqualTo(report.path("total").asInt());
     }
 
     @Test
