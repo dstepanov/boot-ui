@@ -35,6 +35,9 @@ import org.springframework.context.annotation.ImportRuntimeHints;
  *       {@code UnionSubclassEntityPersister}, which Hibernate instantiates reflectively via its
  *       public 4-arg constructor. Neither Hibernate 7.2 nor Spring Boot's AOT hints register that
  *       constructor, so its public constructors are registered here.
+ *   <li><b>Hibernate JCache region factory reflection</b> — Hibernate resolves the configured {@code
+ *       jcache} region factory and instantiates {@code JCacheRegionFactory} reflectively through its
+ *       public no-arg constructor, which is registered here.
  *   <li><b>Hibernate identifier-array reflection</b> — Hibernate's multi-id entity loader
  *       reflectively instantiates a {@code UUID[]} array for the {@code SampleAuditEntry} {@code
  *       UUID} identifier. GraalVM requires the array type to be registered for reflective
@@ -92,6 +95,16 @@ class NativeHintsConfiguration {
                     .registerTypeIfPresent(
                             classLoader,
                             "org.hibernate.persister.entity.UnionSubclassEntityPersister",
+                            MemberCategory.INVOKE_PUBLIC_CONSTRUCTORS);
+
+            // Hibernate resolves the configured "jcache" region factory by name and reflectively
+            // invokes its no-arg constructor. Spring Boot's AOT processing does not infer this
+            // constructor, so the native executable otherwise fails while building the
+            // SessionFactory.
+            hints.reflection()
+                    .registerTypeIfPresent(
+                            classLoader,
+                            "org.hibernate.cache.jcache.internal.JCacheRegionFactory",
                             MemberCategory.INVOKE_PUBLIC_CONSTRUCTORS);
 
             // Hibernate builds a multi-id entity loader for every entity and, for the
