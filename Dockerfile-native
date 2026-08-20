@@ -33,6 +33,13 @@ WORKDIR /app
 
 # Copy the whole multi-module project (see .dockerignore for exclusions).
 COPY . .
+
+# The wrapper jar is intentionally not committed. Fetch the pinned artifact through BuildKit
+# instead of relying on architecture-specific downloader availability in the GraalVM image.
+ADD --checksum=sha256:4e2fbf6554bc8a4702cdfdd3bef464f423393d784ddbb037216320ce55d5e4e1 \
+    https://repo.maven.apache.org/maven2/org/apache/maven/wrapper/maven-wrapper/3.3.4/maven-wrapper-3.3.4.jar \
+    .mvn/wrapper/maven-wrapper.jar
+
 RUN chmod +x mvnw
 
 # Build a "mostly static" native image: statically link everything (including zlib) except glibc,
