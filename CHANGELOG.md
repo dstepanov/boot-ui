@@ -7,6 +7,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **SQL Trace statement rankings and request-route attribution on Spring MVC, Spring WebFlux, and Quarkus.** A new safe
+  read, `GET /bootui/api/sql-trace/insights`, ranks the retained capture window by normalized statement (cumulative,
+  maximum, average duration, execution count, error count, p50/p95/p99, and share of retained database time) and
+  attributes those executions back to the inbound request routes that issued them. Normalization collapses literals and
+  bind markers to `?`, so equivalent parameterized executions aggregate without exposing a bound value, and routes group
+  by the framework's own route template where the adapter has one, otherwise by matching the captured path against the
+  application's own declared route mappings, falling back to a masked path — never a raw query string or path-parameter
+  value. Correlation is trace-id first, then serving thread only where thread affinity is
+  reliable, then time window, with every tier requiring a unique candidate; work that cannot be placed stays in explicit
+  unattributed and ambiguous buckets. Rankings are bounded diagnostic evidence over the stated retention window, not
+  lifetime metrics, and both tables deep-link into the filtered execution list.
+- **New Database advisor rule `DB-RUNTIME-001`.** Reports statement shapes whose raw text changes between executions
+  while the normalized form stays the same and a changing literal sits in a filtering position — the signature of values
+  concatenated into SQL instead of bound. Evidence is counts and literal-free statement shapes only, with explicit
+  confidence and limitations; it is deliberately not a SQL-injection finding.
+
 ## [1.14.1] - 2026-08-20
 
 Patch release that restores Spring native and Quarkus Docker startup, fixes the native-image build bootstrap on AMD64,

@@ -24,8 +24,27 @@ public final class RequestCorrelationRegistry implements IdleReclaimable {
      * One served request: the worker thread and the wall-clock window during which the request was
      * handled. {@code path} is the servlet request URI (no query string), matched against an HTTP
      * exchange's path.
+     *
+     * <p>{@code routeTemplate} is the handler pattern Spring MVC matched, such as
+     * {@code /api/orders/{id}}, or {@code null} when no handler was matched (a 404, a static resource, or
+     * a request rejected before routing). It lets SQL Trace group database work by route instead of by a
+     * path that embeds identifiers. {@code traceId} is the distributed-trace id active at completion,
+     * captured here rather than matched afterwards so request-to-statement correlation is exact.</p>
      */
-    public record RequestCorrelation(long startMillis, long endMillis, String thread, String method, String path) {}
+    public record RequestCorrelation(
+            long startMillis,
+            long endMillis,
+            String thread,
+            String method,
+            String path,
+            String routeTemplate,
+            String traceId) {
+
+        /** The window-and-thread record, for callers that have no routing or tracing evidence to add. */
+        public RequestCorrelation(long startMillis, long endMillis, String thread, String method, String path) {
+            this(startMillis, endMillis, thread, method, path, null, null);
+        }
+    }
 
     private final int maxEntries;
     private final Deque<RequestCorrelation> buffer = new ArrayDeque<>();
@@ -90,6 +109,16 @@ public final class RequestCorrelationRegistry implements IdleReclaimable {
             }
         }
         return found;
+    }
+
+    /**
+     * A snapshot of the retained records, oldest first. Copied under the lock so a reader — such as the
+     * SQL Trace route attribution — never iterates the live buffer while a request is being recorded.
+     */
+    public List<RequestCorrelation> recent() {
+        synchronized (lock) {
+            return List.copyOf(buffer);
+        }
     }
 
     /** Test-only snapshot of the retained records, oldest first. */
