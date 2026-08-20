@@ -403,6 +403,89 @@ public abstract class AbstractBootUiApiConformanceTest {
     }
 
     @Test
+    void cacheTiersAndStatisticsShareOneShapeOnEveryPlatform() {
+        // The Cache panel's tier and counter structure is a *nested* contract the flat catalog cannot pin,
+        // and it is the surface the shared Vue panel binds to, so every adapter has to emit the same shape:
+        // Spring MVC, Spring WebFlux and Quarkus all build it in the engine CacheService from their own
+        // CacheProvider. Values are platform-specific (Quarkus has no provider statistics at all), so this
+        // asserts shape and the honesty rules, never a reading.
+        Response response = probe().get(api("/cache"));
+        if (response.status() == 403 || response.status() == 404) {
+            return; // the panel is disabled or unavailable on this platform; the manifest test covers that
+        }
+        assertThat(response.status()).as("GET /bootui/api/cache status").isEqualTo(200);
+
+        JsonNode report = response.json();
+        int tiersSeen = 0;
+        for (JsonNode manager : report.path("managers")) {
+            for (JsonNode cache : manager.path("caches")) {
+                assertCacheStatisticsShape(
+                        cache.path("statistics"), "cache '" + cache.path("name").asText() + "'");
+                assertThat(cache.path("opaque").isBoolean())
+                        .as("$.managers[].caches[].opaque must be a boolean")
+                        .isTrue();
+                if (cache.path("opaque").asBoolean(false)) {
+                    assertThat(cache.path("opaqueReason").isTextual())
+                            .as("an opaque cache must say why its tiers are unknown")
+                            .isTrue();
+                    assertThat(cache.path("tiers"))
+                            .as("an opaque cache reports no tier")
+                            .isEmpty();
+                }
+                for (JsonNode tier : cache.path("tiers")) {
+                    tiersSeen++;
+                    assertThat(tier.path("id").isTextual())
+                            .as("$..tiers[].id must be a string")
+                            .isTrue();
+                    assertThat(tier.path("name").isTextual())
+                            .as("$..tiers[].name must be a string")
+                            .isTrue();
+                    assertThat(tier.path("level").isInt())
+                            .as("$..tiers[].level must be an int")
+                            .isTrue();
+                    assertThat(tier.path("locality").asText(""))
+                            .as("$..tiers[].locality must be a canonical locality")
+                            .isIn("LOCAL", "DISTRIBUTED", "UNKNOWN");
+                    assertThat(tier.path("maximumSize").isNull()
+                                    || tier.path("maximumSize").isNumber())
+                            .as("$..tiers[].maximumSize is a number or null, never a guess")
+                            .isTrue();
+                    assertCacheStatisticsShape(
+                            tier.path("statistics"),
+                            "a tier of '" + cache.path("name").asText() + "'");
+                }
+            }
+        }
+        assertThat(report.path("tierCount").asInt(-1))
+                .as("$.tierCount must count the reported tiers")
+                .isEqualTo(tiersSeen);
+    }
+
+    /** Pins the honesty rules of one statistics object: unavailable means a reason, and a ratio needs requests. */
+    private void assertCacheStatisticsShape(JsonNode statistics, String where) {
+        assertThat(statistics.path("available").isBoolean())
+                .as("statistics.available of %s must be a boolean", where)
+                .isTrue();
+        if (!statistics.path("available").asBoolean(false)) {
+            assertThat(statistics.path("unavailableReason").asText(""))
+                    .as("unavailable statistics of %s must carry a reason", where)
+                    .isNotBlank();
+            assertThat(statistics.path("hitRatio").isNull())
+                    .as("unavailable statistics of %s must not carry a ratio", where)
+                    .isTrue();
+        }
+        if (statistics.path("hitRatio").isNull()) {
+            assertThat(statistics.path("ratioUnavailableReason").asText(""))
+                    .as("a missing ratio of %s must say why", where)
+                    .isNotBlank();
+        } else if (statistics.path("hitRatio").isNumber()) {
+            assertThat(statistics.path("hitRatio").asDouble())
+                    .as("a reported ratio of %s must be a fraction", where)
+                    .isBetween(0.0d, 1.0d);
+        }
+    }
+
+    @Test
     void loggerLevelCanBeSetAndResetThroughTheWritePath() {
         // Cross-adapter WRITE contract: POST /bootui/api/loggers/{name} sets one logger's level and
         // returns its refreshed view; a null level resets it. Both adapters route this through the shared

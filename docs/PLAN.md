@@ -46,7 +46,7 @@ will therefore be additive rather than an extension of the SQL-specific panels.
 | Planned  | Copy as cURL | Diagnostics | Existing HTTP Exchanges metadata | No | Planned |
 | Planned  | Correlation-ID filtering | Diagnostics | Existing request and Live Activity capture | No (capture only) | Planned |
 | Planned  | Meter provenance and explanation | Diagnostics | Existing meter registry and curated catalogue | No | Planned |
-| Planned  | Cache tiering and hit ratios | Services | Existing cache managers and native statistics | No | Planned |
+| Shipped  | Cache tiering and hit ratios | Services | Existing cache managers and native statistics | No | Implemented |
 
 ## 3. Feature specifications
 
@@ -709,12 +709,18 @@ Acceptance criteria:
 - Fixtures cover native/curated/unknown descriptions, common integration families, naming collisions, custom meters,
   missing units, renamed/versioned families, filters, high cardinality, and equivalent adapter output.
 
-### 3.16 Cache tiering and hit ratios — Cache 📋 Planned
+### 3.16 Cache tiering and hit ratios — Cache ✅ Implemented
 
 The Cache panel shows cache managers and aggregate topology, but a multi-level or composed cache can still appear as one
 opaque manager and provider statistics are not explained consistently. This provider-agnostic enhancement exposes
 framework-available tier structure and native per-cache effectiveness metrics without adding invalidation capture or
 provider-specific promises.
+
+**Shipped.** `CacheTierDto`/`CacheStatisticsDto` extend the core Cache contract, the engine
+`CacheStatisticsAssembler` owns every ratio, sanitization, provenance and bounding rule, and the adapters return raw
+metadata only through classloading-gated inspectors (`SpringCacheInspectors` for the JDK map, Caffeine, Redis and
+no-op cases; `QuarkusCacheProvider` for `io.quarkus.cache.CaffeineCache`). Quarkus's public cache API exposes no
+statistics accessor, so its tiers report counters as honestly unavailable — see `docs/QUARKUS-SUPPORT.md`.
 
 Scope:
 

@@ -6,10 +6,13 @@ import io.github.jdubois.bootui.core.dto.CacheClearRequest;
 import io.github.jdubois.bootui.core.dto.CacheDto;
 import io.github.jdubois.bootui.core.dto.CacheManagerDto;
 import io.github.jdubois.bootui.core.dto.CacheReport;
+import io.github.jdubois.bootui.core.dto.CacheTierDto;
 import io.github.jdubois.bootui.spi.CacheManagerSnapshot;
 import io.github.jdubois.bootui.spi.CacheOperationDiscovery;
 import io.github.jdubois.bootui.spi.CacheProvider;
 import io.github.jdubois.bootui.spi.CacheSnapshot;
+import io.github.jdubois.bootui.spi.CacheStatisticsSnapshot;
+import io.github.jdubois.bootui.spi.CacheTierSnapshot;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -105,6 +108,127 @@ class CacheServiceTests {
     }
 
     @Test
+    void legacySnapshotsWithoutTiersRenderAsOpaqueWithAReason() {
+        FakeCacheProvider provider = new FakeCacheProvider();
+        provider.managers = List.of(new CacheManagerSnapshot(
+                "cacheManager", "Type", false, List.of(new CacheSnapshot("orders", "Native", 5L))));
+
+        CacheDto cache = service(provider).report().managers().get(0).caches().get(0);
+        assertThat(cache.tiers()).isEmpty();
+        assertThat(cache.opaque()).isTrue();
+        assertThat(cache.opaqueReason()).isNotBlank();
+        assertThat(cache.statistics().available()).isFalse();
+        assertThat(cache.statistics().unavailableReason()).isNotBlank();
+    }
+
+    @Test
+    void keepsTheAdapterOpaqueReasonWhenItSuppliedOne() {
+        FakeCacheProvider provider = new FakeCacheProvider();
+        provider.managers = List.of(new CacheManagerSnapshot(
+                "cacheManager",
+                "Type",
+                false,
+                List.of(new CacheSnapshot("orders", "Native", null, List.of(), null, "Vendor cache is sealed."))));
+
+        CacheDto cache = service(provider).report().managers().get(0).caches().get(0);
+        assertThat(cache.opaqueReason()).isEqualTo("Vendor cache is sealed.");
+    }
+
+    @Test
+    void ordersTiersByLevelThenIdAndCountsThem() {
+        FakeCacheProvider provider = new FakeCacheProvider();
+        provider.managers = List.of(new CacheManagerSnapshot(
+                "cacheManager",
+                "Type",
+                false,
+                List.of(new CacheSnapshot(
+                        "orders",
+                        "Native",
+                        5L,
+                        List.of(tier("remote", 1), tier("zLocal", 0), tier("aLocal", 0)),
+                        CacheStatisticsSnapshot.unavailable("Vendor", "No whole-cache counters."),
+                        null))));
+
+        CacheReport report = service(provider).report();
+        CacheDto cache = report.managers().get(0).caches().get(0);
+        assertThat(cache.tiers().stream().map(CacheTierDto::id)).containsExactly("aLocal", "zLocal", "remote");
+        assertThat(cache.opaque()).isFalse();
+        assertThat(cache.opaqueReason()).isNull();
+        assertThat(report.tierCount()).isEqualTo(3);
+        assertThat(report.truncated()).isFalse();
+    }
+
+    @Test
+    void passesManagerCompositionAndDynamicStateThrough() {
+        FakeCacheProvider provider = new FakeCacheProvider();
+        provider.managers = List.of(new CacheManagerSnapshot(
+                "cacheManager",
+                "Type",
+                false,
+                CacheManagerSnapshot.COMPOSITION_COMPOSITE,
+                CacheManagerSnapshot.DYNAMIC_NO,
+                List.of("com.example.LocalManager", "com.example.RemoteManager"),
+                List.of(new CacheSnapshot("orders", "Native", 5L))));
+
+        CacheManagerDto manager = service(provider).report().managers().get(0);
+        assertThat(manager.composition()).isEqualTo(CacheManagerSnapshot.COMPOSITION_COMPOSITE);
+        assertThat(manager.dynamicCaches()).isEqualTo(CacheManagerSnapshot.DYNAMIC_NO);
+        assertThat(manager.delegateTypes()).containsExactly("com.example.LocalManager", "com.example.RemoteManager");
+    }
+
+    @Test
+    void defaultsAnUnstatedManagerCompositionAndDynamicStateToUnknown() {
+        FakeCacheProvider provider = new FakeCacheProvider();
+        provider.managers = List.of(new CacheManagerSnapshot(
+                "cacheManager", "Type", false, null, null, null, List.of(new CacheSnapshot("orders", "Native", 5L))));
+
+        CacheManagerDto manager = service(provider).report().managers().get(0);
+        assertThat(manager.composition()).isEqualTo(CacheManagerSnapshot.COMPOSITION_UNKNOWN);
+        assertThat(manager.dynamicCaches()).isEqualTo(CacheManagerSnapshot.DYNAMIC_UNKNOWN);
+        assertThat(manager.delegateTypes()).isEmpty();
+    }
+
+    @Test
+    void truncatesManagersCachesAndTiersAndSaysSoInTheWarnings() {
+        FakeCacheProvider provider = new FakeCacheProvider();
+        List<CacheTierSnapshot> tiers = new ArrayList<>();
+        for (int i = 0; i < CacheService.MAX_TIERS_PER_CACHE + 3; i++) {
+            tiers.add(tier(String.format("tier-%03d", i), i));
+        }
+        List<CacheSnapshot> caches = new ArrayList<>();
+        for (int i = 0; i < CacheService.MAX_CACHES_PER_MANAGER + 2; i++) {
+            caches.add(new CacheSnapshot(
+                    String.format("cache-%04d", i),
+                    "Native",
+                    1L,
+                    i == 0 ? tiers : List.of(tier("only", 0)),
+                    null,
+                    null));
+        }
+        List<CacheManagerSnapshot> managers = new ArrayList<>();
+        for (int i = 0; i < CacheService.MAX_MANAGERS + 1; i++) {
+            managers.add(new CacheManagerSnapshot(
+                    String.format("manager-%03d", i), "Type", false, i == 0 ? caches : List.of()));
+        }
+        provider.managers = managers;
+
+        CacheReport report = service(provider).report();
+        assertThat(report.managerCount()).isEqualTo(CacheService.MAX_MANAGERS);
+        assertThat(report.managers().get(0).caches()).hasSize(CacheService.MAX_CACHES_PER_MANAGER);
+        assertThat(report.managers().get(0).caches().get(0).tiers()).hasSize(CacheService.MAX_TIERS_PER_CACHE);
+        assertThat(report.truncated()).isTrue();
+        assertThat(report.warnings()).hasSize(3);
+        assertThat(report.warnings()).anyMatch(warning -> warning.contains("cache managers"));
+        assertThat(report.warnings()).anyMatch(warning -> warning.contains("caches"));
+        assertThat(report.warnings()).anyMatch(warning -> warning.contains("tiers"));
+    }
+
+    private static CacheTierSnapshot tier(String id, int level) {
+        return new CacheTierSnapshot(
+                id, id, level, "com.example.Store", CacheTierSnapshot.LOCALITY_LOCAL, null, null, null, null);
+    }
+
+    @Test
     void clearDisabledIsRejectedWith409() {
         FakeCacheProvider provider = new FakeCacheProvider();
         provider.clearEnabled = false;
@@ -181,6 +305,27 @@ class CacheServiceTests {
         assertThat(response.body().message()).isEqualTo("Cleared 2 caches.");
         // Sorted: customers before orders.
         assertThat(response.body().caches()).containsExactly("cacheManager/customers", "cacheManager/orders");
+    }
+
+    @Test
+    void clearAllReportsAnExactCountButABoundedListOfNames() {
+        // Clear-all deliberately clears past the report's truncation, so the reply has to stay bounded too:
+        // the count above the list is exact, the list itself is capped and says how much it left out.
+        int total = CacheService.MAX_CLEARED_NAMES + 25;
+        List<CacheSnapshot> caches = new ArrayList<>();
+        for (int index = 0; index < total; index++) {
+            caches.add(new CacheSnapshot("cache-" + String.format("%04d", index), "Native", 1L));
+        }
+        FakeCacheProvider provider = new FakeCacheProvider();
+        provider.managers = List.of(new CacheManagerSnapshot("cacheManager", "Type", false, caches));
+
+        var response = service(provider).clear(new CacheClearRequest(null, null, true, true));
+
+        assertThat(response.status()).isEqualTo(200);
+        assertThat(response.body().message()).isEqualTo("Cleared " + total + " caches.");
+        assertThat(provider.evicted).hasSize(total);
+        assertThat(response.body().caches()).hasSize(CacheService.MAX_CLEARED_NAMES + 1);
+        assertThat(response.body().caches().get(CacheService.MAX_CLEARED_NAMES)).isEqualTo("... and 25 more");
     }
 
     @Test
