@@ -35,9 +35,10 @@ import org.springframework.context.annotation.ImportRuntimeHints;
  *       {@code UnionSubclassEntityPersister}, which Hibernate instantiates reflectively via its
  *       public 4-arg constructor. Neither Hibernate 7.2 nor Spring Boot's AOT hints register that
  *       constructor, so its public constructors are registered here.
- *   <li><b>Hibernate JCache region factory reflection</b> — Hibernate resolves the configured {@code
- *       jcache} region factory and instantiates {@code JCacheRegionFactory} reflectively through its
- *       public no-arg constructor, which is registered here.
+ *   <li><b>Hibernate JCache support</b> — Hibernate resolves the configured {@code jcache} region
+ *       factory and instantiates {@code JCacheRegionFactory} reflectively through its public no-arg
+ *       constructor. Caffeine also reads the sample's {@code application.conf} at runtime. Both are
+ *       registered here.
  *   <li><b>Hibernate identifier-array reflection</b> — Hibernate's multi-id entity loader
  *       reflectively instantiates a {@code UUID[]} array for the {@code SampleAuditEntry} {@code
  *       UUID} identifier. GraalVM requires the array type to be registered for reflective
@@ -52,6 +53,8 @@ class NativeHintsConfiguration {
 
         @Override
         public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+            hints.resources().registerPattern("application.conf");
+
             Set<Class<?>> immutableCollections = new LinkedHashSet<>();
             immutableCollections.add(List.of().getClass());
             immutableCollections.add(List.of("a").getClass());

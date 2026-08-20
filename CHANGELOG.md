@@ -7,6 +7,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.14.1] - 2026-08-20
+
+Patch release that restores Spring native and Quarkus Docker startup, fixes the native-image build bootstrap on AMD64,
+and strengthens release verification against the artifacts consumers actually download.
+
+### Fixed
+
+- **Spring native images can start with the sample application's Hibernate second-level JCache configuration.**
+  Runtime hints now retain both the reflectively created `JCacheRegionFactory` constructor and Caffeine's
+  `application.conf` cache configuration (#832).
+- **Docker image publishing works across the supported sample configurations.** Native AMD64 builds fetch and verify the
+  pinned Maven Wrapper JAR before invoking the wrapper, Quarkus Docker startup accepts the intentionally pinned
+  Flyway-compatible H2 driver, and the Spring Docker-profile Live Activity check recognizes its PostgreSQL datasource
+  instead of requiring the development-only H2 URL (#828, #833, #834).
+- **Maven Central smoke tests now exercise standalone Spring MVC and WebFlux consumer projects.** They can no longer pass
+  by resolving unpublished reactor sample modules instead of the released starter artifacts (#827).
+- **The MCP concurrency-limit test no longer fails intermittently on JDK 25** while preserving the production capacity
+  guard (#829).
+
 ## [1.14.0] - 2026-08-18
 
 Feature release headlined by three new database diagnostics — the **Database advisor**, **Transactions**, and
@@ -1458,7 +1477,8 @@ First tagged BootUI alpha. Highlights of the harden-all-visible-panels scope:
   request history, distributed tracing, multi-service orchestration, and live
   Docker Compose lifecycle control are intentionally out of scope for the alpha.
 
-[Unreleased]: https://github.com/jdubois/boot-ui/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/jdubois/boot-ui/compare/v1.14.1...HEAD
+[1.14.1]: https://github.com/jdubois/boot-ui/compare/v1.14.0...v1.14.1
 [1.14.0]: https://github.com/jdubois/boot-ui/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/jdubois/boot-ui/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/jdubois/boot-ui/compare/v1.12.0...v1.13.0

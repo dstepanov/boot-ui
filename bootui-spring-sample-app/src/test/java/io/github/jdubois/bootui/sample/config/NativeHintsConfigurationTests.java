@@ -11,6 +11,16 @@ import org.springframework.aot.hint.predicate.RuntimeHintsPredicates;
 class NativeHintsConfigurationTests {
 
     @Test
+    void registersCaffeineJCacheConfiguration() {
+        RuntimeHints hints = new RuntimeHints();
+        new NativeHintsConfiguration.SampleRuntimeHints()
+                .registerHints(hints, getClass().getClassLoader());
+
+        assertThat(RuntimeHintsPredicates.resource().forResource("application.conf"))
+                .accepts(hints);
+    }
+
+    @Test
     void registersJCacheRegionFactoryPublicConstructor() {
         RuntimeHints hints = new RuntimeHints();
         new NativeHintsConfiguration.SampleRuntimeHints()
