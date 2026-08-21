@@ -21,4 +21,29 @@ test.describe('REST API advisor (Quarkus)', () => {
     expect(controllersAnalyzed).toBeGreaterThan(0)
     await expect(controllersMetric.locator('.advisor-summary__hint')).toHaveText(/\d+ handler method\(s\)/)
   })
+
+  /**
+   * The declared error contract is captured from the build-time Jandex index on Quarkus, because Quarkus
+   * exposes no runtime enumeration of resolved mappers. This test proves that capture reaches the UI for
+   * both mapper flavours the sample declares — a global `@Provider ExceptionMapper` and a resource-local
+   * `@ServerExceptionMapper` — and that the panel reports a `Response`-built status honestly.
+   */
+  test('lists the declared exception mappers without invoking any of them', async ({openView, page}) => {
+    await openView('rest-api', 'REST API')
+
+    const card = page.locator('.card', {hasText: 'Declared error contract'})
+    await expect(card).toBeVisible()
+    await expect(card).toContainText('Nothing is executed and no error is triggered.')
+
+    const globalRow = card.locator('tbody tr', {hasText: 'SampleProductNotFoundException'})
+    await expect(globalRow).toBeVisible({timeout: 15_000})
+    await expect(globalRow).toContainText('SampleProductNotFoundMapper#toResponse')
+    await expect(globalRow).toContainText('Application-wide')
+    // A jakarta.ws.rs Response builds its status at runtime, so the panel must not claim one.
+    await expect(globalRow).toContainText('Runtime')
+
+    const localRow = card.locator('tbody tr', {hasText: 'SampleProductRejectedException'})
+    await expect(localRow).toContainText('SampleErrorResource#handleLocally')
+    await expect(localRow).toContainText('Controller-local')
+  })
 })

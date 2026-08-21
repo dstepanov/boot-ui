@@ -3536,6 +3536,304 @@ const sqlTrace = {
   warnings: []
 }
 
+const sqlStatementRanking = (
+  id,
+  sql,
+  category,
+  executions,
+  totalDurationMillis,
+  maxDurationMillis,
+  avgDurationMillis,
+  errorCount,
+  p50DurationMillis,
+  p95DurationMillis,
+  p99DurationMillis,
+  shareOfRetainedTimePercent,
+  potentialNPlusOne,
+  callSites,
+  entryIds,
+  topFor,
+  entryIdsTruncated
+) => ({
+  id,
+  sql,
+  category,
+  executions,
+  totalDurationMillis,
+  maxDurationMillis,
+  avgDurationMillis,
+  errorCount,
+  p50DurationMillis,
+  p95DurationMillis,
+  p99DurationMillis,
+  shareOfRetainedTimePercent,
+  potentialNPlusOne,
+  callSites,
+  entryIds,
+  topFor,
+  entryIdsTruncated
+})
+
+const sqlTraceInsights = {
+  available: true,
+  unavailableReason: null,
+  capturing: true,
+  window: {
+    retainedStatements: 14,
+    bufferSize: 200,
+    evicted: 0,
+    totalCaptured: 14,
+    oldestTimestamp: nowMillis - 96 * 1000,
+    newestTimestamp: nowMillis - 2 * 1000,
+    totalDurationMillis: 254
+  },
+  statements: [
+    sqlStatementRanking(
+      'stmt-products-active',
+      sqlSelectProductsActive,
+      'SELECT',
+      2,
+      160,
+      142,
+      80.0,
+      0,
+      18,
+      142,
+      142,
+      62.99,
+      false,
+      [callSiteProductsActive],
+      [14, 2],
+      ['TOTAL_DURATION', 'MAX_DURATION', 'P95_DURATION', 'P99_DURATION'],
+      false
+    ),
+    sqlStatementRanking(
+      'stmt-order-items',
+      sqlSelectOrderItems,
+      'SELECT',
+      6,
+      61,
+      14,
+      10.17,
+      0,
+      11,
+      14,
+      14,
+      24.02,
+      true,
+      [callSiteOrderItems],
+      [13, 12, 11, 10, 9, 8],
+      ['EXECUTIONS'],
+      false
+    ),
+    sqlStatementRanking(
+      'stmt-insert-order',
+      sqlInsertOrder,
+      'INSERT',
+      3,
+      18,
+      9,
+      6.0,
+      1,
+      6,
+      9,
+      9,
+      7.09,
+      false,
+      [callSiteInsertOrder],
+      [7, 6, 5],
+      ['ERROR_COUNT'],
+      false
+    ),
+    sqlStatementRanking(
+      'stmt-product-by-id',
+      sqlSelectProductById,
+      'SELECT',
+      1,
+      6,
+      6,
+      6.0,
+      0,
+      6,
+      6,
+      6,
+      2.36,
+      false,
+      [callSiteProductById],
+      [1],
+      ['AVG_DURATION'],
+      false
+    ),
+    sqlStatementRanking(
+      'stmt-update-price',
+      'update products set price=? where id=?',
+      'UPDATE',
+      1,
+      5,
+      5,
+      5.0,
+      0,
+      5,
+      5,
+      5,
+      1.97,
+      false,
+      [callSiteUpdatePrice],
+      [4],
+      ['TOTAL_DURATION'],
+      false
+    ),
+    sqlStatementRanking(
+      'stmt-delete-cart',
+      'delete from cart_items where cart_id=?',
+      'DELETE',
+      1,
+      4,
+      4,
+      4.0,
+      0,
+      4,
+      4,
+      4,
+      1.57,
+      false,
+      [callSiteDeleteCart],
+      [3],
+      ['TOTAL_DURATION'],
+      false
+    )
+  ],
+  topPerCriterion: 10,
+  statementsTruncated: false,
+  distinctStatements: 6,
+  attribution: {
+    available: true,
+    unavailableReason: null,
+    supportedCorrelations: ['TRACE_ID', 'SERVING_THREAD', 'TIME_WINDOW'],
+    requestsConsidered: 6,
+    routes: [
+      {
+        id: 'route-products',
+        method: 'GET',
+        route: '/api/sample/products',
+        routeSource: 'ROUTE_TEMPLATE',
+        requests: 2,
+        executions: 3,
+        totalDurationMillis: 166,
+        maxDurationMillis: 142,
+        avgDurationMillis: 55.33,
+        errorCount: 0,
+        distinctStatements: 2,
+        shareOfRetainedTimePercent: 65.35,
+        traceCorrelated: 3,
+        threadCorrelated: 0,
+        timeWindowCorrelated: 0,
+        topStatements: [
+          {
+            statementId: 'stmt-products-active',
+            sql: sqlSelectProductsActive,
+            category: 'SELECT',
+            executions: 2,
+            totalDurationMillis: 160,
+            maxDurationMillis: 142,
+            errorCount: 0
+          },
+          {
+            statementId: 'stmt-product-by-id',
+            sql: sqlSelectProductById,
+            category: 'SELECT',
+            executions: 1,
+            totalDurationMillis: 6,
+            maxDurationMillis: 6,
+            errorCount: 0
+          }
+        ],
+        topStatementsTruncated: false,
+        entryIds: [14, 2, 1]
+      },
+      {
+        id: 'route-order-detail',
+        method: 'GET',
+        route: '/api/sample/orders/{id}',
+        routeSource: 'ROUTE_TEMPLATE',
+        requests: 1,
+        executions: 6,
+        totalDurationMillis: 61,
+        maxDurationMillis: 14,
+        avgDurationMillis: 10.17,
+        errorCount: 0,
+        distinctStatements: 1,
+        shareOfRetainedTimePercent: 24.02,
+        traceCorrelated: 0,
+        threadCorrelated: 6,
+        timeWindowCorrelated: 0,
+        topStatements: [
+          {
+            statementId: 'stmt-order-items',
+            sql: sqlSelectOrderItems,
+            category: 'SELECT',
+            executions: 6,
+            totalDurationMillis: 61,
+            maxDurationMillis: 14,
+            errorCount: 0
+          }
+        ],
+        topStatementsTruncated: false,
+        entryIds: [13, 12, 11, 10, 9, 8]
+      },
+      {
+        id: 'route-orders-create',
+        method: 'POST',
+        route: '/api/sample/orders',
+        routeSource: 'ROUTE_TEMPLATE',
+        requests: 3,
+        executions: 3,
+        totalDurationMillis: 18,
+        maxDurationMillis: 9,
+        avgDurationMillis: 6.0,
+        errorCount: 1,
+        distinctStatements: 1,
+        shareOfRetainedTimePercent: 7.09,
+        traceCorrelated: 3,
+        threadCorrelated: 0,
+        timeWindowCorrelated: 0,
+        topStatements: [
+          {
+            statementId: 'stmt-insert-order',
+            sql: sqlInsertOrder,
+            category: 'INSERT',
+            executions: 3,
+            totalDurationMillis: 18,
+            maxDurationMillis: 9,
+            errorCount: 1
+          }
+        ],
+        topStatementsTruncated: false,
+        entryIds: [7, 6, 5]
+      }
+    ],
+    routesTruncated: false,
+    distinctRoutes: 3,
+    attributedExecutions: 12,
+    unattributed: {
+      executions: 2,
+      totalDurationMillis: 9,
+      errorCount: 0,
+      shareOfRetainedTimePercent: 3.54,
+      reason: 'No inbound request could be correlated; typically background, scheduled or startup work.'
+    },
+    ambiguous: {
+      executions: 0,
+      totalDurationMillis: 0,
+      errorCount: 0,
+      shareOfRetainedTimePercent: 0.0,
+      reason: 'More than one inbound request was an equally good match, so no route was claimed.'
+    },
+    notes: []
+  },
+  notes: ['Rankings cover the 14 statements retained in the capture buffer, not the lifetime of the application.']
+}
+
 const activityRequestId = 'act-req-1'
 
 const activityReport = {
@@ -4358,8 +4656,10 @@ const screenshots = [
     'SQL Trace',
     'bootui-sql-trace.webp',
     async (page) => {
-      await page.getByText('Most frequent statements').waitFor()
-      await page.getByText('possible N+1').waitFor()
+      await page.getByText('Statement rankings').waitFor()
+      await page.getByText('Database time by request route').waitFor()
+      await page.getByText('/api/sample/orders/{id}').waitFor()
+      await page.getByText('possible N+1').first().waitFor()
       await page.getByText('at io.github.jdubois.bootui.sample.OrderService.enrichOrderItems').waitFor()
       await page.getByText('at io.github.jdubois.bootui.sample.ProductController.list').waitFor()
     }
@@ -5094,6 +5394,7 @@ async function handleApiRoute(route) {
     const poolName = endpoint.slice('database-connection-pools/pools/'.length, -'/snapshot'.length)
     return fulfillJson(route, databaseConnectionPoolSnapshot(poolName))
   }
+  if (endpoint === 'sql-trace/insights') return fulfillJson(route, sqlTraceInsights)
   if (endpoint === 'sql-trace' || endpoint === 'sql-trace/clear' || endpoint === 'sql-trace/recording')
     return fulfillJson(route, sqlTrace)
   if (endpoint === 'transactions' || endpoint === 'transactions/clear' || endpoint === 'transactions/recording')

@@ -9,10 +9,10 @@ import org.junit.jupiter.api.Test;
 class RestApiRuleRegistryTests {
 
     @Test
-    void registersFiftyThreeRulesWithUniqueIds() {
+    void registersFiftySixRulesWithUniqueIds() {
         List<RestApiRule> rules = RestApiRuleRegistry.activeRules();
 
-        assertThat(rules).hasSize(53);
+        assertThat(rules).hasSize(56);
 
         List<String> ids = rules.stream().map(rule -> rule.definition().id()).toList();
         assertThat(ids).doesNotHaveDuplicates();
@@ -31,6 +31,9 @@ class RestApiRuleRegistryTests {
                         "RAPI-ERR-006",
                         "RAPI-ERR-007",
                         "RAPI-ERR-008",
+                        "RAPI-ERR-009",
+                        "RAPI-ERR-010",
+                        "RAPI-ERR-011",
                         "RAPI-VALID-004",
                         "RAPI-VALID-005",
                         "RAPI-DTO-005",

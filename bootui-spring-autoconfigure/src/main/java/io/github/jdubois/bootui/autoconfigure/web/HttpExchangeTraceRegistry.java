@@ -24,8 +24,22 @@ import java.util.List;
  */
 public final class HttpExchangeTraceRegistry {
 
-    /** One completed request: its wall-clock window, method + path, and the trace id captured at completion. */
-    public record HttpExchangeTrace(long startMillis, long endMillis, String method, String path, String traceId) {}
+    /**
+     * One completed request: its wall-clock window, method + path, the trace id captured at completion,
+     * and the handler pattern that was matched.
+     *
+     * <p>{@code routeTemplate} is the declared route such as {@code /api/orders/{id}}, or {@code null}
+     * when no handler matched. It lets SQL Trace group database work by route rather than by a path that
+     * embeds identifiers, which is the only grouping key that stays low-cardinality and value-free.</p>
+     */
+    public record HttpExchangeTrace(
+            long startMillis, long endMillis, String method, String path, String traceId, String routeTemplate) {
+
+        /** The trace-only record, for callers with no routing evidence to add. */
+        public HttpExchangeTrace(long startMillis, long endMillis, String method, String path, String traceId) {
+            this(startMillis, endMillis, method, path, traceId, null);
+        }
+    }
 
     private final int maxEntries;
     private final Deque<HttpExchangeTrace> buffer = new ArrayDeque<>();
@@ -78,6 +92,16 @@ public final class HttpExchangeTraceRegistry {
             }
         }
         return found == null || found.traceId() == null || found.traceId().isBlank() ? null : found.traceId();
+    }
+
+    /**
+     * A snapshot of the retained records, oldest first. Copied under the lock so a reader — such as the
+     * SQL Trace route attribution — never iterates the live buffer while a request is being recorded.
+     */
+    public List<HttpExchangeTrace> recent() {
+        synchronized (lock) {
+            return List.copyOf(buffer);
+        }
     }
 
     /** Test-only snapshot of the retained records, oldest first. */

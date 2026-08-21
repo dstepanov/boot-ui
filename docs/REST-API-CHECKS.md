@@ -8,7 +8,7 @@ Each rule is a small class registered in
 [`RestApiRuleRegistry`](https://github.com/jdubois/boot-ui/blob/main/bootui-engine/src/main/java/io/github/jdubois/bootui/engine/restapi/RestApiRuleRegistry.java)
 and implemented in
 [`RestApiRules.java`](https://github.com/jdubois/boot-ui/blob/main/bootui-engine/src/main/java/io/github/jdubois/bootui/engine/restapi/RestApiRules.java),
-both in the framework-neutral `bootui-engine` module. The same 53 rule definitions are evaluated on Spring Boot and
+both in the framework-neutral `bootui-engine` module. The same 56 rule definitions are evaluated on Spring Boot and
 Quarkus from one bounded handler model; rules whose required framework fact is not observable are skipped rather than
 guessed. The list intentionally stays compact and reviewable; adding a new rule means adding one focused class plus a
 registry entry.
@@ -69,7 +69,7 @@ Findings are ranked in the scanner's severity order:
 - `LOW`
 - `INFO`
 
-The catalogue below ships **53 rules across 8 categories** (8 HIGH, 10 MEDIUM, 20 LOW, 15 INFO; no active CRITICAL
+The catalogue below ships **56 rules across 8 categories** (9 HIGH, 11 MEDIUM, 21 LOW, 15 INFO; no active CRITICAL
 rules). The `RAPI-DOC-*` documentation rules only run when OpenAPI annotations are present on the host classpath —
 Swagger/springdoc-openapi (`io.swagger.v3.oas.annotations`) on Spring, or MicroProfile OpenAPI
 (`org.eclipse.microprofile.openapi.annotations`) on Quarkus through `quarkus-smallrye-openapi`. The shared model
@@ -447,6 +447,27 @@ Dismissed rules remove all of their findings from the score.
 - **Recommendation**: Return a typed error DTO or an RFC 9457 problem-details representation instead of a raw String.
 - **Learn more**: <https://www.rfc-editor.org/rfc/rfc9457.html>
 
+### RAPI-ERR-009 - Declared exceptions have a declared handler
+
+- **Severity**: MEDIUM
+- **Detects**: An endpoint declares an application exception in its `throws` clause that no `@ExceptionHandler`, exception mapper, or `@ResponseStatus`-annotated exception maps (supertypes count as coverage), so the failure falls through to the framework's default error response instead of the application's error contract. The rule is silent when the application declares no exception handlers at all, because RAPI-ERR-001 already reports that, and it never infers a missing mapping from the absence of observed failures.
+- **Recommendation**: Map the exception with an `@ExceptionHandler`/exception mapper, or annotate it with `@ResponseStatus`, so its HTTP status and body are part of the declared contract.
+- **Learn more**: <https://www.rfc-editor.org/rfc/rfc9457.html>
+
+### RAPI-ERR-010 - Error responses share one contract
+
+- **Severity**: LOW
+- **Detects**: The declared exception handlers disagree on the error contract — either they return more than one response-body shape (problem details, a custom object, a raw String, an untyped map) or they declare more than one error media type — so clients must parse several error formats from the same API. Only body-rendering handlers are compared, and no response content is read or reported.
+- **Recommendation**: Return one error representation — ideally an RFC 9457 problem-details document — from every exception handler, and declare the same error media type.
+- **Learn more**: <https://www.rfc-editor.org/rfc/rfc9457.html>
+
+### RAPI-ERR-011 - Exception handlers do not expose stack traces
+
+- **Severity**: HIGH
+- **Detects**: A declared exception handler calls a stack-trace accessor (`printStackTrace`, `getStackTrace`, `fillInStackTrace`, or a `getStackFrames`/`getFullStackTrace` helper), which commonly leaks internal class names, file paths, and framework internals into an error response. The evidence is the handler's own declared call graph; the report names only the handler and never includes a captured message, response body, or stack trace.
+- **Recommendation**: Log the failure with a correlation identifier through the logging framework and return only a stable, non-revealing error representation to the client.
+- **Learn more**: <https://www.rfc-editor.org/rfc/rfc9457.html>
+
 ### RAPI-DOC-001 - Endpoints are documented
 
 - **Severity**: INFO
@@ -470,7 +491,7 @@ Dismissed rules remove all of their findings from the score.
 
 ## Deliberately deferred checks
 
-The 2026 source audit retained all 53 active rule IDs and severities. It changed only directly observable model facts;
+The 2026 source audit retained all 53 rule IDs and severities that were active at the time. It changed only directly observable model facts;
 no rule was removed or broadened from a style preference alone.
 
 - JAX-RS `Response` and RESTEasy Reactive `RestResponse` builder chains can set statuses and headers imperatively. The

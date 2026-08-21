@@ -664,12 +664,36 @@ class BootUiSampleApplicationIntegrationTests {
         assertThat(body).isNotNull();
         assertThat(body.get("cacheAvailable")).isEqualTo(true);
         assertThat(body.get("clearEnabled")).isEqualTo(true);
+        assertThat(body.get("truncated")).isEqualTo(false);
+        assertThat((Integer) body.get("tierCount")).isPositive();
         assertThat((Iterable<?>) body.get("managers")).anySatisfy(manager -> {
             Map<?, ?> dto = (Map<?, ?>) manager;
             assertThat(dto.get("type")).asString().contains("ConcurrentMapCacheManager");
-            assertThat((Iterable<?>) dto.get("caches"))
-                    .anySatisfy(
-                            cache -> assertThat(((Map<?, ?>) cache).get("name")).isEqualTo("sample-products"));
+            assertThat(dto.get("composition")).isEqualTo("SIMPLE");
+            assertThat(dto.get("dynamicCaches")).isEqualTo("UNKNOWN");
+            assertThat((Iterable<?>) dto.get("caches")).anySatisfy(entry -> {
+                Map<?, ?> cache = (Map<?, ?>) entry;
+                assertThat(cache.get("name")).isEqualTo("sample-products");
+                assertThat(cache.get("opaque")).isEqualTo(false);
+                // This test pins spring.cache.type=simple, so the cache is one in-memory map tier whose
+                // statistics are honestly unavailable rather than a series of zeroes.
+                assertThat((Iterable<?>) cache.get("tiers")).singleElement().satisfies(tierEntry -> {
+                    Map<?, ?> tier = (Map<?, ?>) tierEntry;
+                    assertThat(tier.get("locality")).isEqualTo("LOCAL");
+                    assertThat(tier.get("level")).isEqualTo(0);
+                    Map<?, ?> tierStatistics = (Map<?, ?>) tier.get("statistics");
+                    assertThat(tierStatistics.get("available")).isEqualTo(false);
+                    assertThat(tierStatistics.get("scope")).isEqualTo("TIER");
+                    assertThat(tierStatistics.get("hits")).isNull();
+                    assertThat(tierStatistics.get("unavailableReason"))
+                            .asString()
+                            .isNotEmpty();
+                });
+                Map<?, ?> statistics = (Map<?, ?>) cache.get("statistics");
+                assertThat(statistics.get("available")).isEqualTo(false);
+                assertThat(statistics.get("scope")).isEqualTo("CACHE");
+                assertThat(statistics.get("hitRatio")).isNull();
+            });
         });
         assertThat((Iterable<?>) body.get("operations")).anySatisfy(operation -> {
             Map<?, ?> dto = (Map<?, ?>) operation;

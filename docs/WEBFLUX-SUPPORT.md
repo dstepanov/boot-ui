@@ -123,6 +123,12 @@ their Live Activity `MESSAGING` capture work identically to the servlet adapter 
 an imperative, blocking broker API, but its work runs on the application's JMS template/listener threads; the WebFlux
 panel only reads the shared in-memory recorder.
 
+The Cache panel's tier and native-statistics reporting is likewise identical on both Spring adapters: it is produced by
+the shared `SpringCacheProvider` and its classloading-gated inspectors, which depend only on Spring's cache abstraction
+and the cache provider's own public API, never on a servlet or reactive type. A WebFlux application configured with
+`spring.cache.type=simple` therefore shows the same single local in-memory map tier — and the same honest "a plain map
+records nothing" statistics state — that the servlet adapter shows for the same configuration.
+
 CRaC uses the same framework-neutral scanner and Spring runtime inventory on MVC and WebFlux. Its pool inventory includes
 R2DBC factories, and its task/scheduling checks use Spring context APIs rather than servlet types. Generated assets still
 target a JVM process and Spring's checkpoint lifecycle; they do not imply Quarkus or native-image support.
@@ -146,6 +152,17 @@ accidentally inherit the Reactor Netty event loop.
 | -------------- | ---------------------------------------------------------------------------------------------------------- |
 | HTTP Exchanges | `ReactiveHttpExchangeRepositoryConfiguration` supplies Actuator's reactive `HttpExchangeRepository` bean instead of the servlet one — same DTO, same UI, same capture semantics |
 
+The REST API panel's **declared error contract** needs no reactive binding at all: `@ControllerAdvice`,
+`@ExceptionHandler` and `@ResponseStatus` all live in `spring-web`, so one `SpringErrorContractProvider` serves
+both stacks by reading bean metadata. The only reactive-specific behavior is in the provider's return-type
+analysis, which unwraps `Mono`, `Flux`, `CompletionStage`, `CompletableFuture`, `Callable`, `DeferredResult` and
+`WebAsyncTask` — matched by class name, so nothing links Reactor — before classifying the declared response body.
+A reactive handler returning `Mono<ResponseEntity<ErrorBody>>` therefore reports the same body category and the
+same runtime-built status as its servlet equivalent, and WebFlux's functional `ServerResponse` is treated like
+`ResponseEntity`: a runtime-built status with a runtime-decided body. Neither stack instantiates or invokes a
+handler — discovery reads bean *types* without creating them, so a `FactoryBean` declaring advice is never
+forced into existence just to build the catalogue.
+
 ### 6.3 Rebuilt with a new reactive capture layer (8 panels)
 
 The DTO and UI are reused unchanged; only the capture/streaming source was rewritten because the servlet original
@@ -154,7 +171,7 @@ depended on `SseEmitter` (SQL Trace, Log Tail, Security Logs, Exceptions, REST C
 
 | Panel         | Reactive source                                                                                                                                                                        |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| SQL Trace     | `ReactiveSqlTraceController`, streaming over the new shared `ReactiveBootUiChangeStream` SSE primitive (`Flux<ServerSentEvent<T>>`), feeding the same `SqlTraceRecorder` engine class |
+| SQL Trace     | `ReactiveSqlTraceController`, streaming over the new shared `ReactiveBootUiChangeStream` SSE primitive (`Flux<ServerSentEvent<T>>`), feeding the same `SqlTraceRecorder` engine class. Statement rankings and request-route attribution (`GET /bootui/api/sql-trace/insights`) are served from the same framework-neutral `SqlTraceInsightsService`; request evidence comes from the reactive `HttpExchangeTraceRegistry`, which also captures the best-matching reactive route pattern so routes group by template rather than by masked path. **Fidelity gap, accepted:** a reactive request is not pinned to one thread, so serving-thread correlation is deliberately not offered on this stack — the report advertises `TRACE_ID` and `TIME_WINDOW` only, and work it cannot place lands in the explicit unattributed/ambiguous buckets rather than being guessed onto a route. The `HttpExchangeTraceRegistry` ships with the OpenTelemetry correlation configuration, so on a WebFlux application without an OpenTelemetry starter route attribution reports itself *unavailable*, naming that requirement, instead of advertising correlation tiers over an empty candidate list and rendering every statement as unattributed; statement rankings are unaffected. |
 | Transactions  | `ReactiveTransactionsController`, streaming over `ReactiveBootUiChangeStream`, feeding the same `TransactionRecorder` engine class. Capture itself is identical to the servlet adapter — BootUI contributes a `TransactionExecutionListener` through Spring Boot's standard transaction-manager customization and completes registration for user-defined `ConfigurableTransactionManager` beans after singleton initialization, observing any configurable blocking transaction manager a WebFlux application still uses (e.g. JDBC repositories behind a thread-blocking data access layer). **Fidelity gap, accepted:** a WebFlux application backed only by a `ReactiveTransactionManager` (R2DBC) has no `ConfigurableTransactionManager` bean to observe — Spring's transaction-execution listener hook exists solely on the blocking SPI — so the panel reports "No configurable PlatformTransactionManager bean is available" rather than silently showing an empty table. |
 | Log Tail      | `ReactiveLogTailController` — same `LogTailBuffer`/Logback appender, SSE via `ReactiveBootUiChangeStream`               |
 | Security Logs | `ReactiveSecurityLogsController` over a fallback `InMemoryAuditEventRepository` (Spring's audit-event bus is itself framework-neutral, so no reactive-specific capture code was needed) |

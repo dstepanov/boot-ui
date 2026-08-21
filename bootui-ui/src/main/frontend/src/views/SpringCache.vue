@@ -44,10 +44,120 @@ const caches = computed(() => {
     manager.caches.map((cache) => ({
       ...cache,
       managerType: manager.type,
-      managerNoOp: manager.noOp
+      managerNoOp: manager.noOp,
+      managerComposition: manager.composition,
+      managerDynamicCaches: manager.dynamicCaches,
+      managerDelegateTypes: manager.delegateTypes || []
     }))
   )
 })
+
+const expandedTiers = ref(new Set())
+
+function toggleTiers(cache) {
+  const key = cacheKey(cache)
+  const next = new Set(expandedTiers.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedTiers.value = next
+}
+
+function tiersExpanded(cache) {
+  return expandedTiers.value.has(cacheKey(cache))
+}
+
+/**
+ * A disclosure id derived from the row position rather than the cache name: manager and cache names are
+ * arbitrary strings, so slugifying them can collide (`a/b` + `c` and `a` + `b/c` slugify alike) and a
+ * duplicate id would break both `aria-controls` and any lookup by id.
+ */
+function tierRowId(index) {
+  return `cache-tiers-${index}`
+}
+
+const COMPOSITION_LABELS = {
+  COMPOSITE: 'Composite',
+  DELEGATING: 'Delegating'
+}
+
+const DYNAMIC_LABELS = {
+  YES: 'Creates caches on demand',
+  NO: 'Fixed cache set'
+}
+
+function compositionLabel(cache) {
+  return COMPOSITION_LABELS[cache.managerComposition] || null
+}
+
+function dynamicLabel(cache) {
+  return DYNAMIC_LABELS[cache.managerDynamicCaches] || null
+}
+
+const LOCALITY_LABELS = {
+  LOCAL: 'In this JVM',
+  DISTRIBUTED: 'Remote',
+  UNKNOWN: 'Locality not reported'
+}
+
+function localityLabel(tier) {
+  return LOCALITY_LABELS[tier.locality] || LOCALITY_LABELS.UNKNOWN
+}
+
+// The only source CacheStatisticsDto ever carries today is NATIVE; the Micrometer overlay travels in the
+// separate CacheMetricsDto and is labelled where it is rendered.
+const SOURCE_LABELS = {
+  NATIVE: 'Provider statistics'
+}
+
+function sourceLabel(statistics) {
+  if (!statistics) return 'Statistics'
+  const label = SOURCE_LABELS[statistics.source] || 'Statistics'
+  return statistics.provider ? `${label} · ${statistics.provider}` : label
+}
+
+/**
+ * The counters a statistics set actually exposes. A counter the provider does not expose is omitted rather
+ * than rendered as zero, so an absent counter is never read as "nothing happened".
+ */
+function counterBadges(statistics) {
+  if (!statistics || !statistics.available) return []
+  const badges = []
+  const push = (label, value, cls) => {
+    if (value !== null && value !== undefined) badges.push({label, text: `${label} ${formatNumber(value)}`, cls})
+  }
+  push('hits', statistics.hits, 'text-bg-success')
+  push('misses', statistics.misses, 'text-bg-warning')
+  push('requests', statistics.requests, 'text-bg-secondary')
+  push('puts', statistics.puts, 'text-bg-secondary')
+  push('evictions', statistics.evictions, 'text-bg-secondary')
+  push('removals', statistics.removals, 'text-bg-secondary')
+  push('load successes', statistics.loadSuccesses, 'text-bg-secondary')
+  push('load failures', statistics.loadFailures, 'text-bg-secondary')
+  return badges
+}
+
+function hasStatistics(statistics) {
+  return Boolean(statistics && statistics.available)
+}
+
+function hasRatio(statistics) {
+  return Boolean(statistics) && statistics.hitRatio !== null && statistics.hitRatio !== undefined
+}
+
+/**
+ * Micrometer's `cache.gets` meters report a 0.0 hit ratio for a cache that has never been asked for anything,
+ * which reads as "0% of requests hit" rather than "there were no requests". The wire value is left alone for
+ * contract stability, so the panel is the one that has to refuse to state it.
+ */
+function hasMicrometerRatio(metrics) {
+  if (!metrics) return false
+  return (metrics.hits || 0) + (metrics.misses || 0) > 0
+}
+
+/** `0` is a real maximum size; only a missing value means the provider did not report one. */
+function maximumSizeText(tier) {
+  return tier.maximumSize === null || tier.maximumSize === undefined ? 'Not reported' : formatNumber(tier.maximumSize)
+}
 
 const filteredCaches = computed(() => {
   const value = cacheFilter.value.trim().toLowerCase()
@@ -77,6 +187,15 @@ const filteredOperations = computed(() => {
 function formatRatio(value) {
   if (value === null || value === undefined) return '—'
   return `${Math.round(Number(value) * 100)}%`
+}
+
+function windowNote(statistics) {
+  if (!statistics) return null
+  const parts = []
+  if (statistics.window === 'APPLICATION_LIFETIME') parts.push('since the cache was created')
+  else if (statistics.window === 'UNKNOWN') parts.push('over an unknown period')
+  if (statistics.since) parts.push(`recorded from ${statistics.since}`)
+  return parts.length ? parts.join(', ') : null
 }
 
 function cacheKey(cache) {
@@ -127,7 +246,9 @@ async function clearAll() {
   if (
     !(await confirm({
       title: 'Clear all caches?',
-      message: `Clear all ${report.value.cacheCount} known caches across ${report.value.managerCount} cache manager(s)? Cached data is recomputed on demand.`,
+      message: report.value.truncated
+        ? `Clear every cache across ${report.value.managerCount} cache manager(s)? The table above was truncated, so this clears more caches than it shows. Cached data is recomputed on demand.`
+        : `Clear all ${report.value.cacheCount} known caches across ${report.value.managerCount} cache manager(s)? Cached data is recomputed on demand.`,
       confirmLabel: 'Clear all',
       danger: true
     }))
@@ -178,8 +299,8 @@ function showReadOnlyMessage() {
       :subtitle="
         report
           ? platform === 'quarkus'
-            ? `${report.managerCount} manager${report.managerCount === 1 ? '' : 's'} · ${report.cacheCount} cache${report.cacheCount === 1 ? '' : 's'}`
-            : `${report.managerCount} manager${report.managerCount === 1 ? '' : 's'} · ${report.cacheCount} cache${report.cacheCount === 1 ? '' : 's'} · ${report.operationCount} annotation operation${report.operationCount === 1 ? '' : 's'}`
+            ? `${report.managerCount} manager${report.managerCount === 1 ? '' : 's'} · ${report.cacheCount} cache${report.cacheCount === 1 ? '' : 's'} · ${report.tierCount} tier${report.tierCount === 1 ? '' : 's'}`
+            : `${report.managerCount} manager${report.managerCount === 1 ? '' : 's'} · ${report.cacheCount} cache${report.cacheCount === 1 ? '' : 's'} · ${report.tierCount} tier${report.tierCount === 1 ? '' : 's'} · ${report.operationCount} annotation operation${report.operationCount === 1 ? '' : 's'}`
           : null
       "
       :loading="loading"
@@ -246,45 +367,185 @@ function showReadOnlyMessage() {
                 <th>Cache</th>
                 <th>Implementation</th>
                 <th>Size</th>
-                <th>Metrics</th>
+                <th>Tiers</th>
+                <th>Hits and misses</th>
                 <th class="text-end">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="cache in filteredCaches" :key="cacheKey(cache)">
-                <td>
-                  <code>{{ cache.managerName }}</code>
-                  <span v-if="cache.managerNoOp" class="badge text-bg-secondary ms-1">No-op</span>
-                </td>
-                <td>
-                  <code class="fw-semibold">{{ cache.name }}</code>
-                </td>
-                <td>
-                  <code>{{ shortName(cache.nativeType) }}</code>
-                  <div class="small text-muted">{{ cache.nativeType || 'No native cache reported' }}</div>
-                </td>
-                <td>{{ formatNumber(cache.size ?? cache.metrics?.size) }}</td>
-                <td>
-                  <div v-if="cache.metrics && cache.metrics.available" class="cache-metrics">
-                    <span class="badge text-bg-success">hits {{ formatNumber(cache.metrics.hits) }}</span>
-                    <span class="badge text-bg-warning">misses {{ formatNumber(cache.metrics.misses) }}</span>
-                    <span class="badge text-bg-info">ratio {{ formatRatio(cache.metrics.hitRatio) }}</span>
-                    <span class="badge text-bg-secondary">puts {{ formatNumber(cache.metrics.puts) }}</span>
-                    <span class="badge text-bg-secondary">evictions {{ formatNumber(cache.metrics.evictions) }}</span>
-                    <span class="badge text-bg-secondary">removals {{ formatNumber(cache.metrics.removals) }}</span>
-                  </div>
-                  <span v-else class="text-muted small">No cache metrics registered</span>
-                </td>
-                <td class="text-end">
-                  <SpinnerButton
-                    :loading="busy === cacheKey(cache)"
-                    :disabled="readOnly || !report.clearEnabled || busy"
-                    class="btn btn-sm btn-outline-danger"
-                    label="Clear"
-                    @click="clearOne(cache)"
-                  />
-                </td>
-              </tr>
+              <template v-for="(cache, cacheIndex) in filteredCaches" :key="cacheKey(cache)">
+                <tr>
+                  <td>
+                    <code>{{ cache.managerName }}</code>
+                    <span v-if="cache.managerNoOp" class="badge text-bg-secondary ms-1">No-op</span>
+                    <div v-if="compositionLabel(cache) || dynamicLabel(cache)" class="small text-muted">
+                      <span v-if="compositionLabel(cache)">{{ compositionLabel(cache) }}</span>
+                      <span v-if="compositionLabel(cache) && dynamicLabel(cache)"> · </span>
+                      <span v-if="dynamicLabel(cache)">{{ dynamicLabel(cache) }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <code class="fw-semibold">{{ cache.name }}</code>
+                  </td>
+                  <td>
+                    <code>{{ shortName(cache.nativeType) }}</code>
+                    <div class="small text-muted">{{ cache.nativeType || 'No native cache reported' }}</div>
+                  </td>
+                  <td>{{ formatNumber(cache.size ?? cache.metrics?.size) }}</td>
+                  <td>
+                    <button
+                      v-if="cache.tiers && cache.tiers.length"
+                      type="button"
+                      class="btn btn-sm btn-link p-0 text-decoration-none cache-tier-toggle"
+                      :aria-expanded="tiersExpanded(cache) ? 'true' : 'false'"
+                      :aria-controls="tierRowId(cacheIndex)"
+                      @click="toggleTiers(cache)"
+                    >
+                      <i :class="tiersExpanded(cache) ? 'bi-chevron-down' : 'bi-chevron-right'" aria-hidden="true"></i>
+                      {{ cache.tiers.length }} tier{{ cache.tiers.length === 1 ? '' : 's' }}
+                      <span class="visually-hidden">for cache {{ cache.name }}</span>
+                    </button>
+                    <span v-else class="badge text-bg-light border text-dark" :title="cache.opaqueReason || ''">
+                      Not described
+                    </span>
+                  </td>
+                  <td>
+                    <div v-if="hasStatistics(cache.statistics)" class="cache-metrics-group">
+                      <div class="small text-muted">{{ sourceLabel(cache.statistics) }}</div>
+                      <div class="cache-metrics">
+                        <span
+                          v-for="badge in counterBadges(cache.statistics)"
+                          :key="badge.label"
+                          :class="badge.cls"
+                          class="badge"
+                          >{{ badge.text }}</span
+                        >
+                        <span v-if="hasRatio(cache.statistics)" class="badge text-bg-info"
+                          >ratio {{ formatRatio(cache.statistics.hitRatio) }}</span
+                        >
+                        <span
+                          v-else
+                          class="badge text-bg-light border text-dark"
+                          :title="cache.statistics.ratioUnavailableReason || ''"
+                          >ratio unknown</span
+                        >
+                      </div>
+                      <div v-if="windowNote(cache.statistics)" class="small text-muted">
+                        {{ windowNote(cache.statistics) }}
+                      </div>
+                    </div>
+                    <div v-else-if="cache.statistics" class="small text-muted">
+                      {{ cache.statistics.unavailableReason }}
+                    </div>
+
+                    <div v-if="cache.metrics && cache.metrics.available" class="cache-metrics-group mt-2">
+                      <div class="small text-muted">Micrometer meters</div>
+                      <div class="cache-metrics">
+                        <span class="badge text-bg-success">hits {{ formatNumber(cache.metrics.hits) }}</span>
+                        <span class="badge text-bg-warning">misses {{ formatNumber(cache.metrics.misses) }}</span>
+                        <span v-if="hasMicrometerRatio(cache.metrics)" class="badge text-bg-info"
+                          >ratio {{ formatRatio(cache.metrics.hitRatio) }}</span
+                        >
+                        <span
+                          v-else
+                          class="badge text-bg-light border text-dark"
+                          title="No cache requests have been recorded yet. Micrometer reports a 0.0 ratio at zero requests, which BootUI does not repeat as 0%."
+                          >ratio unknown</span
+                        >
+                        <span class="badge text-bg-secondary">puts {{ formatNumber(cache.metrics.puts) }}</span>
+                        <span class="badge text-bg-secondary"
+                          >evictions {{ formatNumber(cache.metrics.evictions) }}</span
+                        >
+                        <span class="badge text-bg-secondary">removals {{ formatNumber(cache.metrics.removals) }}</span>
+                      </div>
+                    </div>
+                    <div v-else-if="!cache.statistics" class="text-muted small">No cache metrics registered</div>
+                  </td>
+                  <td class="text-end">
+                    <SpinnerButton
+                      :loading="busy === cacheKey(cache)"
+                      :disabled="readOnly || !report.clearEnabled || busy"
+                      class="btn btn-sm btn-outline-danger"
+                      label="Clear"
+                      @click="clearOne(cache)"
+                    />
+                  </td>
+                </tr>
+                <tr
+                  v-if="cache.tiers && cache.tiers.length"
+                  v-show="tiersExpanded(cache)"
+                  :id="tierRowId(cacheIndex)"
+                  class="cache-tier-row"
+                >
+                  <td colspan="7">
+                    <div class="table-responsive">
+                      <table class="table table-sm mb-0 align-middle">
+                        <caption class="visually-hidden">
+                          Backing tiers of cache
+                          {{
+                            cache.name
+                          }}
+                        </caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">Tier</th>
+                            <th scope="col">Implementation</th>
+                            <th scope="col">Locality</th>
+                            <th scope="col">Maximum size</th>
+                            <th scope="col">Expiry</th>
+                            <th scope="col">Hits and misses</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="tier in cache.tiers" :key="tier.id">
+                            <th scope="row" class="fw-normal">
+                              <span class="badge text-bg-secondary">L{{ tier.level }}</span>
+                              <span class="ms-1">{{ tier.name }}</span>
+                            </th>
+                            <td>
+                              <code>{{ shortName(tier.implementationType) }}</code>
+                              <div class="small text-muted">{{ tier.implementationType || 'Not reported' }}</div>
+                            </td>
+                            <td>{{ localityLabel(tier) }}</td>
+                            <td>
+                              {{ maximumSizeText(tier) }}
+                              <div v-if="tier.policyNote" class="small text-muted">{{ tier.policyNote }}</div>
+                            </td>
+                            <td>{{ tier.expiryPolicy || 'No expiry configured' }}</td>
+                            <td>
+                              <div v-if="hasStatistics(tier.statistics)" class="cache-metrics-group">
+                                <div class="small text-muted">{{ sourceLabel(tier.statistics) }}</div>
+                                <div class="cache-metrics">
+                                  <span
+                                    v-for="badge in counterBadges(tier.statistics)"
+                                    :key="badge.label"
+                                    :class="badge.cls"
+                                    class="badge"
+                                    >{{ badge.text }}</span
+                                  >
+                                  <span v-if="hasRatio(tier.statistics)" class="badge text-bg-info"
+                                    >ratio {{ formatRatio(tier.statistics.hitRatio) }}</span
+                                  >
+                                  <span
+                                    v-else
+                                    class="badge text-bg-light border text-dark"
+                                    :title="tier.statistics.ratioUnavailableReason || ''"
+                                    >ratio unknown</span
+                                  >
+                                </div>
+                                <div v-if="windowNote(tier.statistics)" class="small text-muted">
+                                  {{ windowNote(tier.statistics) }}
+                                </div>
+                              </div>
+                              <div v-else class="small text-muted">{{ tier.statistics?.unavailableReason }}</div>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -399,5 +660,18 @@ function showReadOnlyMessage() {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
+}
+
+.cache-metrics-group + .cache-metrics-group {
+  border-top: 1px solid var(--bs-border-color);
+  padding-top: 0.35rem;
+}
+
+.cache-tier-toggle {
+  white-space: nowrap;
+}
+
+.cache-tier-row > td {
+  background-color: var(--bs-tertiary-bg);
 }
 </style>
