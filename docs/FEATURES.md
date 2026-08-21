@@ -1644,10 +1644,51 @@ default for local development, require explicit browser confirmation, and can be
 
 ![BootUI Cache panel](./images/bootui-cache.webp)
 
+**Tiering and hit ratios.** Each cache row also discloses the **backing tiers** the cache implementation describes
+through its own public API, and the **native effectiveness counters** that implementation records. A tier carries its
+level (`L0` is consulted first), implementation type, locality (in this JVM or remote), configured maximum entry count,
+configured expiry, and, when the provider's own configuration makes a bare number misleading, a short **policy note**
+explaining it (a weight-bounded Caffeine cache, for instance, states that its bound is a total weight rather than an
+entry count); tier detail is collapsed behind a keyboard-operable disclosure button so the caches table stays
+scannable. Counters are shown as their own labelled series — provider statistics are never blended with Micrometer
+meters, and both are rendered side by side when both exist. A Micrometer series that has recorded no request yet shows
+*ratio unknown* for the same reason a provider series does, rather than a misleading 0%.
+
+Everything here is read from public, supported APIs only, and BootUI never fabricates a value:
+
+- A cache implementation that does not describe its storage reports **no tiers at all** and is marked *Not described*
+  with a reason, rather than having a tier inferred from its class name.
+- A counter a provider does not expose (Caffeine has no put or explicit-removal counter, for instance) is **omitted**,
+  never rendered as zero.
+- Statistics are reported as available only when the provider says it is **recording**. Caffeine without
+  `recordStats()` and Spring Data Redis without `enableStatistics()` both report unavailable with the reason and the
+  fix, instead of an all-zero series that reads like a cold cache.
+- A **hit ratio is derived only** from a hit and a miss counter the adapter declared comparable (same counter family,
+  same scope, same window) and only when their sum is positive. An idle cache shows *ratio unknown* with the reason,
+  never "0%".
+- Reading tiers and counters **never contacts anything over the network**. In particular, no Redis entry count is
+  reported, because counting keys would be an unsolicited network round trip on panel render. Local reads stay cheap
+  too, with one honest exception: the Quarkus adapter reads a Caffeine cache's entry count through Quarkus' own
+  `keySet()` accessor, which copies the key set, so a very large Quarkus cache pays a proportional local cost when the
+  panel is opened. The Quarkus extension is dev/test-only and BootUI does not read entry counts anywhere else.
+- Large topologies are bounded (100 managers, 500 caches per manager, 20 tiers per cache) and truncation is stated in
+  the report's warnings rather than silently dropping rows.
+
+Concretely: a Caffeine cache built with `recordStats()` shows hits, misses, requests, evictions, load successes/failures,
+a hit ratio, and its configured maximum size and expiry. A `RedisCache` shows a remote tier with its configured
+time-to-live and, once `spring.cache.redis.enable-statistics=true`, the locally recorded gets/hits/misses/puts/deletes
+with the instant they have been accumulating from. A `spring.cache.type=simple` cache shows one local in-memory map tier
+and honestly reports that a plain map records nothing.
+
 On Quarkus the same panel (kept under the shared id `cache`) is served over `quarkus-cache`: the shared engine
 `CacheService` reads the live cache topology from the application's `io.quarkus.cache.CacheManager`, overlays the same
 Micrometer cache metrics (when a `quarkus-micrometer` registry is present and per-cache metrics are enabled), and the
-clear action evicts via `cache.invalidateAll()`. Because Quarkus binds caching with build-time annotations
+clear action evicts via `cache.invalidateAll()`. Tier metadata is reported the same way as on Spring — one local
+Caffeine tier per cache, with the maximum size and expiry the application configured under
+`quarkus.cache.caffeine."<name>".*` — but Quarkus's public `CaffeineCache` interface exposes **no statistics
+accessor**, so the panel reports the hit and miss counters as unavailable with that reason and points at Micrometer
+cache metrics instead, rather than reaching into Quarkus's internal `CaffeineCacheImpl` by reflection. Because Quarkus
+binds caching with build-time annotations
 (`@CacheResult`, `@CacheInvalidate`, `@CacheInvalidateAll`) woven into methods, there is no runtime registry of cached
 operations, so the operations table is replaced by a short explanatory note and the panel shows cache names + metrics +
 clear. The panel is gated on the `quarkus-cache` extension (the `CACHE` capability) and is reported unavailable, with a
