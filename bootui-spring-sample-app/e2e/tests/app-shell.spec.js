@@ -37,7 +37,7 @@ const allPanelLinks = [
   {id: 'vulnerabilities', title: 'Vulnerabilities', heading: /^Vulnerabilities/},
   {id: 'scheduled', title: 'Scheduled Tasks', heading: /Scheduled Tasks/},
   {id: 'rest-client-trace', title: 'REST Client', heading: /^REST Client$/},
-  {id: 'resilience', title: 'Resilience', heading: /^Resilience/},
+  {id: 'fault-tolerance', title: 'Fault Tolerance', heading: /^Fault Tolerance/},
   {id: 'websockets', title: 'WebSockets', heading: /^WebSockets/},
   {id: 'ai', title: 'AI Framework', heading: /AI Framework/},
   {id: 'cache', title: 'Cache', heading: /^Cache$/},
@@ -395,7 +395,7 @@ test.describe('BootUI app shell', () => {
     await expect(page.getByRole('group', {name: 'Services panels'}).locator('.bootui-nav-link__label')).toHaveText([
       'Scheduled Tasks',
       'REST Client',
-      'Resilience',
+      'Fault Tolerance',
       'WebSockets',
       'AI Framework',
       'Cache',

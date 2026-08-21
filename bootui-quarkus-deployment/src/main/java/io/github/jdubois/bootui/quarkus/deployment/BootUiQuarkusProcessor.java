@@ -30,6 +30,12 @@ import io.github.jdubois.bootui.quarkus.errorcontract.QuarkusErrorContractProvid
 import io.github.jdubois.bootui.quarkus.errorcontract.RawErrorHandler;
 import io.github.jdubois.bootui.quarkus.exceptions.QuarkusExceptionCapture;
 import io.github.jdubois.bootui.quarkus.exceptions.QuarkusPreMappingExceptionCaptureHandler;
+import io.github.jdubois.bootui.quarkus.faulttolerance.FaultTolerancePoliciesRecorder;
+import io.github.jdubois.bootui.quarkus.faulttolerance.QuarkusFaultToleranceCapture;
+import io.github.jdubois.bootui.quarkus.faulttolerance.QuarkusFaultTolerancePolicies;
+import io.github.jdubois.bootui.quarkus.faulttolerance.QuarkusFaultTolerancePolicyProvider;
+import io.github.jdubois.bootui.quarkus.faulttolerance.RawFaultTolerancePolicy;
+import io.github.jdubois.bootui.quarkus.faulttolerance.RawFaultToleranceSetting;
 import io.github.jdubois.bootui.quarkus.logging.QuarkusLogTailCapture;
 import io.github.jdubois.bootui.quarkus.mappings.MappingsRecorder;
 import io.github.jdubois.bootui.quarkus.mappings.QuarkusMappingProvider;
@@ -39,12 +45,6 @@ import io.github.jdubois.bootui.quarkus.mcp.BootUiMcpProducer;
 import io.github.jdubois.bootui.quarkus.mcp.QuarkusMcpEnvelope;
 import io.github.jdubois.bootui.quarkus.mcp.QuarkusMcpFailureReporter;
 import io.github.jdubois.bootui.quarkus.mcp.QuarkusMcpTools;
-import io.github.jdubois.bootui.quarkus.resilience.QuarkusResilienceCapture;
-import io.github.jdubois.bootui.quarkus.resilience.QuarkusResiliencePolicies;
-import io.github.jdubois.bootui.quarkus.resilience.QuarkusResiliencePolicyProvider;
-import io.github.jdubois.bootui.quarkus.resilience.RawResiliencePolicy;
-import io.github.jdubois.bootui.quarkus.resilience.RawResilienceSetting;
-import io.github.jdubois.bootui.quarkus.resilience.ResiliencePoliciesRecorder;
 import io.github.jdubois.bootui.quarkus.scheduled.QuarkusScheduledTaskProvider;
 import io.github.jdubois.bootui.quarkus.scheduled.QuarkusScheduledTasks;
 import io.github.jdubois.bootui.quarkus.scheduled.RawScheduledTask;
@@ -353,8 +353,8 @@ class BootUiQuarkusProcessor {
                         QuarkusDependencyProvider.class,
                         QuarkusConfigProvider.class,
                         QuarkusScheduledTaskProvider.class,
-                        QuarkusResiliencePolicyProvider.class,
-                        QuarkusResilienceCapture.class,
+                        QuarkusFaultTolerancePolicyProvider.class,
+                        QuarkusFaultToleranceCapture.class,
                         QuarkusMappingProvider.class,
                         QuarkusErrorContractProvider.class,
                         QuarkusDevServicesProvider.class,
@@ -1876,7 +1876,7 @@ class BootUiQuarkusProcessor {
     }
 
     private static final String CIRCUIT_BREAKER_STATES_CLASS =
-            "io.github.jdubois.bootui.quarkus.resilience.SmallRyeCircuitBreakerStates";
+            "io.github.jdubois.bootui.quarkus.faulttolerance.SmallRyeCircuitBreakerStates";
 
     private static final DotName FT_CIRCUIT_BREAKER =
             DotName.createSimple("org.eclipse.microprofile.faulttolerance.CircuitBreaker");
@@ -1896,27 +1896,27 @@ class BootUiQuarkusProcessor {
 
     /**
      * Captures the host application's MicroProfile / SmallRye Fault Tolerance policies at build time and
-     * replays them into a synthetic {@link QuarkusResiliencePolicies} bean for the Resilience panel, mirroring
+     * replays them into a synthetic {@link QuarkusFaultTolerancePolicies} bean for the Fault Tolerance panel, mirroring
      * {@link #registerScheduledTasks} exactly. SmallRye keeps no runtime registry of guarded methods — its only
      * runtime API, {@code CircuitBreakerMaintenance}, can answer for a breaker only when the developer gave it
      * a {@code @CircuitBreakerName} — so the declared policies are read from the
      * {@link BeanArchiveIndexBuildItem} Jandex index, which spans the application beans the fault-tolerance
      * interceptors enhance.
      *
-     * <p>The same capability gate also decides two other things. It lights the Resilience panel up in the
-     * manifest ({@link QuarkusPanelAvailability#RESILIENCE_PRESENT_KEY}), true even with zero annotated
+     * <p>The same capability gate also decides two other things. It lights the Fault Tolerance panel up in the
+     * manifest ({@link QuarkusPanelAvailability#FAULT_TOLERANCE_PRESENT_KEY}), true even with zero annotated
      * methods, and it registers {@code SmallRyeCircuitBreakerStates} — the one BootUI class that imports
      * {@code io.smallrye.faulttolerance} — or {@linkplain ExcludedTypeBuildItem excludes} it from discovery
      * otherwise, so Arc never links the fault-tolerance API in an application that does not have it (R2).</p>
      *
      * <p>When the gate is closed the synthetic bean is not produced, so
-     * {@code QuarkusResiliencePolicyProvider}'s {@code Instance} is unsatisfied, the panel is reported
-     * unavailable, and the always-produced {@code ResilienceEventRecorder} simply stays empty — Live Activity
-     * renders no {@code RESILIENCE} entries. Only annotation-discovered policies are captured; programmatic
+     * {@code QuarkusFaultTolerancePolicyProvider}'s {@code Instance} is unsatisfied, the panel is reported
+     * unavailable, and the always-produced {@code FaultToleranceEventRecorder} simply stays empty — Live Activity
+     * renders no {@code FAULT_TOLERANCE} entries. Only annotation-discovered policies are captured; programmatic
      * {@code Guard}/{@code FaultTolerance} builders are not, matching the panel's documented scope.</p>
      */
     @BuildStep
-    void registerResilienceBeans(
+    void registerFaultToleranceBeans(
             LaunchModeBuildItem launchMode,
             Capabilities capabilities,
             BuildProducer<AdditionalBeanBuildItem> additionalBeans,
@@ -1924,52 +1924,52 @@ class BootUiQuarkusProcessor {
             BuildProducer<RunTimeConfigurationDefaultBuildItem> runtimeDefaults) {
         // No quarkus-smallrye-fault-tolerance (or production): keep the io.smallrye.faulttolerance-importing
         // state port out of bean discovery so Arc never links the fault-tolerance API, and leave the panel
-        // unavailable (RESILIENCE_PRESENT_KEY defaults to false).
+        // unavailable (FAULT_TOLERANCE_PRESENT_KEY defaults to false).
         registerCapabilityGatedBeans(
-                resiliencePresent(launchMode, capabilities),
+                faultTolerancePresent(launchMode, capabilities),
                 additionalBeans,
                 excludedTypes,
                 runtimeDefaults,
-                QuarkusPanelAvailability.RESILIENCE_PRESENT_KEY,
+                QuarkusPanelAvailability.FAULT_TOLERANCE_PRESENT_KEY,
                 CIRCUIT_BREAKER_STATES_CLASS);
     }
 
     /**
-     * Second half of the Resilience build-time wiring: the Jandex scan and the synthetic policy bean.
+     * Second half of the Fault Tolerance build-time wiring: the Jandex scan and the synthetic policy bean.
      *
-     * <p>This is deliberately a separate build step from {@link #registerResilienceBeans}. Arc's own
+     * <p>This is deliberately a separate build step from {@link #registerFaultToleranceBeans}. Arc's own
      * {@code BeanArchiveProcessor} consumes {@link AdditionalBeanBuildItem} to produce the
      * {@link BeanArchiveIndexBuildItem}, so a single step that both reads the index and registers an
      * additional bean would form a build-chain cycle and fail augmentation.</p>
      */
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    void registerResiliencePolicies(
+    void registerFaultTolerancePolicies(
             LaunchModeBuildItem launchMode,
             Capabilities capabilities,
             BeanArchiveIndexBuildItem beanArchiveIndex,
-            ResiliencePoliciesRecorder recorder,
+            FaultTolerancePoliciesRecorder recorder,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeans) {
-        if (!resiliencePresent(launchMode, capabilities)) {
+        if (!faultTolerancePresent(launchMode, capabilities)) {
             return;
         }
-        List<RawResiliencePolicy> policies = scanResiliencePolicies(beanArchiveIndex.getIndex());
-        syntheticBeans.produce(SyntheticBeanBuildItem.configure(QuarkusResiliencePolicies.class)
+        List<RawFaultTolerancePolicy> policies = scanFaultTolerancePolicies(beanArchiveIndex.getIndex());
+        syntheticBeans.produce(SyntheticBeanBuildItem.configure(QuarkusFaultTolerancePolicies.class)
                 .scope(Singleton.class)
                 .runtimeValue(recorder.create(policies))
                 .unremovable()
                 .done());
     }
 
-    /** Both Resilience build steps gate on exactly the same decision, so they cannot drift apart. */
-    private static boolean resiliencePresent(LaunchModeBuildItem launchMode, Capabilities capabilities) {
+    /** Both Fault Tolerance build steps gate on exactly the same decision, so they cannot drift apart. */
+    private static boolean faultTolerancePresent(LaunchModeBuildItem launchMode, Capabilities capabilities) {
         return launchMode.getLaunchMode() != LaunchMode.NORMAL
                 && capabilities.isPresent(Capability.SMALLRYE_FAULT_TOLERANCE);
     }
 
     /**
      * Reads every MicroProfile / SmallRye Fault Tolerance annotation from {@code index} into a
-     * {@link RawResiliencePolicy} list. Both method- and class-level annotations are captured (a class-level
+     * {@link RawFaultTolerancePolicy} list. Both method- and class-level annotations are captured (a class-level
      * annotation guards every business method of the bean, which is exactly how SmallRye applies it), and each
      * annotation contributes its own policy row so a method guarded by {@code @Retry} <em>and</em>
      * {@code @CircuitBreaker} shows both protections rather than one merged approximation.
@@ -1977,21 +1977,21 @@ class BootUiQuarkusProcessor {
      * <p>Members absent from the Jandex instance fall back to the specification's documented defaults and are
      * reported with {@code DEFAULT} provenance; members written in the annotation are reported as
      * {@code CONFIGURED}. Values overridden through MicroProfile Fault Tolerance configuration keys are
-     * resolved later, at request time, by {@code QuarkusResiliencePolicyProvider}.</p>
+     * resolved later, at request time, by {@code QuarkusFaultTolerancePolicyProvider}.</p>
      */
-    static List<RawResiliencePolicy> scanResiliencePolicies(IndexView index) {
-        List<RawResiliencePolicy> policies = new ArrayList<>();
-        collectResiliencePolicies(index, FT_CIRCUIT_BREAKER, "CIRCUIT_BREAKER", policies);
-        collectResiliencePolicies(index, FT_RETRY, "RETRY", policies);
-        collectResiliencePolicies(index, FT_RATE_LIMIT, "RATE_LIMITER", policies);
-        collectResiliencePolicies(index, FT_BULKHEAD, "BULKHEAD", policies);
-        collectResiliencePolicies(index, FT_TIMEOUT, "TIME_LIMITER", policies);
-        collectResiliencePolicies(index, FT_FALLBACK, "FALLBACK", policies);
+    static List<RawFaultTolerancePolicy> scanFaultTolerancePolicies(IndexView index) {
+        List<RawFaultTolerancePolicy> policies = new ArrayList<>();
+        collectFaultTolerancePolicies(index, FT_CIRCUIT_BREAKER, "CIRCUIT_BREAKER", policies);
+        collectFaultTolerancePolicies(index, FT_RETRY, "RETRY", policies);
+        collectFaultTolerancePolicies(index, FT_RATE_LIMIT, "RATE_LIMITER", policies);
+        collectFaultTolerancePolicies(index, FT_BULKHEAD, "BULKHEAD", policies);
+        collectFaultTolerancePolicies(index, FT_TIMEOUT, "TIME_LIMITER", policies);
+        collectFaultTolerancePolicies(index, FT_FALLBACK, "FALLBACK", policies);
         return policies;
     }
 
-    private static void collectResiliencePolicies(
-            IndexView index, DotName annotationName, String type, List<RawResiliencePolicy> policies) {
+    private static void collectFaultTolerancePolicies(
+            IndexView index, DotName annotationName, String type, List<RawFaultTolerancePolicy> policies) {
         for (AnnotationInstance annotation : index.getAnnotations(annotationName)) {
             AnnotationTarget target = annotation.target();
             if (target == null) {
@@ -1999,7 +1999,7 @@ class BootUiQuarkusProcessor {
             }
             if (target.kind() == AnnotationTarget.Kind.METHOD) {
                 MethodInfo method = target.asMethod();
-                policies.add(toRawResiliencePolicy(
+                policies.add(toRawFaultTolerancePolicy(
                         annotation,
                         type,
                         method.declaringClass(),
@@ -2007,7 +2007,7 @@ class BootUiQuarkusProcessor {
                         circuitBreakerNameOf(method.annotation(FT_CIRCUIT_BREAKER_NAME))));
             } else if (target.kind() == AnnotationTarget.Kind.CLASS) {
                 ClassInfo declaringClass = target.asClass();
-                policies.add(toRawResiliencePolicy(
+                policies.add(toRawFaultTolerancePolicy(
                         annotation,
                         type,
                         declaringClass,
@@ -2034,7 +2034,7 @@ class BootUiQuarkusProcessor {
      * split one breaker across two identities in the panel. The guarded method stays visible as
      * {@code target}.</p>
      */
-    private static RawResiliencePolicy toRawResiliencePolicy(
+    private static RawFaultTolerancePolicy toRawFaultTolerancePolicy(
             AnnotationInstance annotation,
             String type,
             ClassInfo declaringClass,
@@ -2045,14 +2045,14 @@ class BootUiQuarkusProcessor {
         String simpleClass = declaringClass.simpleName();
         String label = methodName.isEmpty() ? simpleClass : simpleClass + "#" + methodName;
         String name = "CIRCUIT_BREAKER".equals(type) && !circuitBreakerName.isEmpty() ? circuitBreakerName : label;
-        return new RawResiliencePolicy(
+        return new RawFaultTolerancePolicy(
                 name,
                 type,
                 simpleAnnotation,
                 className,
                 methodName,
                 circuitBreakerName,
-                resilienceSettings(annotation, simpleAnnotation));
+                faultToleranceSettings(annotation, simpleAnnotation));
     }
 
     /**
@@ -2060,42 +2060,43 @@ class BootUiQuarkusProcessor {
      * ({@code failOn}, {@code retryOn}, …) are deliberately omitted: they are exception-type filters rather
      * than the thresholds and budgets the panel explains, and rendering them adds unbounded identifiers.
      */
-    private static List<RawResilienceSetting> resilienceSettings(AnnotationInstance annotation, String simpleName) {
-        List<RawResilienceSetting> settings = new ArrayList<>();
+    private static List<RawFaultToleranceSetting> faultToleranceSettings(
+            AnnotationInstance annotation, String simpleName) {
+        List<RawFaultToleranceSetting> settings = new ArrayList<>();
         switch (simpleName) {
             case "CircuitBreaker" -> {
-                addResilienceSetting(settings, annotation, "requestVolumeThreshold", "20");
-                addResilienceSetting(settings, annotation, "failureRatio", "0.5");
-                addResilienceSetting(settings, annotation, "successThreshold", "1");
-                addResilienceSetting(settings, annotation, "delay", "5000");
-                addResilienceSetting(settings, annotation, "delayUnit", "MILLIS");
+                addFaultToleranceSetting(settings, annotation, "requestVolumeThreshold", "20");
+                addFaultToleranceSetting(settings, annotation, "failureRatio", "0.5");
+                addFaultToleranceSetting(settings, annotation, "successThreshold", "1");
+                addFaultToleranceSetting(settings, annotation, "delay", "5000");
+                addFaultToleranceSetting(settings, annotation, "delayUnit", "MILLIS");
             }
             case "Retry" -> {
-                addResilienceSetting(settings, annotation, "maxRetries", "3");
-                addResilienceSetting(settings, annotation, "delay", "0");
-                addResilienceSetting(settings, annotation, "delayUnit", "MILLIS");
-                addResilienceSetting(settings, annotation, "maxDuration", "180000");
-                addResilienceSetting(settings, annotation, "durationUnit", "MILLIS");
-                addResilienceSetting(settings, annotation, "jitter", "200");
-                addResilienceSetting(settings, annotation, "jitterDelayUnit", "MILLIS");
+                addFaultToleranceSetting(settings, annotation, "maxRetries", "3");
+                addFaultToleranceSetting(settings, annotation, "delay", "0");
+                addFaultToleranceSetting(settings, annotation, "delayUnit", "MILLIS");
+                addFaultToleranceSetting(settings, annotation, "maxDuration", "180000");
+                addFaultToleranceSetting(settings, annotation, "durationUnit", "MILLIS");
+                addFaultToleranceSetting(settings, annotation, "jitter", "200");
+                addFaultToleranceSetting(settings, annotation, "jitterDelayUnit", "MILLIS");
             }
             case "RateLimit" -> {
-                addResilienceSetting(settings, annotation, "value", "100");
-                addResilienceSetting(settings, annotation, "window", "1");
-                addResilienceSetting(settings, annotation, "windowUnit", "SECONDS");
-                addResilienceSetting(settings, annotation, "minSpacing", "0");
-                addResilienceSetting(settings, annotation, "minSpacingUnit", "SECONDS");
-                addResilienceSetting(settings, annotation, "type", "FIXED");
+                addFaultToleranceSetting(settings, annotation, "value", "100");
+                addFaultToleranceSetting(settings, annotation, "window", "1");
+                addFaultToleranceSetting(settings, annotation, "windowUnit", "SECONDS");
+                addFaultToleranceSetting(settings, annotation, "minSpacing", "0");
+                addFaultToleranceSetting(settings, annotation, "minSpacingUnit", "SECONDS");
+                addFaultToleranceSetting(settings, annotation, "type", "FIXED");
             }
             case "Bulkhead" -> {
-                addResilienceSetting(settings, annotation, "value", "10");
-                addResilienceSetting(settings, annotation, "waitingTaskQueue", "10");
+                addFaultToleranceSetting(settings, annotation, "value", "10");
+                addFaultToleranceSetting(settings, annotation, "waitingTaskQueue", "10");
             }
             case "Timeout" -> {
-                addResilienceSetting(settings, annotation, "value", "1000");
-                addResilienceSetting(settings, annotation, "unit", "MILLIS");
+                addFaultToleranceSetting(settings, annotation, "value", "1000");
+                addFaultToleranceSetting(settings, annotation, "unit", "MILLIS");
             }
-            case "Fallback" -> addResilienceSetting(settings, annotation, "fallbackMethod", "");
+            case "Fallback" -> addFaultToleranceSetting(settings, annotation, "fallbackMethod", "");
             default -> {
                 // An annotation BootUI does not model contributes no settings rather than a guessed shape.
             }
@@ -2108,21 +2109,21 @@ class BootUiQuarkusProcessor {
      * default ({@code DEFAULT}). A defaulted member with an empty default (an unset {@code fallbackMethod})
      * is omitted entirely rather than rendered as a blank row.
      */
-    private static void addResilienceSetting(
-            List<RawResilienceSetting> settings,
+    private static void addFaultToleranceSetting(
+            List<RawFaultToleranceSetting> settings,
             AnnotationInstance annotation,
             String member,
             String specificationDefault) {
         AnnotationValue value = annotation.value(member);
         if (value == null) {
             if (!specificationDefault.isEmpty()) {
-                settings.add(new RawResilienceSetting(member, specificationDefault, "DEFAULT"));
+                settings.add(new RawFaultToleranceSetting(member, specificationDefault, "DEFAULT"));
             }
             return;
         }
         String rendered = renderAnnotationValue(value);
         if (!rendered.isEmpty()) {
-            settings.add(new RawResilienceSetting(member, rendered, "CONFIGURED"));
+            settings.add(new RawFaultToleranceSetting(member, rendered, "CONFIGURED"));
         }
     }
 

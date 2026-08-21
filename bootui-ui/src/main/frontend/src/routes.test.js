@@ -259,7 +259,7 @@ describe('routes', () => {
       'Security Logs',
       'Scheduled Tasks',
       'REST Client',
-      'Resilience',
+      'Fault Tolerance',
       'WebSockets',
       'AI Framework',
       'Cache',

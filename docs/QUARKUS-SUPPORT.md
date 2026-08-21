@@ -207,10 +207,10 @@ Diff` (**Implemented** — → SmallRye Config; groups active `%profile.`-prefix
 read, BootUI's own routes filtered out at build time) · `Flyway` (→ `quarkus-flyway`) · `Liquibase` (**Implemented** — → `quarkus-liquibase`;
 discovered via `LiquibaseFactoryUtil.getActiveLiquibaseFactories()`, the shared `RanChangeSet` history read + `update`
 action behind the same DTO contract) · `Scheduled Tasks`
-(→ `quarkus-scheduler`) · `Resilience` (**Implemented** — → SmallRye Fault Tolerance; `@CircuitBreaker`, `@Retry`,
+(→ `quarkus-scheduler`) · `Fault Tolerance` (**Implemented** — → SmallRye Fault Tolerance; `@CircuitBreaker`, `@Retry`,
 `@Timeout`, `@Bulkhead`, `@RateLimit`, and `@Fallback` declarations are scanned from the build-time Jandex index by a
-`registerResiliencePolicies` build step + `@Recorder` into a synthetic bean, then mapped onto the same
-`ResiliencePolicyProvider` SPI and DTO contract Spring's Resilience4j/Spring Retry providers use. MicroProfile Fault
+`registerFaultTolerancePolicies` build step + `@Recorder` into a synthetic bean, then mapped onto the same
+`FaultTolerancePolicyProvider` SPI and DTO contract Spring's Resilience4j/Spring Retry providers use. MicroProfile Fault
 Tolerance configuration overrides (`<class>/<method>/<annotation>/<member>` and its two broader forms) are resolved at
 runtime through SmallRye Config and reported with `CONFIGURED` provenance, including the `.../<annotation>/enabled`
 switches and `MP_Fault_Tolerance_NonFallback_Enabled`: a policy the application turned off through configuration is
@@ -607,7 +607,7 @@ Pentesting, HTTP Probe, MCP Server) need no special ingredients — they work ag
 | Flyway              | equiv       | Adapt   | Flyway mapper                    | `MigrationProvider` → quarkus-flyway        |
 | Liquibase           | equiv       | Adapt   | Liquibase mapper                 | `MigrationProvider` → quarkus-liquibase     |
 | Scheduled Tasks     | equiv       | Adapt   | Scheduled mapper                 | `ScheduledTaskProvider` → quarkus-scheduler |
-| Resilience          | equiv       | Adapt   | `ResilienceService` + DTO        | `ResiliencePolicyProvider` → SmallRye Fault Tolerance (Jandex-scanned declarations, MicroProfile config overrides, live named-breaker state) |
+| Fault Tolerance     | equiv       | Adapt   | `FaultToleranceService` + DTO    | `FaultTolerancePolicyProvider` → SmallRye Fault Tolerance (Jandex-scanned declarations, MicroProfile config overrides, live named-breaker state) |
 | Architecture        | equiv       | Adapt   | ArchUnit engine                  | `BasePackageProvider` (rules run unmodified) |
 | REST API            | **done**    | Rebuild | REST conventions engine          | JAX-RS handler-model builder                |
 | Database Connection Pools | **done**    | Rebuild | Pool model                       | `DataSourcePoolProvider` → Agroal           |

@@ -178,23 +178,23 @@ describe('deepLink', () => {
     expect(deepLink({type: 'SCHEDULED'})).toBeNull()
   })
 
-  it('links a resilience entry to the Resilience panel filtered by policy name', () => {
-    expect(deepLink({type: 'RESILIENCE', summary: 'RETRY paymentGateway (retry)'})).toEqual({
-      path: '/resilience',
+  it('links a fault tolerance entry to the Fault Tolerance panel filtered by policy name', () => {
+    expect(deepLink({type: 'FAULT_TOLERANCE', summary: 'RETRY paymentGateway (retry)'})).toEqual({
+      path: '/fault-tolerance',
       query: {q: 'paymentGateway'},
-      label: 'Open in Resilience'
+      label: 'Open in Fault Tolerance'
     })
-    expect(deepLink({type: 'RESILIENCE', summary: 'STATE_TRANSITION orders-breaker (circuit breaker)'})).toEqual({
-      path: '/resilience',
+    expect(deepLink({type: 'FAULT_TOLERANCE', summary: 'STATE_TRANSITION orders-breaker (circuit breaker)'})).toEqual({
+      path: '/fault-tolerance',
       query: {q: 'orders-breaker'},
-      label: 'Open in Resilience'
+      label: 'Open in Fault Tolerance'
     })
   })
 
-  it('still links a resilience entry with an unexpected summary to the unfiltered panel', () => {
-    expect(deepLink({type: 'RESILIENCE', summary: ''})).toEqual({
-      path: '/resilience',
-      label: 'Open in Resilience'
+  it('still links a fault tolerance entry with an unexpected summary to the unfiltered panel', () => {
+    expect(deepLink({type: 'FAULT_TOLERANCE', summary: ''})).toEqual({
+      path: '/fault-tolerance',
+      label: 'Open in Fault Tolerance'
     })
   })
 

@@ -73,7 +73,7 @@ public final class BootUiPanels {
     public static final String KAFKA = "kafka";
     public static final String RABBITMQ = "rabbitmq";
     public static final String JMS = "jms";
-    public static final String RESILIENCE = "resilience";
+    public static final String FAULT_TOLERANCE = "fault-tolerance";
     public static final String WEBSOCKETS = "websockets";
 
     private static final List<Panel> PANELS = List.of(
@@ -137,7 +137,7 @@ public final class BootUiPanels {
             new Panel(KAFKA, "Kafka", true, "/kafka"),
             new Panel(RABBITMQ, "RabbitMQ", true, "/rabbitmq"),
             new Panel(JMS, "JMS", true, "/jms"),
-            new Panel(RESILIENCE, "Resilience", false, "/resilience"),
+            new Panel(FAULT_TOLERANCE, "Fault Tolerance", false, "/fault-tolerance"),
             new Panel(WEBSOCKETS, "WebSockets", true, "/websockets"));
 
     private static final Map<String, Panel> BY_ID =

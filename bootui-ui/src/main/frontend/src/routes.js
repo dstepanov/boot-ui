@@ -19,7 +19,7 @@ const HibernateStatistics = () => import('./views/HibernateStatistics.vue')
 const Flyway = () => import('./views/Flyway.vue')
 const Liquibase = () => import('./views/Liquibase.vue')
 const Startup = () => import('./views/Startup.vue')
-const Resilience = () => import('./views/Resilience.vue')
+const FaultTolerance = () => import('./views/FaultTolerance.vue')
 const Scheduled = () => import('./views/Scheduled.vue')
 const HttpProbe = () => import('./views/HttpProbe.vue')
 const Pentesting = () => import('./views/Pentesting.vue')
@@ -694,14 +694,14 @@ export const routes = [
     }
   },
   {
-    path: '/resilience',
-    name: 'resilience',
-    component: Resilience,
+    path: '/fault-tolerance',
+    name: 'fault-tolerance',
+    component: FaultTolerance,
     meta: {
       group: groups.services,
       icon: 'bi-life-preserver',
-      title: 'Resilience',
-      shortcut: 'rl',
+      title: 'Fault Tolerance',
+      shortcut: 'ft',
       keywords: [
         'resilience4j',
         'spring retry',

@@ -70,10 +70,10 @@ public final class BootUiApiContractCatalog {
             advisor("graalvm", "/graalvm", "findings"),
             inventory("scheduled", "/scheduled", "schedulingPresent", "tasks"),
             read(
-                    "resilience",
-                    "/resilience",
+                    "fault-tolerance",
+                    "/fault-tolerance",
                     fields(
-                            "resiliencePresent", JsonType.BOOLEAN,
+                            "faultTolerancePresent", JsonType.BOOLEAN,
                             "unavailableReason", JsonType.NULLABLE_STRING,
                             "captureEnabled", JsonType.BOOLEAN,
                             "providers", JsonType.ARRAY,

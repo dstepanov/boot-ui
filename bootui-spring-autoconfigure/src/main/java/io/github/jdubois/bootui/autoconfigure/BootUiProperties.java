@@ -154,7 +154,7 @@ public class BootUiProperties {
     /** JMS message capture settings for its independent Live Activity {@code MESSAGING} buffer. */
     private Jms jms = new Jms();
 
-    private Resilience resilience = new Resilience();
+    private FaultTolerance faultTolerance = new FaultTolerance();
     /**
      * RabbitMQ (AMQP) message capture settings, feeding the Live Activity stream's
      * {@code MESSAGING} entries.
@@ -476,12 +476,12 @@ public class BootUiProperties {
         this.websockets = websockets == null ? new WebSockets() : websockets;
     }
 
-    public Resilience getResilience() {
-        return resilience;
+    public FaultTolerance getFaultTolerance() {
+        return faultTolerance;
     }
 
-    public void setResilience(Resilience resilience) {
-        this.resilience = resilience == null ? new Resilience() : resilience;
+    public void setFaultTolerance(FaultTolerance faultTolerance) {
+        this.faultTolerance = faultTolerance == null ? new FaultTolerance() : faultTolerance;
     }
 
     public void setJms(Jms jms) {
@@ -1613,23 +1613,23 @@ public class BootUiProperties {
     }
 
     /**
-     * Resilience policy capture settings for the Resilience panel and the Live Activity stream's
-     * {@code RESILIENCE} entries.
+     * Fault Tolerance policy capture settings for the Fault Tolerance panel and the Live Activity stream's
+     * {@code FAULT_TOLERANCE} entries.
      *
      * <p>Reading declared policies never depends on these settings: they only control the bounded, in-memory
      * capture of runtime outcomes. Capture is metadata-only — a policy name, its type, the attempt number and
      * the failing exception's class name — and BootUI never alters a policy or forces one to trip.</p>
      */
-    public static class Resilience {
+    public static class FaultTolerance {
 
         /**
-         * Whether BootUI subscribes to the resilience libraries' own event publishers and listeners. When
+         * Whether BootUI subscribes to the fault tolerance libraries' own event publishers and listeners. When
          * {@code false}, declared policies are still listed but no outcome is captured and no
-         * {@code RESILIENCE} entry reaches Live Activity.
+         * {@code FAULT_TOLERANCE} entry reaches Live Activity.
          */
         private boolean enabled = true;
 
-        /** Maximum number of captured resilience outcomes retained in the in-memory ring buffer. */
+        /** Maximum number of captured fault tolerance outcomes retained in the in-memory ring buffer. */
         private int maxEvents = 200;
 
         public boolean isEnabled() {

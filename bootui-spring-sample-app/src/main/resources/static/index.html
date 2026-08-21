@@ -182,12 +182,17 @@
 
     .test-action {
       display: grid;
+      min-width: 0;
       gap: 10px;
       align-content: start;
       padding: 16px;
       border: 1px solid #d9e2f1;
       border-radius: 18px;
       background: #f8fbff;
+    }
+
+    .test-action code {
+      overflow-wrap: anywhere;
     }
 
     .test-action p {
@@ -273,6 +278,16 @@
           <button class="button" id="transaction-samples-button" type="button">Generate transaction samples</button>
           <p>Creates committed, slow, rolled-back, and nested transaction boundaries in one safe request.</p>
           <small>Inspect: Transactions</small>
+        </article>
+        <article class="test-action">
+          <button class="button" id="retry-button" type="button">Trigger a retry</button>
+          <p>Calls <code>GET /api/sample/fault-tolerance/retry</code>, which fails once and then recovers through Spring Retry.</p>
+          <small>Inspect: Fault Tolerance, Live Activity</small>
+        </article>
+        <article class="test-action">
+          <button class="button" id="circuit-breaker-button" type="button">Exercise the circuit breaker</button>
+          <p>Calls <code>GET /api/sample/fault-tolerance/circuit-breaker</code> to open the sample Resilience4j breaker.</p>
+          <small>Inspect: Fault Tolerance, Live Activity</small>
         </article>
         <article class="test-action">
           <button class="button" id="session-data-button" type="button">Create session data</button>
@@ -407,6 +422,8 @@
   const sqlQueryButton = document.getElementById('sql-query-button')
   const hibernateCacheButton = document.getElementById('hibernate-cache-button')
   const transactionSamplesButton = document.getElementById('transaction-samples-button')
+  const retryButton = document.getElementById('retry-button')
+  const circuitBreakerButton = document.getElementById('circuit-breaker-button')
   const greetingButton = document.getElementById('greeting-button')
   const publicApiButton = document.getElementById('public-api-button')
   const websocketEchoButton = document.getElementById('websocket-echo-button')
@@ -684,6 +701,37 @@
         `${body.scenarios.map(scenario => `- ${scenario}`).join('\n')}\n\n` +
           `The slow transaction held its boundary for ${body.slowMillis} ms. ` +
           `Open BootUI Transactions to inspect outcomes, timing, SQL counts, and nesting.`
+      )
+    })
+  )
+
+  retryButton.addEventListener('click', () =>
+    runSampleAction(retryButton, 'Triggering a Spring Retry attempt...', async () => {
+      const response = await fetch('/api/sample/fault-tolerance/retry', {headers: {Accept: 'application/json'}})
+      const body = await response.json()
+      if (!response.ok) {
+        throw new Error(body.error || `Retry request failed with HTTP ${response.status}`)
+      }
+      showSampleResult(
+        `Spring Retry recovered ${body.policy}`,
+        `${body.reservation}\n\nOpen BootUI Fault Tolerance or Live Activity to inspect the retry event.`
+      )
+    })
+  )
+
+  circuitBreakerButton.addEventListener('click', () =>
+    runSampleAction(circuitBreakerButton, 'Exercising the Resilience4j circuit breaker...', async () => {
+      const response = await fetch('/api/sample/fault-tolerance/circuit-breaker', {
+        headers: {Accept: 'application/json'}
+      })
+      const body = await response.json()
+      if (!response.ok) {
+        throw new Error(body.error || `Circuit breaker request failed with HTTP ${response.status}`)
+      }
+      showSampleResult(
+        `Circuit breaker ${body.policy} is ${body.state}`,
+        `${body.failures} call(s) failed and ${body.rejections} call(s) were rejected.\n\n` +
+          'Open BootUI Fault Tolerance or Live Activity to inspect the state transition and rejected calls.'
       )
     })
   )

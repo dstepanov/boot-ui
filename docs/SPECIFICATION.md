@@ -2133,7 +2133,7 @@ Initial endpoints:
 | `/bootui/api/heap-dump/delete`               | POST   | Delete a retained heap dump                                                            |
 | `/bootui/api/heap-dump/download`             | GET    | Download a raw heap dump only when explicitly enabled                                  |
 | `/bootui/api/scheduled`                      | GET    | Scheduled tasks                                                                        |
-| `/bootui/api/resilience`                     | GET    | Resilience policy inventory and bounded resilience events                              |
+| `/bootui/api/fault-tolerance`                | GET    | Fault tolerance policy inventory and bounded fault tolerance events                    |
 | `/bootui/api/http-probe`                          | POST   | Local HTTP probe                                                                       |
 | `/bootui/api/log-tail/recent`                    | GET    | Recent log lines                                                                       |
 | `/bootui/api/log-tail/stream`                    | GET    | Log stream over Server-Sent Events                                                     |
@@ -2396,7 +2396,7 @@ Design rules:
     `get_sql_traces`, `get_transactions`, `get_traces`, `get_log_tail`, `get_http_exchanges`, and
     `get_rest_client_traces`.
   - Runtime and integration reads: `get_overview`, `get_health`, `get_config`, `get_beans`, `get_mappings`,
-    `get_loggers`, `get_conditions`, `get_http_sessions`, `get_scheduled_tasks`, `get_resilience`,
+    `get_loggers`, `get_conditions`, `get_http_sessions`, `get_scheduled_tasks`, `get_fault_tolerance`,
     `get_cache_stats`,
     `get_database_connection_pools`, `get_metrics`, `get_live_memory`, `get_jvm_tuning`, `get_heap_dump_report`,
     `get_threads`, `get_startup_timeline`, `get_profile_diff`, `get_spring_data_repositories`,
@@ -2487,7 +2487,7 @@ Top-level navigation:
 - Services:
   - Scheduled Tasks.
   - REST Client.
-  - Resilience.
+  - Fault Tolerance.
   - WebSockets.
   - AI Framework.
   - Cache.

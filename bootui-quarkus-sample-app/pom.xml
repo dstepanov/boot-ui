@@ -127,7 +127,7 @@
             <artifactId>quarkus-scheduler</artifactId>
         </dependency>
 
-        <!-- SmallRye Fault Tolerance: drives the Resilience panel. The sample declares one annotation of each
+        <!-- SmallRye Fault Tolerance: drives the Fault Tolerance panel. The sample declares one annotation of each
              kind BootUI understands, including a named circuit breaker (whose live state SmallRye can report)
              and an anonymous one (whose state it cannot), plus a MicroProfile config override so the panel can
              show configured-versus-annotated provenance honestly. -->

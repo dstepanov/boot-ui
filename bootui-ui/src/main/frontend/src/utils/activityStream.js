@@ -168,11 +168,11 @@ export function deepLink(entry) {
       return {path: '/cache', label: 'Open in Cache'}
     case 'MAIL':
       return entry.id ? {path: '/email', query: {id: entry.id}, label: 'Open in Email'} : null
-    case 'RESILIENCE': {
-      const needle = resilienceNeedle(entry.summary)
+    case 'FAULT_TOLERANCE': {
+      const needle = faultToleranceNeedle(entry.summary)
       return needle
-        ? {path: '/resilience', query: {q: needle}, label: 'Open in Resilience'}
-        : {path: '/resilience', label: 'Open in Resilience'}
+        ? {path: '/fault-tolerance', query: {q: needle}, label: 'Open in Fault Tolerance'}
+        : {path: '/fault-tolerance', label: 'Open in Fault Tolerance'}
     }
     case 'MESSAGING': {
       if ((entry.id || '').startsWith('jms-')) {
@@ -236,11 +236,11 @@ function rabbitDetailValue(detail, key) {
 }
 
 /**
- * The policy name inside a RESILIENCE summary, which the engine renders as
+ * The policy name inside a FAULT_TOLERANCE summary, which the engine renders as
  * `OUTCOME policyName (readable type)`. Both the leading outcome and the trailing parenthesised type are
- * dropped so the needle filters the Resilience panel by policy name alone.
+ * dropped so the needle filters the Fault Tolerance panel by policy name alone.
  */
-function resilienceNeedle(summary) {
+function faultToleranceNeedle(summary) {
   const withoutOutcome = (summary || '').trim().replace(/^\S+\s+/, '')
   return withoutOutcome.replace(/\s*\([^)]*\)\s*$/, '').trim()
 }
