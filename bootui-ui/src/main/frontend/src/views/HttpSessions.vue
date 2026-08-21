@@ -19,6 +19,7 @@ const {confirm} = useConfirm()
 
 const report = ref(null)
 const error = ref(null)
+const filter = ref('')
 const {message: banner, flash, clear} = useFlashMessage()
 const busy = ref(null)
 const expanded = ref(new Set())
@@ -37,6 +38,23 @@ async function fetchSessions() {
 const {autoRefresh, loading, initialLoading, load} = useAutoRefresh(fetchSessions, {enabled: manifestAvailable})
 
 const sessions = computed(() => report.value?.sessions || [])
+const filteredSessions = computed(() => {
+  const needle = filter.value.trim().toLowerCase()
+  if (!needle) return sessions.value
+  return sessions.value.filter((session) => {
+    const attributes = session.attributes || []
+    const searchable = [
+      session.id,
+      session.current ? 'current' : '',
+      ...attributes.flatMap((attribute) => [attribute.name, attribute.type, attribute.value])
+    ]
+    return searchable.some((value) =>
+      String(value ?? '')
+        .toLowerCase()
+        .includes(needle)
+    )
+  })
+})
 const available = computed(() => manifestAvailable.value && report.value?.available !== false)
 const unavailableReason = computed(() => {
   if (!manifestAvailable.value) return manifestUnavailableReason.value
@@ -200,11 +218,30 @@ function showReadOnlyMessage() {
           local profile to reveal them.
         </div>
 
+        <div v-if="sessions.length" class="row g-2 align-items-center mb-3">
+          <div class="col-md-7 col-lg-5">
+            <label class="visually-hidden" for="http-sessions-filter">Filter sessions</label>
+            <div class="input-group">
+              <span class="input-group-text" aria-hidden="true"><i class="bi bi-search"></i></span>
+              <input
+                id="http-sessions-filter"
+                v-model="filter"
+                class="form-control"
+                placeholder="Filter by session or attribute…"
+                type="search"
+              />
+            </div>
+          </div>
+          <div class="col-md text-md-end small text-muted">
+            {{ formatNumber(filteredSessions.length) }} of {{ formatNumber(sessions.length) }} sessions
+          </div>
+        </div>
+
         <div v-if="!sessions.length" class="alert alert-secondary">
           No active Tomcat HTTP sessions were found. Visit an endpoint that creates a session and refresh this panel.
         </div>
 
-        <div v-else class="table-responsive">
+        <div v-else-if="filteredSessions.length" class="table-responsive">
           <table class="table table-sm align-middle http-sessions-table">
             <thead>
               <tr>
@@ -218,7 +255,7 @@ function showReadOnlyMessage() {
               </tr>
             </thead>
             <tbody>
-              <template v-for="session in sessions" :key="session.sessionKey">
+              <template v-for="session in filteredSessions" :key="session.sessionKey">
                 <tr>
                   <td>
                     <code>{{ session.id || 'Hidden' }}</code>
@@ -306,6 +343,9 @@ function showReadOnlyMessage() {
               </template>
             </tbody>
           </table>
+        </div>
+        <div v-else class="alert alert-secondary">
+          <i class="bi bi-search me-2"></i>No HTTP sessions match “{{ filter }}”.
         </div>
       </template>
     </template>

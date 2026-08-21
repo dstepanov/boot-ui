@@ -2,6 +2,7 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {formatClockTime} from '../utils/format.js'
 import {resolveBootUiApiUrl} from '../utils/bootUiPath.js'
+import PanelHeader from './components/PanelHeader.vue'
 
 const MAX_LINES = 2000
 
@@ -126,10 +127,16 @@ onBeforeUnmount(() => disconnect(false))
 
 <template>
   <div>
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
-      <h2 class="mb-0"><i class="bi bi-terminal me-2"></i>Log Tail</h2>
-      <span :class="statusClass" class="badge">{{ status }}</span>
-    </div>
+    <PanelHeader
+      icon="bi-terminal"
+      title="Log Tail"
+      subtitle="Stream recent application log lines and narrow them by logger, message, or severity."
+      :refreshable="false"
+    >
+      <template #actions>
+        <span :class="statusClass" class="badge">{{ status }}</span>
+      </template>
+    </PanelHeader>
 
     <div class="row g-3 mb-3 align-items-end">
       <div class="col-lg-4">
@@ -165,7 +172,14 @@ onBeforeUnmount(() => disconnect(false))
       </div>
     </div>
 
-    <pre ref="pane" class="log-pane rounded border p-3 mb-0"><code v-if="visibleLines.length"><span
+    <pre
+      ref="pane"
+      aria-label="Live application logs"
+      aria-live="polite"
+      aria-relevant="additions"
+      class="log-pane rounded border p-3 mb-0"
+      role="log"
+    ><code v-if="visibleLines.length"><span
       v-for="(line, index) in visibleLines"
       :key="`${line.timestamp}-${index}`"
       class="d-block"

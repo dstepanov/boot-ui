@@ -73,13 +73,18 @@ onBeforeUnmount(stopRelativeTimer)
 </script>
 
 <template>
-  <div class="panel-header mb-3">
-    <div class="panel-header__info">
-      <h2 class="mb-0"><i v-if="icon" :class="['bi', icon, 'me-2']"></i>{{ title }}</h2>
-      <p v-if="subtitle" class="text-muted small mb-0 mt-1 d-flex align-items-center flex-wrap gap-4">
-        <span>{{ subtitle }}</span>
-        <slot name="subtitle-actions"></slot>
-      </p>
+  <div class="panel-header">
+    <div class="panel-header__identity">
+      <span v-if="icon" class="panel-header__icon" aria-hidden="true">
+        <i :class="['bi', icon]"></i>
+      </span>
+      <div class="panel-header__info">
+        <h2 class="panel-header__title">{{ title }}</h2>
+        <div v-if="subtitle || $slots['subtitle-actions']" class="panel-header__subtitle-row">
+          <p v-if="subtitle" class="panel-header__subtitle">{{ subtitle }}</p>
+          <slot name="subtitle-actions"></slot>
+        </div>
+      </div>
     </div>
     <div class="panel-header__actions">
       <span v-if="lastFetchedText" class="last-fetched-text">{{ lastFetchedText }}</span>
@@ -124,16 +129,64 @@ onBeforeUnmount(stopRelativeTimer)
 
 <style scoped>
 .panel-header {
-  align-items: flex-start;
+  align-items: center;
+  border-bottom: 1px solid var(--bootui-border-subtle);
   display: flex;
-  gap: 1rem;
-  justify-content: space-between;
   flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  padding: 1.4rem 0 1.15rem;
+}
+
+.panel-header__identity {
+  align-items: center;
+  display: flex;
+  flex: 1 1 28rem;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.panel-header__icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--bootui-green) 10%, var(--bootui-surface-solid));
+  border: 1px solid color-mix(in srgb, var(--bootui-green) 18%, transparent);
+  border-radius: var(--bootui-radius-md);
+  color: var(--bootui-green-dark);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 1.15rem;
+  height: 2.75rem;
+  justify-content: center;
+  width: 2.75rem;
 }
 
 .panel-header__info {
-  flex: 1;
   min-width: 0;
+}
+
+.panel-header__title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.panel-header__subtitle-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 1rem;
+  margin-top: 0.3rem;
+}
+
+.panel-header__subtitle {
+  color: var(--bootui-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  margin: 0;
+  max-width: 72ch;
 }
 
 .panel-header__actions {
@@ -148,6 +201,21 @@ onBeforeUnmount(stopRelativeTimer)
    stops being an unshrinkable row and wraps under the title instead of pushing a
    horizontal scrollbar onto the workspace. */
 @media (max-width: 575.98px) {
+  .panel-header {
+    align-items: stretch;
+    padding-top: 1.1rem;
+  }
+
+  .panel-header__identity {
+    align-items: flex-start;
+    flex-basis: 100%;
+  }
+
+  .panel-header__icon {
+    height: 2.5rem;
+    width: 2.5rem;
+  }
+
   .panel-header__actions {
     flex-shrink: 1;
     min-width: 0;
@@ -157,7 +225,7 @@ onBeforeUnmount(stopRelativeTimer)
 
 .last-fetched-text {
   color: var(--bootui-text-subtle, #5b6b80);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   white-space: nowrap;
 }
 
