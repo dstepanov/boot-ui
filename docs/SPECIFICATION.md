@@ -2462,8 +2462,8 @@ Top-level navigation:
   - Security Logs.
 - Services:
   - Scheduled Tasks.
-  - Resilience.
   - REST Client.
+  - Resilience.
   - AI Framework.
   - Cache.
   - Email.

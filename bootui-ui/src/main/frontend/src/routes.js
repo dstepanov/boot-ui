@@ -672,6 +672,27 @@ export const routes = [
     }
   },
   {
+    path: '/rest-client-trace',
+    name: 'rest-client-trace',
+    component: RestClientTrace,
+    meta: {
+      group: groups.services,
+      icon: 'bi-globe2',
+      title: 'REST Client',
+      shortcut: 'rc',
+      keywords: [
+        'restclient',
+        'resttemplate',
+        'webclient',
+        'outbound',
+        'outbound calls',
+        'http client',
+        'downstream',
+        'chatty calls'
+      ]
+    }
+  },
+  {
     path: '/resilience',
     name: 'resilience',
     component: Resilience,
@@ -691,27 +712,6 @@ export const routes = [
         'time limiter',
         'timeout',
         'fallback'
-      ]
-    }
-  },
-  {
-    path: '/rest-client-trace',
-    name: 'rest-client-trace',
-    component: RestClientTrace,
-    meta: {
-      group: groups.services,
-      icon: 'bi-globe2',
-      title: 'REST Client',
-      shortcut: 'rc',
-      keywords: [
-        'restclient',
-        'resttemplate',
-        'webclient',
-        'outbound',
-        'outbound calls',
-        'http client',
-        'downstream',
-        'chatty calls'
       ]
     }
   },
