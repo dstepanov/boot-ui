@@ -351,7 +351,7 @@ test.describe('BootUI app shell', () => {
       {title: 'Configuration', count: 6},
       {title: 'Database', count: 7},
       {title: 'Security', count: 2},
-      {title: 'Services', count: 9},
+      {title: 'Services', count: 10},
       {title: 'Diagnostics', count: 5},
       {title: 'Developer tools', count: 5}
     ]
