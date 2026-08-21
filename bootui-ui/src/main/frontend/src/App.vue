@@ -1,6 +1,6 @@
 <script setup>
 import {apiFetch} from './api.js'
-import {computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch} from 'vue'
+import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, watch} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import {
   applyTheme,
@@ -24,7 +24,7 @@ import {
 import {recordRecentPanel} from './utils/recentPanels.js'
 import {safeLocalStorage} from './utils/safeStorage.js'
 import CommandPalette from './views/components/CommandPalette.vue'
-import ConfirmDialog from './views/components/ConfirmDialog.vue'
+const ConfirmDialog = defineAsyncComponent(() => import('./views/components/ConfirmDialog.vue'))
 
 const router = useRouter()
 const route = useRoute()

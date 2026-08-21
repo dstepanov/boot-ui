@@ -1,4 +1,5 @@
 <script setup>
+import 'bootstrap/js/dist/collapse'
 import {apiFetch, getJson} from '../api.js'
 import {computed, inject, onMounted, ref} from 'vue'
 import {describeLoadError, formatLoadError} from '../utils/loadError.js'
