@@ -122,12 +122,14 @@ watch(filter, scheduleReload)
                   {{ lvl }}
                 </button>
                 <button
+                  :aria-label="`Reset ${l.name} logger level`"
                   :disabled="readOnly"
                   class="btn btn-outline-secondary"
                   title="Reset"
+                  type="button"
                   @click="changeLevel(l, null)"
                 >
-                  ↺
+                  <i aria-hidden="true" class="bi bi-arrow-counterclockwise"></i>
                 </button>
               </div>
             </td>

@@ -101,6 +101,24 @@ describe('PanelHeader', () => {
     wrapper.unmount()
   })
 
+  it('keeps subtitle actions outside the descriptive paragraph', () => {
+    const wrapper = mount(PanelHeader, {
+      props: {
+        title: 'Live Activity',
+        subtitle: 'Recent application signals.'
+      },
+      slots: {
+        'subtitle-actions': '<button type="button">Open stream settings</button>'
+      }
+    })
+
+    expect(wrapper.get('.panel-header__subtitle').text()).toBe('Recent application signals.')
+    expect(wrapper.get('.panel-header__subtitle').find('button').exists()).toBe(false)
+    expect(wrapper.get('.panel-header__subtitle-row').find('button').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
   it('keeps the relative last-fetched text current', async () => {
     const wrapper = mount(PanelHeader, {
       props: {

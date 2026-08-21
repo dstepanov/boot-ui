@@ -128,6 +128,50 @@ describe('HTTP Sessions', () => {
     expect(wrapper.text()).not.toContain('******')
   })
 
+  it('filters sessions by id and attribute metadata', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          report({
+            totalSessions: 2,
+            returnedSessions: 2,
+            sessions: [
+              ...report().sessions,
+              {
+                ...report().sessions[0],
+                sessionKey: 'session-key-two',
+                id: 'checkout-session',
+                attributes: [
+                  {
+                    name: 'cartId',
+                    type: 'java.util.UUID',
+                    value: '******',
+                    masked: true,
+                    truncated: false
+                  }
+                ]
+              }
+            ]
+          })
+        )
+      )
+    )
+
+    const wrapper = mount(HttpSessions, {props: {panel: {}}})
+    await flushPromises()
+
+    await wrapper.get('#http-sessions-filter').setValue('cartId')
+
+    expect(wrapper.text()).toContain('checkout-session')
+    expect(wrapper.text()).not.toContain('session-...')
+    expect(wrapper.text()).toContain('1 of 2 sessions')
+
+    await wrapper.get('#http-sessions-filter').setValue('missing')
+
+    expect(wrapper.text()).toContain('No HTTP sessions match “missing”.')
+  })
+
   it('shows unavailable and limited states', async () => {
     vi.stubGlobal(
       'fetch',

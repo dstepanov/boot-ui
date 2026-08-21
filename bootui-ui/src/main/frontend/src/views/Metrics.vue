@@ -751,22 +751,6 @@ const panelLoading = computed(() => loading.value || meterLoading.value || loadi
   overflow-wrap: anywhere;
 }
 
-/* The selected row paints itself Bootstrap primary blue; deepen it so the small
-   <code> meter name and muted description clear WCAG AA (white on #0a53be ~7:1),
-   and stop the default pink <code>/slate muted colors from leaking onto blue. */
-.meter-list .list-group-item-action.active {
-  --bs-list-group-active-bg: #0a53be;
-  --bs-list-group-active-border-color: #0a53be;
-}
-
-.meter-list .list-group-item-action.active code {
-  color: inherit;
-}
-
-.meter-list .list-group-item-action.active .text-muted {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
 .provenance-chip {
   align-items: center;
   display: inline-flex;
