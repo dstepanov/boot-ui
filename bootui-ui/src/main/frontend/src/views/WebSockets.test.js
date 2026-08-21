@@ -171,7 +171,7 @@ function jsonResponse(body) {
 
 describe('WebSockets panel', () => {
   let wrapper
-  const tabFor = (label) => wrapper.findAll('button.nav-link').find((button) => button.text().startsWith(label))
+  const tabFor = (label) => wrapper.findAll('[role="tab"]').find((button) => button.text().startsWith(label))
 
   afterEach(() => {
     wrapper?.unmount()

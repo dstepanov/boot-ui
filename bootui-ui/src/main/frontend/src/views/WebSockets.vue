@@ -437,13 +437,13 @@ function clearActivity() {
           </select>
         </div>
 
-        <ul class="nav nav-tabs websockets-tabs" role="tablist" aria-label="WebSocket data">
-          <li v-for="entry in tabs" :key="entry.id" class="nav-item">
+        <ul class="websockets-tabs" role="tablist" aria-label="WebSocket data">
+          <li v-for="entry in tabs" :key="entry.id" class="websockets-tabs__item" role="presentation">
             <button
               :id="`websockets-tab-${entry.id}`"
               ref="tabButtons"
               type="button"
-              class="nav-link"
+              class="websockets-tabs__button"
               :class="{active: tab === entry.id}"
               role="tab"
               :aria-selected="tab === entry.id"
@@ -457,8 +457,8 @@ function clearActivity() {
                 )
               "
             >
-              {{ entry.label }}
-              <span class="badge text-bg-secondary ms-1">{{ formatNumber(entry.count) }}</span>
+              <span>{{ entry.label }}</span>
+              <span class="websockets-tabs__count">{{ formatNumber(entry.count) }}</span>
             </button>
           </li>
         </ul>
@@ -789,14 +789,78 @@ function clearActivity() {
 }
 
 .websockets-tabs {
+  align-items: center;
+  background: var(--bootui-surface-alt);
+  border: 1px solid var(--bootui-border);
+  border-radius: var(--bootui-radius-md);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
+  display: flex;
+  gap: 0.2rem;
+  list-style: none;
+  margin-bottom: 1rem;
   margin-top: 0.75rem;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
+  padding: 0.22rem;
   scrollbar-width: thin;
+  width: max-content;
 }
 
-.websockets-tabs .nav-item {
+.websockets-tabs__item {
   flex: 0 0 auto;
+}
+
+.websockets-tabs__button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--bootui-radius-sm);
+  color: var(--bootui-text-muted);
+  display: inline-flex;
+  font-size: 0.875rem;
+  font-weight: 700;
+  gap: 0.45rem;
+  justify-content: center;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.75rem;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.websockets-tabs__button:hover:not(.active) {
+  background: var(--bootui-nav-hover-bg);
+  color: var(--bootui-nav-hover-color);
+}
+
+.websockets-tabs__button.active {
+  background: var(--bootui-nav-active-bg);
+  box-shadow: 0 0.35rem 0.8rem rgba(25, 135, 84, 0.2);
+  color: var(--bootui-nav-active-color);
+}
+
+.websockets-tabs__button:focus-visible {
+  outline: 2px solid var(--bootui-blue);
+  outline-offset: 2px;
+}
+
+.websockets-tabs__count {
+  align-items: center;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  border-radius: var(--bootui-radius-pill);
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  height: 1.4rem;
+  justify-content: center;
+  min-width: 1.4rem;
+  padding: 0 0.3rem;
+}
+
+.websockets-tabs__button.active .websockets-tabs__count {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .websockets-table {
@@ -851,10 +915,18 @@ function clearActivity() {
   }
 
   .websockets-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     margin-left: -1rem;
     margin-right: -1rem;
+    overflow: visible;
     padding-left: 1rem;
     padding-right: 1rem;
+    width: calc(100% + 2rem);
+  }
+
+  .websockets-tabs__button {
+    width: 100%;
   }
 
   .websockets-table {
