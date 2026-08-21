@@ -1,12 +1,14 @@
 package io.github.jdubois.bootui.engine.exceptions;
 
 import io.github.jdubois.bootui.core.ValueExposure;
+import io.github.jdubois.bootui.core.dto.ErrorContractLinkDto;
 import io.github.jdubois.bootui.core.dto.ExceptionCauseDto;
 import io.github.jdubois.bootui.core.dto.ExceptionDetailDto;
 import io.github.jdubois.bootui.core.dto.ExceptionFrameDto;
 import io.github.jdubois.bootui.core.dto.ExceptionGroupDto;
 import io.github.jdubois.bootui.core.dto.ExceptionOccurrenceDto;
 import io.github.jdubois.bootui.core.dto.ExceptionsReport;
+import io.github.jdubois.bootui.engine.errorcontract.ErrorContractLinkResolver;
 import io.github.jdubois.bootui.spi.ExposurePolicy;
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -16,6 +18,11 @@ import java.util.regex.Pattern;
  * Quarkus adapters. Adapters own only capture (feeding the {@link ExceptionStore}) and transport; every
  * read transformation lives here so the wire ({@link ExceptionsReport} / {@link ExceptionDetailDto}) is
  * identical across platforms and the single Vue panel renders the same.
+ *
+ * <p>An optional {@link ErrorContractLinkResolver} attaches the declared handler that would produce the
+ * HTTP error response for a retained failure. The seam is optional and conservative: without it, and
+ * whenever the retained evidence is missing or ambiguous, groups stay unlinked rather than claiming a
+ * relationship BootUI cannot prove.</p>
  *
  * <p>Messages are surfaced according to the configured value-exposure policy: omitted for
  * {@code METADATA_ONLY}, scrubbed of obvious secret-like assignments for the default {@code MASKED}
@@ -30,8 +37,19 @@ public final class ExceptionsService {
 
     private final ExposurePolicy exposure;
 
+    private final ErrorContractLinkResolver errorContractLinks;
+
     public ExceptionsService(ExposurePolicy exposure) {
+        this(exposure, null);
+    }
+
+    /**
+     * @param errorContractLinks optional REST API error-contract seam used to cross-link a retained failure
+     *     to its declared handler; {@code null} leaves every group unlinked
+     */
+    public ExceptionsService(ExposurePolicy exposure, ErrorContractLinkResolver errorContractLinks) {
         this.exposure = exposure;
+        this.errorContractLinks = errorContractLinks;
     }
 
     public ExceptionsReport report(ExceptionStore store) {
@@ -106,7 +124,20 @@ public final class ExceptionsService {
                 last == null ? null : last.source(),
                 last == null ? null : last.traceId(),
                 summary.status().name(),
-                summary.regressionCount());
+                summary.regressionCount(),
+                errorContractLink(summary.exceptionClassName(), last == null ? null : last.handler()));
+    }
+
+    /** Resolves the declared-handler cross-link, tolerating a resolver that cannot answer. */
+    private ErrorContractLinkDto errorContractLink(String exceptionClassName, String handler) {
+        if (errorContractLinks == null) {
+            return null;
+        }
+        try {
+            return errorContractLinks.resolve(exceptionClassName, handler);
+        } catch (RuntimeException | LinkageError ex) {
+            return null; // a failing cross-link must never break the Exceptions panel
+        }
     }
 
     private ExceptionFrameDto toFrameDto(ExceptionStore.Frame frame) {

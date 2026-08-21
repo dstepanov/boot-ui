@@ -230,5 +230,38 @@ final class RestApiModel {
             String responseStatusValue,
             boolean catchesExceptionOrThrowable,
             boolean hasResponseParam,
-            boolean rendersBody) {}
+            boolean rendersBody,
+            List<String> handledExceptionTypes,
+            List<String> produces,
+            boolean readsStackTrace,
+            boolean printsStackTrace) {
+
+        ExceptionHandlerModel {
+            handledExceptionTypes = List.copyOf(handledExceptionTypes);
+            produces = List.copyOf(produces);
+        }
+    }
+
+    /**
+     * One application exception type declared in an endpoint method's {@code throws} clause, together with
+     * its resolved supertype chain. Captured because assignability can only be decided while the ArchUnit
+     * class hierarchy is in hand; the rules then own the policy over these raw facts (RAPI-ERR-009).
+     *
+     * @param controllerSimpleName simple name of the declaring controller/resource
+     * @param methodName the endpoint method that declares the exception
+     * @param exceptionTypeName fully-qualified name of the declared exception type
+     * @param exceptionSimpleName simple name of the declared exception type
+     * @param exceptionSuperTypeNames fully-qualified ancestors, nearest first, excluding the type itself
+     */
+    record ThrownExceptionModel(
+            String controllerSimpleName,
+            String methodName,
+            String exceptionTypeName,
+            String exceptionSimpleName,
+            List<String> exceptionSuperTypeNames) {
+
+        ThrownExceptionModel {
+            exceptionSuperTypeNames = List.copyOf(exceptionSuperTypeNames);
+        }
+    }
 }

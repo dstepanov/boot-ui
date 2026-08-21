@@ -1436,7 +1436,8 @@ class LiveActivityServiceTests {
                 "s",
                 null,
                 "OPEN",
-                0);
+                0,
+                null);
     }
 
     /**
@@ -1463,7 +1464,8 @@ class LiveActivityServiceTests {
                 "s",
                 null,
                 "OPEN",
-                0);
+                0,
+                null);
     }
 
     private static io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore scheduledStore(

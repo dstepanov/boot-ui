@@ -1,4 +1,4 @@
-import {flushPromises, mount} from '@vue/test-utils'
+import {config, flushPromises, mount} from '@vue/test-utils'
 import {afterEach, describe, expect, it, vi} from 'vitest'
 
 import Exceptions from './Exceptions.vue'
@@ -103,6 +103,9 @@ function detail() {
     ]
   }
 }
+
+// The handler attribution links into the REST API panel, so a router is not needed to render the panel.
+config.global.stubs.RouterLink = {props: ['to'], template: '<a :href="JSON.stringify(to)"><slot /></a>'}
 
 describe('Exceptions', () => {
   afterEach(() => {
@@ -219,6 +222,48 @@ describe('Exceptions', () => {
     expect(wrapper.text()).toContain('Caused by: java.lang.NumberFormatException')
     expect(wrapper.text()).toContain('... 12 more')
     expect(wrapper.text()).toContain('Recent occurrences')
+  })
+
+  it('links a retained failure to its declared handler only when the engine attributed one', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          report({
+            groups: [
+              group({
+                errorContract: {
+                  entryId: 'com.example.GlobalAdvice#handleOrder(java.lang.IllegalStateException)',
+                  component: 'com.example.GlobalAdvice',
+                  componentSimpleName: 'GlobalAdvice',
+                  method: 'handleOrder',
+                  scope: 'GLOBAL',
+                  status: '409',
+                  bodyCategory: 'PROBLEM_DETAIL'
+                }
+              }),
+              group({id: 'def456', errorContract: null})
+            ]
+          })
+        )
+      )
+    )
+
+    const wrapper = mount(Exceptions)
+    await flushPromises()
+
+    const rows = wrapper.findAll('tbody tr')
+    expect(rows[0].text()).toContain('Handled by')
+    expect(rows[0].text()).toContain('GlobalAdvice#handleOrder')
+    expect(rows[0].text()).toContain('409')
+    // The attribution is a real cross-link into the REST API panel's catalogue, filtered to that handler.
+    const link = rows[0].find('a')
+    expect(JSON.parse(link.attributes('href'))).toEqual({
+      path: '/rest-api',
+      query: {errorContract: 'com.example.GlobalAdvice'}
+    })
+    // An unattributed failure must not imply a handler exists.
+    expect(rows[1].text()).not.toContain('Handled by')
   })
 
   it('shows a disabled notice when capture is unavailable', async () => {

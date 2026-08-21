@@ -7,6 +7,8 @@ import io.github.jdubois.bootui.core.dto.ExceptionDetailDto;
 import io.github.jdubois.bootui.core.dto.ExceptionGroupDto;
 import io.github.jdubois.bootui.core.dto.ExceptionStatusUpdateRequest;
 import io.github.jdubois.bootui.core.dto.ExceptionsReport;
+import io.github.jdubois.bootui.engine.errorcontract.ErrorContractLinkResolver;
+import io.github.jdubois.bootui.engine.errorcontract.ErrorContractService;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionsService;
 import java.util.Map;
@@ -51,10 +53,13 @@ public class ReactiveExceptionsController {
 
     @Autowired
     public ReactiveExceptionsController(
-            ObjectProvider<ExceptionStore> storeProvider, BootUiProperties properties, BootUiExposure exposure) {
+            ObjectProvider<ExceptionStore> storeProvider,
+            BootUiProperties properties,
+            BootUiExposure exposure,
+            ObjectProvider<ErrorContractService> errorContract) {
         this.storeProvider = storeProvider;
         this.properties = properties;
-        this.service = new ExceptionsService(exposure);
+        this.service = new ExceptionsService(exposure, errorContractLinks(errorContract));
         this.changeStream = new ReactiveBootUiChangeStream("exceptions");
         ExceptionStore store = storeProvider.getIfAvailable();
         if (store != null) {
@@ -77,7 +82,7 @@ public class ReactiveExceptionsController {
     }
 
     ReactiveExceptionsController(ObjectProvider<ExceptionStore> storeProvider, BootUiProperties properties) {
-        this(storeProvider, properties, new BootUiExposure(properties));
+        this(storeProvider, properties, new BootUiExposure(properties), null);
     }
 
     @GetMapping
@@ -114,5 +119,20 @@ public class ReactiveExceptionsController {
     @GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<Map<String, Object>>> stream() {
         return changeStream.open();
+    }
+    /**
+     * Builds the Exceptions panel's conservative cross-link to the REST API panel's error-contract
+     * catalogue. The {@link ErrorContractService} is resolved lazily through the {@link ObjectProvider} on
+     * each lookup so this controller never forces the catalogue to be built, and so a context without the
+     * service (or one where discovery is unavailable) simply yields no link instead of failing.
+     */
+    private static ErrorContractLinkResolver errorContractLinks(ObjectProvider<ErrorContractService> provider) {
+        if (provider == null) {
+            return null; // the test constructor wires no catalogue, so no failure is ever cross-linked
+        }
+        return (exceptionClassName, handlerEvidence) -> {
+            ErrorContractService service = provider.getIfAvailable();
+            return service == null ? null : service.resolve(exceptionClassName, handlerEvidence);
+        };
     }
 }

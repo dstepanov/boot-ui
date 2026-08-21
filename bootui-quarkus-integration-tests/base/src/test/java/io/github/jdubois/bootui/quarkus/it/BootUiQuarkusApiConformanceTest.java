@@ -47,6 +47,17 @@ class BootUiQuarkusApiConformanceTest extends AbstractBootUiApiConformanceTest {
     @TestHTTPResource
     URL baseUrl;
 
+    /**
+     * {@code ItCatalogueExceptionMapper} is declared in {@code com.example.bootui.it.errors} rather than
+     * alongside this test: BootUI excludes its own {@code io.github.jdubois.bootui.quarkus} package from
+     * every declaration scan, and this integration-test application lives inside that package, so a
+     * fixture declared here would be filtered out exactly like BootUI's own resources.
+     */
+    @Override
+    protected Set<String> expectedErrorContractComponents() {
+        return Set.of("ItCatalogueExceptionMapper");
+    }
+
     @Override
     protected String baseUrl() {
         return baseUrl.toExternalForm();

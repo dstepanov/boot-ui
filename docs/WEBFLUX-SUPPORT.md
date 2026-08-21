@@ -146,6 +146,17 @@ accidentally inherit the Reactor Netty event loop.
 | -------------- | ---------------------------------------------------------------------------------------------------------- |
 | HTTP Exchanges | `ReactiveHttpExchangeRepositoryConfiguration` supplies Actuator's reactive `HttpExchangeRepository` bean instead of the servlet one — same DTO, same UI, same capture semantics |
 
+The REST API panel's **declared error contract** needs no reactive binding at all: `@ControllerAdvice`,
+`@ExceptionHandler` and `@ResponseStatus` all live in `spring-web`, so one `SpringErrorContractProvider` serves
+both stacks by reading bean metadata. The only reactive-specific behavior is in the provider's return-type
+analysis, which unwraps `Mono`, `Flux`, `CompletionStage`, `CompletableFuture`, `Callable`, `DeferredResult` and
+`WebAsyncTask` — matched by class name, so nothing links Reactor — before classifying the declared response body.
+A reactive handler returning `Mono<ResponseEntity<ErrorBody>>` therefore reports the same body category and the
+same runtime-built status as its servlet equivalent, and WebFlux's functional `ServerResponse` is treated like
+`ResponseEntity`: a runtime-built status with a runtime-decided body. Neither stack instantiates or invokes a
+handler — discovery reads bean *types* without creating them, so a `FactoryBean` declaring advice is never
+forced into existence just to build the catalogue.
+
 ### 6.3 Rebuilt with a new reactive capture layer (8 panels)
 
 The DTO and UI are reused unchanged; only the capture/streaming source was rewritten because the servlet original
