@@ -66,6 +66,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `RAPI-ERR-010` (inconsistent error contracts across handlers for the same exception), and `RAPI-ERR-011`
   (exception handlers that read stack traces into their response). The catalogue now ships 56 rules.
 
+### Fixed
+
+- **HTTP Probe input is explicitly bounded on Spring MVC, Spring WebFlux, and Quarkus.** The probe capped only the
+  response body, so an oversized request body, path or header collection was bound by the adapter and forwarded to the
+  local target. Method (32 bytes), path (2 KiB), request body (64 KiB), header count (50), header name (256 bytes),
+  header value (8 KiB) and total header size (32 KiB) are now checked in UTF-8 bytes — so multi-byte input cannot
+  smuggle several times the budget past a character count — before any request is sent. Over-limit input is rejected
+  with the canonical `400` and `{"error": ...}` body on every adapter, and the panel shows that message; a probe that
+  runs and fails is still reported as a probe outcome (#860).
+
 ## [1.14.1] - 2026-08-20
 
 Patch release that restores Spring native and Quarkus Docker startup, fixes the native-image build bootstrap on AMD64,
