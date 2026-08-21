@@ -14,12 +14,12 @@ import io.github.jdubois.bootui.core.dto.SecurityLogEventDto;
 import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
 import io.github.jdubois.bootui.engine.cache.CacheActivityEvent;
 import io.github.jdubois.bootui.engine.cache.CacheActivityOperation;
+import io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceEventRecorder;
+import io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceVocabulary;
 import io.github.jdubois.bootui.engine.jms.JmsActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.CapturedMessage;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.Direction;
-import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
-import io.github.jdubois.bootui.engine.resilience.ResilienceVocabulary;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import java.time.Instant;
 import java.util.List;
@@ -1248,61 +1248,64 @@ class LiveActivityAssemblerTests {
     }
 
     @Test
-    void nestsResilienceEventUnderRequestSharingTraceIdAndCountsIt() {
+    void nestsFaultToleranceEventUnderRequestSharingTraceIdAndCountsIt() {
         HttpExchangesReport requests = requests(request("req-1", "/orders", "trace-a", 1_000L));
-        ResilienceEventRecorder recorder = new ResilienceEventRecorder(true, 10);
+        FaultToleranceEventRecorder recorder = new FaultToleranceEventRecorder(true, 10);
         recorder.setTraceIdProvider(() -> "trace-a");
         recorder.record(
                 "paymentGateway",
-                ResilienceVocabulary.TYPE_RETRY,
-                ResilienceVocabulary.PROVIDER_RESILIENCE4J,
+                FaultToleranceVocabulary.TYPE_RETRY,
+                FaultToleranceVocabulary.PROVIDER_RESILIENCE4J,
                 "PayClient#charge",
-                ResilienceVocabulary.OUTCOME_RETRY,
+                FaultToleranceVocabulary.OUTCOME_RETRY,
                 2,
                 12L,
                 "IOException");
 
-        LiveActivityReport report = resilienceReport(requests, recorder, true);
+        LiveActivityReport report = faultToleranceReport(requests, recorder, true);
 
-        ActivityEntryDto resilience = entryOfType(report, "RESILIENCE");
-        assertThat(resilience.parentId()).isEqualTo("req-1");
-        assertThat(resilience.severity()).isEqualTo("WARN");
-        assertThat(resilience.summary()).contains("paymentGateway");
-        assertThat(report.typeCounts().get("RESILIENCE")).isEqualTo(1);
-        assertThat(report.sources()).contains("resilience");
+        ActivityEntryDto faultTolerance = entryOfType(report, "FAULT_TOLERANCE");
+        assertThat(faultTolerance.parentId()).isEqualTo("req-1");
+        assertThat(faultTolerance.severity()).isEqualTo("WARN");
+        assertThat(faultTolerance.summary()).contains("paymentGateway");
+        assertThat(report.typeCounts().get("FAULT_TOLERANCE")).isEqualTo(1);
+        assertThat(report.sources()).contains("fault-tolerance");
     }
 
     @Test
-    void keepsResilienceEventTopLevelWhenNoRequestSharesItsTraceId() {
+    void keepsFaultToleranceEventTopLevelWhenNoRequestSharesItsTraceId() {
         HttpExchangesReport requests = requests(request("req-1", "/orders", "trace-a", 1_000L));
-        ResilienceEventRecorder recorder = new ResilienceEventRecorder(true, 10);
+        FaultToleranceEventRecorder recorder = new FaultToleranceEventRecorder(true, 10);
         recorder.setTraceIdProvider(() -> null);
         recorder.recordStateTransition(
-                "paymentGateway", ResilienceVocabulary.PROVIDER_RESILIENCE4J, null, ResilienceVocabulary.STATE_OPEN);
+                "paymentGateway",
+                FaultToleranceVocabulary.PROVIDER_RESILIENCE4J,
+                null,
+                FaultToleranceVocabulary.STATE_OPEN);
 
-        LiveActivityReport report = resilienceReport(requests, recorder, true);
+        LiveActivityReport report = faultToleranceReport(requests, recorder, true);
 
-        assertThat(entryOfType(report, "RESILIENCE").parentId()).isNull();
+        assertThat(entryOfType(report, "FAULT_TOLERANCE").parentId()).isNull();
     }
 
     @Test
-    void omitsResilienceEntriesWhenTheSourceIsUnavailable() {
+    void omitsFaultToleranceEntriesWhenTheSourceIsUnavailable() {
         HttpExchangesReport requests = requests(request("req-1", "/orders", "trace-a", 1_000L));
-        ResilienceEventRecorder recorder = new ResilienceEventRecorder(true, 10);
+        FaultToleranceEventRecorder recorder = new FaultToleranceEventRecorder(true, 10);
         recorder.record(
                 "paymentGateway",
-                ResilienceVocabulary.TYPE_RETRY,
-                ResilienceVocabulary.PROVIDER_RESILIENCE4J,
+                FaultToleranceVocabulary.TYPE_RETRY,
+                FaultToleranceVocabulary.PROVIDER_RESILIENCE4J,
                 null,
-                ResilienceVocabulary.OUTCOME_RETRY,
+                FaultToleranceVocabulary.OUTCOME_RETRY,
                 1,
                 null,
                 null);
 
-        LiveActivityReport report = resilienceReport(requests, recorder, false);
+        LiveActivityReport report = faultToleranceReport(requests, recorder, false);
 
-        assertThat(report.entries()).noneMatch(candidate -> "RESILIENCE".equals(candidate.type()));
-        assertThat(report.sources()).doesNotContain("resilience");
+        assertThat(report.entries()).noneMatch(candidate -> "FAULT_TOLERANCE".equals(candidate.type()));
+        assertThat(report.sources()).doesNotContain("fault-tolerance");
     }
 
     private static ActivityEntryDto entryOfType(LiveActivityReport report, String type) {
@@ -1312,8 +1315,8 @@ class LiveActivityAssemblerTests {
                 .orElseThrow(() -> new AssertionError("No " + type + " entry in " + report.entries()));
     }
 
-    private LiveActivityReport resilienceReport(
-            HttpExchangesReport requests, ResilienceEventRecorder recorder, boolean resilienceAvailable) {
+    private LiveActivityReport faultToleranceReport(
+            HttpExchangesReport requests, FaultToleranceEventRecorder recorder, boolean faultToleranceAvailable) {
         return assembler.report(
                 requests,
                 List.of(),
@@ -1338,7 +1341,7 @@ class LiveActivityAssemblerTests {
                 List.of(),
                 false,
                 recorder.recent(),
-                resilienceAvailable);
+                faultToleranceAvailable);
     }
 
     private static HttpExchangesReport requests(HttpExchangeDto... exchanges) {

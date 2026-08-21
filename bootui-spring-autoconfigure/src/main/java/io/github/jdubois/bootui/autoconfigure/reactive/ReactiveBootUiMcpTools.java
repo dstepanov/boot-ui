@@ -21,6 +21,7 @@ import io.github.jdubois.bootui.autoconfigure.web.DataController;
 import io.github.jdubois.bootui.autoconfigure.web.DatabaseConnectionPoolsController;
 import io.github.jdubois.bootui.autoconfigure.web.DevServicesController;
 import io.github.jdubois.bootui.autoconfigure.web.DevToolsController;
+import io.github.jdubois.bootui.autoconfigure.web.FaultToleranceController;
 import io.github.jdubois.bootui.autoconfigure.web.FlywayController;
 import io.github.jdubois.bootui.autoconfigure.web.GitHubController;
 import io.github.jdubois.bootui.autoconfigure.web.HealthController;
@@ -35,7 +36,6 @@ import io.github.jdubois.bootui.autoconfigure.web.MetricsController;
 import io.github.jdubois.bootui.autoconfigure.web.OverviewController;
 import io.github.jdubois.bootui.autoconfigure.web.PanelsController;
 import io.github.jdubois.bootui.autoconfigure.web.ProfileDiffController;
-import io.github.jdubois.bootui.autoconfigure.web.ResilienceController;
 import io.github.jdubois.bootui.autoconfigure.web.ScheduledController;
 import io.github.jdubois.bootui.autoconfigure.web.SpringCacheController;
 import io.github.jdubois.bootui.autoconfigure.web.StartupController;
@@ -96,7 +96,7 @@ public class ReactiveBootUiMcpTools {
             ObjectProvider<LoggersController> loggers,
             ObjectProvider<ConditionsController> conditions,
             ObjectProvider<ScheduledController> scheduled,
-            ObjectProvider<ResilienceController> resilience,
+            ObjectProvider<FaultToleranceController> faultTolerance,
             ObjectProvider<SpringCacheController> cache,
             ObjectProvider<DatabaseConnectionPoolsController> connectionPools) {
         OverviewController overviewBean = overview.getIfAvailable();
@@ -126,7 +126,7 @@ public class ReactiveBootUiMcpTools {
         LoggersController loggersBean = loggers.getIfAvailable();
         ConditionsController conditionsBean = conditions.getIfAvailable();
         ScheduledController scheduledBean = scheduled.getIfAvailable();
-        ResilienceController resilienceBean = resilience.getIfAvailable();
+        FaultToleranceController faultToleranceBean = faultTolerance.getIfAvailable();
         SpringCacheController cacheBean = cache.getIfAvailable();
         DatabaseConnectionPoolsController connectionPoolsBean = connectionPools.getIfAvailable();
 
@@ -423,12 +423,12 @@ public class ReactiveBootUiMcpTools {
                     BootUiPanels.SCHEDULED,
                     args -> scheduledBean.scheduled()));
         }
-        if (resilienceBean != null) {
+        if (faultToleranceBean != null) {
             registry.add(read(
-                    "get_resilience",
-                    McpToolDescriptions.spring("get_resilience"),
-                    BootUiPanels.RESILIENCE,
-                    args -> resilienceBean.resilience()));
+                    "get_fault_tolerance",
+                    McpToolDescriptions.spring("get_fault_tolerance"),
+                    BootUiPanels.FAULT_TOLERANCE,
+                    args -> faultToleranceBean.faultTolerance()));
         }
         if (cacheBean != null) {
             registry.add(read(

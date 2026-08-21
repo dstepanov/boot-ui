@@ -911,10 +911,10 @@ class BootUiReactiveAutoConfigurationTests {
     }
 
     @Test
-    void installsTheReactiveTraceProviderOntoTheResilienceRecorder() {
+    void installsTheReactiveTraceProviderOntoTheFaultToleranceRecorder() {
         runner.withPropertyValues("bootui.enabled=ON").run(context -> {
-            io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder recorder =
-                    context.getBean(io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder.class);
+            io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceEventRecorder recorder =
+                    context.getBean(io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceEventRecorder.class);
             assertThat(recorder.isEnabled()).isTrue();
 
             // Reactor hops break thread-locals, so the recorder must read the active span rather than the

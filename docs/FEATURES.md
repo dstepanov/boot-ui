@@ -1617,12 +1617,12 @@ identical.
 
 ![BootUI REST Client panel](./images/bootui-rest-client-trace.webp)
 
-### Resilience
+### Fault Tolerance
 
-The Resilience panel makes an application's fault-tolerance configuration visible. It lists every circuit breaker, retry,
+The Fault Tolerance panel makes an application's protective policies visible. It lists every circuit breaker, retry,
 rate limiter, bulkhead, time limiter, and fallback the application declares, with the settings that actually apply, the
 protected operation, live circuit breaker state, and — where the library exposes them — call counters. Below the
-inventory, a bounded event feed shows what resilience machinery actually did: retried calls, exhausted retries, rejected
+inventory, a bounded event feed shows what fault tolerance machinery actually did: retried calls, exhausted retries, rejected
 calls, timeouts, short circuits, and circuit breaker state transitions.
 
 Three providers are supported, and several can be active at once:
@@ -1644,10 +1644,10 @@ Three providers are supported, and several can be active at once:
 The panel is **strictly capture-only**. BootUI never opens, closes, resets, forces, or otherwise mutates a policy, and it
 never triggers a protected call itself. Event capture is metadata only: policy name, outcome, attempt number, duration,
 the *simple name* of a failure's exception class, and circuit breaker state. Method arguments, return values, payloads
-and exception messages are never recorded. Resilience events also appear in Live Activity as `RESILIENCE` entries,
+and exception messages are never recorded. Fault tolerance events also appear in Live Activity as `FAULT_TOLERANCE` entries,
 correlated with the request that produced them, and clicking one opens this panel filtered to that policy.
 
-Set `bootui.resilience.enabled=false` to keep the live policy inventory while recording no events at all.
+Set `bootui.fault-tolerance.enabled=false` to keep the live policy inventory while recording no events at all.
 
 ### AI Framework
 
@@ -2059,7 +2059,7 @@ groups:
   requests, SQL statements, exceptions, security events, scheduled-task runs, and, on Spring, cache accesses grouped by
   request or trace. `get_exception_detail` returns a selected exception group's stack trace, causes, and occurrences.
 - **Runtime and integration reads:** `get_overview`, `get_health`, `get_config`, `get_beans`, `get_mappings`,
-  `get_loggers`, `get_conditions`, `get_http_sessions`, `get_scheduled_tasks`, `get_resilience`, `get_cache_stats`,
+  `get_loggers`, `get_conditions`, `get_http_sessions`, `get_scheduled_tasks`, `get_fault_tolerance`, `get_cache_stats`,
   `get_database_connection_pools`, `get_metrics`, `get_live_memory`, `get_jvm_tuning`, `get_heap_dump_report`,
   `get_threads`, `get_startup_timeline`, `get_profile_diff`, `get_spring_data_repositories`,
   `get_flyway_migrations`, `get_liquibase_changesets`, `get_spring_security`, `get_ai_overview`, `get_emails`,

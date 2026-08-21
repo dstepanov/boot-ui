@@ -34,7 +34,7 @@
         <module>health</module>
         <module>micrometer</module>
         <module>scheduler</module>
-        <module>resilience</module>
+        <module>fault-tolerance</module>
         <module>security</module>
         <module>cache</module>
         <module>email</module>

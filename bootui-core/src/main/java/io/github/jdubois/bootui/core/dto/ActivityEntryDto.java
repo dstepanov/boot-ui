@@ -5,7 +5,7 @@ package io.github.jdubois.bootui.core.dto;
  *
  * <p>Entries are produced by merging BootUI's existing in-memory signal buffers (HTTP exchanges,
  * SQL trace, REST client trace, exceptions, security logs, cache accesses, scheduled-task executions,
- * captured emails, Kafka messaging, and resilience-policy events) into one chronological feed. Each source
+ * captured emails, Kafka messaging, and fault-tolerance policy events) into one chronological feed. Each source
  * is consumed through its own controller, so values are already masked and self-filtered before they reach
  * this shape.</p>
  *
@@ -13,7 +13,7 @@ package io.github.jdubois.bootui.core.dto;
  *     id, which the per-request profiler endpoint accepts as {@code /activity/request/{id}}
  * @param type coarse activity type: {@code REQUEST}, {@code SQL}, {@code REST_CLIENT}, {@code EXCEPTION},
  *     {@code SECURITY}, {@code MAIL}, {@code CACHE}, {@code SCHEDULED}, {@code MESSAGING}, or
- *     {@code RESILIENCE}
+ *     {@code FAULT_TOLERANCE}
  * @param timestamp epoch milliseconds when the activity occurred
  * @param severity {@code OK}, {@code SLOW}, {@code WARN}, or {@code ERROR}
  * @param summary one-line, already-masked human-readable summary

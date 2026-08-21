@@ -192,7 +192,7 @@ Enforced identically on Spring and Quarkus (`PanelAccessFilter` / `QuarkusPanelA
 | Security        | Spring Security           | `spring-security`           | `bootui.panels.spring-security.enabled`           | Not applicable; view-only.                |
 | Security        | Security Logs             | `security-logs`             | `bootui.panels.security-logs.enabled`             | Not applicable; view-only.                |
 | Services        | Scheduled Tasks           | `scheduled`                 | `bootui.panels.scheduled.enabled`                 | Not applicable; view-only.                |
-| Services        | Resilience                | `resilience`                | `bootui.panels.resilience.enabled`                | Not applicable; view-only.                |
+| Services        | Fault Tolerance           | `fault-tolerance`           | `bootui.panels.fault-tolerance.enabled`           | Not applicable; view-only.                |
 | Services        | REST Client               | `rest-client-trace`         | `bootui.panels.rest-client-trace.enabled`         | `bootui.panels.rest-client-trace.read-only` |
 | Services        | AI Framework              | `ai`                        | `bootui.panels.ai.enabled`                        | Not applicable; view-only.                |
 | Services        | Cache                     | `cache`                     | `bootui.panels.cache.enabled`                     | `bootui.panels.cache.read-only`           |
@@ -577,19 +577,19 @@ mode. The `bootui.rabbitmq.*` properties above tune both surfaces.
 | `bootui.panels.rabbitmq.enabled`  | `true`  | Show the RabbitMQ panel when the adapter detects RabbitMQ support. |
 | `bootui.panels.rabbitmq.read-only`| `false` | Disable the clear action while keeping captured messages visible. |
 
-### Resilience
+### Fault Tolerance
 
-The Resilience panel reads fault-tolerance policies live from Resilience4j registries, Spring Retry `@Retryable`
+The Fault Tolerance panel reads protective policies live from Resilience4j registries, Spring Retry `@Retryable`
 metadata, and SmallRye Fault Tolerance annotations captured at build time on Quarkus. It is strictly capture-only: BootUI
 never opens, closes, resets, or otherwise mutates a circuit breaker, retry, rate limiter, bulkhead or time limiter.
 Captured events are metadata only — policy name, outcome, attempt number, duration, exception simple name, and circuit
 breaker state — never method arguments, return values or exception messages.
 
-| Property                             | Default | Description                                                                                                                          |
-| ------------------------------------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `bootui.panels.resilience.enabled`   | `true`  | Show the Resilience panel when a supported resilience library is present.                                                            |
-| `bootui.resilience.enabled`          | `true`  | Capture bounded resilience events (retries, rejections, timeouts, short circuits, and circuit breaker state transitions) for the panel and Live Activity. Setting it to `false` keeps the live policy inventory but stops recording events. |
-| `bootui.resilience.max-events`       | `200`   | Maximum captured resilience events retained in the bounded in-memory buffer (hard-capped at `2000`).                                 |
+| Property                                 | Default | Description                                                                                                                      |
+| ---------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `bootui.panels.fault-tolerance.enabled`  | `true`  | Show the Fault Tolerance panel when a supported fault tolerance library is present.                                              |
+| `bootui.fault-tolerance.enabled`         | `true`  | Capture bounded fault tolerance events (retries, rejections, timeouts, short circuits, and circuit breaker state transitions) for the panel and Live Activity. Setting it to `false` keeps the live policy inventory but stops recording events. |
+| `bootui.fault-tolerance.max-events`      | `200`   | Maximum captured fault tolerance events retained in the bounded in-memory buffer (hard-capped at `2000`).                        |
 
 ### JMS
 

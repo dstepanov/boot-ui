@@ -93,6 +93,7 @@ readonly expected_exclusions=(
   bootui-quarkus-cache-integration-tests
   bootui-quarkus-datasource-integration-tests
   bootui-quarkus-email-integration-tests
+  bootui-quarkus-fault-tolerance-integration-tests
   bootui-quarkus-flyway-integration-tests
   bootui-quarkus-health-integration-tests
   bootui-quarkus-hibernate-integration-tests
@@ -101,7 +102,6 @@ readonly expected_exclusions=(
   bootui-quarkus-otel-integration-tests
   bootui-quarkus-prod-shell-guard-integration-tests
   bootui-quarkus-rabbit-integration-tests
-  bootui-quarkus-resilience-integration-tests
   bootui-quarkus-rest-client-integration-tests
   bootui-quarkus-scheduler-integration-tests
   bootui-quarkus-security-integration-tests

@@ -141,7 +141,7 @@ import tools.jackson.databind.ObjectMapper;
     BootUiAutoConfiguration.HttpExchangeRepositoryConfiguration.class,
     BootUiAutoConfiguration.SecurityAuditRepositoryConfiguration.class,
     ScheduledController.class,
-    ResilienceController.class,
+    FaultToleranceController.class,
     HttpProbeController.class,
     PentestingController.class,
     HeapDumpController.class,
@@ -237,7 +237,7 @@ public class BootUiAutoConfiguration {
             PentestingController.class.getName(),
             ProfileDiffController.class.getName(),
             ScheduledController.class.getName(),
-            ResilienceController.class.getName(),
+            FaultToleranceController.class.getName(),
             SecurityLogsController.class.getName(),
             SecurityController.class.getName(),
             SpringController.class.getName(),
@@ -434,7 +434,7 @@ public class BootUiAutoConfiguration {
                 ObjectProvider<LoggersController> loggers,
                 ObjectProvider<ConditionsController> conditions,
                 ObjectProvider<ScheduledController> scheduled,
-                ObjectProvider<ResilienceController> resilience,
+                ObjectProvider<FaultToleranceController> faultTolerance,
                 ObjectProvider<SpringCacheController> cache,
                 ObjectProvider<DatabaseConnectionPoolsController> connectionPools) {
             return new BootUiMcpTools(
@@ -465,7 +465,7 @@ public class BootUiAutoConfiguration {
                     loggers,
                     conditions,
                     scheduled,
-                    resilience,
+                    faultTolerance,
                     cache,
                     connectionPools);
         }

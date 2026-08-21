@@ -162,26 +162,28 @@ Acceptance criteria:
   inherited defaults, client-specific overrides, and ambiguous builder-derived clients without requiring external
   services.
 
-### 3.7 Resilience — Services ✅ Completed
+### 3.7 Fault Tolerance — Services ✅ Completed
 
-**Shipped.** The `resilience` panel is available on Spring MVC, Spring WebFlux, and Quarkus over a shared
-`GET /bootui/api/resilience` contract and a framework-neutral `ResilienceService` fed by the `ResiliencePolicyProvider`
-SPI. Spring contributes Resilience4j (all six registries, read live so lazily created entries appear) and Spring Retry
-`@Retryable` metadata; Quarkus contributes SmallRye Fault Tolerance annotations captured from the Jandex index at build
-time with MicroProfile Fault Tolerance configuration overrides resolved at runtime. A bounded, metadata-only
-`ResilienceEventRecorder` feeds both the panel's event feed and Live Activity's new `RESILIENCE` entry type. Everything
-is capture-only: no policy is ever opened, closed, reset, or otherwise mutated by BootUI. SmallRye publishes no per-call
-event stream, so on Quarkus only circuit-breaker state transitions (for breakers carrying `@CircuitBreakerName`) are
-captured and per-policy counters are reported as absent rather than invented.
+**Shipped.** The `fault-tolerance` panel is available on Spring MVC, Spring WebFlux, and Quarkus over a shared
+`GET /bootui/api/fault-tolerance` contract and a framework-neutral `FaultToleranceService` fed by the
+`FaultTolerancePolicyProvider` SPI. Spring contributes Resilience4j (all six registries, read live so lazily created
+entries appear) and Spring Retry `@Retryable` metadata; Quarkus contributes SmallRye Fault Tolerance annotations
+captured from the Jandex index at build time with MicroProfile Fault Tolerance configuration overrides resolved at
+runtime. A bounded, metadata-only `FaultToleranceEventRecorder` feeds both the panel's event feed and Live Activity's
+new `FAULT_TOLERANCE` entry type. Everything is capture-only: no policy is ever opened, closed, reset, or otherwise
+mutated by BootUI. SmallRye publishes no per-call event stream, so on Quarkus only circuit-breaker state transitions
+(for breakers carrying `@CircuitBreakerName`) are captured and per-policy counters are reported as absent rather than
+invented.
 
-BootUI exposes raw metrics that resilience libraries may publish, but it does not explain which protections apply to each
-operation, their current runtime state, or why a call was retried, rejected, or short-circuited. This panel provides one
-cross-platform view over Resilience4j and Spring Retry on Spring, and SmallRye Fault Tolerance on Quarkus.
+BootUI exposes raw metrics that fault tolerance libraries may publish, but it does not explain which protections apply
+to each operation, their current runtime state, or why a call was retried, rejected, or short-circuited. This panel
+provides one cross-platform view over Resilience4j and Spring Retry on Spring, and SmallRye Fault Tolerance on
+Quarkus.
 
 Scope:
 
-- Add one shared `resilience` panel and stable `/bootui/api/resilience/**` contract for Spring servlet, Spring WebFlux, and
-  Quarkus.
+- Add one shared `fault-tolerance` panel and stable `/bootui/api/fault-tolerance/**` contract for Spring servlet, Spring
+  WebFlux, and Quarkus.
 - Discover configured circuit breakers, retries, rate limiters, bulkheads, and time limiters, including annotation-driven
   and registry-backed definitions where the library exposes them safely.
 - Report the protected bean/class and method, policy type, effective configuration, configuration provenance, and current
@@ -189,9 +191,9 @@ Scope:
   registries or metrics expose them.
 - Show circuit-breaker state (`CLOSED`, `OPEN`, `HALF_OPEN`, or an explicit adapter-specific/unknown state), retry limits
   and delay policy, rate-limit capacity and refresh policy, bulkhead concurrency/queue limits, and timeout thresholds.
-- Capture bounded, metadata-only resilience events and feed them into Live Activity as a `RESILIENCE` entry type. Include
-  policy name/type, protected operation, outcome, attempt number where applicable, duration, and safe failure category;
-  never capture method arguments, return values, payloads, or raw exception messages.
+- Capture bounded, metadata-only fault tolerance events and feed them into Live Activity as a `FAULT_TOLERANCE` entry
+  type. Include policy name/type, protected operation, outcome, attempt number where applicable, duration, and safe
+  failure category; never capture method arguments, return values, payloads, or raw exception messages.
 - Correlate events to an originating request through the existing trace-id or safe adapter-specific correlation path when
   available. Background and asynchronously detached events remain top-level rather than being matched heuristically.
 - Support multiple named registries and policies while returning the same stable DTOs and UI on every adapter.
@@ -199,7 +201,7 @@ Scope:
 Architecture:
 
 - Put DTO assembly, normalization, ordering, bounds, state mapping, and event-to-Live-Activity mapping in JSON-free,
-  framework-neutral engine services behind neutral resilience metadata and event provider SPIs.
+  framework-neutral engine services behind neutral fault tolerance metadata and event provider SPIs.
 - Keep Resilience4j, Spring Retry, and SmallRye Fault Tolerance types in optional adapter providers. Gate each provider on
   its dependency, registry/bean presence, and native framework capability so absent libraries cannot cause classloading
   failures.
@@ -208,14 +210,14 @@ Architecture:
   removed or disabled when capture is disabled.
 - Treat policy configuration and panel enablement as live inputs where supported. Hash or omit high-cardinality operation
   identifiers when necessary, route displayable values through the exposure policy, and keep event buffers independently
-  bounded so resilience traffic cannot evict unrelated Live Activity sources.
+  bounded so fault tolerance traffic cannot evict unrelated Live Activity sources.
 
 Out of scope for the first release:
 
 - Opening, closing, or resetting circuit breakers; changing retry, rate-limit, bulkhead, or timeout configuration.
 - Invoking protected operations, generating synthetic failures, or probing downstream services.
 - Capturing method arguments, return values, request/response bodies, message payloads, or raw exception messages.
-- Reimplementing resilience behavior or creating a BootUI abstraction that application code depends on.
+- Reimplementing fault tolerance behavior or creating a BootUI abstraction that application code depends on.
 - Inferring a policy or runtime state when a framework does not expose sufficient metadata.
 
 Acceptance criteria:
@@ -223,7 +225,7 @@ Acceptance criteria:
 - Opening the panel performs no protected call, network request, state transition, or policy mutation.
 - Equivalent Resilience4j, Spring Retry, and SmallRye policies produce the same core response shape, with unsupported
   policy types or fields represented explicitly rather than guessed.
-- Applications without a supported resilience library load normally and show a framework-correct unavailable or empty
+- Applications without a supported fault tolerance library load normally and show a framework-correct unavailable or empty
   state without optional classloading failures.
 - Listener and event capture composes with application-owned listeners/interceptors, remains pass-through on BootUI
   failures, and stops cleanly when the panel or capture is disabled.

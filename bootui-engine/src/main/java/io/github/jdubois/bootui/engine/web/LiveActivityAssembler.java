@@ -12,14 +12,14 @@ import io.github.jdubois.bootui.core.dto.SecurityLogEventDto;
 import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
 import io.github.jdubois.bootui.engine.cache.CacheActivityEvent;
 import io.github.jdubois.bootui.engine.cache.CacheActivityOperation;
+import io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceActivityEntries;
+import io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceEventRecorder;
 import io.github.jdubois.bootui.engine.jms.JmsActivityEntries;
 import io.github.jdubois.bootui.engine.jms.JmsActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityEntries;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.CapturedMessage;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityEntries;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
-import io.github.jdubois.bootui.engine.resilience.ResilienceActivityEntries;
-import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceGrouping;
 import io.github.jdubois.bootui.engine.support.BlankStrings;
@@ -274,15 +274,15 @@ public final class LiveActivityAssembler {
     }
 
     /**
-     * Full overload that also merges captured resilience events as {@code RESILIENCE} entries. The
-     * narrower overloads above remain for adapters without a resilience capture source.
+     * Full overload that also merges captured fault tolerance events as {@code FAULT_TOLERANCE} entries. The
+     * narrower overloads above remain for adapters without a fault tolerance capture source.
      *
-     * @param resilienceEvents captured, metadata-only resilience events (newest-first), or {@code null};
-     *     ignored unless {@code resilienceAvailable}. Capture stamps the active trace id, so an event is
+     * @param faultToleranceEvents captured, metadata-only fault tolerance events (newest-first), or {@code null};
+     *     ignored unless {@code faultToleranceAvailable}. Capture stamps the active trace id, so an event is
      *     nested under the uniquely matching REQUEST entry exactly like SQL/MAIL above; a background or
      *     asynchronously detached event carries no trace id and stays top-level rather than being matched
      *     heuristically.
-     * @param resilienceAvailable whether the resilience capture source is present and feeding
+     * @param faultToleranceAvailable whether the fault tolerance capture source is present and feeding
      */
     public LiveActivityReport report(
             HttpExchangesReport requests,
@@ -307,8 +307,8 @@ public final class LiveActivityAssembler {
             boolean emailAvailable,
             List<RestClientTraceEntryDto> restEntries,
             boolean restAvailable,
-            List<ResilienceEventRecorder.CapturedEvent> resilienceEvents,
-            boolean resilienceAvailable) {
+            List<FaultToleranceEventRecorder.CapturedEvent> faultToleranceEvents,
+            boolean faultToleranceAvailable) {
         List<HttpExchangeDto> exchanges = requests == null ? List.of() : requests.exchanges();
         List<SqlTraceEntryDto> sql = !sqlAvailable || sqlEntries == null ? List.of() : sqlEntries;
         List<ExceptionGroupDto> exceptions = exceptionGroups == null ? List.of() : exceptionGroups;
@@ -321,8 +321,8 @@ public final class LiveActivityAssembler {
                 !rabbitAvailable || rabbitMessages == null ? List.of() : rabbitMessages;
         List<EmailMessageDto> emails = !emailAvailable || emailMessages == null ? List.of() : emailMessages;
         List<RestClientTraceEntryDto> rest = !restAvailable || restEntries == null ? List.of() : restEntries;
-        List<ResilienceEventRecorder.CapturedEvent> resilience =
-                !resilienceAvailable || resilienceEvents == null ? List.of() : resilienceEvents;
+        List<FaultToleranceEventRecorder.CapturedEvent> faultTolerance =
+                !faultToleranceAvailable || faultToleranceEvents == null ? List.of() : faultToleranceEvents;
 
         List<ActivityEntryDto> entries = new ArrayList<>();
 
@@ -457,8 +457,8 @@ public final class LiveActivityAssembler {
             entries.add(toRestEntry(entry, traceIndex.parentRequestId(entry.traceId())));
         }
 
-        for (ResilienceEventRecorder.CapturedEvent event : resilience) {
-            entries.add(ResilienceActivityEntries.toEntry(event, traceIndex.parentRequestId(event.traceId())));
+        for (FaultToleranceEventRecorder.CapturedEvent event : faultTolerance) {
+            entries.add(FaultToleranceActivityEntries.toEntry(event, traceIndex.parentRequestId(event.traceId())));
         }
 
         entries.sort((a, b) -> Long.compare(b.timestamp(), a.timestamp()));
@@ -502,8 +502,8 @@ public final class LiveActivityAssembler {
         if (restAvailable) {
             sources.add("rest-client");
         }
-        if (resilienceAvailable) {
-            sources.add("resilience");
+        if (faultToleranceAvailable) {
+            sources.add("fault-tolerance");
         }
 
         List<String> warnings = new ArrayList<>();

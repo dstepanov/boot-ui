@@ -342,6 +342,7 @@
                             <excludeArtifact>bootui-quarkus-cache-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-datasource-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-email-integration-tests</excludeArtifact>
+                            <excludeArtifact>bootui-quarkus-fault-tolerance-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-flyway-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-health-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-hibernate-integration-tests</excludeArtifact>
@@ -350,7 +351,6 @@
                             <excludeArtifact>bootui-quarkus-otel-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-prod-shell-guard-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-rabbit-integration-tests</excludeArtifact>
-                            <excludeArtifact>bootui-quarkus-resilience-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-rest-client-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-scheduler-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-security-integration-tests</excludeArtifact>

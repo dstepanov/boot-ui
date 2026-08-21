@@ -20,6 +20,7 @@ import io.github.jdubois.bootui.quarkus.web.DatabaseAdvisorResource;
 import io.github.jdubois.bootui.quarkus.web.DevServicesResource;
 import io.github.jdubois.bootui.quarkus.web.EmailResource;
 import io.github.jdubois.bootui.quarkus.web.ExceptionsResource;
+import io.github.jdubois.bootui.quarkus.web.FaultToleranceResource;
 import io.github.jdubois.bootui.quarkus.web.FlywayResource;
 import io.github.jdubois.bootui.quarkus.web.GitHubResource;
 import io.github.jdubois.bootui.quarkus.web.HealthResource;
@@ -40,7 +41,6 @@ import io.github.jdubois.bootui.quarkus.web.OverviewResource;
 import io.github.jdubois.bootui.quarkus.web.PentestingResource;
 import io.github.jdubois.bootui.quarkus.web.ProfileDiffResource;
 import io.github.jdubois.bootui.quarkus.web.RabbitResource;
-import io.github.jdubois.bootui.quarkus.web.ResilienceResource;
 import io.github.jdubois.bootui.quarkus.web.RestApiResource;
 import io.github.jdubois.bootui.quarkus.web.RestClientTraceResource;
 import io.github.jdubois.bootui.quarkus.web.ScheduledResource;
@@ -112,7 +112,7 @@ public class QuarkusMcpTools {
             VulnerabilitiesResource vulnerabilities,
             LoggersResource loggers,
             ScheduledResource scheduled,
-            ResilienceResource resilience,
+            FaultToleranceResource faultTolerance,
             CacheResource cache,
             ConnectionPoolsResource connectionPools,
             MetricsResource metrics,
@@ -449,10 +449,10 @@ public class QuarkusMcpTools {
                 registry,
                 availability,
                 read(
-                        "get_resilience",
-                        McpToolDescriptions.quarkus("get_resilience"),
-                        BootUiPanels.RESILIENCE,
-                        args -> resilience.resilience()));
+                        "get_fault_tolerance",
+                        McpToolDescriptions.quarkus("get_fault_tolerance"),
+                        BootUiPanels.FAULT_TOLERANCE,
+                        args -> faultTolerance.faultTolerance()));
         addIfAvailable(
                 registry,
                 availability,

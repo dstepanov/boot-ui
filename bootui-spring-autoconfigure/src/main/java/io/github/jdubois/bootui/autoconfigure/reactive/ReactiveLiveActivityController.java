@@ -40,12 +40,12 @@ import io.github.jdubois.bootui.engine.cache.CacheActivityRecorder;
 import io.github.jdubois.bootui.engine.email.EmailCaptureService;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionsService;
+import io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceEventRecorder;
 import io.github.jdubois.bootui.engine.jms.JmsActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.CapturedMessage;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
-import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
@@ -127,7 +127,7 @@ public class ReactiveLiveActivityController {
     private final ObjectProvider<CacheActivityRecorder> cacheActivity;
     private final ObjectProvider<KafkaActivityRecorder> kafkaActivity;
     private final ObjectProvider<JmsActivityRecorder> jmsActivity;
-    private final ObjectProvider<ResilienceEventRecorder> resilienceEvents;
+    private final ObjectProvider<FaultToleranceEventRecorder> faultToleranceEvents;
     private final ObjectProvider<RabbitActivityRecorder> rabbitActivity;
     private final BootUiProperties properties;
     private final BootUiExposure exposure;
@@ -154,7 +154,7 @@ public class ReactiveLiveActivityController {
             ObjectProvider<CacheActivityRecorder> cacheActivity,
             ObjectProvider<KafkaActivityRecorder> kafkaActivity,
             ObjectProvider<JmsActivityRecorder> jmsActivity,
-            ObjectProvider<ResilienceEventRecorder> resilienceEvents,
+            ObjectProvider<FaultToleranceEventRecorder> faultToleranceEvents,
             ObjectProvider<RabbitActivityRecorder> rabbitActivity,
             SwitchableActivityStore activityStore,
             ActivityPersistenceSettings persistenceSettings,
@@ -174,7 +174,7 @@ public class ReactiveLiveActivityController {
         this.cacheActivity = cacheActivity;
         this.kafkaActivity = kafkaActivity;
         this.jmsActivity = jmsActivity;
-        this.resilienceEvents = resilienceEvents;
+        this.faultToleranceEvents = faultToleranceEvents;
         this.rabbitActivity = rabbitActivity;
         this.activityStore = activityStore;
         this.persistenceSettings = persistenceSettings;
@@ -210,9 +210,9 @@ public class ReactiveLiveActivityController {
         if (jmsRecorder != null) {
             unsubscribers.add(jmsRecorder.subscribe(changeStream::signal));
         }
-        ResilienceEventRecorder resilienceRecorder = resilienceEvents.getIfAvailable();
-        if (resilienceRecorder != null) {
-            unsubscribers.add(resilienceRecorder.subscribe(changeStream::signal));
+        FaultToleranceEventRecorder faultToleranceRecorder = faultToleranceEvents.getIfAvailable();
+        if (faultToleranceRecorder != null) {
+            unsubscribers.add(faultToleranceRecorder.subscribe(changeStream::signal));
         }
         RabbitActivityRecorder rabbitRecorder = rabbitActivity.getIfAvailable();
         if (rabbitRecorder != null) {
@@ -377,8 +377,8 @@ public class ReactiveLiveActivityController {
         boolean rabbitAvailable = rabbitMessages != null;
         EmailsReport emailReport = emailReport();
         boolean emailAvailable = emailReport != null && emailReport.available();
-        List<ResilienceEventRecorder.CapturedEvent> resilienceCaptured = resilienceCaptured();
-        boolean resilienceAvailable = resilienceCaptured != null;
+        List<FaultToleranceEventRecorder.CapturedEvent> faultToleranceCaptured = faultToleranceCaptured();
+        boolean faultToleranceAvailable = faultToleranceCaptured != null;
 
         LiveActivityReport report = assembler.report(
                 requests,
@@ -403,8 +403,8 @@ public class ReactiveLiveActivityController {
                 emailAvailable,
                 restEntries,
                 restAvailable,
-                resilienceCaptured,
-                resilienceAvailable);
+                faultToleranceCaptured,
+                faultToleranceAvailable);
 
         // Adapter-side post-processing over the shared assembler's output, mirroring the Quarkus adapter
         // exactly: a REQUEST entry is profileable here iff its exchange carries a resolvable trace id,
@@ -542,15 +542,15 @@ public class ReactiveLiveActivityController {
 
     /** Recent JMS messages from the independent JMS bounded buffer. */
     /**
-     * Recent resilience outcomes feeding the assembler's {@code RESILIENCE} entries, or {@code null} when
-     * the source is not feeding (Resilience panel disabled, capture disabled via
-     * {@code bootui.resilience.enabled}, or no recorder bean present).
+     * Recent fault tolerance outcomes feeding the assembler's {@code FAULT_TOLERANCE} entries, or {@code null} when
+     * the source is not feeding (Fault Tolerance panel disabled, capture disabled via
+     * {@code bootui.fault-tolerance.enabled}, or no recorder bean present).
      */
-    private List<ResilienceEventRecorder.CapturedEvent> resilienceCaptured() {
-        if (!properties.isPanelEnabled(BootUiPanels.RESILIENCE)) {
+    private List<FaultToleranceEventRecorder.CapturedEvent> faultToleranceCaptured() {
+        if (!properties.isPanelEnabled(BootUiPanels.FAULT_TOLERANCE)) {
             return null;
         }
-        ResilienceEventRecorder recorder = resilienceEvents.getIfAvailable();
+        FaultToleranceEventRecorder recorder = faultToleranceEvents.getIfAvailable();
         if (recorder == null || !recorder.isEnabled()) {
             return null;
         }

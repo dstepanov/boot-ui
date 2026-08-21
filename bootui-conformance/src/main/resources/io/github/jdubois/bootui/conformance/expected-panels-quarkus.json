@@ -57,6 +57,6 @@
     { "id": "kafka", "title": "Kafka", "actionCapable": true },
     { "id": "rabbitmq", "title": "RabbitMQ", "actionCapable": true },
     { "id": "jms", "title": "JMS", "actionCapable": true },
-    { "id": "resilience", "title": "Resilience", "actionCapable": false }
+    { "id": "fault-tolerance", "title": "Fault Tolerance", "actionCapable": false }
   ]
 }
