@@ -470,6 +470,13 @@ configuration fails dev/test startup. Production remains dark even if dormant pa
 always-registered production guard uses fail-closed safe defaults and suppresses both configured/default and private
 mounts without wiring data-bearing resources.
 
+BootUI's own requests are excluded from the telemetry it reports on. HTTP-exchange capture, request-failure capture,
+pre-mapping exception capture, and log-based exception capture all resolve "is this BootUI?" through one shared matcher
+that strips `quarkus.http.root-path` and matches the configured `bootui.path` / `bootui.api-path` mounts as well as the
+private `/bootui` mount. The console therefore never appears in HTTP Exchanges, Live Activity, or Exceptions under a
+custom root path or a custom mount, while application paths that merely resemble the console — `/bootui-other`, for
+instance — remain captured.
+
 ## 7. Code-sharing scorecard
 
 | Layer                                                                                                                 | Shared?          | Notes                                                                            |
