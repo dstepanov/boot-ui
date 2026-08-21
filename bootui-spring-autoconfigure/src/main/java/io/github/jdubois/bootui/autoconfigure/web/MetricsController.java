@@ -27,9 +27,12 @@ public class MetricsController {
     public MetricsReport metrics(
             @RequestParam(name = "q", required = false) String query,
             @RequestParam(name = "type", required = false) String type,
+            @RequestParam(name = "group", required = false) String group,
+            @RequestParam(name = "provenance", required = false) String provenance,
+            @RequestParam(name = "explanation", required = false) String explanation,
             @RequestParam(name = "offset", required = false) String offset,
             @RequestParam(name = "limit", required = false) String limit) {
-        return provider.metrics(query, type, offset, limit);
+        return provider.metrics(query, type, group, provenance, explanation, offset, limit);
     }
 
     @GetMapping("/detail")

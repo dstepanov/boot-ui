@@ -468,7 +468,7 @@ public class QuarkusMcpTools {
                         "get_metrics",
                         McpToolDescriptions.quarkus("get_metrics"),
                         BootUiPanels.METRICS,
-                        args -> metrics.metrics(args.query(), null, "0", String.valueOf(args.limit()))
+                        args -> metrics.metrics(args.query(), null, null, null, null, "0", String.valueOf(args.limit()))
                                 .getEntity()));
         addIfAvailable(
                 registry,
