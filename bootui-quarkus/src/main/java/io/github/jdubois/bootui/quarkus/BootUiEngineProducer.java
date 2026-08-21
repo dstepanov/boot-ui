@@ -1,6 +1,7 @@
 package io.github.jdubois.bootui.quarkus;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
 import io.github.jdubois.bootui.engine.activity.ActivityInstanceIds;
 import io.github.jdubois.bootui.engine.activity.ActivityPersistenceSettings;
 import io.github.jdubois.bootui.engine.activity.ActivityStoreFactory;
@@ -49,6 +50,7 @@ import io.github.jdubois.bootui.engine.safety.ApiTokenAuthenticator;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTasksService;
 import io.github.jdubois.bootui.engine.security.SecurityEventBuffer;
+import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
 import io.github.jdubois.bootui.engine.support.InternalPackageMatcher;
 import io.github.jdubois.bootui.engine.telemetry.SelfTelemetryClassifier;
 import io.github.jdubois.bootui.engine.telemetry.SpanEnricher;
@@ -792,7 +794,9 @@ public class BootUiEngineProducer {
     @Produces
     @Singleton
     public DatabaseAdvisorScanner databaseAdvisorScanner(
-            @Any Instance<DataSource> dataSources, Instance<EntityDiscoverySource> entityDiscoverySources) {
+            @Any Instance<DataSource> dataSources,
+            Instance<EntityDiscoverySource> entityDiscoverySources,
+            Instance<SqlTraceRecorder> sqlTraceRecorders) {
         QuarkusDatabaseAdvisorDataSourceProvider dataSourceProvider =
                 new QuarkusDatabaseAdvisorDataSourceProvider(dataSources);
         Supplier<EntityDiscovery> discovery;
@@ -802,7 +806,13 @@ public class BootUiEngineProducer {
             EntityDiscoverySource source = entityDiscoverySources.get();
             discovery = source::discover;
         }
-        return DatabaseAdvisorScanner.using(dataSourceProvider::dataSources, discovery, Clock.systemUTC());
+        // Statement evidence for the runtime-SQL checks, read from the SQL Trace buffer that is already
+        // being filled. Empty when SQL Trace is off (no Agroal datasource wrapped), and those rules then
+        // skip rather than report a clean result they have no basis for.
+        Supplier<List<SqlTraceEntryDto>> observedStatements =
+                () -> sqlTraceRecorders.isResolvable() ? sqlTraceRecorders.get().entries(false) : List.of();
+        return DatabaseAdvisorScanner.using(
+                dataSourceProvider::dataSources, discovery, observedStatements, Clock.systemUTC());
     }
 
     /**

@@ -1246,13 +1246,46 @@ untouched so application database access is never compromised.
 
 Executions are retained in a bounded in-memory ring buffer (most recent first) alongside aggregate stats (total/average/
 max time, slow-query and failure counts, per-category counters, and evictions). The panel also groups identical
-statements into a "Most frequent statements" table and flags repeated `SELECT`s that look like an **N+1 access pattern**
+statements into a "Most frequent statements" table (a fallback shown when statement rankings are unavailable) and flags repeated `SELECT`s that look like an **N+1 access pattern**
 (the repeat count is configurable via `bootui.sql-trace.n-plus-one-threshold`); a flagged group also lists the distinct
 call site(s) — class, method, and line — that issued it, most-recently-seen first and bounded to a handful of entries,
 so you can jump straight to the repository or service method causing the repetition. Each execution row expands to
 reveal the full statement, bound parameters, statement type, connection id, executing thread, call site, and error. A
 configurable slow-query threshold highlights expensive statements, and local-only **Pause/Resume** and **Clear** actions
 let you stop recording without unwrapping the data source or empty the buffer.
+
+Above the execution list the panel ranks the retained window twice. **Statement rankings** aggregate executions by a
+normalized statement — literals and existing bind markers are collapsed to `?` and `IN (…)` lists folded, so equivalent
+parameterized executions group together without ever exposing a bound value — and rank them by cumulative duration,
+slowest single execution, execution count, average duration, error count, p95, or p99, alongside p50/p95/p99 durations
+and each group's share of the retained database time. A statement that scores zero on the selected criterion is not
+ranked for it, so "top by errors" never lists statements that never failed. Note that this is a *different* grouping
+from the "Most frequent statements" fallback below, which keeps literal values so you can see the exact statements that
+repeated. **Database time by request route** attributes those executions back to the
+inbound requests that issued them, grouping by the framework's own route template (`GET /api/sample/orders/{id}`) when
+the adapter can supply one, otherwise by matching the captured path against the application's own declared route
+mappings, and falling back to a masked path — identifier-looking segments replaced with `{value}`, query string
+discarded — only when neither is available. Matching a declaration is deliberately strict: it must agree segment for
+segment and be the single most literal match, and two equally plausible declarations produce no template at all. That
+strictness is a privacy property as much as a grouping one, because masking alone cannot tell a word-shaped path
+parameter such as `/api/users/alice` from a fixed route segment. Each route row shows its requests, executions, distinct statements, error
+count, and share of retained database time, and expands to that route's own top statements. Both tables deep-link into
+the filtered execution list below, so a slow ranking row is one click away from the individual executions behind it.
+
+These rankings are **diagnostic evidence over the bounded capture window, not lifetime metrics**: they describe only the
+statements still retained in the ring buffer, and the panel states that window — retained statements, buffer size,
+evictions, and the age of the oldest retained execution — inline. Attribution is deliberately conservative. BootUI
+correlates a statement to a request by trace id first, then by the serving thread only where thread affinity is
+reliable, and finally by the request's time window; each tier requires a single unambiguous candidate. Executions it
+cannot place, and executions that more than one request matched equally well, are kept in explicit **Unattributed** and
+**Ambiguous** buckets rather than being dropped or assigned to a plausible guess. On Spring WebFlux and Quarkus, where a
+request is not pinned to one thread, only trace-id and time-window correlation are used and the panel says so. A
+statement carrying a trace id that no retained request carries is left unattributed rather than handed to a weaker
+tier, and a statement that was already running when a request began is never absorbed into it. On Spring WebFlux the
+request evidence arrives with the OpenTelemetry integration, so without it the panel reports route attribution as
+unavailable and names the requirement instead of showing everything as unattributed; rankings still work. Quarkus has no
+per-request route template available to the adapter, so it resolves declared JAX-RS mappings after the fact and falls
+back to a masked path.
 
 The panel is read-mostly and privacy-conscious: parameter bindings are **not** captured by default, and even when
 capture is enabled they are suppressed under metadata-only value exposure and routed through the same masking rules as

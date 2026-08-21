@@ -98,6 +98,47 @@ class BootUiQuarkusSqlTraceCaptureTest {
     }
 
     @Test
+    void ranksTheRetainedWindowAndKeepsUncorrelatedWorkInAnExplicitBucket() {
+        Response response = probe().get("/bootui/api/sql-trace/insights");
+        assertThat(response.status())
+                .as("GET /bootui/api/sql-trace/insights status")
+                .isEqualTo(200);
+        assertThat(response.isJson())
+                .as("content-type (%s)", response.contentType())
+                .isTrue();
+
+        JsonNode root = response.json();
+        assertThat(root.path("available").asBoolean(false))
+                .as("rankings are available once a datasource is wrapped")
+                .isTrue();
+        assertThat(root.path("window").path("retainedStatements").asLong(0))
+                .as("the report states the bounded window it ranked")
+                .isGreaterThan(0);
+
+        JsonNode statements = root.path("statements");
+        assertThat(statements.size()).as("the executed statement is ranked").isGreaterThan(0);
+        assertThat(statements.toString())
+                .as("a ranked statement never carries a bound value")
+                .doesNotContain("secret-value");
+        assertThat(statements.get(0).path("topFor").isArray())
+                .as("a ranked statement declares which criteria earned it its place")
+                .isTrue();
+
+        JsonNode attribution = root.path("attribution");
+        assertThat(attribution.path("supportedCorrelations").toString())
+                .as("Quarkus has no thread-per-request anchor and must not claim one")
+                .doesNotContain("SERVING_THREAD");
+        // This query was issued from the test's own @BeforeEach, not from an inbound HTTP request, so it
+        // must land in the visible unattributed bucket rather than being guessed onto a route.
+        assertThat(attribution.path("unattributed").path("executions").asLong(0))
+                .as("work with no inbound request stays explicitly unattributed")
+                .isGreaterThan(0);
+        assertThat(attribution.path("unattributed").path("reason").asText(""))
+                .as("the unattributed bucket explains itself")
+                .isNotBlank();
+    }
+
+    @Test
     void sqlTraceStreamOpens() throws Exception {
         // The SSE change-notification stream backs the shared Vue panel's auto-refresh toggle; it must open
         // (200 + text/event-stream) whenever a recorder is wrapped, mirroring the Spring adapter. The push

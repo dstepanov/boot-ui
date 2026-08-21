@@ -78,6 +78,7 @@ import io.github.jdubois.bootui.engine.restapi.RestApiScanner;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTasksService;
+import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
 import io.github.jdubois.bootui.engine.threads.ThreadDumpService;
 import io.github.jdubois.bootui.engine.web.HttpProbeService;
 import io.github.jdubois.bootui.spi.BasePackageProvider;
@@ -189,7 +190,8 @@ public class BootUiEngineConfiguration {
     @ConditionalOnMissingBean
     DatabaseAdvisorScanner bootUiDatabaseAdvisorScanner(
             ObjectProvider<ListableBeanFactory> beanFactoryProvider,
-            ObjectProvider<EntityDiscoverySource> entityDiscoverySource) {
+            ObjectProvider<EntityDiscoverySource> entityDiscoverySource,
+            ObjectProvider<SqlTraceRecorder> sqlTraceRecorder) {
         // javax.sql.DataSource is core JDK (unlike EntityManagerFactory), so DataSource discovery needs no
         // @ConditionalOnClass gating; the Hibernate cross-reference half is optional and only resolved when
         // the nested HibernateAdvisorConfiguration below is active, via the EntityDiscoverySource seam.
@@ -202,6 +204,13 @@ public class BootUiEngineConfiguration {
                     return source == null
                             ? EntityDiscovery.empty("Hibernate/JPA metamodel not detected on the classpath.")
                             : source.discover();
+                },
+                // Statement evidence for the runtime-SQL checks, read from the SQL Trace buffer that is
+                // already being filled. Empty when SQL Trace is off, and those rules then skip rather than
+                // report a clean result they have no basis for.
+                () -> {
+                    SqlTraceRecorder recorder = sqlTraceRecorder.getIfAvailable();
+                    return recorder == null ? List.of() : recorder.entries(false);
                 },
                 Clock.systemUTC());
     }

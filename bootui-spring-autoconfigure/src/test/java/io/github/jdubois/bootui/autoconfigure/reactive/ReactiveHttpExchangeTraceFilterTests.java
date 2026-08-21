@@ -16,7 +16,9 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.web.reactive.HandlerMapping;
 import org.springframework.web.server.WebFilterChain;
+import org.springframework.web.util.pattern.PathPatternParser;
 import reactor.core.publisher.Mono;
 
 /**
@@ -90,6 +92,35 @@ class ReactiveHttpExchangeTraceFilterTests {
         assertThat(registry.match("GET", "/bootui/api/http-exchanges", before, after))
                 .isNull();
         assertThat(registry.match("GET", "/bootui", before, after)).isNull();
+    }
+
+    @Test
+    void capturesTheMatchedReactiveRouteTemplateFromTheExchangeAttribute() {
+        HttpExchangeTraceRegistry registry = new HttpExchangeTraceRegistry(10);
+        ReactiveHttpExchangeTraceFilter filter =
+                new ReactiveHttpExchangeTraceFilter(properties, registry, new ReactiveOtelTraceIdProvider());
+        MockServerWebExchange exchange = exchange("GET", "/api/sample/orders/42");
+        exchange.getAttributes()
+                .put(
+                        HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE,
+                        PathPatternParser.defaultInstance.parse("/api/sample/orders/{id}"));
+
+        filter.filter(exchange, OK_CHAIN).block(Duration.ofSeconds(5));
+
+        assertThat(registry.recent()).hasSize(1);
+        assertThat(registry.recent().get(0).routeTemplate()).isEqualTo("/api/sample/orders/{id}");
+    }
+
+    @Test
+    void leavesTheRouteTemplateNullWhenNoReactivePatternMatched() {
+        HttpExchangeTraceRegistry registry = new HttpExchangeTraceRegistry(10);
+        ReactiveHttpExchangeTraceFilter filter =
+                new ReactiveHttpExchangeTraceFilter(properties, registry, new ReactiveOtelTraceIdProvider());
+
+        filter.filter(exchange("GET", "/api/sample/unmapped"), OK_CHAIN).block(Duration.ofSeconds(5));
+
+        assertThat(registry.recent()).hasSize(1);
+        assertThat(registry.recent().get(0).routeTemplate()).isNull();
     }
 
     private static MockServerWebExchange exchange(String method, String uri) {

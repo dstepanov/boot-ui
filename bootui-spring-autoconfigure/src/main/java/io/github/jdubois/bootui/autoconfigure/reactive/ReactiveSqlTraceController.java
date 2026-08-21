@@ -2,9 +2,13 @@ package io.github.jdubois.bootui.autoconfigure.reactive;
 
 import io.github.jdubois.bootui.autoconfigure.config.BootUiExposure;
 import io.github.jdubois.bootui.autoconfigure.sqltrace.SqlTraceControllerSupport;
+import io.github.jdubois.bootui.autoconfigure.sqltrace.SqlTraceInsightsSupport;
+import io.github.jdubois.bootui.autoconfigure.web.HttpExchangeTraceRegistry;
+import io.github.jdubois.bootui.core.dto.SqlTraceInsightsReport;
 import io.github.jdubois.bootui.core.dto.SqlTraceRecordingRequest;
 import io.github.jdubois.bootui.core.dto.SqlTraceReport;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
+import io.github.jdubois.bootui.spi.MappingProvider;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.ObjectProvider;
@@ -30,6 +34,8 @@ public class ReactiveSqlTraceController {
 
     private final ObjectProvider<SqlTraceRecorder> recorderProvider;
     private final ObjectProvider<DataSource> dataSourceProvider;
+    private final ObjectProvider<HttpExchangeTraceRegistry> traceRegistryProvider;
+    private final ObjectProvider<MappingProvider> mappingProvider;
     private final BootUiExposure exposure;
     private final ReactiveBootUiChangeStream changeStream;
     private Runnable recorderUnsubscribe;
@@ -37,9 +43,13 @@ public class ReactiveSqlTraceController {
     public ReactiveSqlTraceController(
             ObjectProvider<SqlTraceRecorder> recorderProvider,
             ObjectProvider<DataSource> dataSourceProvider,
+            ObjectProvider<HttpExchangeTraceRegistry> traceRegistryProvider,
+            ObjectProvider<MappingProvider> mappingProvider,
             BootUiExposure exposure) {
         this.recorderProvider = recorderProvider;
         this.dataSourceProvider = dataSourceProvider;
+        this.traceRegistryProvider = traceRegistryProvider;
+        this.mappingProvider = mappingProvider;
         this.exposure = exposure;
         this.changeStream = new ReactiveBootUiChangeStream("sql-trace");
         SqlTraceRecorder recorder = recorderProvider.getIfAvailable();
@@ -65,6 +75,17 @@ public class ReactiveSqlTraceController {
     @GetMapping
     public SqlTraceReport trace() {
         return SqlTraceControllerSupport.trace(recorderProvider, exposure, dataSourceProvider);
+    }
+
+    /**
+     * Slow-statement rankings and per-route database attribution, identical in shape to the servlet
+     * binding. WebFlux has no one-thread-per-request invariant, so this stack correlates statements to
+     * requests by trace context and, failing that, by a uniqueness-guarded time window; the response says
+     * which tiers were available rather than implying parity it does not have.
+     */
+    @GetMapping("/insights")
+    public SqlTraceInsightsReport insights() {
+        return SqlTraceInsightsSupport.reactiveInsights(recorderProvider, traceRegistryProvider, mappingProvider);
     }
 
     @PostMapping("/clear")

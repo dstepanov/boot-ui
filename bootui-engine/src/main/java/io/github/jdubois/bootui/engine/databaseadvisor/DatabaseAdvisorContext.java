@@ -1,5 +1,6 @@
 package io.github.jdubois.bootui.engine.databaseadvisor;
 
+import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
 import io.github.jdubois.bootui.engine.hibernate.HibernateSchemaBridge.MappedEntityFacts;
 import java.util.List;
 
@@ -10,13 +11,27 @@ import java.util.List;
  * <p>{@code hibernateAvailable} is {@code false} whenever no {@code EntityManagerFactory}/Hibernate
  * metamodel could be read for the persistence unit(s) sharing these datasources; the Hibernate
  * cross-reference rules must skip (not silently drop) in that case.</p>
+ *
+ * <p>{@code observedStatements} carries the statements the SQL Trace panel has already retained, so a rule
+ * can reason about how the application actually talks to the database rather than only about its schema. It
+ * is empty whenever SQL tracing is off or nothing has run yet, and a rule reading it must skip in that case:
+ * absence of captured evidence is not evidence of a healthy application.</p>
  */
 record DatabaseAdvisorContext(
-        List<SchemaSnapshot> schemas, boolean hibernateAvailable, List<MappedEntityFacts> hibernateEntities) {
+        List<SchemaSnapshot> schemas,
+        boolean hibernateAvailable,
+        List<MappedEntityFacts> hibernateEntities,
+        List<SqlTraceEntryDto> observedStatements) {
 
     DatabaseAdvisorContext {
         schemas = List.copyOf(schemas);
         hibernateEntities = List.copyOf(hibernateEntities);
+        observedStatements = observedStatements == null ? List.of() : List.copyOf(observedStatements);
+    }
+
+    DatabaseAdvisorContext(
+            List<SchemaSnapshot> schemas, boolean hibernateAvailable, List<MappedEntityFacts> hibernateEntities) {
+        this(schemas, hibernateAvailable, hibernateEntities, List.of());
     }
 
     List<SchemaSnapshot> availableSchemas() {

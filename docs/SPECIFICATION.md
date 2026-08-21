@@ -1784,6 +1784,91 @@ Acceptance criteria:
 - R2DBC-only WebFlux applications and Quarkus return an explained unavailable state rather than a silently empty
   transaction list; the Quarkus adapter does not advertise the `get_transactions` MCP tool.
 
+### 5.17.6 SQL Trace Rankings and Request Attribution
+
+Purpose: answer "Which statements dominate the database time I just captured, and which inbound request routes are
+paying for them?"
+
+Data sources:
+
+- The existing bounded `SqlTraceRecorder` window. No second statement recorder, JDBC wrapper, or SQL parsing library is
+  introduced.
+- The adapter's existing inbound-request evidence: the Spring MVC request-correlation registry, the Spring WebFlux HTTP
+  exchange trace registry, and the framework-neutral HTTP exchange buffer on Quarkus.
+- The adapter's existing trace-id provider, plus the framework's own best-matching route pattern where the adapter
+  already resolves one.
+- The Mappings panel's existing `MappingProvider`, used to resolve a captured path back to a declared route template on
+  a runtime that reports no per-request pattern. No new route enumeration is introduced.
+
+Features:
+
+- Aggregate retained executions by a normalized statement. Normalization is a dependency-free lexical pass that replaces
+  string, numeric, and boolean literals and existing bind markers with `?`, collapses `IN (...)` lists, and normalizes
+  whitespace, so equivalent parameterized executions fold into one group without exposing any bound value.
+- Rank normalized statements by cumulative duration, maximum duration, execution count, average duration, error count,
+  p95 duration, and p99 duration. Each ranked group carries all metrics, p50/p95/p99 durations over the retained window,
+  its share of retained database time, the criteria it is actually top-ranked for (`topFor`), the existing N+1 flag and
+  call sites, and bounded execution ids for deep linking with an explicit `entryIdsTruncated` flag when the group ran
+  more times than the deep link retains. A group that scores zero on a criterion is never ranked for it.
+- Attribute executions to inbound requests using trace id first, then the serving thread only where thread affinity is
+  reliable, then the request's time window. Each tier requires a unique candidate; two or more equally good candidates
+  produce an ambiguous result rather than a guess.
+- Group attributed work by the framework's normalized route template when the adapter supplies one; otherwise resolve
+  the captured path against the application's declared route templates, and fall back to a masked request path
+  (identifier-looking segments replaced with `{value}`, query string and fragment discarded) only when neither is
+  available. Template resolution is conservative: a declared template must match segment for segment and be the single
+  most literal match, and two equally plausible declarations resolve to no template at all. Raw query strings and
+  path-parameter values are never used as a grouping key, and each route group declares its `routeSource`.
+- Report per-route requests, executions, distinct statements, cumulative/maximum/average duration, error count, share of
+  retained database time, the correlation tiers that produced the grouping, and a bounded list of that route's top
+  statements.
+- Keep executions that could not be correlated and executions that more than one request matched in explicit
+  `unattributed` and `ambiguous` buckets, each with its own executions, duration, error count, share, and a reason.
+- State the retained window (retained statements, buffer size, evictions, total captured, oldest and newest retained
+  timestamps, total retained duration) in the contract so rankings are read as bounded diagnostic evidence rather than
+  lifetime metrics.
+- Serve the whole report from a single safe `GET /bootui/api/sql-trace/insights`, computed on request. Nothing is
+  computed on page load beyond the panel's normal fetch, and no state is mutated.
+
+Availability:
+
+- Available on Spring MVC, Spring WebFlux, and Quarkus whenever SQL Trace itself is available. The report declares which
+  correlation tiers the runtime supports instead of silently degrading.
+- Spring MVC supports trace-id, serving-thread, and time-window correlation, and supplies route templates from the
+  best-matching handler pattern.
+- Spring WebFlux supports trace-id and time-window correlation only, because a reactive request is not pinned to one
+  thread; it supplies route templates from the best-matching reactive pattern. Its request evidence ships with the
+  OpenTelemetry correlation configuration, so without an OpenTelemetry starter route attribution reports itself
+  unavailable with that reason instead of showing every statement as unattributed. Statement rankings are unaffected.
+- Quarkus supports trace-id and time-window correlation only. RESTEasy Reactive exposes no per-request route template to
+  the adapter, so Quarkus resolves route templates from the application's declared JAX-RS `@Path` mappings and falls
+  back to a masked path when no declaration matches unambiguously.
+
+Out of scope for the current release surface:
+
+- Execution plans, table statistics, index recommendations, and active query profiling.
+- Capturing bind values, query strings, path-parameter values, request bodies, or any SQL text beyond what the SQL Trace
+  recorder already retains.
+- Persistence beyond the SQL Trace retention window, lifetime counters, SQL rewriting, and any causal claim that the
+  retained evidence does not support.
+
+Acceptance criteria:
+
+- Ranking, normalization, aggregation, bounding, attribution, and advisory policy live in framework-neutral,
+  JSON-free engine services; core DTO records stay immutable, annotation-free, and byte-compatible across Jackson 3 and
+  Jackson 2.
+- Equivalent parameterized executions aggregate into one normalized group and no ranked statement, route key, or advisor
+  finding exposes a bound value, raw query string, or path-parameter value.
+- Ranked statements, routes, and the route-by-statement cross product are bounded before serialization, and truncation
+  is disclosed in the payload rather than silently applied.
+- A statement whose owning request cannot be uniquely identified appears in the `unattributed` or `ambiguous` bucket and
+  never in a route group. A statement carrying a trace id that no retained request carries is never attributed by a
+  weaker tier, and a statement that was already running before a request began is never absorbed into it.
+- `GET /bootui/api/sql-trace/insights` is a safe read that honors localhost, Host, and panel enablement policy
+  identically on Spring MVC, Spring WebFlux, and Quarkus, and returns the same report shape on all three.
+- The Database advisor's `DB-RUNTIME-001` rule reports only statement shapes with repeated distinct texts and a literal
+  in a filtering position, states its confidence and limitations, and includes no captured literal values.
+
 ### 5.18 Cache Panel
 
 Purpose: answer "Which cache managers and caches exist, how are they used, and can I clear them during local
@@ -2048,6 +2133,7 @@ Initial endpoints:
 | `/bootui/api/database-advisor`       | GET    | Latest Database advisor report, with per-datasource read status and scan diagnostics   |
 | `/bootui/api/database-advisor/scan`  | POST   | Run explicit read-only, bounded physical-schema checks                                 |
 | `/bootui/api/sql-trace`                       | GET    | Retained SQL execution report and aggregate statistics                                |
+| `/bootui/api/sql-trace/insights`              | GET    | Ranked normalized statements and request-route attribution over the retained window   |
 | `/bootui/api/sql-trace/clear`                 | POST   | Clear the retained SQL execution buffer                                                |
 | `/bootui/api/sql-trace/recording`             | POST   | Pause/resume SQL execution capture at runtime                                          |
 | `/bootui/api/sql-trace/stream`                | GET    | SQL Trace change notifications over Server-Sent Events (re-fetch trigger)              |
@@ -2095,6 +2181,7 @@ Initial endpoints:
 | `/bootui/api/rest-client-trace/recording`    | POST   | Pause/resume REST client call capture at runtime                                        |
 | `/bootui/api/rest-client-trace/stream`       | GET    | REST Client change notifications over Server-Sent Events (re-fetch trigger)             |
 | `/bootui/api/sql-trace`                      | GET    | Current bounded SQL trace snapshot and aggregate statistics                             |
+| `/bootui/api/sql-trace/insights`             | GET    | Ranked normalized statements and request-route attribution over the retained window     |
 | `/bootui/api/transactions`                   | GET    | Current bounded transaction-boundary snapshot and aggregate statistics                 |
 | `/bootui/api/activity`                       | GET    | Merged Live Activity stream and KPI summary (params: `type`, `severity`, `since`, `limit`, plus `q`, `until`, `cursor`, `pageSize` when persistence is enabled) |
 | `/bootui/api/activity/stream`                | GET    | Live Activity change notifications over Server-Sent Events (re-fetch trigger)           |

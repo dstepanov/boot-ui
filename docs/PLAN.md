@@ -42,7 +42,7 @@ will therefore be additive rather than an extension of the SQL-specific panels.
 | Planned  | Spring Batch | Services | Spring Batch `JobExplorer` / `JobRepository` | No | Planned |
 | Planned  | WebSocket endpoints | Services | Spring WebSocket/STOMP / Quarkus WebSockets Next | No (capture only) | Planned |
 | Planned  | Error-contract catalogue | Services | Spring exception handlers / Quarkus exception mappers | No | Delivered |
-| Planned  | Slow-SQL ranking and URI attribution | Database | Existing SQL Trace and HTTP exchange evidence | No | Planned |
+| Shipped  | Slow-SQL ranking and URI attribution | Database | Existing SQL Trace and HTTP exchange evidence | No | ✅ Shipped |
 | Planned  | Copy as cURL | Diagnostics | Existing HTTP Exchanges metadata | No | Planned |
 | Planned  | Correlation-ID filtering | Diagnostics | Existing request and Live Activity capture | No (capture only) | Planned |
 | Planned  | Meter provenance and explanation | Diagnostics | Existing meter registry and curated catalogue | No | Planned |
@@ -479,7 +479,18 @@ Acceptance criteria:
   `ProblemDetail`, custom response bodies, Quarkus exception mappers, ambiguous/dynamic status, unmapped retained
   exceptions, inconsistent contracts, safe/unsafe stack-trace settings, and high-cardinality paging.
 
-### 3.12 Slow-SQL ranking and URI attribution — SQL Trace 📋 Planned
+### 3.12 Slow-SQL ranking and URI attribution — SQL Trace ✅ Shipped
+
+Shipped as `GET /bootui/api/sql-trace/insights` on Spring MVC, Spring WebFlux, and Quarkus, plus the two new SQL Trace
+panel sections and the `DB-RUNTIME-001` Database advisor rule. Ranking, normalization, bounding, attribution, and
+advisory policy live in the framework-neutral engine (`SqlStatementNormalizer`, `SqlStatementRanking`,
+`RoutePathMasker`, `SqlRouteAttribution`, `SqlTraceInsightsService`); the adapters only supply inbound-request evidence
+they already captured. Correlation is trace-id first, then serving thread on Spring MVC only, then time window, and each
+tier requires a unique candidate — Spring WebFlux and Quarkus advertise `TRACE_ID` + `TIME_WINDOW` only, and Quarkus
+groups by masked path because RESTEasy Reactive exposes no per-request route template. Executions that cannot be placed
+stay in explicit unattributed/ambiguous buckets. See `docs/SPECIFICATION.md` §5.17.6,
+`docs/DATABASE-ADVISOR-CHECKS.md` (`DB-RUNTIME-001`), and the SQL Trace section of `docs/FEATURES.md`.
+
 
 SQL Trace shows retained statements chronologically and already detects N+1 patterns, but it does not rank normalized
 statements by cumulative cost or explain which inbound request routes are responsible for that database work. This
