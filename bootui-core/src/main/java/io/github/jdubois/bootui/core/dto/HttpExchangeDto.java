@@ -19,4 +19,10 @@ public record HttpExchangeDto(
         String sessionId,
         String traceId,
         List<HttpHeaderDto> requestHeaders,
-        List<HttpHeaderDto> responseHeaders) {}
+        List<HttpHeaderDto> responseHeaders) {
+
+    public HttpExchangeDto {
+        requestHeaders = DtoCollections.immutableCopy(requestHeaders);
+        responseHeaders = DtoCollections.immutableCopy(responseHeaders);
+    }
+}

@@ -21,4 +21,11 @@ public record AiOverviewDto(
         int vectorOperationCount,
         int embeddingCount,
         List<AiChatSummaryDto> recent,
-        String contentBanner) {}
+        String contentBanner) {
+
+    public AiOverviewDto {
+        tokensByModel = DtoCollections.immutableCopy(tokensByModel);
+        callsByModel = DtoCollections.immutableCopy(callsByModel);
+        recent = DtoCollections.immutableCopy(recent);
+    }
+}

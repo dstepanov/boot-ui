@@ -24,4 +24,9 @@ public record CacheDto(
         boolean opaque,
         String opaqueReason,
         List<CacheTierDto> tiers,
-        CacheStatisticsDto statistics) {}
+        CacheStatisticsDto statistics) {
+
+    public CacheDto {
+        tiers = DtoCollections.immutableCopy(tiers);
+    }
+}

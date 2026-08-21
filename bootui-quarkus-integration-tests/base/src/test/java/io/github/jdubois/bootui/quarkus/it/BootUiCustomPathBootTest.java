@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.quarkus.it;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.jdubois.bootui.conformance.AbstractBootUiApiConformanceTest;
 import io.github.jdubois.bootui.conformance.BootUiApiContractCatalog.Runtime;
 import io.github.jdubois.bootui.conformance.BootUiHttpProbe;
@@ -119,6 +120,32 @@ class BootUiCustomPathBootTest extends AbstractBootUiApiConformanceTest {
         assertThat(logger.status()).isEqualTo(200);
         assertThat(download.status()).isEqualTo(200);
         assertThat(download.header("content-disposition")).contains("thread-dump.txt");
+    }
+
+    @Test
+    void bootUiTrafficOnTheCustomMountIsExcludedFromHttpExchanges() {
+        BootUiHttpProbe probe = probe();
+        probe.get("/host/api/hello");
+        probe.get("/host/internal/bootui-api/overview");
+
+        Response report = probe.get("/host/internal/bootui-api/http-exchanges");
+        assertThat(report.status()).isEqualTo(200);
+
+        boolean foundHello = false;
+        for (JsonNode exchange : report.json().path("exchanges")) {
+            String path = exchange.path("path").asText("");
+            assertThat(path)
+                    .as("console traffic on the configured mounts must never be retained as host telemetry")
+                    .doesNotContain("/dev-console")
+                    .doesNotContain("bootui-api")
+                    .doesNotContain("/host/bootui");
+            if (path.equals("/host/api/hello")) {
+                foundHello = true;
+            }
+        }
+        assertThat(foundHello)
+                .as("host-application traffic on the same root path must still be captured")
+                .isTrue();
     }
 
     public static final class CustomPathProfile implements QuarkusTestProfile {

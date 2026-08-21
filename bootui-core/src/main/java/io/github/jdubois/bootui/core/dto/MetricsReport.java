@@ -18,6 +18,12 @@ public record MetricsReport(
         List<MetricGroupDto> groups,
         String catalogueVersion) {
 
+    public MetricsReport {
+        meters = DtoCollections.immutableCopy(meters);
+        availableTypes = DtoCollections.immutableCopy(availableTypes);
+        groups = DtoCollections.immutableCopy(groups);
+    }
+
     public MetricsReport(
             boolean metricsAvailable,
             int total,

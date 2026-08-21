@@ -39,4 +39,9 @@ public record FaultTolerancePolicyDto(
         String target,
         String state,
         List<FaultTolerancePolicySettingDto> settings,
-        FaultTolerancePolicyMetricsDto metrics) {}
+        FaultTolerancePolicyMetricsDto metrics) {
+
+    public FaultTolerancePolicyDto {
+        settings = DtoCollections.immutableCopy(settings);
+    }
+}

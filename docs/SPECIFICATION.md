@@ -100,6 +100,26 @@ Default activation rules:
 `bootui.enabled=AUTO` is the default. BootUI must fail closed: if no enabled profile is active and DevTools is not on
 the classpath, it should not expose the UI.
 
+Failing closed covers the packaged console itself, not only its API. When BootUI is inactive no controller, resource
+handler, or safety filter is registered, but `bootui-ui` still ships the compiled shell on the classpath at
+`META-INF/resources/bootui/`, which every supported runtime serves from its own built-in static-resource handling. Each
+adapter therefore keeps a guard that answers `404` for the reserved internal `/bootui` namespace while the console is
+off: `BootUiShellGuardAutoConfiguration` on Spring MVC and Spring WebFlux (registered under the exact negation of the
+activation condition, and only when the packaged shell is actually on the classpath), `BootUiProdShellGuardFilter` on
+Quarkus (always registered, active in `LaunchMode.NORMAL`). A custom `bootui.path` moves the console's routes but never
+the classpath location of the bundle.
+
+The URL that reaches that classpath location is not fixed, so the Spring guard resolves it rather than assuming it. It
+matches the decoded application path, the same form the framework's handler mapping resolves against, so encoded and
+matrix-parameter spellings such as `/%62ootui/index.html` cannot slip past it. It also follows Spring Boot's relocatable
+static handling — `spring.mvc.servlet.path`, `spring.mvc.static-path-pattern`, and `spring.webflux.static-path-pattern`
+— under which the same bundle surfaces at, for example, `/app/static/bootui/index.html`. A prefix is only claimed when
+the configured pattern can actually reach a nested resource, so a single-segment pattern such as `/resources/*` never
+costs the host a namespace it could not have exposed. Requests outside the reserved `/bootui` namespace and its derived
+prefixes are passed through untouched; the namespace itself is reserved, so a host application must not serve its own
+routes there. Republishing BootUI's classpath directory under a URL of the host's own choosing (by pointing
+`spring.web.resources.static-locations` inside it) is host-controlled and unsupported.
+
 When BootUI is active, the starter should contribute low-precedence Actuator defaults for the local panels, including
 `beans`, `conditions`, `configprops`, `env`, `loggers`, `mappings`, `metrics`, `startup`, and `scheduledtasks`. Host
 applications can override those `management.*` settings explicitly.
@@ -2067,6 +2087,13 @@ Quarkus modules:
 Dependency direction is one-way: `bootui-engine` depends on `bootui-core`, and each framework adapter depends on both.
 The shared `core`, `engine`, `conformance`, and UI modules never depend on Spring or Quarkus. JSON parsing and
 serialization stay in the adapters because Spring Boot and Quarkus use incompatible Jackson major versions.
+
+Core DTO immutability is enforced, not just documented. Every collection component of a `bootui-core` record is
+defensively copied in the record's compact constructor, so a caller cannot change a published report by mutating the
+collection it passed in or the collection an accessor returned, and a `null` collection is normalized to an empty one.
+The copies preserve the caller's iteration order — in particular map components are copied into a `LinkedHashMap` rather
+than through `Map.copyOf`, whose hash order is randomized per JVM run — so the serialized JSON stays byte-identical
+across Jackson 3 and Jackson 2.
 
 The Maven build installs the configured Node.js and npm versions, builds the frontend before Java resources are
 packaged, and produces adapter artifacts that already contain the compiled UI. Consumers only add the matching Spring

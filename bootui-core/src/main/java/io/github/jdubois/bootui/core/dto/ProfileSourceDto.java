@@ -5,4 +5,9 @@ import java.util.List;
 /**
  * Properties contributed by a single profile-specific property source.
  */
-public record ProfileSourceDto(String sourceName, String profile, List<ConfigPropertyDto> properties) {}
+public record ProfileSourceDto(String sourceName, String profile, List<ConfigPropertyDto> properties) {
+
+    public ProfileSourceDto {
+        properties = DtoCollections.immutableCopy(properties);
+    }
+}

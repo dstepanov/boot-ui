@@ -419,8 +419,10 @@ advisor endpoints, and the shell-chrome `GET /bootui/api/overview` endpoint is s
   step in the extension), whose `handle()` method reads a CDI-injected `LaunchMode` and answers a plain `404` for
   the configured UI/API surface and the private `/bootui` classpath mount only when it is `LaunchMode.NORMAL` — an
   immediate no-op pass-through otherwise, so dev/`@QuarkusTest` behavior is unaffected. Net effect: the public and
-  internal BootUI paths are plain 404s in production, at parity with the Spring adapter (which never registers any BootUI
-  route when inactive, so nothing is reachable there either).
+  internal BootUI paths are plain 404s in production, at parity with the Spring adapter, whose
+  `BootUiShellGuardAutoConfiguration` answers the same 404 for the same reserved `/bootui` mount whenever BootUI's
+  activation condition resolves to disabled — Spring Boot's default static-resource handling exposed the packaged shell
+  there for exactly the same reason (#856).
   Proven by a genuine `LaunchMode.NORMAL` build+run via `QuarkusProdModeTest`
   (`BootUiQuarkusProdShellGuardBootTest`, in the dedicated `bootui-quarkus-prod-shell-guard-integration-tests`
   module — kept separate from every `@QuarkusTest`-based module because Quarkus's own test framework refuses to mix
@@ -469,6 +471,13 @@ The UI path cannot be nested under `/bootui/**`, which avoids collisions with th
 configuration fails dev/test startup. Production remains dark even if dormant path settings are invalid: the
 always-registered production guard uses fail-closed safe defaults and suppresses both configured/default and private
 mounts without wiring data-bearing resources.
+
+BootUI's own requests are excluded from the telemetry it reports on. HTTP-exchange capture, request-failure capture,
+pre-mapping exception capture, and log-based exception capture all resolve "is this BootUI?" through one shared matcher
+that strips `quarkus.http.root-path` and matches the configured `bootui.path` / `bootui.api-path` mounts as well as the
+private `/bootui` mount. The console therefore never appears in HTTP Exchanges, Live Activity, or Exceptions under a
+custom root path or a custom mount, while application paths that merely resemble the console — `/bootui-other`, for
+instance — remain captured.
 
 ## 7. Code-sharing scorecard
 

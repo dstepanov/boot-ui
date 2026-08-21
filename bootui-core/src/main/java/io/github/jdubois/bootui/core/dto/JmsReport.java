@@ -25,7 +25,7 @@ public record JmsReport(
         List<JmsMessageDto> messages) {
 
     public JmsReport {
-        messages = messages == null ? List.of() : List.copyOf(messages);
+        messages = DtoCollections.immutableCopy(messages);
     }
 
     public static JmsReport unavailable(String reason, int maxEntries) {

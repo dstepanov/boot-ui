@@ -65,15 +65,14 @@ public record WebSocketReport(
         List<String> warnings) {
 
     public WebSocketReport {
-        brokerPrefixes = brokerPrefixes == null ? List.of() : List.copyOf(brokerPrefixes);
-        applicationDestinationPrefixes =
-                applicationDestinationPrefixes == null ? List.of() : List.copyOf(applicationDestinationPrefixes);
-        endpoints = endpoints == null ? List.of() : List.copyOf(endpoints);
-        sessions = sessions == null ? List.of() : List.copyOf(sessions);
-        subscriptions = subscriptions == null ? List.of() : List.copyOf(subscriptions);
-        activity = activity == null ? List.of() : List.copyOf(activity);
+        brokerPrefixes = DtoCollections.immutableCopy(brokerPrefixes);
+        applicationDestinationPrefixes = DtoCollections.immutableCopy(applicationDestinationPrefixes);
+        endpoints = DtoCollections.immutableCopy(endpoints);
+        sessions = DtoCollections.immutableCopy(sessions);
+        subscriptions = DtoCollections.immutableCopy(subscriptions);
+        activity = DtoCollections.immutableCopy(activity);
         stats = stats == null ? WebSocketStatsDto.empty() : stats;
-        warnings = warnings == null ? List.of() : List.copyOf(warnings);
+        warnings = DtoCollections.immutableCopy(warnings);
     }
 
     public static WebSocketReport unavailable(String reason) {

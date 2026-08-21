@@ -25,6 +25,14 @@ public record CracReadinessReport(
         List<String> warnings,
         List<CracGeneratedFileDto> generatedFiles) {
 
+    public CracReadinessReport {
+        basePackages = DtoCollections.immutableCopy(basePackages);
+        severityCounts = DtoCollections.immutableCopy(severityCounts);
+        findings = DtoCollections.immutableCopy(findings);
+        warnings = DtoCollections.immutableCopy(warnings);
+        generatedFiles = DtoCollections.immutableCopy(generatedFiles);
+    }
+
     /** Returns a copy of this report with the generated container assets attached. */
     public CracReadinessReport withGeneratedFiles(List<CracGeneratedFileDto> generatedFiles) {
         return new CracReadinessReport(

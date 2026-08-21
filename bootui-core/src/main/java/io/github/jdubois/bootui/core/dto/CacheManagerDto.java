@@ -23,4 +23,10 @@ public record CacheManagerDto(
         String composition,
         String dynamicCaches,
         List<String> delegateTypes,
-        List<CacheDto> caches) {}
+        List<CacheDto> caches) {
+
+    public CacheManagerDto {
+        delegateTypes = DtoCollections.immutableCopy(delegateTypes);
+        caches = DtoCollections.immutableCopy(caches);
+    }
+}

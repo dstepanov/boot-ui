@@ -51,6 +51,6 @@ public record ErrorContractEntryDto(
         List<String> produces) {
 
     public ErrorContractEntryDto {
-        produces = produces == null ? List.of() : List.copyOf(produces);
+        produces = DtoCollections.immutableCopy(produces);
     }
 }

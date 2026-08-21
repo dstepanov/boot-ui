@@ -146,8 +146,9 @@ import org.jboss.jandex.Type;
  * {@code /bootui} and any {@code /bootui/**} path (the static shell, {@code /bootui/api/**}, everything);
  * in every other launch mode it is an immediate no-op pass-through, so dev/{@code @QuarkusTest} behavior is
  * entirely unaffected. Net effect: {@code /bootui}/{@code /bootui/**} is a plain 404 in production, at
- * parity with the Spring adapter (which never registers any BootUI route when inactive, so nothing is
- * reachable there either).</p>
+ * parity with the Spring adapter, whose {@code BootUiShellGuardAutoConfiguration} answers the same 404 for
+ * the same reserved mount whenever BootUI's activation condition resolves to disabled (#856: Spring Boot's
+ * default static-resource handling served the packaged shell there too, for exactly the same reason).</p>
  *
  * <p>In dev/test, the static handler only answers the directory index {@code /bootui/} (trailing slash);
  * {@code /bootui} without the trailing slash previously 404'd, so {@code QuarkusIndexResource} — a

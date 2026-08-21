@@ -9,4 +9,9 @@ public record SpringSecurityEndpointsReport(
         boolean springSecurityPresent,
         boolean handlerMappingAvailable,
         int total,
-        List<SpringSecurityEndpointDto> endpoints) {}
+        List<SpringSecurityEndpointDto> endpoints) {
+
+    public SpringSecurityEndpointsReport {
+        endpoints = DtoCollections.immutableCopy(endpoints);
+    }
+}

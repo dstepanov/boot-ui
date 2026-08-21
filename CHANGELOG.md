@@ -75,6 +75,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   smuggle several times the budget past a character count — before any request is sent. Over-limit input is rejected
   with the canonical `400` and `{"error": ...}` body on every adapter, and the panel shows that message; a probe that
   runs and fails is still reported as a probe outcome (#860).
+- **BootUI's own Quarkus traffic stays out of HTTP Exchanges, Live Activity, and Exceptions under a non-default
+  `quarkus.http.root-path` or a custom `bootui.path` mount.** The HTTP-exchange, exception, pre-mapping exception, and
+  log-based capture points now recognize BootUI's surface through one shared matcher that strips the configured root
+  path and honors the configured UI/API mounts, instead of matching the literal `/bootui` prefix each on its own. A
+  request logged by Quarkus' own error handler while serving the console is excluded too. Application paths that merely
+  resemble the console, such as `/bootui-other`, stay captured (#857).
 
 ## [1.14.1] - 2026-08-20
 
@@ -83,6 +89,18 @@ and strengthens release verification against the artifacts consumers actually do
 
 ### Fixed
 
+- **The packaged BootUI shell is no longer reachable on Spring MVC or Spring WebFlux when BootUI is inactive.**
+  Deactivating BootUI (a `prod`/`production` profile, `bootui.enabled=OFF`, an invalid `bootui.enabled` value, or simply
+  no enabling profile) already unwired every BootUI route, but `bootui-ui` ships the compiled console at
+  `META-INF/resources/bootui/`, one of Spring Boot's default static-resource locations, so `GET /bootui/index.html` and
+  every asset under it still answered `200` with an empty shell. A new `BootUiShellGuardAutoConfiguration`, gated by the
+  exact negation of the activation condition and by the presence of the packaged shell, answers `404` for the reserved
+  `/bootui` namespace on both stacks, matching the Quarkus adapter's production shell guard. It matches the decoded
+  request path (so `/%62ootui/index.html` and matrix-parameter spellings cannot slip through) and follows relocated
+  static handling (`spring.mvc.servlet.path`, `spring.mvc.static-path-pattern`, `spring.webflux.static-path-pattern`),
+  under which the same bundle otherwise surfaced at, for example, `/app/static/bootui/index.html`. Requests outside the
+  reserved `/bootui` namespace are passed through untouched; a host application that served its own routes there while
+  shipping BootUI now receives `404` for them while BootUI is inactive (#856).
 - **Spring native images can start with the sample application's Hibernate second-level JCache configuration.**
   Runtime hints now retain the reflectively created `JCacheRegionFactory` constructor together with Caffeine's
   `application.conf` and default `reference.conf` cache configuration resources (#832, #835).

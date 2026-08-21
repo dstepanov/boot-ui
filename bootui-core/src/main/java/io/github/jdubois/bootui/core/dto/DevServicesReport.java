@@ -13,6 +13,11 @@ public record DevServicesReport(
         List<DevServiceDto> services,
         List<String> warnings) {
 
+    public DevServicesReport {
+        services = DtoCollections.immutableCopy(services);
+        warnings = DtoCollections.immutableCopy(warnings);
+    }
+
     public DevServicesReport(
             boolean dockerComposePresent,
             boolean testcontainersPresent,

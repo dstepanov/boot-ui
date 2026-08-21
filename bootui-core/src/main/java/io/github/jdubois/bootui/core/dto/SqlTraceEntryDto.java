@@ -50,6 +50,6 @@ public record SqlTraceEntryDto(
         String callSite) {
 
     public SqlTraceEntryDto {
-        parameters = parameters == null ? List.of() : List.copyOf(parameters);
+        parameters = DtoCollections.immutableCopy(parameters);
     }
 }

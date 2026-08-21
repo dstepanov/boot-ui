@@ -16,4 +16,11 @@ public record RestApiReport(
         int violationsFound,
         List<RestApiSeverityCountDto> severityCounts,
         RestApiScanStatusDto scan,
-        List<RestApiRuleResultDto> results) {}
+        List<RestApiRuleResultDto> results) {
+
+    public RestApiReport {
+        basePackages = DtoCollections.immutableCopy(basePackages);
+        severityCounts = DtoCollections.immutableCopy(severityCounts);
+        results = DtoCollections.immutableCopy(results);
+    }
+}

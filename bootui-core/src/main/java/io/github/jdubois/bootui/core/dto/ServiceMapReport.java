@@ -36,9 +36,9 @@ public record ServiceMapReport(
         List<String> warnings) {
 
     public ServiceMapReport {
-        nodes = nodes == null ? List.of() : List.copyOf(nodes);
-        edges = edges == null ? List.of() : List.copyOf(edges);
-        sources = sources == null ? List.of() : List.copyOf(sources);
-        warnings = warnings == null ? List.of() : List.copyOf(warnings);
+        nodes = DtoCollections.immutableCopy(nodes);
+        edges = DtoCollections.immutableCopy(edges);
+        sources = DtoCollections.immutableCopy(sources);
+        warnings = DtoCollections.immutableCopy(warnings);
     }
 }

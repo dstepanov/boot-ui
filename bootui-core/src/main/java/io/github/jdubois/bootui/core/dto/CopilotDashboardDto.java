@@ -28,4 +28,15 @@ public record CopilotDashboardDto(
         List<CopilotActivityBucket> activityBuckets,
         List<CopilotActivityBucket> dailyActivityBuckets,
         List<CopilotSessionSummary> recentSessions,
-        List<String> warnings) {}
+        List<String> warnings) {
+
+    public CopilotDashboardDto {
+        categoryCounts = DtoCollections.immutableCopy(categoryCounts);
+        modelCounts = DtoCollections.immutableCopy(modelCounts);
+        topTools = DtoCollections.immutableCopy(topTools);
+        activityBuckets = DtoCollections.immutableCopy(activityBuckets);
+        dailyActivityBuckets = DtoCollections.immutableCopy(dailyActivityBuckets);
+        recentSessions = DtoCollections.immutableCopy(recentSessions);
+        warnings = DtoCollections.immutableCopy(warnings);
+    }
+}

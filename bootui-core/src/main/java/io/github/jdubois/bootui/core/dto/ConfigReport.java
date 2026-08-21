@@ -9,6 +9,14 @@ public record ConfigReport(
         List<ConfigPropertySuggestionDto> propertySuggestions,
         PageMetadata page,
         int overrideCount) {
+
+    public ConfigReport {
+        activeProfiles = DtoCollections.immutableCopy(activeProfiles);
+        sources = DtoCollections.immutableCopy(sources);
+        properties = DtoCollections.immutableCopy(properties);
+        propertySuggestions = DtoCollections.immutableCopy(propertySuggestions);
+    }
+
     public ConfigReport(
             List<String> activeProfiles,
             List<String> sources,

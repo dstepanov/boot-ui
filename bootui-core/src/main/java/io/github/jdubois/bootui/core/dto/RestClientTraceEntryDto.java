@@ -57,6 +57,6 @@ public record RestClientTraceEntryDto(
         String callSite) {
 
     public RestClientTraceEntryDto {
-        requestHeaders = requestHeaders == null ? Map.of() : Map.copyOf(requestHeaders);
+        requestHeaders = DtoCollections.immutableCopy(requestHeaders);
     }
 }

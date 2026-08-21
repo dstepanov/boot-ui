@@ -26,6 +26,6 @@ public record SqlTraceGroupDto(
         List<String> callSites) {
 
     public SqlTraceGroupDto {
-        callSites = callSites == null ? List.of() : List.copyOf(callSites);
+        callSites = DtoCollections.immutableCopy(callSites);
     }
 }

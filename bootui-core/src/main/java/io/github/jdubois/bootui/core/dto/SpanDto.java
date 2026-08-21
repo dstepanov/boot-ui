@@ -19,4 +19,10 @@ public record SpanDto(
         String statusCode,
         String statusMessage,
         List<SpanAttributeDto> attributes,
-        List<SpanEventDto> events) {}
+        List<SpanEventDto> events) {
+
+    public SpanDto {
+        attributes = DtoCollections.immutableCopy(attributes);
+        events = DtoCollections.immutableCopy(events);
+    }
+}

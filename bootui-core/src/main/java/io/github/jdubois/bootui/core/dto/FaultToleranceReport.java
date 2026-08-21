@@ -35,6 +35,14 @@ public record FaultToleranceReport(
         int maxEvents,
         List<String> warnings) {
 
+    public FaultToleranceReport {
+        providers = DtoCollections.immutableCopy(providers);
+        policies = DtoCollections.immutableCopy(policies);
+        policyCountsByType = DtoCollections.immutableCopy(policyCountsByType);
+        events = DtoCollections.immutableCopy(events);
+        warnings = DtoCollections.immutableCopy(warnings);
+    }
+
     /** An empty report explaining why no supported fault tolerance library is reporting. */
     public static FaultToleranceReport unavailable(String reason, int maxEvents) {
         return new FaultToleranceReport(

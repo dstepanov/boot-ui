@@ -6,4 +6,10 @@ import java.util.List;
  * Authentication and user-details summary.
  */
 public record SpringSecurityAuthDto(
-        List<String> authenticationProviderTypes, List<String> userDetailsServiceTypes, String configuredUsername) {}
+        List<String> authenticationProviderTypes, List<String> userDetailsServiceTypes, String configuredUsername) {
+
+    public SpringSecurityAuthDto {
+        authenticationProviderTypes = DtoCollections.immutableCopy(authenticationProviderTypes);
+        userDetailsServiceTypes = DtoCollections.immutableCopy(userDetailsServiceTypes);
+    }
+}

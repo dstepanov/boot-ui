@@ -5,4 +5,9 @@ import java.util.List;
 /**
  * The set of advisor rule IDs that have been dismissed by the developer.
  */
-public record DismissedRulesDto(List<String> dismissed) {}
+public record DismissedRulesDto(List<String> dismissed) {
+
+    public DismissedRulesDto {
+        dismissed = DtoCollections.immutableCopy(dismissed);
+    }
+}

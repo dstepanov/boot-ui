@@ -18,6 +18,10 @@ public record RestApiRuleResultDto(
         String learnMoreUrl,
         boolean dismissed) {
 
+    public RestApiRuleResultDto {
+        sampleViolations = DtoCollections.immutableCopy(sampleViolations);
+    }
+
     public RestApiRuleResultDto(
             String id,
             String name,

@@ -10,4 +10,11 @@ public record ExceptionDetailDto(
         ExceptionGroupDto group,
         List<ExceptionFrameDto> frames,
         List<ExceptionCauseDto> causes,
-        List<ExceptionOccurrenceDto> occurrences) {}
+        List<ExceptionOccurrenceDto> occurrences) {
+
+    public ExceptionDetailDto {
+        frames = DtoCollections.immutableCopy(frames);
+        causes = DtoCollections.immutableCopy(causes);
+        occurrences = DtoCollections.immutableCopy(occurrences);
+    }
+}

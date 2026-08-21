@@ -16,4 +16,12 @@ public record SecurityReport(
         List<SecuritySeverityCountDto> severityCounts,
         SecurityScanStatusDto scan,
         List<SecurityRuleResultDto> results,
-        List<SecurityRuleResultDto> analysisErrors) {}
+        List<SecurityRuleResultDto> analysisErrors) {
+
+    public SecurityReport {
+        filterChains = DtoCollections.immutableCopy(filterChains);
+        severityCounts = DtoCollections.immutableCopy(severityCounts);
+        results = DtoCollections.immutableCopy(results);
+        analysisErrors = DtoCollections.immutableCopy(analysisErrors);
+    }
+}

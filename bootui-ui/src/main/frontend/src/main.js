@@ -1,7 +1,6 @@
 import {createApp} from 'vue'
 import {createRouter, createWebHashHistory} from 'vue-router'
 import 'bootstrap/dist/css/bootstrap.min.css'
-import 'bootstrap/js/dist/collapse'
 import './generated/bootstrap-icons.css'
 import App from './App.vue'
 import {routes} from './routes.js'

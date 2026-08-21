@@ -19,4 +19,11 @@ public record MemoryReport(
         List<MemorySeverityCountDto> severityCounts,
         MemoryScanStatusDto scan,
         List<MemoryRuleResultDto> results,
-        List<MemoryRuleResultDto> analysisErrors) {}
+        List<MemoryRuleResultDto> analysisErrors) {
+
+    public MemoryReport {
+        severityCounts = DtoCollections.immutableCopy(severityCounts);
+        results = DtoCollections.immutableCopy(results);
+        analysisErrors = DtoCollections.immutableCopy(analysisErrors);
+    }
+}

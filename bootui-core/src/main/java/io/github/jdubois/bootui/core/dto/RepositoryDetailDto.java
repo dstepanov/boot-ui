@@ -13,4 +13,10 @@ public record RepositoryDetailDto(
         String storeModule,
         String customImplementation,
         List<RepositoryMethodDto> methods,
-        List<String> fragments) {}
+        List<String> fragments) {
+
+    public RepositoryDetailDto {
+        methods = DtoCollections.immutableCopy(methods);
+        fragments = DtoCollections.immutableCopy(fragments);
+    }
+}

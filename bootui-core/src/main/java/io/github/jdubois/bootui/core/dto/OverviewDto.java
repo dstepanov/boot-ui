@@ -20,4 +20,10 @@ public record OverviewDto(
         String contextPath,
         Long startupTimeMillis,
         ActivationStatus activation,
-        String openApiUrl) {}
+        String openApiUrl) {
+
+    public OverviewDto {
+        activeProfiles = DtoCollections.immutableCopy(activeProfiles);
+        defaultProfiles = DtoCollections.immutableCopy(defaultProfiles);
+    }
+}

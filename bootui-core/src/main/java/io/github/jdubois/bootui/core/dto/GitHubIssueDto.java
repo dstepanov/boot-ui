@@ -14,4 +14,9 @@ public record GitHubIssueDto(
         Long createdAt,
         Long updatedAt,
         int comments,
-        List<String> labels) {}
+        List<String> labels) {
+
+    public GitHubIssueDto {
+        labels = DtoCollections.immutableCopy(labels);
+    }
+}

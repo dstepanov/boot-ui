@@ -18,6 +18,10 @@ public record ArchitectureRuleResultDto(
         String learnMoreUrl,
         boolean dismissed) {
 
+    public ArchitectureRuleResultDto {
+        sampleViolations = DtoCollections.immutableCopy(sampleViolations);
+    }
+
     public ArchitectureRuleResultDto(
             String id,
             String name,

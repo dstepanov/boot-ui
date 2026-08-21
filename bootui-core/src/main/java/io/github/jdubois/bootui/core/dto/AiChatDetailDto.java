@@ -12,4 +12,12 @@ public record AiChatDetailDto(
         List<SpanAttributeDto> attributes,
         List<SpanEventDto> events,
         boolean contentCaptured,
-        String contentBanner) {}
+        String contentBanner) {
+
+    public AiChatDetailDto {
+        toolCalls = DtoCollections.immutableCopy(toolCalls);
+        vectorOperations = DtoCollections.immutableCopy(vectorOperations);
+        attributes = DtoCollections.immutableCopy(attributes);
+        events = DtoCollections.immutableCopy(events);
+    }
+}

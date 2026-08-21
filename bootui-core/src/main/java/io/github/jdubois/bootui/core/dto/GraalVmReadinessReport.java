@@ -37,6 +37,14 @@ public record GraalVmReadinessReport(
         String metadataDirectory,
         GraalVmDockerfileDto dockerfile) {
 
+    public GraalVmReadinessReport {
+        basePackages = DtoCollections.immutableCopy(basePackages);
+        severityCounts = DtoCollections.immutableCopy(severityCounts);
+        findings = DtoCollections.immutableCopy(findings);
+        dependencies = DtoCollections.immutableCopy(dependencies);
+        warnings = DtoCollections.immutableCopy(warnings);
+    }
+
     /** Returns a copy of this report with the install target resolution filled in. */
     public GraalVmReadinessReport withInstallTarget(boolean installable, String installPath, String metadataDirectory) {
         return new GraalVmReadinessReport(

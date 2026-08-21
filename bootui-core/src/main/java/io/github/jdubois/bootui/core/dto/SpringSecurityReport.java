@@ -6,4 +6,9 @@ import java.util.List;
  * Top-level Spring Security report.
  */
 public record SpringSecurityReport(
-        boolean springSecurityPresent, List<SpringSecurityFilterChainDto> chains, SpringSecurityAuthDto auth) {}
+        boolean springSecurityPresent, List<SpringSecurityFilterChainDto> chains, SpringSecurityAuthDto auth) {
+
+    public SpringSecurityReport {
+        chains = DtoCollections.immutableCopy(chains);
+    }
+}
