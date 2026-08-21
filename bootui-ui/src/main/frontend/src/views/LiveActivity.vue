@@ -39,7 +39,7 @@ const TYPES = [
   'MESSAGING',
   'MAIL',
   'REST_CLIENT',
-  'RESILIENCE'
+  'FAULT_TOLERANCE'
 ]
 const SEVERITIES = ['OK', 'SLOW', 'WARN', 'ERROR']
 const FILTERS_STORAGE_KEY = 'bootui.activity.filters'
@@ -338,7 +338,7 @@ function typeIcon(type) {
       SCHEDULED: 'bi-clock-history',
       MESSAGING: 'bi-diagram-3',
       MAIL: 'bi-envelope',
-      RESILIENCE: 'bi-shield-check'
+      FAULT_TOLERANCE: 'bi-shield-check'
     }[type] || 'bi-dot'
   )
 }

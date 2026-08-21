@@ -18,6 +18,8 @@ test.describe('Sample application REST API', () => {
     expect(body).toContain('Sample action lab')
     expect(body).toContain('GET /api/sample/products')
     expect(body).toContain('Test Hibernate second-level cache')
+    expect(body).toContain('Trigger a retry')
+    expect(body).toContain('Exercise the circuit breaker')
     expect(body).toContain('Create session data')
     expect(body).toContain('Secure API as admin')
     expect(body).toContain('Secure SQL request as admin')
@@ -38,6 +40,31 @@ test.describe('Sample application REST API', () => {
     await page.getByRole('button', {name: 'Test Hibernate second-level cache'}).click()
     await expect(page.locator('#sample-action-status')).toContainText(/Observed \d+ second-level cache hit/)
     await expect(page.locator('#sample-action-result')).toContainText('Hits: +1')
+
+    await page.getByRole('button', {name: 'Trigger a retry'}).click()
+    await expect(page.locator('#sample-action-status')).toContainText(
+      'Spring Retry recovered FlakyInventoryClient#reserve'
+    )
+    await expect(page.locator('#sample-action-result')).toContainText('reserved BOOTUI-1')
+
+    await page.getByRole('button', {name: 'Exercise the circuit breaker'}).click()
+    await expect(page.locator('#sample-action-status')).toContainText('Circuit breaker inventory-service is OPEN')
+    await expect(page.locator('#sample-action-result')).toContainText(/call\(s\) (failed|were rejected)/)
+
+    const faultToleranceCardsFitTheirGridColumns = await page
+      .locator('.test-action', {
+        has: page.getByRole('button', {name: /Trigger a retry|Exercise the circuit breaker/})
+      })
+      .evaluateAll((cards) =>
+        cards.every((card) => {
+          const button = card.querySelector('button')
+          if (!button) return false
+          const cardBounds = card.getBoundingClientRect()
+          const buttonBounds = button.getBoundingClientRect()
+          return buttonBounds.left >= cardBounds.left && buttonBounds.right <= cardBounds.right
+        })
+      )
+    expect(faultToleranceCardsFitTheirGridColumns).toBe(true)
 
     await page.getByRole('button', {name: 'Create session data'}).click()
     await expect(page.locator('#session-data-status')).toContainText('Added 5 attributes')
@@ -122,6 +149,22 @@ test.describe('Sample application REST API', () => {
     expect(body.counter).toBe('sample.orders.processed')
     expect(body.timer).toBe('sample.orders.duration')
     expect(body.counterTotal).toBeGreaterThanOrEqual(3)
+  })
+
+  test('fault tolerance sample actions trigger retry and circuit-breaker activity independently', async ({request}) => {
+    const retry = await request.get('/api/sample/fault-tolerance/retry')
+    expect(retry.status()).toBe(200)
+    expect(await retry.json()).toMatchObject({
+      policy: 'FlakyInventoryClient#reserve',
+      reservation: 'reserved BOOTUI-1'
+    })
+
+    const circuitBreaker = await request.get('/api/sample/fault-tolerance/circuit-breaker')
+    expect(circuitBreaker.status()).toBe(200)
+    const body = await circuitBreaker.json()
+    expect(body.policy).toBe('inventory-service')
+    expect(body.state).toBe('OPEN')
+    expect(body.failures + body.rejections).toBe(6)
   })
 
   test('GET /api/sample/allocate allocates a bounded heap buffer', async ({request}) => {

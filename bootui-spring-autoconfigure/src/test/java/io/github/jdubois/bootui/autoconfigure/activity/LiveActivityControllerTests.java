@@ -384,7 +384,7 @@ class LiveActivityControllerTests {
                 empty(io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.class),
                 empty(io.github.jdubois.bootui.engine.jms.JmsActivityRecorder.class),
                 empty(io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder.class),
-                empty(io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder.class),
+                empty(io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceEventRecorder.class),
                 properties);
         return service.report(type, severity, since, limit);
     }
@@ -497,7 +497,7 @@ class LiveActivityControllerTests {
                 empty(io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.class),
                 empty(io.github.jdubois.bootui.engine.jms.JmsActivityRecorder.class),
                 empty(io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder.class),
-                empty(io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder.class),
+                empty(io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceEventRecorder.class),
                 empty(io.github.jdubois.bootui.engine.email.EmailCaptureService.class),
                 activityStore,
                 persistenceSettings,
@@ -526,7 +526,7 @@ class LiveActivityControllerTests {
                 empty(io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.class),
                 empty(io.github.jdubois.bootui.engine.jms.JmsActivityRecorder.class),
                 empty(io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder.class),
-                empty(io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder.class),
+                empty(io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceEventRecorder.class),
                 empty(io.github.jdubois.bootui.engine.email.EmailCaptureService.class),
                 defaultActivityStore(),
                 disabledSettings(),
@@ -555,7 +555,7 @@ class LiveActivityControllerTests {
                 empty(io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.class),
                 empty(io.github.jdubois.bootui.engine.jms.JmsActivityRecorder.class),
                 empty(io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder.class),
-                empty(io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder.class),
+                empty(io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceEventRecorder.class),
                 empty(io.github.jdubois.bootui.engine.email.EmailCaptureService.class),
                 defaultActivityStore(),
                 disabledSettings(),

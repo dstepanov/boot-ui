@@ -45,7 +45,7 @@ const PANEL_HEADINGS = {
   pentesting: /^Pentesting/,
   vulnerabilities: /^Vulnerabilities/,
   scheduled: /Scheduled Tasks/,
-  resilience: /^Resilience/,
+  'fault-tolerance': /^Fault Tolerance/,
   cache: /^Cache$/,
   ai: /AI Framework/,
   traces: /^Traces/,

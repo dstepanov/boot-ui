@@ -42,7 +42,7 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
         <!--
-            Resilience libraries the BootUI Resilience panel reads. Neither is managed by the Spring Boot
+            Fault tolerance libraries the BootUI Fault Tolerance panel reads. Neither is managed by the Spring Boot
             BOM, so both use the versions pinned in the root pom.
         -->
         <dependency>
