@@ -5,4 +5,9 @@ import java.util.List;
 /**
  * Top-level Traces list payload.
  */
-public record TracesReport(boolean enabled, int retained, int capacity, List<TraceSummaryDto> traces) {}
+public record TracesReport(boolean enabled, int retained, int capacity, List<TraceSummaryDto> traces) {
+
+    public TracesReport {
+        traces = DtoCollections.immutableCopy(traces);
+    }
+}

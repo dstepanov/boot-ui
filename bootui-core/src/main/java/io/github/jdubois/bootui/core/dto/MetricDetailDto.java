@@ -19,6 +19,12 @@ public record MetricDetailDto(
         boolean samplesTruncated,
         MetricProvenanceDto provenance) {
 
+    public MetricDetailDto {
+        measurements = DtoCollections.immutableCopy(measurements);
+        availableTags = DtoCollections.immutableCopy(availableTags);
+        samples = DtoCollections.immutableCopy(samples);
+    }
+
     public MetricDetailDto(
             boolean metricsAvailable,
             String name,

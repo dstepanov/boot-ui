@@ -12,4 +12,9 @@ public record LiquibaseActionResult(
         Integer pendingBefore,
         Integer pendingAfter,
         Integer changeSetsApplied,
-        List<String> warnings) {}
+        List<String> warnings) {
+
+    public LiquibaseActionResult {
+        warnings = DtoCollections.immutableCopy(warnings);
+    }
+}

@@ -37,6 +37,6 @@ public record ServiceMapEdgeDto(
         List<ServiceMapInteractionDto> recentInteractions) {
 
     public ServiceMapEdgeDto {
-        recentInteractions = recentInteractions == null ? List.of() : List.copyOf(recentInteractions);
+        recentInteractions = DtoCollections.immutableCopy(recentInteractions);
     }
 }

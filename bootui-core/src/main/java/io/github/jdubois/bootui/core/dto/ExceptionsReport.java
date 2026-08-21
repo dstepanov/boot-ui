@@ -13,6 +13,10 @@ public record ExceptionsReport(
         long totalExceptions,
         List<ExceptionGroupDto> groups) {
 
+    public ExceptionsReport {
+        groups = DtoCollections.immutableCopy(groups);
+    }
+
     public static ExceptionsReport unavailable(String reason, int maxGroups) {
         return new ExceptionsReport(false, reason, maxGroups, 0L, List.of());
     }

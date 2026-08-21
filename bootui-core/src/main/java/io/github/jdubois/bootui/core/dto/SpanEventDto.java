@@ -5,4 +5,9 @@ import java.util.List;
 /**
  * Discrete event recorded inside a span.
  */
-public record SpanEventDto(String name, long timeOffsetNanos, List<SpanAttributeDto> attributes) {}
+public record SpanEventDto(String name, long timeOffsetNanos, List<SpanAttributeDto> attributes) {
+
+    public SpanEventDto {
+        attributes = DtoCollections.immutableCopy(attributes);
+    }
+}

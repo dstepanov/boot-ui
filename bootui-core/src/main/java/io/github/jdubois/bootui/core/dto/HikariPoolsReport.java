@@ -5,4 +5,9 @@ import java.util.List;
 /**
  * Top-level database connection-pool report.
  */
-public record HikariPoolsReport(boolean hikariPresent, int total, List<HikariPoolDto> pools) {}
+public record HikariPoolsReport(boolean hikariPresent, int total, List<HikariPoolDto> pools) {
+
+    public HikariPoolsReport {
+        pools = DtoCollections.immutableCopy(pools);
+    }
+}

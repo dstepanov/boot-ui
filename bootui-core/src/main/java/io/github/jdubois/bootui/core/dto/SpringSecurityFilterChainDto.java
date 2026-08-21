@@ -12,4 +12,9 @@ public record SpringSecurityFilterChainDto(
         List<String> filters,
         boolean csrfEnabled,
         boolean corsEnabled,
-        boolean sessionManagementPresent) {}
+        boolean sessionManagementPresent) {
+
+    public SpringSecurityFilterChainDto {
+        filters = DtoCollections.immutableCopy(filters);
+    }
+}

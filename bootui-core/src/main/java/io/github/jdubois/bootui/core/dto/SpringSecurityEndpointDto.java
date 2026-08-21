@@ -30,4 +30,9 @@ public record SpringSecurityEndpointDto(
         Integer chainIndex,
         String matcherDescription,
         String description,
-        boolean bestEffort) {}
+        boolean bestEffort) {
+
+    public SpringSecurityEndpointDto {
+        roles = DtoCollections.immutableCopy(roles);
+    }
+}

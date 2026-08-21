@@ -12,4 +12,10 @@ public record LiveMemoryReport(
         List<String> jvmInputArguments,
         String suggestedJvmOptions,
         MemoryCalculationDto calculation,
-        KubernetesMemoryRecommendationDto kubernetes) {}
+        KubernetesMemoryRecommendationDto kubernetes) {
+
+    public LiveMemoryReport {
+        pools = DtoCollections.immutableCopy(pools);
+        jvmInputArguments = DtoCollections.immutableCopy(jvmInputArguments);
+    }
+}

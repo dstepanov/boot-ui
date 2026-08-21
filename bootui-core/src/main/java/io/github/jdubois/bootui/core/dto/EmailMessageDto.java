@@ -49,9 +49,9 @@ public record EmailMessageDto(
         String thread) {
 
     public EmailMessageDto {
-        to = to == null ? List.of() : List.copyOf(to);
-        cc = cc == null ? List.of() : List.copyOf(cc);
-        bcc = bcc == null ? List.of() : List.copyOf(bcc);
-        attachments = attachments == null ? List.of() : List.copyOf(attachments);
+        to = DtoCollections.immutableCopy(to);
+        cc = DtoCollections.immutableCopy(cc);
+        bcc = DtoCollections.immutableCopy(bcc);
+        attachments = DtoCollections.immutableCopy(attachments);
     }
 }

@@ -18,6 +18,10 @@ public record SpringRuleResultDto(
         String learnMoreUrl,
         boolean dismissed) {
 
+    public SpringRuleResultDto {
+        sampleViolations = DtoCollections.immutableCopy(sampleViolations);
+    }
+
     public SpringRuleResultDto(
             String id,
             String name,

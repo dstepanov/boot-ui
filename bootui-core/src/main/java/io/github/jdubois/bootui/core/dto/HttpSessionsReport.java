@@ -16,6 +16,10 @@ public record HttpSessionsReport(
         String valueExposure,
         List<HttpSessionDto> sessions) {
 
+    public HttpSessionsReport {
+        sessions = DtoCollections.immutableCopy(sessions);
+    }
+
     public static HttpSessionsReport unavailable(
             String reason, int limit, boolean actionEnabled, String valueExposure) {
         return new HttpSessionsReport(false, reason, 0, 0, limit, false, actionEnabled, valueExposure, List.of());

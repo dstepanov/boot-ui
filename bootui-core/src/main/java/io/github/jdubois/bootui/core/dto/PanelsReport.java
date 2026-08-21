@@ -12,6 +12,10 @@ import java.util.List;
  */
 public record PanelsReport(String platform, List<PanelDto> panels) {
 
+    public PanelsReport {
+        panels = DtoCollections.immutableCopy(panels);
+    }
+
     /** Platform value reported by the Spring Boot autoconfigure adapter running on the servlet (Spring MVC) stack. */
     public static final String PLATFORM_SPRING_BOOT = "spring-boot";
 

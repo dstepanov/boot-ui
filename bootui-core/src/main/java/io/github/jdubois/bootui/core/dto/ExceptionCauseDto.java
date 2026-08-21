@@ -9,4 +9,9 @@ import java.util.List;
  * exception, so the UI can render the familiar {@code ... N more} suffix.</p>
  */
 public record ExceptionCauseDto(
-        String exceptionClassName, String message, List<ExceptionFrameDto> frames, int commonFrames) {}
+        String exceptionClassName, String message, List<ExceptionFrameDto> frames, int commonFrames) {
+
+    public ExceptionCauseDto {
+        frames = DtoCollections.immutableCopy(frames);
+    }
+}

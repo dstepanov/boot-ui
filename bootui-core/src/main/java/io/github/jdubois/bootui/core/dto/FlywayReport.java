@@ -5,4 +5,9 @@ import java.util.List;
 /**
  * Top-level Flyway migration report.
  */
-public record FlywayReport(boolean flywayPresent, int total, List<FlywayDatabaseDto> databases) {}
+public record FlywayReport(boolean flywayPresent, int total, List<FlywayDatabaseDto> databases) {
+
+    public FlywayReport {
+        databases = DtoCollections.immutableCopy(databases);
+    }
+}

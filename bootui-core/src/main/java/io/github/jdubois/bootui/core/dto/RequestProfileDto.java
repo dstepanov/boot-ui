@@ -37,11 +37,11 @@ public record RequestProfileDto(
         List<String> notes) {
 
     public RequestProfileDto {
-        sql = sql == null ? List.of() : List.copyOf(sql);
-        sqlGroups = sqlGroups == null ? List.of() : List.copyOf(sqlGroups);
-        exceptions = exceptions == null ? List.of() : List.copyOf(exceptions);
-        security = security == null ? List.of() : List.copyOf(security);
-        notes = notes == null ? List.of() : List.copyOf(notes);
+        sql = DtoCollections.immutableCopy(sql);
+        sqlGroups = DtoCollections.immutableCopy(sqlGroups);
+        exceptions = DtoCollections.immutableCopy(exceptions);
+        security = DtoCollections.immutableCopy(security);
+        notes = DtoCollections.immutableCopy(notes);
     }
 
     public static RequestProfileDto unavailable(String reason) {

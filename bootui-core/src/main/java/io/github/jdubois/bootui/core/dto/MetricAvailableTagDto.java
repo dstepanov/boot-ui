@@ -5,4 +5,9 @@ import java.util.List;
 /**
  * Available values for one Micrometer meter tag key.
  */
-public record MetricAvailableTagDto(String key, List<String> values, boolean truncated) {}
+public record MetricAvailableTagDto(String key, List<String> values, boolean truncated) {
+
+    public MetricAvailableTagDto {
+        values = DtoCollections.immutableCopy(values);
+    }
+}

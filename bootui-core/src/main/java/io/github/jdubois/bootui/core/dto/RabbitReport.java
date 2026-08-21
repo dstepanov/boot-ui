@@ -33,7 +33,7 @@ public record RabbitReport(
         List<RabbitMessageDto> messages) {
 
     public RabbitReport {
-        messages = messages == null ? List.of() : List.copyOf(messages);
+        messages = DtoCollections.immutableCopy(messages);
     }
 
     public static RabbitReport unavailable(String reason, int maxEntries) {

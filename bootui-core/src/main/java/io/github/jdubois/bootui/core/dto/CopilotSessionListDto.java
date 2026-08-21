@@ -13,4 +13,10 @@ public record CopilotSessionListDto(
         int returned,
         int maxSessions,
         List<CopilotSessionSummary> sessions,
-        List<String> warnings) {}
+        List<String> warnings) {
+
+    public CopilotSessionListDto {
+        sessions = DtoCollections.immutableCopy(sessions);
+        warnings = DtoCollections.immutableCopy(warnings);
+    }
+}

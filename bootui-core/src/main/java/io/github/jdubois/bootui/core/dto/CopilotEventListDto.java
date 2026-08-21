@@ -5,4 +5,9 @@ import java.util.List;
 /**
  * Paginated/filtered events for a single session.
  */
-public record CopilotEventListDto(String sessionId, int total, int returned, List<CopilotActivityEvent> events) {}
+public record CopilotEventListDto(String sessionId, int total, int returned, List<CopilotActivityEvent> events) {
+
+    public CopilotEventListDto {
+        events = DtoCollections.immutableCopy(events);
+    }
+}

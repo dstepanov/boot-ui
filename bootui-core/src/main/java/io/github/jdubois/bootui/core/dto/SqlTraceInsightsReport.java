@@ -41,9 +41,9 @@ public record SqlTraceInsightsReport(
 
     public SqlTraceInsightsReport {
         window = window == null ? SqlTraceWindowDto.empty() : window;
-        statements = statements == null ? List.of() : List.copyOf(statements);
+        statements = DtoCollections.immutableCopy(statements);
         attribution = attribution == null ? SqlRouteAttributionDto.unavailable(null) : attribution;
-        notes = notes == null ? List.of() : List.copyOf(notes);
+        notes = DtoCollections.immutableCopy(notes);
     }
 
     public static SqlTraceInsightsReport unavailable(String reason) {

@@ -29,4 +29,10 @@ public record CracRuntimeStatusDto(
         String restoreFrom,
         List<String> cracJvmArgs,
         String summary,
-        List<String> restoreCaveats) {}
+        List<String> restoreCaveats) {
+
+    public CracRuntimeStatusDto {
+        cracJvmArgs = DtoCollections.immutableCopy(cracJvmArgs);
+        restoreCaveats = DtoCollections.immutableCopy(restoreCaveats);
+    }
+}

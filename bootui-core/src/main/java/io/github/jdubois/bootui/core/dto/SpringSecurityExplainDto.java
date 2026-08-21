@@ -10,4 +10,9 @@ import java.util.List;
  * session-based matchers.</p>
  */
 public record SpringSecurityExplainDto(
-        boolean matched, boolean bestEffort, Integer chainIndex, String matcherDescription, List<String> filters) {}
+        boolean matched, boolean bestEffort, Integer chainIndex, String matcherDescription, List<String> filters) {
+
+    public SpringSecurityExplainDto {
+        filters = DtoCollections.immutableCopy(filters);
+    }
+}

@@ -11,4 +11,12 @@ public record CopilotSessionDetail(
         List<CopilotTurn> turns,
         List<CopilotActivityEvent> recentEvents,
         List<CopilotActivityEvent> failureEvents,
-        List<String> warnings) {}
+        List<String> warnings) {
+
+    public CopilotSessionDetail {
+        turns = DtoCollections.immutableCopy(turns);
+        recentEvents = DtoCollections.immutableCopy(recentEvents);
+        failureEvents = DtoCollections.immutableCopy(failureEvents);
+        warnings = DtoCollections.immutableCopy(warnings);
+    }
+}

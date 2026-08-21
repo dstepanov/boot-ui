@@ -15,4 +15,9 @@ public record CacheOperationDto(
         String condition,
         String unless,
         boolean allEntries,
-        boolean beforeInvocation) {}
+        boolean beforeInvocation) {
+
+    public CacheOperationDto {
+        caches = DtoCollections.immutableCopy(caches);
+    }
+}

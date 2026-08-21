@@ -26,4 +26,11 @@ public record CacheReport(
         boolean truncated,
         List<CacheManagerDto> managers,
         List<CacheOperationDto> operations,
-        List<String> warnings) {}
+        List<String> warnings) {
+
+    public CacheReport {
+        managers = DtoCollections.immutableCopy(managers);
+        operations = DtoCollections.immutableCopy(operations);
+        warnings = DtoCollections.immutableCopy(warnings);
+    }
+}

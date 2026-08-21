@@ -26,9 +26,9 @@ public record ThreadDumpReport(
         PageMetadata page) {
 
     public ThreadDumpReport {
-        deadlockedThreadIds = deadlockedThreadIds == null ? List.of() : List.copyOf(deadlockedThreadIds);
-        stateCounts = stateCounts == null ? List.of() : List.copyOf(stateCounts);
-        threads = threads == null ? List.of() : List.copyOf(threads);
+        deadlockedThreadIds = DtoCollections.immutableCopy(deadlockedThreadIds);
+        stateCounts = DtoCollections.immutableCopy(stateCounts);
+        threads = DtoCollections.immutableCopy(threads);
     }
 
     /**

@@ -33,7 +33,7 @@ public record KafkaReport(
         List<KafkaMessageDto> messages) {
 
     public KafkaReport {
-        messages = messages == null ? List.of() : List.copyOf(messages);
+        messages = DtoCollections.immutableCopy(messages);
     }
 
     public static KafkaReport unavailable(String reason, int maxEntries) {

@@ -57,7 +57,7 @@ public record SqlRouteRankingDto(
         List<Long> entryIds) {
 
     public SqlRouteRankingDto {
-        topStatements = topStatements == null ? List.of() : List.copyOf(topStatements);
-        entryIds = entryIds == null ? List.of() : List.copyOf(entryIds);
+        topStatements = DtoCollections.immutableCopy(topStatements);
+        entryIds = DtoCollections.immutableCopy(entryIds);
     }
 }

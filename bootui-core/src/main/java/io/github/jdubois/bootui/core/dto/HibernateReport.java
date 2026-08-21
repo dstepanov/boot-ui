@@ -15,4 +15,11 @@ public record HibernateReport(
         int violationsFound,
         List<HibernateSeverityCountDto> severityCounts,
         HibernateScanStatusDto scan,
-        List<HibernateRuleResultDto> results) {}
+        List<HibernateRuleResultDto> results) {
+
+    public HibernateReport {
+        entityPackages = DtoCollections.immutableCopy(entityPackages);
+        severityCounts = DtoCollections.immutableCopy(severityCounts);
+        results = DtoCollections.immutableCopy(results);
+    }
+}

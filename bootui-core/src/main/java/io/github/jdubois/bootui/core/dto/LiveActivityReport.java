@@ -28,10 +28,10 @@ public record LiveActivityReport(
         ActivityPersistenceOptionDto persistenceOption) {
 
     public LiveActivityReport {
-        entries = entries == null ? List.of() : List.copyOf(entries);
-        typeCounts = typeCounts == null ? Map.of() : Map.copyOf(typeCounts);
-        sources = sources == null ? List.of() : List.copyOf(sources);
-        warnings = warnings == null ? List.of() : List.copyOf(warnings);
+        entries = DtoCollections.immutableCopy(entries);
+        typeCounts = DtoCollections.immutableCopy(typeCounts);
+        sources = DtoCollections.immutableCopy(sources);
+        warnings = DtoCollections.immutableCopy(warnings);
     }
 
     /** Convenience constructor for callers that have a page info but no persistence option yet. */
