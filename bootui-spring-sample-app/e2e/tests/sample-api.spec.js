@@ -21,6 +21,8 @@ test.describe('Sample application REST API', () => {
     expect(body).toContain('Create session data')
     expect(body).toContain('Secure API as admin')
     expect(body).toContain('Secure SQL request as admin')
+    expect(body).toContain('Test native WebSocket echo')
+    expect(body).toContain('Test STOMP chat')
     expect(body).toContain('Ask Spring AI')
   })
 
@@ -59,6 +61,14 @@ test.describe('Sample application REST API', () => {
 
     await page.getByRole('button', {name: 'Make a multi-hop request'}).click()
     await expect(page.locator('#sample-action-status')).toContainText('Completed a multi-hop request')
+
+    await page.getByRole('button', {name: 'Test native WebSocket echo'}).click()
+    await expect(page.locator('#sample-action-status')).toContainText('Native WebSocket echo received')
+    await expect(page.locator('#sample-action-result')).toContainText('echo: Hello from the sample app')
+
+    await page.getByRole('button', {name: 'Test STOMP chat'}).click()
+    await expect(page.locator('#sample-action-status')).toContainText('STOMP chat message received')
+    await expect(page.locator('#sample-action-result')).toContainText('echo: Hello from the sample app')
 
     await page.getByRole('button', {name: 'Fail authentication'}).click()
     await expect(page.locator('#sample-action-status')).toContainText('Authentication failed with HTTP 401')
