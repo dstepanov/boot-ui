@@ -34,7 +34,9 @@ final class DatabaseAdvisorRuleRegistry {
             new HibernateMissingUniqueIndexRule(),
             new HibernateMissingColumnRule(),
             new HibernateMissingForeignKeyConstraintRule(),
-            new HibernateSequenceIncrementMismatchRule());
+            new HibernateSequenceIncrementMismatchRule(),
+            // Runtime SQL observed through the SQL Trace window
+            new SqlLiteralConcatenationRule());
 
     private DatabaseAdvisorRuleRegistry() {}
 

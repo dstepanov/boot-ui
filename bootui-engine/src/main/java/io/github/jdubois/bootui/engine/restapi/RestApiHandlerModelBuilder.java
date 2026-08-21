@@ -1,6 +1,7 @@
 package io.github.jdubois.bootui.engine.restapi;
 
 import com.tngtech.archunit.core.domain.JavaAnnotation;
+import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaEnumConstant;
@@ -12,6 +13,7 @@ import com.tngtech.archunit.core.domain.JavaType;
 import io.github.jdubois.bootui.engine.restapi.RestApiModel.ControllerModel;
 import io.github.jdubois.bootui.engine.restapi.RestApiModel.ExceptionHandlerModel;
 import io.github.jdubois.bootui.engine.restapi.RestApiModel.HandlerMethodModel;
+import io.github.jdubois.bootui.engine.restapi.RestApiModel.ThrownExceptionModel;
 import io.github.jdubois.bootui.engine.restapi.RestApiModel.Types;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -19,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Translates the imported {@link JavaClasses} into the bounded {@link HandlerMethodModel} /
@@ -151,6 +154,7 @@ final class RestApiHandlerModelBuilder {
     private final List<HandlerMethodModel> handlers = new ArrayList<>();
     private final List<ExceptionHandlerModel> exceptionHandlers = new ArrayList<>();
     private final List<String> responseStatusExceptionClasses = new ArrayList<>();
+    private final List<ThrownExceptionModel> thrownExceptions = new ArrayList<>();
     private boolean hasExceptionHandling;
     private int springControllerCount;
     private int jaxRsResourceCount;
@@ -183,6 +187,10 @@ final class RestApiHandlerModelBuilder {
 
     List<String> responseStatusExceptionClasses() {
         return List.copyOf(responseStatusExceptionClasses);
+    }
+
+    List<ThrownExceptionModel> thrownExceptions() {
+        return List.copyOf(thrownExceptions);
     }
 
     boolean hasExceptionHandling() {
@@ -463,6 +471,7 @@ final class RestApiHandlerModelBuilder {
         // A broad "throws Exception/Throwable" is a plain JVM method-signature fact, not a Spring-specific
         // one, so it applies to JAX-RS resource methods exactly the same way (RAPI-ERR-002).
         boolean declaresBroadThrows = declaresBroadThrows(method);
+        collectThrownExceptions(type, method);
         boolean isDeprecated = type.isAnnotatedWith(Types.DEPRECATED) || method.isAnnotatedWith(Types.DEPRECATED);
         boolean operationMarkedDeprecated = operationMarkedDeprecated(method);
         String paginationParamFamily = paginationFamily(false, pageQueryParamNames);
@@ -637,7 +646,11 @@ final class RestApiHandlerModelBuilder {
                 "",
                 catchesExceptionOrThrowable,
                 hasResponseParam,
-                true));
+                true,
+                exceptionType == null ? List.of() : List.of(exceptionType),
+                declaredProduces(type, methodOpt),
+                methodOpt.map(RestApiHandlerModelBuilder::readsStackTrace).orElse(false),
+                methodOpt.map(RestApiHandlerModelBuilder::printsStackTrace).orElse(false)));
     }
 
     private void collectExceptionHandlers(JavaClass type) {
@@ -683,7 +696,11 @@ final class RestApiHandlerModelBuilder {
                         handlerResponseStatusValue,
                         catchesExceptionOrThrowable,
                         hasResponseParam,
-                        methodRendersBody));
+                        methodRendersBody,
+                        springHandledExceptionTypes(method),
+                        springDeclaredProduces(method, type),
+                        readsStackTrace(method),
+                        printsStackTrace(method)));
                 if (isAdvice) {
                     foundAdviceHandler = true;
                 }
@@ -855,6 +872,7 @@ final class RestApiHandlerModelBuilder {
         boolean methodHasResponseStatus = method.isAnnotatedWith(Types.RESPONSE_STATUS);
         String responseStatusValue = responseStatusValue(method, type);
         boolean declaresBroadThrows = declaresBroadThrows(method);
+        collectThrownExceptions(type, method);
         boolean hasOperation = hasOperationAnnotation(method);
         boolean stateChanging = nameLooksStateChanging(method.getName());
         String lowerName = method.getName().toLowerCase(Locale.ROOT);
@@ -1443,6 +1461,155 @@ final class RestApiHandlerModelBuilder {
             }
         }
         return fallback;
+    }
+
+    /**
+     * Methods that read a stack trace into a value the handler can then render. {@code fillInStackTrace} is
+     * deliberately absent: it populates a trace, it never exposes one.
+     */
+    private static final Set<String> STACK_TRACE_READERS =
+            Set.of("getStackTrace", "getStackFrames", "getFullStackTrace", "getStackTraceAsString");
+
+    /** Well-known helpers that turn a throwable into a printable stack trace. */
+    private static final Set<String> STACK_TRACE_HELPERS = Set.of(
+            "org.apache.commons.lang3.exception.ExceptionUtils",
+            "org.apache.commons.lang.exception.ExceptionUtils",
+            "com.google.common.base.Throwables");
+
+    /**
+     * Whether the method declares a call that prints a stack trace, which reaches a console or log
+     * regardless of what the handler returns. Read from the bytecode call graph ArchUnit already imported;
+     * nothing is executed.
+     */
+    private static boolean printsStackTrace(JavaMethod method) {
+        return callsStackTraceAccessor(method, "printStackTrace"::equals, STACK_TRACE_HELPERS::contains);
+    }
+
+    /**
+     * Whether the method declares a call that reads a stack trace as a value. On its own this is weaker
+     * evidence than printing, so RAPI-ERR-011 only reports it for a handler that renders a response body.
+     */
+    private static boolean readsStackTrace(JavaMethod method) {
+        return callsStackTraceAccessor(method, STACK_TRACE_READERS::contains, STACK_TRACE_HELPERS::contains);
+    }
+
+    /**
+     * Whether the method calls a stack-trace accessor <em>on a throwable</em> or on a known stack-trace
+     * helper. The owner check keeps an unrelated application method that happens to be named
+     * {@code getStackTrace} from being reported as an exposure.
+     */
+    private static boolean callsStackTraceAccessor(
+            JavaMethod method, Predicate<String> methodNames, Predicate<String> helperOwners) {
+        try {
+            for (JavaCall<?> call : method.getCallsFromSelf()) {
+                if (!methodNames.test(call.getTarget().getName())) {
+                    continue;
+                }
+                JavaClass owner = call.getTargetOwner();
+                if (owner.isAssignableTo(Throwable.class) || helperOwners.test(owner.getFullName())) {
+                    return true;
+                }
+            }
+        } catch (RuntimeException | LinkageError ex) {
+            // An unreadable call graph simply yields no evidence.
+        }
+        return false;
+    }
+
+    /**
+     * The exception types a Spring {@code @ExceptionHandler} declares: the annotation's explicit
+     * {@code value()} when present, otherwise the method's {@code Throwable} parameters (Spring's own rule).
+     */
+    private static List<String> springHandledExceptionTypes(JavaMethod method) {
+        List<String> types = new ArrayList<>();
+        Optional<JavaAnnotation<JavaMethod>> annotation = method.tryGetAnnotationOfType(Types.EXCEPTION_HANDLER);
+        if (annotation.isPresent()) {
+            Object value = annotation.get().get("value").orElse(null);
+            if (value instanceof Object[] array) {
+                for (Object element : array) {
+                    if (element instanceof JavaClass javaClass && !types.contains(javaClass.getName())) {
+                        types.add(javaClass.getName());
+                    }
+                }
+            } else if (value instanceof JavaClass javaClass) {
+                types.add(javaClass.getName());
+            }
+        }
+        if (!types.isEmpty()) {
+            return List.copyOf(types);
+        }
+        for (JavaParameter parameter : method.getParameters()) {
+            try {
+                JavaClass raw = parameter.getRawType();
+                if (extendsClass(raw, "java.lang.Throwable") && !types.contains(raw.getName())) {
+                    types.add(raw.getName());
+                }
+            } catch (RuntimeException | LinkageError ex) {
+                // Skip a parameter that cannot be introspected.
+            }
+        }
+        return List.copyOf(types);
+    }
+
+    /** Spring's declared error media types: method-level {@code produces}, falling back to class level. */
+    private static List<String> springDeclaredProduces(JavaMethod method, JavaClass type) {
+        // @ExceptionHandler carries its own produces() and wins, exactly as it does at runtime; the
+        // error-contract catalogue reads the same attribute, so the rule and the panel agree.
+        List<String> declared = method.tryGetAnnotationOfType(Types.EXCEPTION_HANDLER)
+                .map(annotation -> stringValues(annotation, "produces"))
+                .orElse(List.of());
+        if (!declared.isEmpty()) {
+            return declared;
+        }
+        List<String> produces = method.tryGetAnnotationOfType(Types.REQUEST_MAPPING)
+                .map(annotation -> stringValues(annotation, "produces"))
+                .orElse(List.of());
+        if (!produces.isEmpty()) {
+            return produces;
+        }
+        return typeHierarchyMappingAnnotation(type, Types.REQUEST_MAPPING)
+                .map(annotation -> stringValues(annotation, "produces"))
+                .orElse(List.of());
+    }
+
+    /** JAX-RS declared error media types: method-level {@code @Produces}, falling back to class level. */
+    private static List<String> declaredProduces(JavaClass type, Optional<JavaMethod> methodOpt) {
+        List<String> produces = methodOpt
+                .map(method -> methodStringAttr(method, Types.JAXRS_PRODUCES, "value"))
+                .orElse(List.of());
+        if (!produces.isEmpty()) {
+            return produces;
+        }
+        return type.tryGetAnnotationOfType(Types.JAXRS_PRODUCES)
+                .map(annotation -> stringValues(annotation, "value"))
+                .orElse(List.of());
+    }
+
+    /**
+     * Records the application exception types an endpoint method declares in its {@code throws} clause,
+     * together with their resolved ancestors, so RAPI-ERR-009 can decide handler coverage without a class
+     * hierarchy of its own. Framework and JDK exceptions are excluded: they are already mapped by the
+     * framework's own default resolution, so reporting them would be noise rather than evidence.
+     */
+    private void collectThrownExceptions(JavaClass type, JavaMethod method) {
+        try {
+            for (JavaClass thrown : method.getExceptionTypes()) {
+                String name = thrown.getName();
+                if (name.startsWith("java.")
+                        || name.startsWith("jakarta.")
+                        || name.startsWith("org.springframework.")) {
+                    continue;
+                }
+                List<String> superTypes = new ArrayList<>();
+                for (JavaClass ancestor : thrown.getAllRawSuperclasses()) {
+                    superTypes.add(ancestor.getName());
+                }
+                thrownExceptions.add(new ThrownExceptionModel(
+                        type.getSimpleName(), method.getName(), name, thrown.getSimpleName(), superTypes));
+            }
+        } catch (RuntimeException | LinkageError ex) {
+            // Skip a throws clause that cannot be resolved.
+        }
     }
 
     private static boolean declaresBroadThrows(JavaMethod method) {

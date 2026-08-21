@@ -26,6 +26,11 @@ final class CacheActivityCache implements Cache {
         this.managerName = managerName;
     }
 
+    /** The real {@link Cache} this instance decorates. */
+    Cache getTargetCache() {
+        return delegate;
+    }
+
     @Override
     public String getName() {
         return delegate.getName();

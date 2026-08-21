@@ -67,6 +67,9 @@ final class RestApiRuleRegistry {
             new ResponseStatusOnExceptionRule(),
             new RetryAfterOnThrottlingResponsesRule(),
             new ExceptionHandlersDoNotReturnRawStringsRule(),
+            new DeclaredExceptionsHaveHandlersRule(),
+            new ConsistentErrorContractRule(),
+            new ExceptionHandlersDoNotExposeStackTracesRule(),
             new EndpointsAreDocumentedRule(),
             new ControllersAreTaggedRule(),
             new DeprecatedEndpointsSignalDeprecationRule());

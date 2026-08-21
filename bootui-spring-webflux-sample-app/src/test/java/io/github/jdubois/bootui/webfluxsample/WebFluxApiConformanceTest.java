@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.webfluxsample;
 
 import io.github.jdubois.bootui.conformance.AbstractBootUiApiConformanceTest;
 import io.github.jdubois.bootui.conformance.BootUiApiContractCatalog.Runtime;
+import java.util.Set;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -48,6 +49,11 @@ class WebFluxApiConformanceTest extends AbstractBootUiApiConformanceTest {
     @Override
     protected String baseUrl() {
         return "http://localhost:" + port;
+    }
+
+    @Override
+    protected Set<String> expectedErrorContractComponents() {
+        return Set.of("SampleReactiveErrorHandler", "SampleErrorController");
     }
 
     @Override

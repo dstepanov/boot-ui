@@ -12,8 +12,9 @@ import org.eclipse.microprofile.config.spi.Converter;
  * Minimal {@link org.eclipse.microprofile.config.Config} test double backed by a {@code Map<String,String>}.
  *
  * <p>Supports the {@code getOptionalValue(key, type)} reads BootUI's runtime classes perform — {@code String},
- * {@code Boolean} and {@code Integer} — so unit tests can drive {@link QuarkusPanelAvailability} and
- * {@code QuarkusHibernatePropertyLookup} without booting Quarkus. Other {@code Config} surface that no
+ * {@code Boolean}, {@code Integer}, {@code Long} and {@code Duration} — so unit tests can drive
+ * {@link QuarkusPanelAvailability}, {@code QuarkusHibernatePropertyLookup} and
+ * {@code QuarkusCacheProvider} without booting Quarkus. Other {@code Config} surface that no
  * unit-tested path uses (profiles via {@code unwrap}, config sources, converters) is intentionally
  * unimplemented; those paths are covered by the {@code @QuarkusTest} integration tests instead.</p>
  */
@@ -45,7 +46,29 @@ public final class StubConfig implements org.eclipse.microprofile.config.Config 
         if (propertyType == Integer.class || propertyType == int.class) {
             return Optional.of((T) Integer.valueOf(raw.trim()));
         }
+        if (propertyType == Long.class || propertyType == long.class) {
+            return Optional.of((T) Long.valueOf(raw.trim()));
+        }
+        if (propertyType == java.time.Duration.class) {
+            return Optional.of((T) duration(raw.trim()));
+        }
         throw new IllegalArgumentException("StubConfig does not convert to " + propertyType);
+    }
+
+    /**
+     * Mirrors SmallRye's documented duration rules closely enough for BootUI's reads: a bare number is a count
+     * of seconds, a value that starts with a digit is prefixed with {@code PT} (so Quarkus' {@code 5M} means
+     * five minutes), and anything else is parsed as ISO-8601. An unparseable value throws, exactly as the real
+     * converter does, so callers can be tested against that failure.
+     */
+    private static java.time.Duration duration(String raw) {
+        if (raw.matches("[-+]?[0-9]+")) {
+            return java.time.Duration.parse("PT" + raw + "S");
+        }
+        if (raw.matches("[-+]?[0-9].*")) {
+            return java.time.Duration.parse("PT" + raw);
+        }
+        return java.time.Duration.parse(raw);
     }
 
     @Override

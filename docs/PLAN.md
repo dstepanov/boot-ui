@@ -41,11 +41,11 @@ will therefore be additive rather than an extension of the SQL-specific panels.
 | Planned  | gRPC | Services | Spring gRPC / Quarkus gRPC registries and metrics | No | Planned |
 | Planned  | Spring Batch | Services | Spring Batch `JobExplorer` / `JobRepository` | No | Planned |
 | Planned  | WebSocket endpoints | Services | Spring WebSocket/STOMP / Quarkus WebSockets Next | No (capture only) | Planned |
-| Planned  | Error-contract catalogue | Services | Spring exception handlers / Quarkus exception mappers | No | Planned |
-| Planned  | Slow-SQL ranking and URI attribution | Database | Existing SQL Trace and HTTP exchange evidence | No | Planned |
+| Planned  | Error-contract catalogue | Services | Spring exception handlers / Quarkus exception mappers | No | Delivered |
+| Shipped  | Slow-SQL ranking and URI attribution | Database | Existing SQL Trace and HTTP exchange evidence | No | ✅ Shipped |
 | Planned  | Correlation-ID filtering | Diagnostics | Existing request and Live Activity capture | No (capture only) | Planned |
 | Planned  | Meter provenance and explanation | Diagnostics | Existing meter registry and curated catalogue | No | Planned |
-| Planned  | Cache tiering and hit ratios | Services | Existing cache managers and native statistics | No | Planned |
+| Shipped  | Cache tiering and hit ratios | Services | Existing cache managers and native statistics | No | Implemented |
 
 ## 3. Feature specifications
 
@@ -408,7 +408,13 @@ Acceptance criteria:
   multiple endpoints, active/closed sessions, subscriptions, inbound/outbound text and binary metadata, failures,
   disabled capture, and high-cardinality truncation without external services.
 
-### 3.11 Error-contract catalogue — REST API and Exceptions 📋 Planned
+### 3.11 Error-contract catalogue — REST API and Exceptions ✅ Delivered
+
+Delivered as a declaration-only catalogue on the existing REST API panel
+(`GET /bootui/api/rest-api/error-contract`), a conservative Exceptions cross-link, and three evidence-based
+REST API advisor rules (`RAPI-ERR-009`, `RAPI-ERR-010`, `RAPI-ERR-011`). Spring MVC, Spring WebFlux, and
+Quarkus are all supported; Quarkus discovery is captured from the build-time Jandex index because no
+runtime enumeration of resolved mappers exists.
 
 BootUI's Exceptions panel shows failures that have occurred, while the REST API panel explains declared endpoints. Neither
 shows which exception handlers define the application's error contract, which status and body shape each handler returns,
@@ -441,9 +447,12 @@ Architecture:
   handler registries and metadata where available, with classpath and capability gates for optional integrations.
 - Reuse the REST API panel and Exceptions data already retained by BootUI. Do not invoke handlers, synthesize requests,
   throw exceptions, or add another exception-capture path.
-- Route component names, exception types, media types, inferred schemas, and retained failure details through the existing
-  masking and exposure policy. Advisor findings must cite concrete configuration or declaration evidence and avoid claims
-  based solely on the absence of observed failures.
+- Report only declaration metadata: component, method, exception, status, body category, and media types are Java type
+  and constant names read from the application's own declarations, so they carry no property values and are shown
+  verbatim, exactly as the Mappings and Beans panels already show type names. Retained failure details stay behind the
+  Exceptions panel's existing masking and exposure policy; the catalogue adds a reference to a declaration and never a
+  new value. Advisor findings must cite concrete configuration or declaration evidence and avoid claims based solely on
+  the absence of observed failures.
 
 Out of scope for the first release:
 
@@ -469,7 +478,18 @@ Acceptance criteria:
   `ProblemDetail`, custom response bodies, Quarkus exception mappers, ambiguous/dynamic status, unmapped retained
   exceptions, inconsistent contracts, safe/unsafe stack-trace settings, and high-cardinality paging.
 
-### 3.12 Slow-SQL ranking and URI attribution — SQL Trace 📋 Planned
+### 3.12 Slow-SQL ranking and URI attribution — SQL Trace ✅ Shipped
+
+Shipped as `GET /bootui/api/sql-trace/insights` on Spring MVC, Spring WebFlux, and Quarkus, plus the two new SQL Trace
+panel sections and the `DB-RUNTIME-001` Database advisor rule. Ranking, normalization, bounding, attribution, and
+advisory policy live in the framework-neutral engine (`SqlStatementNormalizer`, `SqlStatementRanking`,
+`RoutePathMasker`, `SqlRouteAttribution`, `SqlTraceInsightsService`); the adapters only supply inbound-request evidence
+they already captured. Correlation is trace-id first, then serving thread on Spring MVC only, then time window, and each
+tier requires a unique candidate — Spring WebFlux and Quarkus advertise `TRACE_ID` + `TIME_WINDOW` only, and Quarkus
+groups by masked path because RESTEasy Reactive exposes no per-request route template. Executions that cannot be placed
+stay in explicit unattributed/ambiguous buckets. See `docs/SPECIFICATION.md` §5.17.6,
+`docs/DATABASE-ADVISOR-CHECKS.md` (`DB-RUNTIME-001`), and the SQL Trace section of `docs/FEATURES.md`.
+
 
 SQL Trace shows retained statements chronologically and already detects N+1 patterns, but it does not rank normalized
 statements by cumulative cost or explain which inbound request routes are responsible for that database work. This
@@ -651,12 +671,18 @@ Acceptance criteria:
 - Fixtures cover native/curated/unknown descriptions, common integration families, naming collisions, custom meters,
   missing units, renamed/versioned families, filters, high cardinality, and equivalent adapter output.
 
-### 3.16 Cache tiering and hit ratios — Cache 📋 Planned
+### 3.16 Cache tiering and hit ratios — Cache ✅ Implemented
 
 The Cache panel shows cache managers and aggregate topology, but a multi-level or composed cache can still appear as one
 opaque manager and provider statistics are not explained consistently. This provider-agnostic enhancement exposes
 framework-available tier structure and native per-cache effectiveness metrics without adding invalidation capture or
 provider-specific promises.
+
+**Shipped.** `CacheTierDto`/`CacheStatisticsDto` extend the core Cache contract, the engine
+`CacheStatisticsAssembler` owns every ratio, sanitization, provenance and bounding rule, and the adapters return raw
+metadata only through classloading-gated inspectors (`SpringCacheInspectors` for the JDK map, Caffeine, Redis and
+no-op cases; `QuarkusCacheProvider` for `io.quarkus.cache.CaffeineCache`). Quarkus's public cache API exposes no
+statistics accessor, so its tiers report counters as honestly unavailable — see `docs/QUARKUS-SUPPORT.md`.
 
 Scope:
 

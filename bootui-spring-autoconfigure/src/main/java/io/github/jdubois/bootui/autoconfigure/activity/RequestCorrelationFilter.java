@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.net.URI;
 import org.slf4j.MDC;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.servlet.HandlerMapping;
 
 /**
  * Records, for every application request, which worker thread served it, its wall-clock window, and the
@@ -20,8 +21,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * per-request profiler and Live Flow correlate downstream evidence without relying on an inbound
  * propagation header.
  *
- * <p>It is intentionally a thin wrapper around the filter chain: it reads the current thread name and
- * two timestamps and never touches the request or response, so it cannot alter application behaviour.
+ * <p>It is intentionally a thin wrapper around the filter chain: it reads the current thread name, two
+ * timestamps and two request attributes, and never mutates the request or response, so it cannot alter
+ * application behaviour.
  * BootUI's own endpoints are skipped (their requests are hidden from the activity feed anyway), and
  * async/error re-dispatches are skipped so each logical request is recorded exactly once on its main
  * dispatch.</p>
@@ -50,8 +52,10 @@ public final class RequestCorrelationFilter extends OncePerRequestFilter {
             chain.doFilter(request, response);
         } finally {
             long end = System.currentTimeMillis();
-            registry.record(new RequestCorrelation(start, end, thread, method, path));
-            traceRegistry.record(new HttpExchangeTrace(start, end, method, decodedPath(path), currentTraceId()));
+            String traceId = currentTraceId();
+            String routeTemplate = routeTemplate(request);
+            registry.record(new RequestCorrelation(start, end, thread, method, path, routeTemplate, traceId));
+            traceRegistry.record(new HttpExchangeTrace(start, end, method, decodedPath(path), traceId, routeTemplate));
         }
     }
 
@@ -63,6 +67,26 @@ public final class RequestCorrelationFilter extends OncePerRequestFilter {
             return URI.create(path).getPath();
         } catch (IllegalArgumentException ex) {
             return path;
+        }
+    }
+
+    /**
+     * The handler pattern Spring MVC matched for this request, such as {@code /api/orders/{id}}, read from
+     * the attribute the handler mapping publishes. Returns {@code null} when no handler matched (a 404, a
+     * static resource, a request rejected before routing) — a route BootUI cannot name is reported as
+     * unknown rather than guessed at from the raw path. Fully guarded: this filter must never alter the
+     * outcome of a request.
+     */
+    private String routeTemplate(HttpServletRequest request) {
+        try {
+            Object pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+            if (pattern == null) {
+                return null;
+            }
+            String template = pattern.toString().trim();
+            return template.isEmpty() ? null : template;
+        } catch (RuntimeException | NoClassDefFoundError ex) {
+            return null;
         }
     }
 
