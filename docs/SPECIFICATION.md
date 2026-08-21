@@ -2145,6 +2145,7 @@ Initial endpoints:
 | `/bootui/api/architecture/scan`              | POST   | Run explicit ArchUnit hygiene checks                                                   |
 | `/bootui/api/rest-api`                   | GET    | Latest REST API Advisor scan report                                                    |
 | `/bootui/api/rest-api/scan`              | POST   | Run explicit read-only REST API best-practice checks                                   |
+| `/bootui/api/rest-api/error-contract`    | GET    | Declared exception handlers (paged, declaration-only; never invokes a handler)         |
 | `/bootui/api/spring`                     | GET    | Latest Spring Advisor scan report                                                      |
 | `/bootui/api/spring/scan`                | POST   | Run explicit read-only Spring context and configuration checks                         |
 | `/bootui/api/memory`                     | GET    | Latest Memory Advisor scan report                                                      |

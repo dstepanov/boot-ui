@@ -24,6 +24,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   while the normalized form stays the same and a changing literal sits in a filtering position — the signature of values
   concatenated into SQL instead of bound. Evidence is counts and literal-free statement shapes only, with explicit
   confidence and limitations; it is deliberately not a SQL-injection finding.
+- **The REST API panel now shows the application's declared error contract.** Spring `@ControllerAdvice`,
+  `@RestControllerAdvice` and `@ExceptionHandler` methods (MVC and WebFlux) and Quarkus Jakarta REST `@Provider`
+  `ExceptionMapper` implementations and `@ServerExceptionMapper` methods are catalogued in one framework-neutral,
+  pageable view: handled exception type, declaring component and method, scope, resolved precedence, declared
+  status, response-body category (including RFC 9457 `ProblemDetail`), and declared media types. The catalogue is a
+  pure declaration read — no handler is instantiated or invoked, no request is synthesized, and no exception is
+  thrown — so anything the declarations cannot prove is reported as unresolved instead of guessed. Only the
+  application's own declarations are catalogued, so an application that declares none shows an empty catalogue
+  rather than the framework's built-in handlers.
+- **The Exceptions panel links a retained failure to the handler that declares its response** when the exception
+  type and the retained request evidence identify exactly one declared handler, and the link opens the REST API
+  catalogue already filtered to that declaration. Ambiguous and unmatched failures stay unlinked rather than
+  inventing a relationship.
+- **Three evidence-based REST API advisor rules**: `RAPI-ERR-009` (declared exceptions with no handler),
+  `RAPI-ERR-010` (inconsistent error contracts across handlers for the same exception), and `RAPI-ERR-011`
+  (exception handlers that read stack traces into their response). The catalogue now ships 56 rules.
 
 ## [1.14.1] - 2026-08-20
 

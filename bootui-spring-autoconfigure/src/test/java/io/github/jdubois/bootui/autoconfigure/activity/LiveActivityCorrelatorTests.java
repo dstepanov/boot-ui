@@ -517,7 +517,8 @@ class LiveActivityCorrelatorTests {
                     "s",
                     null,
                     "OPEN",
-                    0);
+                    0,
+                    null);
             ExceptionDetailDto detail = new ExceptionDetailDto(
                     groups[i],
                     List.of(),
@@ -552,7 +553,8 @@ class LiveActivityCorrelatorTests {
                 "web",
                 null,
                 "OPEN",
-                0);
+                0,
+                null);
         ExceptionDetailDto detail = new ExceptionDetailDto(group, List.of(), List.of(), List.of(occurrences));
         when(controller.detail("g0")).thenReturn(detail);
         ExceptionsReport report = new ExceptionsReport(true, null, 50, 1, List.of(group));

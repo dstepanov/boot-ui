@@ -317,6 +317,18 @@ onMounted(() => {
                       <div v-if="requestLabel(g)" class="text-muted small">
                         <i class="bi bi-globe me-1"></i>{{ requestLabel(g) }}
                       </div>
+                      <div v-if="g.errorContract" class="text-muted small">
+                        <i class="bi bi-shield-check me-1"></i>Handled by
+                        <router-link
+                          :to="{path: '/rest-api', query: {errorContract: g.errorContract.component}}"
+                          :title="`Open the declared error contract for ${g.errorContract.component}`"
+                        >
+                          <code
+                            >{{ g.errorContract.componentSimpleName }}#{{ g.errorContract.method }}</code
+                          ></router-link
+                        >
+                        <span v-if="g.errorContract.status"> → {{ g.errorContract.status }}</span>
+                      </div>
                     </td>
                     <td>
                       <span :class="sourceBadgeClass(g.lastSource)" class="badge">{{ g.lastSource || '—' }}</span>
