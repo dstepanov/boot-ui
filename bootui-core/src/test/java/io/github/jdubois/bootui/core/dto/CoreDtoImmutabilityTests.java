@@ -28,6 +28,7 @@ import org.junit.jupiter.api.TestFactory;
  * <p>The DTO package is discovered reflectively rather than spot-checked, so a newly added DTO that
  * forgets its defensive copy fails here instead of silently shipping a mutable "immutable" record.</p>
  */
+@SuppressWarnings("unchecked")
 class CoreDtoImmutabilityTests {
 
     private static final String PROBE = "probe";
@@ -56,7 +57,7 @@ class CoreDtoImmutabilityTests {
     @TestFactory
     Stream<DynamicTest> everyCollectionComponentIsDefensivelyCopied() {
         return dtoRecords().stream()
-                .filter(CoreDtoImmutabilityTests::hasCollectionComponent)
+                .filter(CoreDtoImmutabilityTests::hasCollectionCarryingComponent)
                 .map(type -> DynamicTest.dynamicTest(type.getSimpleName(), () -> assertDefensivelyCopied(type)));
     }
 
@@ -163,6 +164,58 @@ class CoreDtoImmutabilityTests {
         assertThat(first.toString()).isEqualTo(second.toString());
     }
 
+    @Test
+    void collectionsCarriedByLooselyTypedComponentsAreSnapshotted() {
+        List<String> attributeValue = new ArrayList<>(List.of("a", "b"));
+        SpanAttributeDto attribute = new SpanAttributeDto("http.methods", "ARRAY", attributeValue);
+
+        Map<String, Object> details = new LinkedHashMap<>();
+        List<String> nested = new ArrayList<>(List.of("db1"));
+        details.put("databases", nested);
+        HealthNodeDto node = new HealthNodeDto("db", "UP", details, List.of());
+
+        List<String> defaultValue = new ArrayList<>(List.of("INFO"));
+        ConfigPropertyDto property = new ConfigPropertyDto(
+                "logging.level", new ArrayList<>(List.of("DEBUG")), "env", null, false, false, null, defaultValue);
+
+        attributeValue.add("mutated");
+        nested.add("mutated");
+        details.put("mutated", "mutated");
+        defaultValue.add("mutated");
+
+        assertThat((List<Object>) attribute.value()).containsExactly("a", "b");
+        assertThatThrownBy(() -> ((List<Object>) attribute.value()).add("x"))
+                .isInstanceOf(UnsupportedOperationException.class);
+
+        Map<String, Object> heldDetails = (Map<String, Object>) node.details();
+        assertThat(heldDetails).containsOnlyKeys("databases");
+        assertThat((List<Object>) heldDetails.get("databases")).containsExactly("db1");
+        assertThatThrownBy(() -> ((List<Object>) heldDetails.get("databases")).add("x"))
+                .isInstanceOf(UnsupportedOperationException.class);
+
+        assertThat((List<Object>) property.defaultValue()).containsExactly("INFO");
+        assertThat((List<Object>) property.value()).containsExactly("DEBUG");
+    }
+
+    @Test
+    void arraysCarriedByLooselyTypedComponentsBecomeImmutableLists() {
+        String[] values = {"a", "b"};
+
+        SpanAttributeDto attribute = new SpanAttributeDto("http.methods", "ARRAY", values);
+        values[0] = "mutated";
+
+        assertThat((List<Object>) attribute.value()).containsExactly("a", "b");
+        assertThatThrownBy(() -> ((List<Object>) attribute.value()).add("x"))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void scalarsBehindLooselyTypedComponentsArePassedThroughUnchanged() {
+        assertThat(new SpanAttributeDto("http.status", "LONG", 200L).value()).isEqualTo(200L);
+        assertThat(new SpanAttributeDto("http.route", "STRING", "/a").value()).isEqualTo("/a");
+        assertThat(new SpanAttributeDto("missing", "NULL", null).value()).isNull();
+    }
+
     private static void assertDefensivelyCopied(Class<?> type) throws Exception {
         RecordComponent[] components = type.getRecordComponents();
         Object[] arguments = new Object[components.length];
@@ -174,7 +227,7 @@ class CoreDtoImmutabilityTests {
 
         for (int i = 0; i < components.length; i++) {
             RecordComponent component = components[i];
-            if (!isCollection(component.getType())) {
+            if (!carriesCollection(component.getType())) {
                 continue;
             }
             String where = type.getSimpleName() + "." + component.getName() + "()";
@@ -226,8 +279,20 @@ class CoreDtoImmutabilityTests {
         return Stream.of(type.getRecordComponents()).anyMatch(component -> isCollection(component.getType()));
     }
 
+    private static boolean hasCollectionCarryingComponent(Class<?> type) {
+        return Stream.of(type.getRecordComponents()).anyMatch(component -> carriesCollection(component.getType()));
+    }
+
     private static boolean isCollection(Class<?> type) {
         return Collection.class.isAssignableFrom(type) || Map.class.isAssignableFrom(type);
+    }
+
+    /**
+     * A loosely typed {@code Object} component carries framework-supplied JSON payloads, so it has to
+     * snapshot a collection just like a declared collection component does.
+     */
+    private static boolean carriesCollection(Class<?> type) {
+        return isCollection(type) || type == Object.class;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -250,6 +315,11 @@ class CoreDtoImmutabilityTests {
             return map;
         }
         if (Collection.class.isAssignableFrom(type)) {
+            List<Object> list = new ArrayList<>();
+            list.add(PROBE);
+            return list;
+        }
+        if (type == Object.class) {
             List<Object> list = new ArrayList<>();
             list.add(PROBE);
             return list;

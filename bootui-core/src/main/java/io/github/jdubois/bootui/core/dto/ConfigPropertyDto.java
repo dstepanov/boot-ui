@@ -11,4 +11,10 @@ public record ConfigPropertyDto(
         boolean masked,
         boolean override,
         String description,
-        Object defaultValue) {}
+        Object defaultValue) {
+
+    public ConfigPropertyDto {
+        value = DtoCollections.immutableValue(value);
+        defaultValue = DtoCollections.immutableValue(defaultValue);
+    }
+}

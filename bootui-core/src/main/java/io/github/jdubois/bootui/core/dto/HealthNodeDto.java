@@ -16,6 +16,7 @@ public record HealthNodeDto(
         List<HealthSetupStepDto> setup) {
 
     public HealthNodeDto {
+        details = DtoCollections.immutableValue(details);
         components = DtoCollections.immutableCopy(components);
         setup = DtoCollections.immutableCopy(setup);
     }
