@@ -71,6 +71,15 @@ both, so exactly one of the two autoconfigurations activates.
   `bootui.disabled-profiles`, `spring-boot-devtools` on the classpath), plus
   `@ConditionalOnWebApplication(REACTIVE)` and `@ConditionalOnClass(DispatcherHandler)`. There is no separate
   "reactive mode" flag to opt into — BootUI simply detects which stack Spring Boot picked and binds accordingly.
+- **Same dark shell when inactive.** `WebFluxAutoConfiguration` serves `classpath:/META-INF/resources/` by default, so
+  the packaged Vue bundle would stay reachable at `/bootui/**` even with every BootUI bean unwired.
+  `BootUiShellGuardAutoConfiguration` registers `ReactiveBootUiShellGuardFilter` under the exact negation of the
+  activation condition, answering `404` for the reserved namespace; the servlet adapter gets the identical treatment
+  from the same auto-configuration. The reactive filter matches on `PathContainer.PathSegment.valueToMatch()` — the
+  decoded value `PathPattern` itself matches — and covers the prefix `spring.webflux.static-path-pattern` introduces,
+  mirroring the servlet guard's handling of `spring.mvc.servlet.path` and `spring.mvc.static-path-pattern`. Both filters
+  share the framework-neutral `BootUiInternalMount` predicate rather than calling into each other, because a
+  WebFlux-only application has no servlet API on its classpath at all.
 - **Same `LocalhostGuard`, ported to `WebFilter`.** `ReactiveLocalhostOnlyFilter` is a thin `WebFilter` binding over
   the exact same framework-neutral `io.github.jdubois.bootui.engine.safety.LocalhostGuard` the servlet
   `LocalhostOnlyFilter` uses — same loopback-source trust, `Host` allow-list, cross-site-write/CSRF defense, same

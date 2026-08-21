@@ -82,6 +82,18 @@ and strengthens release verification against the artifacts consumers actually do
 
 ### Fixed
 
+- **The packaged BootUI shell is no longer reachable on Spring MVC or Spring WebFlux when BootUI is inactive.**
+  Deactivating BootUI (a `prod`/`production` profile, `bootui.enabled=OFF`, an invalid `bootui.enabled` value, or simply
+  no enabling profile) already unwired every BootUI route, but `bootui-ui` ships the compiled console at
+  `META-INF/resources/bootui/`, one of Spring Boot's default static-resource locations, so `GET /bootui/index.html` and
+  every asset under it still answered `200` with an empty shell. A new `BootUiShellGuardAutoConfiguration`, gated by the
+  exact negation of the activation condition and by the presence of the packaged shell, answers `404` for the reserved
+  `/bootui` namespace on both stacks, matching the Quarkus adapter's production shell guard. It matches the decoded
+  request path (so `/%62ootui/index.html` and matrix-parameter spellings cannot slip through) and follows relocated
+  static handling (`spring.mvc.servlet.path`, `spring.mvc.static-path-pattern`, `spring.webflux.static-path-pattern`),
+  under which the same bundle otherwise surfaced at, for example, `/app/static/bootui/index.html`. Requests outside the
+  reserved `/bootui` namespace are passed through untouched; a host application that served its own routes there while
+  shipping BootUI now receives `404` for them while BootUI is inactive (#856).
 - **Spring native images can start with the sample application's Hibernate second-level JCache configuration.**
   Runtime hints now retain the reflectively created `JCacheRegionFactory` constructor together with Caffeine's
   `application.conf` and default `reference.conf` cache configuration resources (#832, #835).
