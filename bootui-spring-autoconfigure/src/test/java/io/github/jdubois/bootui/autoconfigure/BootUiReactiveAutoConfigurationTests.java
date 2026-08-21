@@ -910,6 +910,28 @@ class BootUiReactiveAutoConfigurationTests {
         record HostPayload(List<String> values) {}
     }
 
+    @Test
+    void installsTheReactiveTraceProviderOntoTheResilienceRecorder() {
+        runner.withPropertyValues("bootui.enabled=ON").run(context -> {
+            io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder recorder =
+                    context.getBean(io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder.class);
+            assertThat(recorder.isEnabled()).isTrue();
+
+            // Reactor hops break thread-locals, so the recorder must read the active span rather than the
+            // MDC it falls back to by default: with the reactive provider installed, an MDC value left over
+            // from another thread is deliberately not adopted as this event's trace id.
+            org.slf4j.MDC.put("traceId", "mdc-only-trace");
+            try {
+                recorder.record("orders", "RETRY", "resilience4j", null, "RETRY", 1, null, "IOException");
+            } finally {
+                org.slf4j.MDC.remove("traceId");
+            }
+
+            assertThat(recorder.recent()).hasSize(1);
+            assertThat(recorder.recent().get(0).traceId()).isNull();
+        });
+    }
+
     /**
      * Replaces the deprecated-for-removal {@code JsonPathAssertions.value(Matcher)} overload: asserts the
      * JsonPath filter projection matched exactly one panel and its {@code unavailableReason} starts with

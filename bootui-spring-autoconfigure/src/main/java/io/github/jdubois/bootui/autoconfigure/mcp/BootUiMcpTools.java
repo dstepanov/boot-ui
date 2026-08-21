@@ -45,6 +45,7 @@ import io.github.jdubois.bootui.autoconfigure.web.MetricsController;
 import io.github.jdubois.bootui.autoconfigure.web.OverviewController;
 import io.github.jdubois.bootui.autoconfigure.web.PanelsController;
 import io.github.jdubois.bootui.autoconfigure.web.ProfileDiffController;
+import io.github.jdubois.bootui.autoconfigure.web.ResilienceController;
 import io.github.jdubois.bootui.autoconfigure.web.ScheduledController;
 import io.github.jdubois.bootui.autoconfigure.web.SecurityLogsController;
 import io.github.jdubois.bootui.autoconfigure.web.SpringCacheController;
@@ -113,6 +114,7 @@ public class BootUiMcpTools {
             ObjectProvider<LoggersController> loggers,
             ObjectProvider<ConditionsController> conditions,
             ObjectProvider<ScheduledController> scheduled,
+            ObjectProvider<ResilienceController> resilience,
             ObjectProvider<SpringCacheController> cache,
             ObjectProvider<DatabaseConnectionPoolsController> connectionPools) {
         // Resolve each (lazy) controller bean; conditionally-registered controllers (e.g. Hibernate,
@@ -145,6 +147,7 @@ public class BootUiMcpTools {
         LoggersController loggersBean = loggers.getIfAvailable();
         ConditionsController conditionsBean = conditions.getIfAvailable();
         ScheduledController scheduledBean = scheduled.getIfAvailable();
+        ResilienceController resilienceBean = resilience.getIfAvailable();
         SpringCacheController cacheBean = cache.getIfAvailable();
         DatabaseConnectionPoolsController connectionPoolsBean = connectionPools.getIfAvailable();
 
@@ -443,6 +446,13 @@ public class BootUiMcpTools {
                     McpToolDescriptions.spring("get_scheduled_tasks"),
                     BootUiPanels.SCHEDULED,
                     args -> scheduledBean.scheduled()));
+        }
+        if (resilienceBean != null) {
+            registry.add(read(
+                    "get_resilience",
+                    McpToolDescriptions.spring("get_resilience"),
+                    BootUiPanels.RESILIENCE,
+                    args -> resilienceBean.resilience()));
         }
         if (cacheBean != null) {
             registry.add(read(

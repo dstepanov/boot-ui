@@ -45,6 +45,7 @@ import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.CapturedMessage;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
@@ -126,6 +127,7 @@ public class ReactiveLiveActivityController {
     private final ObjectProvider<CacheActivityRecorder> cacheActivity;
     private final ObjectProvider<KafkaActivityRecorder> kafkaActivity;
     private final ObjectProvider<JmsActivityRecorder> jmsActivity;
+    private final ObjectProvider<ResilienceEventRecorder> resilienceEvents;
     private final ObjectProvider<RabbitActivityRecorder> rabbitActivity;
     private final BootUiProperties properties;
     private final BootUiExposure exposure;
@@ -152,6 +154,7 @@ public class ReactiveLiveActivityController {
             ObjectProvider<CacheActivityRecorder> cacheActivity,
             ObjectProvider<KafkaActivityRecorder> kafkaActivity,
             ObjectProvider<JmsActivityRecorder> jmsActivity,
+            ObjectProvider<ResilienceEventRecorder> resilienceEvents,
             ObjectProvider<RabbitActivityRecorder> rabbitActivity,
             SwitchableActivityStore activityStore,
             ActivityPersistenceSettings persistenceSettings,
@@ -171,6 +174,7 @@ public class ReactiveLiveActivityController {
         this.cacheActivity = cacheActivity;
         this.kafkaActivity = kafkaActivity;
         this.jmsActivity = jmsActivity;
+        this.resilienceEvents = resilienceEvents;
         this.rabbitActivity = rabbitActivity;
         this.activityStore = activityStore;
         this.persistenceSettings = persistenceSettings;
@@ -205,6 +209,10 @@ public class ReactiveLiveActivityController {
         JmsActivityRecorder jmsRecorder = jmsActivity.getIfAvailable();
         if (jmsRecorder != null) {
             unsubscribers.add(jmsRecorder.subscribe(changeStream::signal));
+        }
+        ResilienceEventRecorder resilienceRecorder = resilienceEvents.getIfAvailable();
+        if (resilienceRecorder != null) {
+            unsubscribers.add(resilienceRecorder.subscribe(changeStream::signal));
         }
         RabbitActivityRecorder rabbitRecorder = rabbitActivity.getIfAvailable();
         if (rabbitRecorder != null) {
@@ -369,6 +377,8 @@ public class ReactiveLiveActivityController {
         boolean rabbitAvailable = rabbitMessages != null;
         EmailsReport emailReport = emailReport();
         boolean emailAvailable = emailReport != null && emailReport.available();
+        List<ResilienceEventRecorder.CapturedEvent> resilienceCaptured = resilienceCaptured();
+        boolean resilienceAvailable = resilienceCaptured != null;
 
         LiveActivityReport report = assembler.report(
                 requests,
@@ -392,7 +402,9 @@ public class ReactiveLiveActivityController {
                 emailAvailable ? emailReport.messages() : List.<EmailMessageDto>of(),
                 emailAvailable,
                 restEntries,
-                restAvailable);
+                restAvailable,
+                resilienceCaptured,
+                resilienceAvailable);
 
         // Adapter-side post-processing over the shared assembler's output, mirroring the Quarkus adapter
         // exactly: a REQUEST entry is profileable here iff its exchange carries a resolvable trace id,
@@ -529,6 +541,22 @@ public class ReactiveLiveActivityController {
     }
 
     /** Recent JMS messages from the independent JMS bounded buffer. */
+    /**
+     * Recent resilience outcomes feeding the assembler's {@code RESILIENCE} entries, or {@code null} when
+     * the source is not feeding (Resilience panel disabled, capture disabled via
+     * {@code bootui.resilience.enabled}, or no recorder bean present).
+     */
+    private List<ResilienceEventRecorder.CapturedEvent> resilienceCaptured() {
+        if (!properties.isPanelEnabled(BootUiPanels.RESILIENCE)) {
+            return null;
+        }
+        ResilienceEventRecorder recorder = resilienceEvents.getIfAvailable();
+        if (recorder == null || !recorder.isEnabled()) {
+            return null;
+        }
+        return recorder.recent();
+    }
+
     private List<JmsActivityRecorder.CapturedMessage> jmsMessages() {
         if (!properties.isPanelEnabled(BootUiPanels.JMS)) {
             return null;

@@ -30,6 +30,9 @@ import io.github.jdubois.bootui.autoconfigure.monitoring.BootUiSelfDataFilter;
 import io.github.jdubois.bootui.autoconfigure.pentesting.SpringPentestingObservationCollector;
 import io.github.jdubois.bootui.autoconfigure.rabbit.RabbitConsumerCaptureBeanPostProcessor;
 import io.github.jdubois.bootui.autoconfigure.rabbit.RabbitProducerCaptureBeanPostProcessor;
+import io.github.jdubois.bootui.autoconfigure.resilience.BootUiRetryListener;
+import io.github.jdubois.bootui.autoconfigure.resilience.Resilience4jPolicyProvider;
+import io.github.jdubois.bootui.autoconfigure.resilience.SpringRetryPolicyProvider;
 import io.github.jdubois.bootui.autoconfigure.restclienttrace.RestClientTraceExchangeFilter;
 import io.github.jdubois.bootui.autoconfigure.restclienttrace.RestClientTraceInterceptor;
 import io.github.jdubois.bootui.autoconfigure.scheduled.BootUiSchedulingConfigurer;
@@ -74,6 +77,8 @@ import io.github.jdubois.bootui.engine.metrics.MetricsReportProvider;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.pentesting.PentestingScanner;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceService;
 import io.github.jdubois.bootui.engine.restapi.RestApiScanner;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
@@ -87,6 +92,7 @@ import io.github.jdubois.bootui.spi.ErrorContractProvider;
 import io.github.jdubois.bootui.spi.HealthProvider;
 import io.github.jdubois.bootui.spi.LoggerProvider;
 import io.github.jdubois.bootui.spi.MappingProvider;
+import io.github.jdubois.bootui.spi.ResiliencePolicyProvider;
 import io.github.jdubois.bootui.spi.ScheduledTaskProvider;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.persistence.EntityManagerFactory;
@@ -97,6 +103,7 @@ import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.NoUniqueBeanDefinitionException;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.actuate.beans.BeansEndpoint;
 import org.springframework.boot.actuate.logging.LoggersEndpoint;
 import org.springframework.boot.actuate.web.mappings.MappingsEndpoint;
@@ -868,6 +875,108 @@ public class BootUiEngineConfiguration {
         static KafkaConsumerCaptureBeanPostProcessor bootUiKafkaConsumerCaptureBeanPostProcessor(
                 ObjectProvider<KafkaActivityRecorder> recorderProvider) {
             return new KafkaConsumerCaptureBeanPostProcessor(recorderProvider);
+        }
+    }
+
+    /**
+     * The Resilience panel backend is shared by the servlet and reactive stacks, so it is wired here rather
+     * than under the servlet-only auto-configuration.
+     *
+     * <p>Every resilience library binding sits behind a method-level {@code @ConditionalOnClass} guard, and
+     * {@link Resilience4jPolicyProvider} additionally defers each Resilience4j module to its own reader
+     * class, because Resilience4j ships circuit breakers, retries, rate limiters, bulkheads and time
+     * limiters as independent artifacts that applications adopt one at a time.</p>
+     *
+     * <p>The service is wired with the providers that exist; when none does, it reports the panel as
+     * unavailable instead of an empty success.</p>
+     */
+    @Configuration(proxyBeanMethods = false)
+    static class ResilienceBackendConfiguration {
+
+        /**
+         * Gated on the Resilience panel itself: disabling the panel should stop the underlying capture
+         * entirely rather than merely hide it, and the same buffer also feeds Live Activity.
+         *
+         * <p>Also gated on a supported library actually being present, using the same class-presence signal
+         * the panel catalog reports availability with. Without that gate an application with no resilience
+         * library at all would still advertise {@code Resilience} as a feeding Live Activity source, which
+         * is exactly the kind of claim BootUI must not make.</p>
+         */
+        @Bean
+        @Lazy
+        @ConditionalOnMissingBean
+        ResilienceEventRecorder bootUiResilienceEventRecorder(
+                BootUiProperties properties, ConfigurableListableBeanFactory beanFactory) {
+            BootUiProperties.Resilience resilience = properties.getResilience();
+            boolean enabled = resilience.isEnabled()
+                    && properties.isPanelEnabled(BootUiPanels.RESILIENCE)
+                    && resilienceLibraryPresent(beanFactory.getBeanClassLoader());
+            return new ResilienceEventRecorder(enabled, resilience.getMaxEvents());
+        }
+
+        private static boolean resilienceLibraryPresent(ClassLoader classLoader) {
+            return ClassUtils.isPresent("io.github.resilience4j.core.Registry", classLoader)
+                    || ClassUtils.isPresent("org.springframework.retry.annotation.Retryable", classLoader);
+        }
+
+        /**
+         * Deliberately not {@code @Lazy}: this provider subscribes BootUI's metadata-only consumers to the
+         * Resilience4j event publishers from {@code SmartInitializingSingleton}, a callback that only fires
+         * for singletons that exist at the end of refresh. A lazy bean would therefore never capture an
+         * event. Creating it eagerly resolves no application registry bean by itself — the registries are
+         * only looked up once every other singleton already exists.
+         */
+        @Bean
+        @ConditionalOnMissingBean
+        @ConditionalOnClass(name = "io.github.resilience4j.core.Registry")
+        Resilience4jPolicyProvider bootUiResilience4jPolicyProvider(
+                ConfigurableListableBeanFactory beanFactory, ResilienceEventRecorder recorder) {
+            return new Resilience4jPolicyProvider(beanFactory, recorder);
+        }
+
+        /**
+         * The Spring Retry bindings live in their own class-level {@code @ConditionalOnClass} configuration
+         * rather than behind method-level guards on the enclosing class, because
+         * {@link BootUiRetryListener} <em>implements</em> {@code RetryListener}: merely introspecting the
+         * declared methods of a class that returns it - which Spring does for every other condition
+         * evaluated on the same class - would load that type and fail with {@code NoClassDefFoundError} in
+         * a Spring-Retry-free application. A class-level guard is evaluated from ASM metadata, so the
+         * member class is never loaded when Spring Retry is absent.
+         */
+        @Configuration(proxyBeanMethods = false)
+        @ConditionalOnClass(
+                name = {"org.springframework.retry.annotation.Retryable", "org.springframework.retry.RetryListener"})
+        static class SpringRetryResilienceConfiguration {
+
+            @Bean
+            @Lazy
+            @ConditionalOnMissingBean
+            SpringRetryPolicyProvider bootUiSpringRetryPolicyProvider(ConfigurableListableBeanFactory beanFactory) {
+                return new SpringRetryPolicyProvider(beanFactory);
+            }
+
+            /**
+             * Spring Retry collects every {@code RetryListener} bean, so publishing one is enough to observe
+             * retries additively. It is not {@code @ConditionalOnMissingBean}: an application that declares
+             * its own listener must keep both.
+             */
+            @Bean
+            BootUiRetryListener bootUiRetryListener(ResilienceEventRecorder recorder) {
+                return new BootUiRetryListener(recorder);
+            }
+        }
+
+        @Bean
+        @Lazy
+        @ConditionalOnMissingBean
+        ResilienceService bootUiResilienceService(
+                ObjectProvider<ResiliencePolicyProvider> providers,
+                ResilienceEventRecorder recorder,
+                BootUiProperties properties) {
+            return new ResilienceService(
+                    providers.orderedStream().toList(),
+                    recorder,
+                    properties.getResilience().getMaxEvents());
         }
     }
 

@@ -4,7 +4,7 @@
 
 BootUI adds a safe, local-only developer console to a running application, shipping on **Spring Boot 4 (servlet and
 WebFlux starters) and Quarkus (an extension)** from one shared, framework-neutral engine that serves the same Vue UI and
-the same `/bootui/api/**` contract on every runtime. The released surface covers 54 panels across runtime introspection,
+the same `/bootui/api/**` contract on every runtime. The released surface covers 55 panels across runtime introspection,
 configuration, database migrations, services, diagnostics, project health, and developer tooling. The next planned panel
 is a read-only **MongoDB** operational view, scoped in §3.5.
 
@@ -37,7 +37,6 @@ will therefore be additive rather than an extension of the SQL-specific panels.
 | -------- | ------------------------ | -------- | -------------------------------------- | --------- | ------- |
 | Next     | MongoDB operational view | Database | Spring/Quarkus MongoDB client adapters | No        | Planned |
 | Planned  | Declarative HTTP client registry | Services | Spring HTTP clients / Quarkus REST Client metadata | No | Planned |
-| Planned  | Resilience | Services | Resilience4j, Spring Retry, and SmallRye Fault Tolerance | No (capture only) | Planned |
 | Planned  | gRPC | Services | Spring gRPC / Quarkus gRPC registries and metrics | No | Planned |
 | Planned  | Spring Batch | Services | Spring Batch `JobExplorer` / `JobRepository` | No | Planned |
 | Planned  | WebSocket endpoints | Services | Spring WebSocket/STOMP / Quarkus WebSockets Next | No (capture only) | Planned |
@@ -163,7 +162,17 @@ Acceptance criteria:
   inherited defaults, client-specific overrides, and ambiguous builder-derived clients without requiring external
   services.
 
-### 3.7 Resilience — Services 📋 Planned
+### 3.7 Resilience — Services ✅ Completed
+
+**Shipped.** The `resilience` panel is available on Spring MVC, Spring WebFlux, and Quarkus over a shared
+`GET /bootui/api/resilience` contract and a framework-neutral `ResilienceService` fed by the `ResiliencePolicyProvider`
+SPI. Spring contributes Resilience4j (all six registries, read live so lazily created entries appear) and Spring Retry
+`@Retryable` metadata; Quarkus contributes SmallRye Fault Tolerance annotations captured from the Jandex index at build
+time with MicroProfile Fault Tolerance configuration overrides resolved at runtime. A bounded, metadata-only
+`ResilienceEventRecorder` feeds both the panel's event feed and Live Activity's new `RESILIENCE` entry type. Everything
+is capture-only: no policy is ever opened, closed, reset, or otherwise mutated by BootUI. SmallRye publishes no per-call
+event stream, so on Quarkus only circuit-breaker state transitions (for breakers carrying `@CircuitBreakerName`) are
+captured and per-policy counters are reported as absent rather than invented.
 
 BootUI exposes raw metrics that resilience libraries may publish, but it does not explain which protections apply to each
 operation, their current runtime state, or why a call was retried, rejected, or short-circuited. This panel provides one

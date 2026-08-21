@@ -238,6 +238,7 @@ import tools.jackson.databind.ObjectMapper;
     BootUiReactiveAutoConfiguration.ReactiveHttpExchangeRepositoryConfiguration.class,
     HttpExchangesController.class,
     ScheduledController.class,
+    ResilienceController.class,
     HttpProbeController.class,
     PentestingController.class,
     HeapDumpController.class,
@@ -317,6 +318,7 @@ public class BootUiReactiveAutoConfiguration {
             PentestingController.class.getName(),
             ProfileDiffController.class.getName(),
             ScheduledController.class.getName(),
+            ResilienceController.class.getName(),
             SpringController.class.getName(),
             StartupController.class.getName(),
             TracesController.class.getName(),
@@ -400,6 +402,7 @@ public class BootUiReactiveAutoConfiguration {
                 ObjectProvider<LoggersController> loggers,
                 ObjectProvider<ConditionsController> conditions,
                 ObjectProvider<ScheduledController> scheduled,
+                ObjectProvider<ResilienceController> resilience,
                 ObjectProvider<SpringCacheController> cache,
                 ObjectProvider<DatabaseConnectionPoolsController> connectionPools) {
             return new ReactiveBootUiMcpTools(
@@ -430,6 +433,7 @@ public class BootUiReactiveAutoConfiguration {
                     loggers,
                     conditions,
                     scheduled,
+                    resilience,
                     cache,
                     connectionPools);
         }
@@ -921,10 +925,10 @@ public class BootUiReactiveAutoConfiguration {
      * Reactive sibling of the trace-id correlation Quarkus's adapter supplies natively (see
      * {@code QuarkusOtelTraceIdProvider}): installs an OpenTelemetry-backed {@link TraceIdProvider} onto
      * the SQL Trace recorder, the reactive exception handler, the {@link HttpExchangesController} (via the
-     * side-buffer {@link HttpExchangeTraceRegistry}), and the {@link ReactiveSecurityLogsController} (via
-     * {@link ReactiveSecurityEventTraceRegistry}), so {@link ReactiveLiveActivityController} - which
-     * already feeds all four signal sources to the shared engine {@code LiveActivityAssembler} - can
-     * actually nest a request's SQL/exception/security signals under it.
+     * side-buffer {@link HttpExchangeTraceRegistry}), the {@link ReactiveSecurityLogsController} (via
+     * {@link ReactiveSecurityEventTraceRegistry}), the email/REST-client/cache recorders and the resilience
+     * recorder, so {@link ReactiveLiveActivityController} - which already feeds every signal source to the
+     * shared engine {@code LiveActivityAssembler} - can actually nest a request's signals under it.
      *
      * <p>WebFlux has no thread-per-request invariant for {@code SqlTraceRecorder}'s default MDC-based
      * {@link TraceIdProvider} to rely on (Reactor Netty's event-loop / {@code boundedElastic} scheduler
@@ -984,6 +988,8 @@ public class BootUiReactiveAutoConfiguration {
                 ObjectProvider<ReactiveBootUiExceptionHandler> exceptionHandlers,
                 ObjectProvider<ReactiveSecurityLogsController> securityLogsControllers,
                 ObjectProvider<CacheActivityRecorder> cacheActivityRecorders,
+                ObjectProvider<io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder>
+                        resilienceEventRecorders,
                 ObjectProvider<io.github.jdubois.bootui.engine.email.EmailCaptureService> emailCaptureServices) {
             return () -> {
                 sqlTraceRecorders.ifAvailable(recorder -> recorder.setTraceIdProvider(traceIdProvider));
@@ -997,6 +1003,10 @@ public class BootUiReactiveAutoConfiguration {
                     controller.setTraceRegistry(securityEventTraceRegistry);
                 });
                 cacheActivityRecorders.ifAvailable(recorder -> recorder.setTraceIdProvider(traceIdProvider));
+                // Resilience outcomes are recorded on whichever Reactor thread the operator ran on, so the
+                // MDC fallback the recorder defaults to cannot see the request's trace: without this the
+                // RESILIENCE entries would never nest under their REQUEST in Live Activity on WebFlux.
+                resilienceEventRecorders.ifAvailable(recorder -> recorder.setTraceIdProvider(traceIdProvider));
             };
         }
     }

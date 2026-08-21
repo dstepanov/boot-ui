@@ -29,7 +29,18 @@ import {
 // panel of its own. Keep its layout and motion code in a route-level async chunk.
 const LiveFlowMode = defineAsyncComponent(() => import('./LiveFlowMode.vue'))
 
-const TYPES = ['REQUEST', 'SQL', 'EXCEPTION', 'SECURITY', 'CACHE', 'SCHEDULED', 'MESSAGING', 'MAIL', 'REST_CLIENT']
+const TYPES = [
+  'REQUEST',
+  'SQL',
+  'EXCEPTION',
+  'SECURITY',
+  'CACHE',
+  'SCHEDULED',
+  'MESSAGING',
+  'MAIL',
+  'REST_CLIENT',
+  'RESILIENCE'
+]
 const SEVERITIES = ['OK', 'SLOW', 'WARN', 'ERROR']
 const FILTERS_STORAGE_KEY = 'bootui.activity.filters'
 const FLOW_COLLAPSED_STORAGE_KEY = 'bootui.activity.flowCollapsed'
@@ -326,7 +337,8 @@ function typeIcon(type) {
       CACHE: 'bi-lightning-charge',
       SCHEDULED: 'bi-clock-history',
       MESSAGING: 'bi-diagram-3',
-      MAIL: 'bi-envelope'
+      MAIL: 'bi-envelope',
+      RESILIENCE: 'bi-shield-check'
     }[type] || 'bi-dot'
   )
 }

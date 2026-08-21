@@ -69,6 +69,20 @@ public final class BootUiApiContractCatalog {
             read("startup", "/startup", fields("steps", JsonType.ARRAY)),
             advisor("graalvm", "/graalvm", "findings"),
             inventory("scheduled", "/scheduled", "schedulingPresent", "tasks"),
+            read(
+                    "resilience",
+                    "/resilience",
+                    fields(
+                            "resiliencePresent", JsonType.BOOLEAN,
+                            "unavailableReason", JsonType.NULLABLE_STRING,
+                            "captureEnabled", JsonType.BOOLEAN,
+                            "providers", JsonType.ARRAY,
+                            "totalPolicies", JsonType.INTEGER,
+                            "policies", JsonType.ARRAY,
+                            "policyCountsByType", JsonType.OBJECT,
+                            "events", JsonType.ARRAY,
+                            "maxEvents", JsonType.INTEGER,
+                            "warnings", JsonType.ARRAY)),
             pagedList(
                     "config",
                     "/config",

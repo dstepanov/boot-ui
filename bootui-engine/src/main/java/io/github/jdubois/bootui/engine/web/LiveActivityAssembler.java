@@ -18,6 +18,8 @@ import io.github.jdubois.bootui.engine.kafka.KafkaActivityEntries;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.CapturedMessage;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityEntries;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceActivityEntries;
+import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceGrouping;
 import io.github.jdubois.bootui.engine.support.BlankStrings;
@@ -244,7 +246,69 @@ public final class LiveActivityAssembler {
             boolean emailAvailable,
             List<RestClientTraceEntryDto> restEntries,
             boolean restAvailable) {
+        return report(
+                requests,
+                sqlEntries,
+                sqlAvailable,
+                sqlUnavailableWarning,
+                exceptionGroups,
+                securityEvents,
+                securityAvailable,
+                cacheEvents,
+                cacheAvailable,
+                scheduledRuns,
+                healthStatus,
+                limit,
+                kafkaMessages,
+                kafkaAvailable,
+                jmsMessages,
+                jmsAvailable,
+                rabbitMessages,
+                rabbitAvailable,
+                emailMessages,
+                emailAvailable,
+                restEntries,
+                restAvailable,
+                null,
+                false);
+    }
 
+    /**
+     * Full overload that also merges captured resilience events as {@code RESILIENCE} entries. The
+     * narrower overloads above remain for adapters without a resilience capture source.
+     *
+     * @param resilienceEvents captured, metadata-only resilience events (newest-first), or {@code null};
+     *     ignored unless {@code resilienceAvailable}. Capture stamps the active trace id, so an event is
+     *     nested under the uniquely matching REQUEST entry exactly like SQL/MAIL above; a background or
+     *     asynchronously detached event carries no trace id and stays top-level rather than being matched
+     *     heuristically.
+     * @param resilienceAvailable whether the resilience capture source is present and feeding
+     */
+    public LiveActivityReport report(
+            HttpExchangesReport requests,
+            List<SqlTraceEntryDto> sqlEntries,
+            boolean sqlAvailable,
+            String sqlUnavailableWarning,
+            List<ExceptionGroupDto> exceptionGroups,
+            List<SecurityLogEventDto> securityEvents,
+            boolean securityAvailable,
+            List<CacheActivityEvent> cacheEvents,
+            boolean cacheAvailable,
+            List<ScheduledTaskRunStore.Run> scheduledRuns,
+            String healthStatus,
+            int limit,
+            List<CapturedMessage> kafkaMessages,
+            boolean kafkaAvailable,
+            List<JmsActivityRecorder.CapturedMessage> jmsMessages,
+            boolean jmsAvailable,
+            List<RabbitActivityRecorder.CapturedMessage> rabbitMessages,
+            boolean rabbitAvailable,
+            List<EmailMessageDto> emailMessages,
+            boolean emailAvailable,
+            List<RestClientTraceEntryDto> restEntries,
+            boolean restAvailable,
+            List<ResilienceEventRecorder.CapturedEvent> resilienceEvents,
+            boolean resilienceAvailable) {
         List<HttpExchangeDto> exchanges = requests == null ? List.of() : requests.exchanges();
         List<SqlTraceEntryDto> sql = !sqlAvailable || sqlEntries == null ? List.of() : sqlEntries;
         List<ExceptionGroupDto> exceptions = exceptionGroups == null ? List.of() : exceptionGroups;
@@ -257,6 +321,8 @@ public final class LiveActivityAssembler {
                 !rabbitAvailable || rabbitMessages == null ? List.of() : rabbitMessages;
         List<EmailMessageDto> emails = !emailAvailable || emailMessages == null ? List.of() : emailMessages;
         List<RestClientTraceEntryDto> rest = !restAvailable || restEntries == null ? List.of() : restEntries;
+        List<ResilienceEventRecorder.CapturedEvent> resilience =
+                !resilienceAvailable || resilienceEvents == null ? List.of() : resilienceEvents;
 
         List<ActivityEntryDto> entries = new ArrayList<>();
 
@@ -391,6 +457,10 @@ public final class LiveActivityAssembler {
             entries.add(toRestEntry(entry, traceIndex.parentRequestId(entry.traceId())));
         }
 
+        for (ResilienceEventRecorder.CapturedEvent event : resilience) {
+            entries.add(ResilienceActivityEntries.toEntry(event, traceIndex.parentRequestId(event.traceId())));
+        }
+
         entries.sort((a, b) -> Long.compare(b.timestamp(), a.timestamp()));
 
         Map<String, Integer> typeCounts = new LinkedHashMap<>();
@@ -431,6 +501,9 @@ public final class LiveActivityAssembler {
         }
         if (restAvailable) {
             sources.add("rest-client");
+        }
+        if (resilienceAvailable) {
+            sources.add("resilience");
         }
 
         List<String> warnings = new ArrayList<>();

@@ -296,6 +296,10 @@ public final class McpToolDescriptions {
             case "get_jms_activity" ->
                 "Return the bounded local JMS activity snapshot captured from application templates and listeners. "
                         + "This does not send, receive, clear, or contact a broker.";
+            case "get_resilience" ->
+                "Return the configured Resilience4j and Spring Retry policy inventory with live counters and circuit "
+                        + "breaker state, plus a bounded metadata-only event history. This read never opens, closes, "
+                        + "resets, or otherwise mutates a policy.";
             case "clear_transactions" ->
                 "Clear the bounded in-memory Spring transaction trace buffer and return the resulting report. This does "
                         + "not begin, commit, or roll back an application transaction.";
@@ -329,6 +333,10 @@ public final class McpToolDescriptions {
             case "get_beans" ->
                 "Search Arc/CDI beans by name or type and return a bounded result. Use this to verify runtime wiring, "
                         + "not as proof that a bean is exercised.";
+            case "get_resilience" ->
+                "Return the SmallRye Fault Tolerance policy inventory declared by application annotations, including "
+                        + "effective MicroProfile configuration overrides and live named circuit breaker state, plus a "
+                        + "bounded metadata-only event history. This read never mutates a policy.";
             default -> common(name);
         };
     }

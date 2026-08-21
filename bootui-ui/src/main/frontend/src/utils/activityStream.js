@@ -168,6 +168,12 @@ export function deepLink(entry) {
       return {path: '/cache', label: 'Open in Cache'}
     case 'MAIL':
       return entry.id ? {path: '/email', query: {id: entry.id}, label: 'Open in Email'} : null
+    case 'RESILIENCE': {
+      const needle = resilienceNeedle(entry.summary)
+      return needle
+        ? {path: '/resilience', query: {q: needle}, label: 'Open in Resilience'}
+        : {path: '/resilience', label: 'Open in Resilience'}
+    }
     case 'MESSAGING': {
       if ((entry.id || '').startsWith('jms-')) {
         const needle = jmsNeedle(entry.summary)
@@ -227,6 +233,16 @@ function rabbitDetailValue(detail, key) {
     .filter((index) => index >= 0)
   const end = boundaries.length ? Math.min(...boundaries) : tail.length
   return tail.slice(0, end).trim()
+}
+
+/**
+ * The policy name inside a RESILIENCE summary, which the engine renders as
+ * `OUTCOME policyName (readable type)`. Both the leading outcome and the trailing parenthesised type are
+ * dropped so the needle filters the Resilience panel by policy name alone.
+ */
+function resilienceNeedle(summary) {
+  const withoutOutcome = (summary || '').trim().replace(/^\S+\s+/, '')
+  return withoutOutcome.replace(/\s*\([^)]*\)\s*$/, '').trim()
 }
 
 function jmsNeedle(summary) {

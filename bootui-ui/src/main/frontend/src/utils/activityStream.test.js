@@ -178,6 +178,26 @@ describe('deepLink', () => {
     expect(deepLink({type: 'SCHEDULED'})).toBeNull()
   })
 
+  it('links a resilience entry to the Resilience panel filtered by policy name', () => {
+    expect(deepLink({type: 'RESILIENCE', summary: 'RETRY paymentGateway (retry)'})).toEqual({
+      path: '/resilience',
+      query: {q: 'paymentGateway'},
+      label: 'Open in Resilience'
+    })
+    expect(deepLink({type: 'RESILIENCE', summary: 'STATE_TRANSITION orders-breaker (circuit breaker)'})).toEqual({
+      path: '/resilience',
+      query: {q: 'orders-breaker'},
+      label: 'Open in Resilience'
+    })
+  })
+
+  it('still links a resilience entry with an unexpected summary to the unfiltered panel', () => {
+    expect(deepLink({type: 'RESILIENCE', summary: ''})).toEqual({
+      path: '/resilience',
+      label: 'Open in Resilience'
+    })
+  })
+
   it('links a cache entry to the Cache panel', () => {
     expect(deepLink({type: 'CACHE', summary: 'MISS orders'})).toEqual({
       path: '/cache',

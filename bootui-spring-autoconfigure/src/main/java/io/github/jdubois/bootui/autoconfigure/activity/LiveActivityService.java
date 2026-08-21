@@ -34,6 +34,8 @@ import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.CapturedMessage;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceActivityEntries;
+import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceGrouping;
 import io.github.jdubois.bootui.engine.support.BlankStrings;
@@ -44,11 +46,13 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import org.springframework.beans.factory.ObjectProvider;
 
 /**
@@ -89,6 +93,7 @@ public class LiveActivityService {
     private final ObjectProvider<KafkaActivityRecorder> kafka;
     private final ObjectProvider<JmsActivityRecorder> jms;
     private final ObjectProvider<RabbitActivityRecorder> rabbit;
+    private final ObjectProvider<ResilienceEventRecorder> resilience;
     private final BootUiProperties properties;
 
     public LiveActivityService(
@@ -106,6 +111,7 @@ public class LiveActivityService {
             ObjectProvider<KafkaActivityRecorder> kafka,
             ObjectProvider<JmsActivityRecorder> jms,
             ObjectProvider<RabbitActivityRecorder> rabbit,
+            ObjectProvider<ResilienceEventRecorder> resilience,
             BootUiProperties properties) {
         this.httpExchanges = httpExchanges;
         this.sqlTrace = sqlTrace;
@@ -121,6 +127,7 @@ public class LiveActivityService {
         this.kafka = kafka;
         this.jms = jms;
         this.rabbit = rabbit;
+        this.resilience = resilience;
         this.properties = properties;
     }
 
@@ -148,6 +155,7 @@ public class LiveActivityService {
         List<CapturedMessage> kafkaMessages = loadKafka(sources);
         List<JmsActivityRecorder.CapturedMessage> jmsMessages = loadJms(sources);
         List<RabbitActivityRecorder.CapturedMessage> rabbitMessages = loadRabbit(sources);
+        List<ResilienceEventRecorder.CapturedEvent> resilienceEvents = loadResilience(sources);
 
         List<RequestAnchor> anchors = buildAnchors(requests);
         Map<String, RequestAnchor> anchorsById = new HashMap<>();
@@ -229,6 +237,13 @@ public class LiveActivityService {
         }
         for (RabbitActivityRecorder.CapturedMessage message : rabbitMessages) {
             all.add(toRabbitEntry(message));
+        }
+        if (!resilienceEvents.isEmpty()) {
+            Map<String, String> requestIdByTraceId = uniqueRequestIdsByTraceId(anchors);
+            for (ResilienceEventRecorder.CapturedEvent event : resilienceEvents) {
+                all.add(ResilienceActivityEntries.toEntry(
+                        event, event.traceId() == null ? null : requestIdByTraceId.get(event.traceId())));
+            }
         }
         if (requests != null) {
             int nPlusOneThreshold = properties.getActivity().getNPlusOneThreshold();
@@ -432,6 +447,43 @@ public class LiveActivityService {
     }
 
     /** Loads recently captured JMS records independently from Kafka and RabbitMQ history. */
+    /**
+     * Loads recently captured resilience outcomes. Gated on the Resilience panel, so disabling that panel
+     * removes its {@code RESILIENCE} entries from the stream exactly as it stops the capture itself.
+     */
+    private List<ResilienceEventRecorder.CapturedEvent> loadResilience(List<String> sources) {
+        if (!properties.isPanelEnabled(BootUiPanels.RESILIENCE)) {
+            return List.of();
+        }
+        ResilienceEventRecorder recorder = resilience == null ? null : resilience.getIfAvailable();
+        if (recorder == null || !recorder.isEnabled()) {
+            return List.of();
+        }
+        sources.add("Resilience");
+        return recorder.recent();
+    }
+
+    /**
+     * Indexes request ids by trace id, keeping only trace ids carried by exactly one request. A resilience
+     * outcome recorded under a trace shared by several requests cannot be attributed to one of them, so it
+     * stays a top-level entry rather than being nested under a guess.
+     */
+    private static Map<String, String> uniqueRequestIdsByTraceId(List<RequestAnchor> anchors) {
+        Map<String, String> byTraceId = new HashMap<>();
+        Set<String> ambiguous = new HashSet<>();
+        for (RequestAnchor anchor : anchors) {
+            String traceId = anchor.traceId();
+            if (traceId == null || traceId.isBlank()) {
+                continue;
+            }
+            if (byTraceId.putIfAbsent(traceId, anchor.id()) != null) {
+                ambiguous.add(traceId);
+            }
+        }
+        byTraceId.keySet().removeAll(ambiguous);
+        return byTraceId;
+    }
+
     private List<JmsActivityRecorder.CapturedMessage> loadJms(List<String> sources) {
         if (!properties.isPanelEnabled(BootUiPanels.JMS)) {
             return List.of();

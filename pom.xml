@@ -70,6 +70,10 @@
         <spring-boot.version>4.1.0</spring-boot.version>
         <!-- Latest Quarkus LTS, shared by the extension, integration tests, and sample app. -->
         <quarkus.platform.version>3.33.3.1</quarkus.platform.version>
+        <!-- Neither Resilience4j nor Spring Retry is managed by the Spring Boot 4.1 BOM, so both are
+             pinned here and shared by the optional autoconfigure dependencies and the sample apps. -->
+        <resilience4j.version>2.4.0</resilience4j.version>
+        <spring-retry.version>2.0.13</spring-retry.version>
         <!-- testcontainers version is managed by the Spring Boot BOM (2.0.x) -->
         <!-- opentelemetry-proto remains on -alpha as the upstream project does not publish stable releases yet -->
         <opentelemetry-proto.version>1.10.0-alpha</opentelemetry-proto.version>
@@ -346,6 +350,7 @@
                             <excludeArtifact>bootui-quarkus-otel-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-prod-shell-guard-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-rabbit-integration-tests</excludeArtifact>
+                            <excludeArtifact>bootui-quarkus-resilience-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-rest-client-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-scheduler-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-security-integration-tests</excludeArtifact>

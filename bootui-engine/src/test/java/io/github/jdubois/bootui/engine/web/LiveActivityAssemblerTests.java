@@ -18,6 +18,8 @@ import io.github.jdubois.bootui.engine.jms.JmsActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.CapturedMessage;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder.Direction;
+import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceVocabulary;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import java.time.Instant;
 import java.util.List;
@@ -1243,6 +1245,100 @@ class LiveActivityAssemblerTests {
                 .filter(e -> "SECURITY".equals(e.type()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("no SECURITY entry in report"));
+    }
+
+    @Test
+    void nestsResilienceEventUnderRequestSharingTraceIdAndCountsIt() {
+        HttpExchangesReport requests = requests(request("req-1", "/orders", "trace-a", 1_000L));
+        ResilienceEventRecorder recorder = new ResilienceEventRecorder(true, 10);
+        recorder.setTraceIdProvider(() -> "trace-a");
+        recorder.record(
+                "paymentGateway",
+                ResilienceVocabulary.TYPE_RETRY,
+                ResilienceVocabulary.PROVIDER_RESILIENCE4J,
+                "PayClient#charge",
+                ResilienceVocabulary.OUTCOME_RETRY,
+                2,
+                12L,
+                "IOException");
+
+        LiveActivityReport report = resilienceReport(requests, recorder, true);
+
+        ActivityEntryDto resilience = entryOfType(report, "RESILIENCE");
+        assertThat(resilience.parentId()).isEqualTo("req-1");
+        assertThat(resilience.severity()).isEqualTo("WARN");
+        assertThat(resilience.summary()).contains("paymentGateway");
+        assertThat(report.typeCounts().get("RESILIENCE")).isEqualTo(1);
+        assertThat(report.sources()).contains("resilience");
+    }
+
+    @Test
+    void keepsResilienceEventTopLevelWhenNoRequestSharesItsTraceId() {
+        HttpExchangesReport requests = requests(request("req-1", "/orders", "trace-a", 1_000L));
+        ResilienceEventRecorder recorder = new ResilienceEventRecorder(true, 10);
+        recorder.setTraceIdProvider(() -> null);
+        recorder.recordStateTransition(
+                "paymentGateway", ResilienceVocabulary.PROVIDER_RESILIENCE4J, null, ResilienceVocabulary.STATE_OPEN);
+
+        LiveActivityReport report = resilienceReport(requests, recorder, true);
+
+        assertThat(entryOfType(report, "RESILIENCE").parentId()).isNull();
+    }
+
+    @Test
+    void omitsResilienceEntriesWhenTheSourceIsUnavailable() {
+        HttpExchangesReport requests = requests(request("req-1", "/orders", "trace-a", 1_000L));
+        ResilienceEventRecorder recorder = new ResilienceEventRecorder(true, 10);
+        recorder.record(
+                "paymentGateway",
+                ResilienceVocabulary.TYPE_RETRY,
+                ResilienceVocabulary.PROVIDER_RESILIENCE4J,
+                null,
+                ResilienceVocabulary.OUTCOME_RETRY,
+                1,
+                null,
+                null);
+
+        LiveActivityReport report = resilienceReport(requests, recorder, false);
+
+        assertThat(report.entries()).noneMatch(candidate -> "RESILIENCE".equals(candidate.type()));
+        assertThat(report.sources()).doesNotContain("resilience");
+    }
+
+    private static ActivityEntryDto entryOfType(LiveActivityReport report, String type) {
+        return report.entries().stream()
+                .filter(candidate -> type.equals(candidate.type()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No " + type + " entry in " + report.entries()));
+    }
+
+    private LiveActivityReport resilienceReport(
+            HttpExchangesReport requests, ResilienceEventRecorder recorder, boolean resilienceAvailable) {
+        return assembler.report(
+                requests,
+                List.of(),
+                false,
+                null,
+                exceptions(),
+                List.of(),
+                false,
+                List.of(),
+                false,
+                List.of(),
+                "UP",
+                50,
+                List.of(),
+                false,
+                List.of(),
+                false,
+                List.of(),
+                false,
+                List.of(),
+                false,
+                List.of(),
+                false,
+                recorder.recent(),
+                resilienceAvailable);
     }
 
     private static HttpExchangesReport requests(HttpExchangeDto... exchanges) {

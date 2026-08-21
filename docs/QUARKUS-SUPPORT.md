@@ -195,7 +195,7 @@ bounded at 4096 entries. It explicitly marks Spring endpoint/security metadata u
 explicit scan sends at most one GET and one OPTIONS request directly to `127.0.0.1`, with no redirect, proxy, or external
 host access. See [PENTEST-CHECKS.md](PENTEST-CHECKS.md) for the exact evidence limits and mappings.
 
-### 5.2 Ported by swapping the data source (11)
+### 5.2 Ported by swapping the data source (12)
 
 Same DTO and UX; the Quarkus adapter implements the relevant SPI against a Quarkus API.
 
@@ -207,7 +207,20 @@ Diff` (**Implemented** — → SmallRye Config; groups active `%profile.`-prefix
 read, BootUI's own routes filtered out at build time) · `Flyway` (→ `quarkus-flyway`) · `Liquibase` (**Implemented** — → `quarkus-liquibase`;
 discovered via `LiquibaseFactoryUtil.getActiveLiquibaseFactories()`, the shared `RanChangeSet` history read + `update`
 action behind the same DTO contract) · `Scheduled Tasks`
-(→ `quarkus-scheduler`) · `Architecture` advisor (shared ArchUnit registry; generic rules run unchanged, Spring-only
+(→ `quarkus-scheduler`) · `Resilience` (**Implemented** — → SmallRye Fault Tolerance; `@CircuitBreaker`, `@Retry`,
+`@Timeout`, `@Bulkhead`, `@RateLimit`, and `@Fallback` declarations are scanned from the build-time Jandex index by a
+`registerResiliencePolicies` build step + `@Recorder` into a synthetic bean, then mapped onto the same
+`ResiliencePolicyProvider` SPI and DTO contract Spring's Resilience4j/Spring Retry providers use. MicroProfile Fault
+Tolerance configuration overrides (`<class>/<method>/<annotation>/<member>` and its two broader forms) are resolved at
+runtime through SmallRye Config and reported with `CONFIGURED` provenance, including the `.../<annotation>/enabled`
+switches and `MP_Fault_Tolerance_NonFallback_Enabled`: a policy the application turned off through configuration is
+listed with a leading `enabled` = `false` setting instead of being silently shown as if it still applied. Live circuit-breaker state and state-transition
+events come from `CircuitBreakerMaintenance`, which SmallRye only exposes for breakers carrying `@CircuitBreakerName`;
+anonymous breakers honestly report `UNKNOWN`. **Honest fidelity gaps:** SmallRye publishes no per-call event stream, so
+retries, rejections and timeouts are not individually captured on Quarkus (only breaker state transitions are), and it
+exposes no per-policy call counters through a public API, so the metrics block is reported absent rather than invented.
+The whole integration is capability-gated on `Capability.SMALLRYE_FAULT_TOLERANCE`, with `SmallRyeCircuitBreakerStates`
+— the only class importing the fault-tolerance API — R2-excluded from Arc when the extension is absent) · `Architecture` advisor (shared ArchUnit registry; generic rules run unchanged, Spring-only
 annotation rules no-op, and Jakarta-based/platform-sensitive rules use Quarkus semantics) · `Beans`
 (**Implemented** — → Arc/CDI `BeanManager.getBeans(...)`, with resolved injection edges
 captured after Arc build-time validation and overlaid on the retained runtime inventory; defining resources and Spring
@@ -382,10 +395,10 @@ No equivalent, low value, or superseded by Quarkus's own tooling:
 - `JMS` uses Spring JMS (`JmsTemplate` and `@JmsListener`) today. Quarkus users can use the implemented Kafka and RabbitMQ
   panels while a Quarkus-native JMS capture layer remains unimplemented.
 
-**Result:** 45 of the 55 panels ship on Quarkus: 26 are statically available and 19 are capability/detector-gated. The
+**Result:** 46 of the 56 panels ship on Quarkus: 26 are statically available and 20 are capability/detector-gated. The
 remaining 10 panels do not ship: 9 are intentionally not applicable (GraalVM, CRaC, Conditions, Startup Timeline, HTTP
 Sessions, Spring Data, Spring Security, DevTools, Transactions), and 1 (`JMS`) is not yet available. By portability
-strategy, the 45 shipped panels comprise 19 ported as-is, 11 source-swapped, 12 capture-rebuilt, and 3 replaced with a
+strategy, the 46 shipped panels comprise 19 ported as-is, 12 source-swapped, 12 capture-rebuilt, and 3 replaced with a
 Quarkus-native panel. The Overview dashboard panel is available (its scoring dashboard renders client-side from the
 advisor endpoints, and the shell-chrome `GET /bootui/api/overview` endpoint is served on both adapters).
 
@@ -593,6 +606,7 @@ Pentesting, HTTP Probe, MCP Server) need no special ingredients — they work ag
 | Flyway              | equiv       | Adapt   | Flyway mapper                    | `MigrationProvider` → quarkus-flyway        |
 | Liquibase           | equiv       | Adapt   | Liquibase mapper                 | `MigrationProvider` → quarkus-liquibase     |
 | Scheduled Tasks     | equiv       | Adapt   | Scheduled mapper                 | `ScheduledTaskProvider` → quarkus-scheduler |
+| Resilience          | equiv       | Adapt   | `ResilienceService` + DTO        | `ResiliencePolicyProvider` → SmallRye Fault Tolerance (Jandex-scanned declarations, MicroProfile config overrides, live named-breaker state) |
 | Architecture        | equiv       | Adapt   | ArchUnit engine                  | `BasePackageProvider` (rules run unmodified) |
 | REST API            | **done**    | Rebuild | REST conventions engine          | JAX-RS handler-model builder                |
 | Database Connection Pools | **done**    | Rebuild | Pool model                       | `DataSourcePoolProvider` → Agroal           |

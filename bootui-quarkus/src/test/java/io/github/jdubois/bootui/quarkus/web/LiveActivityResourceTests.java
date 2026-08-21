@@ -23,6 +23,7 @@ import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionsService;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import io.github.jdubois.bootui.engine.security.SecurityEventBuffer;
@@ -725,6 +726,7 @@ class LiveActivityResourceTests {
                 dataSources,
                 kafkaRecorder,
                 rabbitRecorder,
+                new ResilienceEventRecorder(true, 200),
                 restClientTraceRecorder,
                 selfTelemetryClassifier(config));
     }

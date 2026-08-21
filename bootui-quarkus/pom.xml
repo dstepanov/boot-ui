@@ -254,6 +254,19 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- SmallRye Fault Tolerance, compile-only (provided): needed solely to compile the optional Resilience
+             panel port (SmallRyeCircuitBreakerStates), which reads live circuit-breaker state through
+             io.smallrye.faulttolerance.api.CircuitBreakerMaintenance. provided scope is NOT transitive, so an
+             application that does not add quarkus-smallrye-fault-tolerance never gets the fault-tolerance API on
+             its classpath, and the capability-gated build step (registerResiliencePolicies) excludes the bean that
+             would reference it (R2). When an app DOES add the extension, the API is supplied (at the same
+             quarkus-bom-managed version) by that extension and the bean is registered. -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-smallrye-fault-tolerance</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- Unit-test deps (quarkus-bom managed). Same-package white-box tests stay in this runtime module
              rather than an integration-test module so Quarkus augmentation never sees split packages across
              application archives. QuarkusHealthProviderTest also needs SmallRye's jakarta.json API + the
