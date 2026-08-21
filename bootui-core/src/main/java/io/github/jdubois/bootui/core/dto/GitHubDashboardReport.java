@@ -24,4 +24,17 @@ public record GitHubDashboardReport(
         List<GitHubIssueDto> issues,
         List<GitHubSecuritySignalDto> securitySignals,
         GitHubCopilotUsageDto copilotUsage,
-        List<String> warnings) {}
+        List<String> warnings) {
+
+    public GitHubDashboardReport {
+        metrics = DtoCollections.immutableCopy(metrics);
+        quotas = DtoCollections.immutableCopy(quotas);
+        pullRequests = DtoCollections.immutableCopy(pullRequests);
+        workflowRuns = DtoCollections.immutableCopy(workflowRuns);
+        workflows = DtoCollections.immutableCopy(workflows);
+        issueBuckets = DtoCollections.immutableCopy(issueBuckets);
+        issues = DtoCollections.immutableCopy(issues);
+        securitySignals = DtoCollections.immutableCopy(securitySignals);
+        warnings = DtoCollections.immutableCopy(warnings);
+    }
+}

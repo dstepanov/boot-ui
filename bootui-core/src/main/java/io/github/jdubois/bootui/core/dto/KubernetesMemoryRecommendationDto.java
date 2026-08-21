@@ -26,4 +26,9 @@ public record KubernetesMemoryRecommendationDto(
         double initialRamPercentage,
         String javaToolOptions,
         boolean burstableEnabled,
-        boolean healthProbesEnabled) {}
+        boolean healthProbesEnabled) {
+
+    public KubernetesMemoryRecommendationDto {
+        warnings = DtoCollections.immutableCopy(warnings);
+    }
+}

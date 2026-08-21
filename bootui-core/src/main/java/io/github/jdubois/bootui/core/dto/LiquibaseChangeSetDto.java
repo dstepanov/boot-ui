@@ -18,4 +18,10 @@ public record LiquibaseChangeSetDto(
         String tag,
         String deploymentId,
         List<String> contexts,
-        List<String> labels) {}
+        List<String> labels) {
+
+    public LiquibaseChangeSetDto {
+        contexts = DtoCollections.immutableCopy(contexts);
+        labels = DtoCollections.immutableCopy(labels);
+    }
+}

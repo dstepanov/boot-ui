@@ -33,10 +33,10 @@ public record SqlTraceReport(
         List<String> warnings) {
 
     public SqlTraceReport {
-        dataSources = dataSources == null ? List.of() : List.copyOf(dataSources);
-        entries = entries == null ? List.of() : List.copyOf(entries);
-        topStatements = topStatements == null ? List.of() : List.copyOf(topStatements);
-        warnings = warnings == null ? List.of() : List.copyOf(warnings);
+        dataSources = DtoCollections.immutableCopy(dataSources);
+        entries = DtoCollections.immutableCopy(entries);
+        topStatements = DtoCollections.immutableCopy(topStatements);
+        warnings = DtoCollections.immutableCopy(warnings);
     }
 
     public static SqlTraceReport unavailable(String reason) {

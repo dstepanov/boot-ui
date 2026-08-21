@@ -12,4 +12,9 @@ public record LiquibaseDatabaseDto(
         int total,
         List<LiquibaseChangeSetDto> changeSets,
         boolean updateEnabled,
-        String updateDisabledReason) {}
+        String updateDisabledReason) {
+
+    public LiquibaseDatabaseDto {
+        changeSets = DtoCollections.immutableCopy(changeSets);
+    }
+}

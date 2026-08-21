@@ -9,6 +9,14 @@ public record ConditionsReport(
         List<String> exclusions,
         PageMetadata page,
         ConditionCounts counts) {
+
+    public ConditionsReport {
+        positiveMatches = DtoCollections.immutableCopy(positiveMatches);
+        negativeMatches = DtoCollections.immutableCopy(negativeMatches);
+        unconditionalClasses = DtoCollections.immutableCopy(unconditionalClasses);
+        exclusions = DtoCollections.immutableCopy(exclusions);
+    }
+
     public ConditionsReport(
             List<ConditionEntry> positiveMatches,
             List<ConditionEntry> negativeMatches,

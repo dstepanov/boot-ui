@@ -16,4 +16,12 @@ public record SpringReport(
         List<SpringSeverityCountDto> severityCounts,
         SpringScanStatusDto scan,
         List<SpringRuleResultDto> results,
-        List<SpringRuleResultDto> analysisErrors) {}
+        List<SpringRuleResultDto> analysisErrors) {
+
+    public SpringReport {
+        inspected = DtoCollections.immutableCopy(inspected);
+        severityCounts = DtoCollections.immutableCopy(severityCounts);
+        results = DtoCollections.immutableCopy(results);
+        analysisErrors = DtoCollections.immutableCopy(analysisErrors);
+    }
+}

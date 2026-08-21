@@ -21,4 +21,10 @@ public record HeapDumpReport(
         List<HeapDumpFileDto> dumps,
         long histogramTotalInstances,
         long histogramTotalBytes,
-        List<HeapClassHistogramEntryDto> topClasses) {}
+        List<HeapClassHistogramEntryDto> topClasses) {
+
+    public HeapDumpReport {
+        dumps = DtoCollections.immutableCopy(dumps);
+        topClasses = DtoCollections.immutableCopy(topClasses);
+    }
+}

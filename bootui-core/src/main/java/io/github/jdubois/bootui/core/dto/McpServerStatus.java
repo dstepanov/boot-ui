@@ -41,6 +41,10 @@ public record McpServerStatus(
         int toolCount,
         List<McpToolInfo> tools) {
 
+    public McpServerStatus {
+        tools = DtoCollections.immutableCopy(tools);
+    }
+
     public McpServerStatus(
             boolean enabled,
             String configuredMode,

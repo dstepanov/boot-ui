@@ -5,4 +5,9 @@ import java.util.List;
 /**
  * Token usage time series payload.
  */
-public record AiTokenSeriesDto(int minutes, List<AiTokenBucketDto> buckets) {}
+public record AiTokenSeriesDto(int minutes, List<AiTokenBucketDto> buckets) {
+
+    public AiTokenSeriesDto {
+        buckets = DtoCollections.immutableCopy(buckets);
+    }
+}

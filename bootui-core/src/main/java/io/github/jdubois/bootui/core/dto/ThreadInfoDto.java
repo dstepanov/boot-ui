@@ -29,6 +29,6 @@ public record ThreadInfoDto(
         List<String> stackTrace) {
 
     public ThreadInfoDto {
-        stackTrace = stackTrace == null ? List.of() : List.copyOf(stackTrace);
+        stackTrace = DtoCollections.immutableCopy(stackTrace);
     }
 }

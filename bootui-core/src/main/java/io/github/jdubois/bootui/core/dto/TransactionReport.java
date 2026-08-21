@@ -31,8 +31,8 @@ public record TransactionReport(
         List<String> warnings) {
 
     public TransactionReport {
-        entries = entries == null ? List.of() : List.copyOf(entries);
-        warnings = warnings == null ? List.of() : List.copyOf(warnings);
+        entries = DtoCollections.immutableCopy(entries);
+        warnings = DtoCollections.immutableCopy(warnings);
     }
 
     public static TransactionReport unavailable(String reason) {

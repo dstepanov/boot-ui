@@ -13,4 +13,9 @@ import java.util.List;
  *     instead (see {@code ActivityEntryDto.parentId}).
  */
 public record SecurityLogEventDto(
-        String timestamp, String principal, String type, List<SecurityLogDataDto> data, String traceId) {}
+        String timestamp, String principal, String type, List<SecurityLogDataDto> data, String traceId) {
+
+    public SecurityLogEventDto {
+        data = DtoCollections.immutableCopy(data);
+    }
+}

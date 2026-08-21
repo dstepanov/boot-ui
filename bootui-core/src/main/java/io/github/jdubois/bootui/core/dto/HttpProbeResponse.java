@@ -17,4 +17,9 @@ public record HttpProbeResponse(
         String body,
         long durationMs,
         String error,
-        boolean truncated) {}
+        boolean truncated) {
+
+    public HttpProbeResponse {
+        headers = DtoCollections.immutableCopy(headers);
+    }
+}

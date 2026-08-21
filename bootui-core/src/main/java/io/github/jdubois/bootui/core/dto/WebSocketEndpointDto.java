@@ -42,9 +42,9 @@ public record WebSocketEndpointDto(
         boolean captureInstalled) {
 
     public WebSocketEndpointDto {
-        subprotocols = subprotocols == null ? List.of() : List.copyOf(subprotocols);
-        allowedOrigins = allowedOrigins == null ? List.of() : List.copyOf(allowedOrigins);
-        interceptors = interceptors == null ? List.of() : List.copyOf(interceptors);
-        callbacks = callbacks == null ? List.of() : List.copyOf(callbacks);
+        subprotocols = DtoCollections.immutableCopy(subprotocols);
+        allowedOrigins = DtoCollections.immutableCopy(allowedOrigins);
+        interceptors = DtoCollections.immutableCopy(interceptors);
+        callbacks = DtoCollections.immutableCopy(callbacks);
     }
 }

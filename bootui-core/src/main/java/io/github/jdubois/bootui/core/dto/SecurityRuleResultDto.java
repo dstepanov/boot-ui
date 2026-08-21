@@ -19,6 +19,10 @@ public record SecurityRuleResultDto(
         String learnMoreUrl,
         boolean dismissed) {
 
+    public SecurityRuleResultDto {
+        sampleViolations = DtoCollections.immutableCopy(sampleViolations);
+    }
+
     public SecurityRuleResultDto(
             String id,
             String name,

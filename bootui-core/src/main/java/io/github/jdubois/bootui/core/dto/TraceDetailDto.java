@@ -5,4 +5,9 @@ import java.util.List;
 /**
  * Top-level Trace detail payload.
  */
-public record TraceDetailDto(String traceId, List<SpanDto> spans) {}
+public record TraceDetailDto(String traceId, List<SpanDto> spans) {
+
+    public TraceDetailDto {
+        spans = DtoCollections.immutableCopy(spans);
+    }
+}

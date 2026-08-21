@@ -9,6 +9,11 @@ public record HttpExchangesReport(
         List<HttpExchangeDto> exchanges,
         PageMetadata page,
         String unavailableReason) {
+
+    public HttpExchangesReport {
+        exchanges = DtoCollections.immutableCopy(exchanges);
+    }
+
     public static HttpExchangesReport unavailable(String reason) {
         return new HttpExchangesReport(0, 0, 0, List.of(), new PageMetadata(0, 0, 0, 0, 0, false), reason);
     }

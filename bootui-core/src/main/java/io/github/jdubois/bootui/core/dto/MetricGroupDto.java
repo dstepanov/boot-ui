@@ -19,4 +19,11 @@ public record MetricGroupDto(
         int describedMeterCount,
         List<String> families,
         List<String> commonTagKeys,
-        List<String> baseUnits) {}
+        List<String> baseUnits) {
+
+    public MetricGroupDto {
+        families = DtoCollections.immutableCopy(families);
+        commonTagKeys = DtoCollections.immutableCopy(commonTagKeys);
+        baseUnits = DtoCollections.immutableCopy(baseUnits);
+    }
+}

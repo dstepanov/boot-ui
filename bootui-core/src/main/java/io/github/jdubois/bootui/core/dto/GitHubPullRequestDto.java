@@ -14,4 +14,9 @@ public record GitHubPullRequestDto(
         Long updatedAt,
         String reviewDecision,
         String checksConclusion,
-        List<String> labels) {}
+        List<String> labels) {
+
+    public GitHubPullRequestDto {
+        labels = DtoCollections.immutableCopy(labels);
+    }
+}

@@ -13,6 +13,11 @@ public record DependenciesReport(
         DependencyScanStatusDto scan,
         List<DependencyDto> dependencies) {
 
+    public DependenciesReport {
+        severityCounts = DtoCollections.immutableCopy(severityCounts);
+        dependencies = DtoCollections.immutableCopy(dependencies);
+    }
+
     public String status() {
         return scan == null ? null : scan.status();
     }

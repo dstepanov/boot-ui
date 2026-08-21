@@ -5,4 +5,10 @@ import java.util.List;
 /**
  * Profile-aware view of the active configuration.
  */
-public record ProfilesReport(List<String> activeProfiles, List<ProfileSourceDto> profileSources) {}
+public record ProfilesReport(List<String> activeProfiles, List<ProfileSourceDto> profileSources) {
+
+    public ProfilesReport {
+        activeProfiles = DtoCollections.immutableCopy(activeProfiles);
+        profileSources = DtoCollections.immutableCopy(profileSources);
+    }
+}

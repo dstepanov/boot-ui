@@ -43,6 +43,6 @@ public record HibernateStatisticsDto(
         List<HibernateCacheRegionStatisticsDto> secondLevelCacheRegions) {
 
     public HibernateStatisticsDto {
-        secondLevelCacheRegions = secondLevelCacheRegions == null ? List.of() : List.copyOf(secondLevelCacheRegions);
+        secondLevelCacheRegions = DtoCollections.immutableCopy(secondLevelCacheRegions);
     }
 }

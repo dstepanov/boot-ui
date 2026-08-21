@@ -2062,6 +2062,13 @@ Dependency direction is one-way: `bootui-engine` depends on `bootui-core`, and e
 The shared `core`, `engine`, `conformance`, and UI modules never depend on Spring or Quarkus. JSON parsing and
 serialization stay in the adapters because Spring Boot and Quarkus use incompatible Jackson major versions.
 
+Core DTO immutability is enforced, not just documented. Every collection component of a `bootui-core` record is
+defensively copied in the record's compact constructor, so a caller cannot change a published report by mutating the
+collection it passed in or the collection an accessor returned, and a `null` collection is normalized to an empty one.
+The copies preserve the caller's iteration order — in particular map components are copied into a `LinkedHashMap` rather
+than through `Map.copyOf`, whose hash order is randomized per JVM run — so the serialized JSON stays byte-identical
+across Jackson 3 and Jackson 2.
+
 The Maven build installs the configured Node.js and npm versions, builds the frontend before Java resources are
 packaged, and produces adapter artifacts that already contain the compiled UI. Consumers only add the matching Spring
 starter or Quarkus extension; they do not run a frontend build.

@@ -16,4 +16,9 @@ public record CracFindingDto(
         int occurrenceCount,
         List<String> sampleOccurrences,
         String recommendation,
-        String learnMoreUrl) {}
+        String learnMoreUrl) {
+
+    public CracFindingDto {
+        sampleOccurrences = DtoCollections.immutableCopy(sampleOccurrences);
+    }
+}

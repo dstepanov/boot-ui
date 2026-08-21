@@ -15,6 +15,11 @@ public record HealthNodeDto(
         String guidanceReason,
         List<HealthSetupStepDto> setup) {
 
+    public HealthNodeDto {
+        components = DtoCollections.immutableCopy(components);
+        setup = DtoCollections.immutableCopy(setup);
+    }
+
     public HealthNodeDto(String name, String status, Object details, List<HealthNodeDto> components) {
         this(name, status, details, components, true, null, null, List.of());
     }

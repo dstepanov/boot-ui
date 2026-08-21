@@ -5,4 +5,9 @@ import java.util.List;
 /**
  * Result of a cache clear operation.
  */
-public record CacheClearResult(String status, String message, int clearedCaches, List<String> caches) {}
+public record CacheClearResult(String status, String message, int clearedCaches, List<String> caches) {
+
+    public CacheClearResult {
+        caches = DtoCollections.immutableCopy(caches);
+    }
+}

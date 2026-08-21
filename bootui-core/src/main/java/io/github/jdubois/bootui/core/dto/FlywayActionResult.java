@@ -13,4 +13,11 @@ public record FlywayActionResult(
         List<String> schemasCleaned,
         List<String> schemasDropped,
         String migrationPath,
-        List<String> warnings) {}
+        List<String> warnings) {
+
+    public FlywayActionResult {
+        schemasCleaned = DtoCollections.immutableCopy(schemasCleaned);
+        schemasDropped = DtoCollections.immutableCopy(schemasDropped);
+        warnings = DtoCollections.immutableCopy(warnings);
+    }
+}
