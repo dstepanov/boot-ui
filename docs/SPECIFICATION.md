@@ -897,6 +897,8 @@ Features:
 - Show recent exchanges with timestamp, method, path, status, duration, response size when available, and trace id when a
   common propagation header or the server's active tracing context supplies one.
 - Show request and response headers in row details.
+- Offer a client-side **Copy as cURL** action in row details that rebuilds a runnable command template from the retained
+  exchange metadata, without capturing a body or replaying the request.
 - Provide server-side filtering by path/URL/trace id, method, and status class with bounded paging.
 - Hide BootUI self-requests by default through `bootui.monitoring.exclude-self`.
 
@@ -905,6 +907,10 @@ Acceptance criteria:
 - The recorder is bounded by `bootui.http-exchanges.max-exchanges`, defaulting to 200.
 - Secret-like headers and query parameters are masked unless value exposure is explicitly set to `FULL`.
 - The panel is read-only and returns a stable unavailable DTO when no `HttpExchangeRepository` is available.
+- Copy as cURL performs no request and changes no state; it shows the command before copying, keeps query-parameter
+  names but replaces every value with a placeholder, copies only allowlisted unmasked request headers, POSIX-quotes
+  every argument, copies the recorded path without normalization, and explains what it left out. It reports a clear
+  reason instead of guessing when the recorded URL or method is unusable.
 
 ### 5.14.2 Live Activity Panel
 

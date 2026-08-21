@@ -43,7 +43,6 @@ will therefore be additive rather than an extension of the SQL-specific panels.
 | Planned  | WebSocket endpoints | Services | Spring WebSocket/STOMP / Quarkus WebSockets Next | No (capture only) | Planned |
 | Planned  | Error-contract catalogue | Services | Spring exception handlers / Quarkus exception mappers | No | Delivered |
 | Shipped  | Slow-SQL ranking and URI attribution | Database | Existing SQL Trace and HTTP exchange evidence | No | ✅ Shipped |
-| Planned  | Copy as cURL | Diagnostics | Existing HTTP Exchanges metadata | No | Planned |
 | Planned  | Correlation-ID filtering | Diagnostics | Existing request and Live Activity capture | No (capture only) | Planned |
 | Done     | Meter provenance and explanation | Diagnostics | Existing meter registry and curated catalogue | No | Shipped |
 | Shipped  | Cache tiering and hit ratios | Services | Existing cache managers and native statistics | No | Implemented |
@@ -553,63 +552,6 @@ Acceptance criteria:
 - Sample applications and fixtures cover repeated and one-off statements, ties, errors, N+1 overlap, trace-correlated and
   thread-correlated requests, WebFlux context shifts, ambiguous/unattributed work, route templates, masked paths,
   high-cardinality truncation, and likely/false-positive concatenated SQL patterns.
-
-### 3.13 Copy as cURL — HTTP Exchanges 📋 Planned
-
-HTTP Exchanges captures enough request metadata to help reproduce an observed call, but developers must currently rebuild
-the command by hand. This enhancement adds a safe, client-side copy-as-cURL action using only retained metadata BootUI
-already exposes, without capturing bodies or replaying the request.
-
-Scope:
-
-- Add a **Copy as cURL** action to each eligible HTTP Exchanges request detail on Spring servlet, Spring WebFlux, and
-  Quarkus; keep the existing panel id, route, enablement, read-only policy, and backend contract.
-- Generate a deterministic command from the request method, normalized scheme/host/port/path, query-parameter names, and a
-  small explicit allowlist of safe headers.
-- Preserve query-parameter names and replace every value with a quoted placeholder so the command is useful as a template
-  without copying retained values into the clipboard.
-- Include only allowlisted, currently exposed request headers whose values are not masked. Omit authorization, cookies,
-  proxy authorization, forwarding headers, API keys, tracing headers, and unknown/custom headers regardless of exposure
-  mode.
-- Use robust shell quoting for URLs, header names/values, and methods so captured metacharacters cannot turn the copied
-  text into additional shell commands.
-- Explain omitted bodies, headers, and query values in the action feedback so users understand that the generated command
-  is a safe template rather than a byte-for-byte replay.
-
-Architecture:
-
-- Implement cURL command assembly as a pure, shared frontend helper over the existing HTTP Exchange DTO; no endpoint,
-  recorder, buffer, or adapter changes are required.
-- Centralize the safe-header allowlist, URL sanitization, placeholder generation, and POSIX shell quoting in testable
-  helpers rather than assembling command fragments in the component.
-- Reuse the existing masking/exposure state as an additional restriction, never as permission to include a header or query
-  value outside this feature's stricter policy.
-- Use the browser clipboard API through the existing UI action/notification pattern and surface permission or clipboard
-  failures clearly.
-
-Out of scope for the first release:
-
-- Capturing or including request/response bodies, multipart data, files, form values, or binary content.
-- Including original query-parameter values, sensitive headers, cookies, credentials, tracing identifiers, or arbitrary
-  custom headers.
-- Replaying the request, invoking cURL, opening a network connection, or automatically sending the command to HTTP Probe.
-- Generating platform-specific PowerShell or Windows Command Prompt syntax.
-- Claiming the generated command exactly reproduces transport behavior, redirects, TLS state, or client middleware.
-
-Acceptance criteria:
-
-- Copying a command performs no network request and changes no backend or capture state.
-- The same HTTP Exchange DTO produces byte-identical cURL text on every adapter.
-- Every query parameter retains its name but uses a placeholder value, including repeated, empty, encoded, and malformed
-  parameters.
-- Only explicitly allowlisted, unmasked headers appear; sensitive and unknown headers are omitted under every exposure
-  mode.
-- Shell metacharacters, quotes, newlines, and option-like values in retained metadata cannot escape their argument or add
-  another command.
-- Requests with unavailable authority/path metadata show a clear disabled reason rather than producing an invalid or
-  misleading command.
-- Frontend tests cover common methods, ports, encoded paths, repeated query parameters, safe and sensitive headers,
-  masked values, CR/LF input, shell metacharacters, missing metadata, clipboard denial, and body-present exchanges.
 
 ### 3.14 Correlation-ID filtering — Live Activity 📋 Planned
 
