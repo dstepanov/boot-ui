@@ -514,6 +514,8 @@ describe('SqlTrace', () => {
     const link = wrapper
       .findAll('table.sql-ranking-table tbody button')
       .find((button) => button.text() === 'Executions')
+    expect(link.classes()).toContain('sql-executions-link')
+    expect(link.get('i').classes()).toContain('bi-list-ul')
     await link.trigger('click')
 
     const executions = wrapper.get('table.sql-table').text()

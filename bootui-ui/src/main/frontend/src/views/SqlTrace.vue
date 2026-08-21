@@ -515,11 +515,12 @@ function clearTrace() {
                   <td class="text-end">{{ group.shareOfRetainedTimePercent.toFixed(1) }}%</td>
                   <td class="text-end">
                     <button
-                      class="btn btn-sm btn-link p-0 text-nowrap"
+                      class="btn btn-sm sql-executions-link bootui-keyboard-target text-nowrap"
                       type="button"
                       :aria-label="`Show retained executions of ${group.sql}`"
                       @click="showExecutions(group.entryIds, group.sql, group.entryIdsTruncated)"
                     >
+                      <i aria-hidden="true" class="bi bi-list-ul"></i>
                       Executions
                     </button>
                     <div v-if="group.entryIdsTruncated" class="text-muted small text-nowrap">
@@ -676,11 +677,12 @@ function clearTrace() {
                       <td class="text-end">{{ routeGroup.shareOfRetainedTimePercent.toFixed(1) }}%</td>
                       <td class="text-end">
                         <button
-                          class="btn btn-sm btn-link p-0 text-nowrap"
+                          class="btn btn-sm sql-executions-link bootui-keyboard-target text-nowrap"
                           type="button"
                           :aria-label="`Show retained executions for ${routeGroup.method} ${routeGroup.route}`"
                           @click="showExecutions(routeGroup.entryIds, `${routeGroup.method} ${routeGroup.route}`)"
                         >
+                          <i aria-hidden="true" class="bi bi-list-ul"></i>
                           Executions
                         </button>
                       </td>
@@ -961,6 +963,27 @@ function clearTrace() {
   display: flex;
   flex-wrap: wrap;
   gap: 0.2rem;
+}
+
+.sql-executions-link {
+  align-items: center;
+  background: color-mix(in srgb, var(--bootui-blue) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bootui-blue) 24%, transparent);
+  border-radius: var(--bootui-radius-pill);
+  color: var(--bootui-blue);
+  display: inline-flex;
+  font-weight: 600;
+  gap: 0.3rem;
+  line-height: 1;
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+  text-decoration: none;
+}
+
+.sql-executions-link:hover {
+  background: color-mix(in srgb, var(--bootui-blue) 14%, transparent);
+  border-color: color-mix(in srgb, var(--bootui-blue) 40%, transparent);
+  color: var(--bootui-blue);
 }
 
 .sql-row {
