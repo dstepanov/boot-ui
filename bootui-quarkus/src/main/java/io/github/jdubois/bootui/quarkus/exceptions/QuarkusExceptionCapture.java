@@ -13,6 +13,7 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.logging.Handler;
 import java.util.logging.Logger;
+import org.eclipse.microprofile.config.Config;
 
 /**
  * Installs and removes the {@link QuarkusExceptionLogHandler} on the root {@code java.util.logging} logger
@@ -29,6 +30,7 @@ public class QuarkusExceptionCapture {
     private final ExceptionStore store;
     private final TraceIdProvider traceIdProvider;
     private final CurrentVertxRequest currentVertxRequest;
+    private final Config config;
     private QuarkusExceptionLogHandler handler;
 
     /**
@@ -40,10 +42,14 @@ public class QuarkusExceptionCapture {
      */
     @Inject
     public QuarkusExceptionCapture(
-            ExceptionStore store, Instance<TraceIdProvider> traceIdProvider, CurrentVertxRequest currentVertxRequest) {
+            ExceptionStore store,
+            Instance<TraceIdProvider> traceIdProvider,
+            CurrentVertxRequest currentVertxRequest,
+            Config config) {
         this.store = store;
         this.traceIdProvider = traceIdProvider.isResolvable() ? traceIdProvider.get() : null;
         this.currentVertxRequest = currentVertxRequest;
+        this.config = config;
     }
 
     void onStart(@Observes StartupEvent event) {
@@ -60,7 +66,8 @@ public class QuarkusExceptionCapture {
                         "io.github.jdubois.bootui.engine",
                         "io.github.jdubois.bootui.core")),
                 traceIdProvider,
-                currentVertxRequest);
+                currentVertxRequest,
+                config);
         root.addHandler(handler);
     }
 

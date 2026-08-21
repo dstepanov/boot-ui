@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.quarkus.web;
 
 import io.github.jdubois.bootui.engine.web.CapturedHttpExchange;
 import io.github.jdubois.bootui.engine.web.HttpExchangeBuffer;
+import io.github.jdubois.bootui.quarkus.QuarkusBootUiPaths;
 import io.github.jdubois.bootui.spi.TraceIdProvider;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.vertx.http.runtime.filters.Filters;
@@ -22,6 +23,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.eclipse.microprofile.config.Config;
 
 /**
  * Captures completed HTTP exchanges into the shared {@link HttpExchangeBuffer} — the Quarkus analogue of
@@ -31,9 +33,10 @@ import java.util.Map;
  *
  * <p>It records in {@link HttpServerResponse#bodyEndHandler} so status, headers, byte count and duration
  * are final (a route filter runs before the response is sent, where those are all defaulted). BootUI's
- * own {@code /bootui} traffic is excluded before recording so the panel never shows its own polling and
- * the self counter mirrors Spring. The buffer caps size and masks downstream, so this filter does
- * minimal, non-blocking work on the event loop.</p>
+ * own traffic is excluded before recording so the panel never shows its own polling and the self counter
+ * mirrors Spring; the exclusion goes through {@link QuarkusBootUiPaths#isBootUiRequest} so it holds under a
+ * non-default {@code quarkus.http.root-path} and for a custom {@code bootui.path} mount alike. The buffer
+ * caps size and masks downstream, so this filter does minimal, non-blocking work on the event loop.</p>
  *
  * <p>When an OpenTelemetry {@link TraceIdProvider} is present (capability-gated), the active server span's
  * trace id is resolved <em>at filter entry</em> — on the event loop, where the span is current — and stamped
@@ -52,18 +55,19 @@ import java.util.Map;
 @ApplicationScoped
 public class QuarkusHttpExchangeCaptureFilter {
 
-    private static final String BASE_PATH = "/bootui";
-
     /** After the safety filter (priority 1000); only ever records, never short-circuits. */
     private static final int PRIORITY = 900;
 
     private final HttpExchangeBuffer buffer;
     private final TraceIdProvider traceIdProvider;
+    private final Config config;
 
     @Inject
-    public QuarkusHttpExchangeCaptureFilter(HttpExchangeBuffer buffer, Instance<TraceIdProvider> traceIdProvider) {
+    public QuarkusHttpExchangeCaptureFilter(
+            HttpExchangeBuffer buffer, Instance<TraceIdProvider> traceIdProvider, Config config) {
         this.buffer = buffer;
         this.traceIdProvider = traceIdProvider.isResolvable() ? traceIdProvider.get() : null;
+        this.config = config;
     }
 
     public void register(@Observes Filters filters) {
@@ -72,7 +76,7 @@ public class QuarkusHttpExchangeCaptureFilter {
 
     void handle(RoutingContext rc) {
         String path = rc.normalizedPath();
-        if (isBootUiRequest(path)) {
+        if (QuarkusBootUiPaths.isBootUiRequest(config, path)) {
             rc.next();
             return;
         }
@@ -137,10 +141,6 @@ public class QuarkusHttpExchangeCaptureFilter {
         } catch (RuntimeException ex) {
             return null;
         }
-    }
-
-    static boolean isBootUiRequest(String path) {
-        return path != null && (path.equals(BASE_PATH) || path.startsWith(BASE_PATH + "/"));
     }
 
     private static URI toUri(HttpServerRequest request) {
