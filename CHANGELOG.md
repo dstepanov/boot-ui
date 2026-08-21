@@ -66,6 +66,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `RAPI-ERR-010` (inconsistent error contracts across handlers for the same exception), and `RAPI-ERR-011`
   (exception handlers that read stack traces into their response). The catalogue now ships 56 rules.
 
+### Security
+
+- **Malformed `Host` headers are rejected instead of being treated as absent.** `LocalhostGuard` now parses the
+  request authority strictly on Spring MVC, Spring WebFlux, and Quarkus: an empty host (`:`), trailing junk after an
+  IPv6 literal (`[::1]junk`), an unterminated bracket, a non-numeric port, a scheme or path smuggled into the header
+  (`http://localhost:8080`, `localhost:8080/@evil.example.com`), or any character that cannot appear in a hostname
+  fails the DNS-rebinding allow-list with the canonical `Host` 403 rather than falling through the intentional
+  missing-`Host` allowance. Only a genuinely absent or blank `Host` keeps that allowance, and an unparsable `Origin`
+  still fails closed on state-changing requests (#859).
+
 ## [1.14.1] - 2026-08-20
 
 Patch release that restores Spring native and Quarkus Docker startup, fixes the native-image build bootstrap on AMD64,
