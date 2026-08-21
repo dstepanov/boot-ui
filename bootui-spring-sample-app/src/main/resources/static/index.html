@@ -305,6 +305,16 @@
           <small>Inspect: Mappings, HTTP Probe, HTTP Exchanges</small>
         </article>
         <article class="test-action">
+          <button class="button" id="websocket-echo-button" type="button">Test native WebSocket echo</button>
+          <p>Opens <code>/echo</code>, sends one text message, and waits for the echoed response.</p>
+          <small>Inspect: WebSockets → Endpoints and Sessions</small>
+        </article>
+        <article class="test-action">
+          <button class="button" id="stomp-chat-button" type="button">Test STOMP chat</button>
+          <p>Subscribes to <code>/topic/chat</code> and sends one message to <code>/app/chat</code>.</p>
+          <small>Inspect: WebSockets → Subscriptions and Activity</small>
+        </article>
+        <article class="test-action">
           <button class="button" id="secure-admin-button" type="button">Secure API as admin</button>
           <p>Calls <code>GET /api/secure</code> with <code>admin/admin</code> credentials.</p>
           <small>Inspect: Spring Security, Security Logs</small>
@@ -416,6 +426,8 @@
   const circuitBreakerButton = document.getElementById('circuit-breaker-button')
   const greetingButton = document.getElementById('greeting-button')
   const publicApiButton = document.getElementById('public-api-button')
+  const websocketEchoButton = document.getElementById('websocket-echo-button')
+  const stompChatButton = document.getElementById('stomp-chat-button')
   const secureAdminButton = document.getElementById('secure-admin-button')
   const secureSqlButton = document.getElementById('secure-sql-button')
   const secureUserButton = document.getElementById('secure-user-button')
@@ -507,6 +519,123 @@
 
   function basicAuth(username, password) {
     return 'Basic ' + btoa(`${username}:${password}`)
+  }
+
+  function webSocketUrl(path) {
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${location.host}${path}`
+  }
+
+  function nativeWebSocketEcho(message) {
+    return new Promise((resolve, reject) => {
+      const socket = new WebSocket(webSocketUrl('/echo'))
+      let settled = false
+      let timeout
+
+      const finish = callback => {
+        if (settled) {
+          return
+        }
+        settled = true
+        window.clearTimeout(timeout)
+        callback()
+      }
+
+      timeout = window.setTimeout(() => {
+        finish(() => {
+          socket.close()
+          reject(new Error('The native WebSocket echo timed out.'))
+        })
+      }, 5000)
+
+      socket.addEventListener('open', () => socket.send(message))
+      socket.addEventListener('message', event => {
+        finish(() => {
+          resolve(String(event.data))
+          socket.close(1000, 'Sample complete')
+        })
+      })
+      socket.addEventListener('error', () => {
+        finish(() => {
+          socket.close()
+          reject(new Error('The native WebSocket connection failed.'))
+        })
+      })
+      socket.addEventListener('close', event => {
+        if (!settled) {
+          finish(() => reject(new Error(`The native WebSocket closed before replying (code ${event.code}).`)))
+        }
+      })
+    })
+  }
+
+  function stompChatRoundTrip(text) {
+    return new Promise((resolve, reject) => {
+      const socket = new WebSocket(webSocketUrl('/ws/websocket'), ['v12.stomp', 'v11.stomp', 'v10.stomp'])
+      let settled = false
+      let timeout
+
+      const finish = callback => {
+        if (settled) {
+          return
+        }
+        settled = true
+        window.clearTimeout(timeout)
+        callback()
+      }
+
+      timeout = window.setTimeout(() => {
+        finish(() => {
+          socket.close()
+          reject(new Error('The STOMP chat round trip timed out.'))
+        })
+      }, 5000)
+
+      socket.addEventListener('open', () => {
+        socket.send(`CONNECT\naccept-version:1.2\nhost:${location.host}\nheart-beat:0,0\n\n\u0000`)
+      })
+      socket.addEventListener('message', event => {
+        const frame = String(event.data)
+        if (frame.startsWith('CONNECTED')) {
+          socket.send('SUBSCRIBE\nid:sample-chat\ndestination:/topic/chat\nack:auto\n\n\u0000')
+          const payload = JSON.stringify({sender: 'Sample app', text})
+          const contentLength = new TextEncoder().encode(payload).length
+          socket.send(
+            `SEND\ndestination:/app/chat\ncontent-type:application/json\ncontent-length:${contentLength}\n\n${payload}\u0000`
+          )
+          return
+        }
+        if (frame.startsWith('MESSAGE')) {
+          const bodyStart = frame.indexOf('\n\n')
+          const body = bodyStart >= 0 ? frame.slice(bodyStart + 2).replace(/\u0000$/, '') : ''
+          finish(() => {
+            resolve(JSON.parse(body))
+            socket.send('DISCONNECT\n\n\u0000')
+            socket.close(1000, 'Sample complete')
+          })
+          return
+        }
+        if (frame.startsWith('ERROR')) {
+          const bodyStart = frame.indexOf('\n\n')
+          const body = bodyStart >= 0 ? frame.slice(bodyStart + 2).replace(/\u0000$/, '') : frame
+          finish(() => {
+            socket.close()
+            reject(new Error(body || 'The STOMP broker reported an error.'))
+          })
+        }
+      })
+      socket.addEventListener('error', () => {
+        finish(() => {
+          socket.close()
+          reject(new Error('The STOMP WebSocket connection failed.'))
+        })
+      })
+      socket.addEventListener('close', event => {
+        if (!settled) {
+          finish(() => reject(new Error(`The STOMP WebSocket closed before replying (code ${event.code}).`)))
+        }
+      })
+    })
   }
 
   productsButton.addEventListener('click', () =>
@@ -645,6 +774,29 @@
         throw new Error(text)
       }
       showSampleResult('Public API returned', `${text}\n\nOpen Mappings, HTTP Probe, or HTTP Exchanges to inspect it.`)
+    })
+  )
+
+  websocketEchoButton.addEventListener('click', () =>
+    runSampleAction(websocketEchoButton, 'Testing the native WebSocket echo...', async () => {
+      const message = 'Hello from the sample app'
+      const reply = await nativeWebSocketEcho(message)
+      showSampleResult(
+        'Native WebSocket echo received',
+        `Sent: ${message}\nReceived: ${reply}\n\nOpen BootUI WebSockets to inspect the endpoint metadata.`
+      )
+    })
+  )
+
+  stompChatButton.addEventListener('click', () =>
+    runSampleAction(stompChatButton, 'Testing the STOMP chat destination...', async () => {
+      const message = 'Hello from the sample app'
+      const reply = await stompChatRoundTrip(message)
+      showSampleResult(
+        'STOMP chat message received',
+        `Sender: ${reply.sender}\nReceived: ${reply.text}\n\n` +
+          'Open BootUI WebSockets to inspect the subscription and captured STOMP frames.'
+      )
     })
   )
 

@@ -41,6 +41,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
+        <!-- WebSockets: drives the WebSockets panel. The sample declares a STOMP endpoint over SockJS plus a
+             native WebSocketHandler endpoint, so the panel shows both the "capture installed" and the
+             "metadata only" endpoint shapes without any external broker. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
         <!--
             Fault tolerance libraries the BootUI Fault Tolerance panel reads. Neither is managed by the Spring Boot
             BOM, so both use the versions pinned in the root pom.

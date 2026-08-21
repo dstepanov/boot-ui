@@ -50,6 +50,8 @@ import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveSecurityHeadersFi
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveSecurityLogsController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveSqlTraceController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveTransactionsController;
+import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveWebSocketController;
+import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveWebSocketMetadataProvider;
 import io.github.jdubois.bootui.autoconfigure.restapi.RestApiController;
 import io.github.jdubois.bootui.autoconfigure.spring.SpringController;
 import io.github.jdubois.bootui.autoconfigure.sqltrace.SqlTraceDataSourceBeanPostProcessor;
@@ -66,6 +68,9 @@ import io.github.jdubois.bootui.engine.safety.ApiTokenAuthenticator;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
 import io.github.jdubois.bootui.engine.telemetry.TelemetryStore;
 import io.github.jdubois.bootui.engine.transactions.TransactionRecorder;
+import io.github.jdubois.bootui.engine.websocket.WebSocketActivityRecorder;
+import io.github.jdubois.bootui.engine.websocket.WebSocketService;
+import io.github.jdubois.bootui.engine.websocket.WebSocketSettings;
 import io.github.jdubois.bootui.spi.TraceIdProvider;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -264,6 +269,7 @@ import tools.jackson.databind.ObjectMapper;
     ReactiveSqlTraceController.class,
     ReactiveTransactionsController.class,
     ReactiveRestClientTraceController.class,
+    BootUiReactiveAutoConfiguration.ReactiveWebSocketConfiguration.class,
     ReactiveSecurityLogsController.class,
     ReactiveLiveActivityController.class,
     LiveServiceMapController.class,
@@ -329,6 +335,7 @@ public class BootUiReactiveAutoConfiguration {
             ReactiveSqlTraceController.class.getName(),
             ReactiveTransactionsController.class.getName(),
             ReactiveRestClientTraceController.class.getName(),
+            ReactiveWebSocketController.class.getName(),
             ReactiveSecurityLogsController.class.getName(),
             ReactiveLiveActivityController.class.getName(),
             LiveServiceMapController.class.getName(),
@@ -818,6 +825,43 @@ public class BootUiReactiveAutoConfiguration {
      * (a {@code WebExceptionHandler}) instead of the servlet-only {@code BootUiExceptionHandlerResolver}
      * (a {@code HandlerExceptionResolver}). Needed by {@link ReactiveExceptionsController}.
      */
+    /**
+     * The WebFlux WebSockets panel backend. WebFlux has no STOMP broker and no sanctioned frame or session
+     * interception seam, so this stack contributes the endpoint topology only and the report states
+     * {@code frameCaptureSupported=false} with a reason rather than presenting an always-empty activity
+     * list as if capture were working. The JSON contract and the actions stay identical across stacks.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "org.springframework.web.reactive.socket.WebSocketHandler")
+    @ConditionalOnProperty(prefix = "bootui.panels.websockets", name = "enabled", matchIfMissing = true)
+    static class ReactiveWebSocketConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        ReactiveWebSocketMetadataProvider bootUiReactiveWebSocketMetadataProvider(ApplicationContext context) {
+            return new ReactiveWebSocketMetadataProvider(context);
+        }
+
+        @Bean
+        @Lazy
+        @ConditionalOnMissingBean
+        WebSocketService bootUiWebSocketService(
+                ReactiveWebSocketMetadataProvider metadataProvider,
+                WebSocketActivityRecorder recorder,
+                WebSocketSettings settings,
+                BootUiExposure exposure) {
+            return new WebSocketService(metadataProvider, null, recorder, settings, exposure);
+        }
+
+        @Bean
+        @Lazy
+        ReactiveWebSocketController bootUiReactiveWebSocketController(
+                ObjectProvider<WebSocketService> serviceProvider,
+                ObjectProvider<WebSocketActivityRecorder> recorderProvider) {
+            return new ReactiveWebSocketController(serviceProvider, recorderProvider);
+        }
+    }
+
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnProperty(prefix = "bootui.panels.exceptions", name = "enabled", matchIfMissing = true)
     static class ReactiveExceptionsConfiguration {

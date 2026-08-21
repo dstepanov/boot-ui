@@ -197,6 +197,20 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- Quarkus WebSockets Next extension, compile-only (provided): needed solely to compile the optional
+             WebSockets panel runtime bindings (QuarkusWebSocketSessionProvider and
+             QuarkusWebSocketConnectionCapture), which read io.quarkus.websockets.next OpenConnections /
+             WebSocketConnection state and observe @Open/@Closed connection events. provided scope is NOT
+             transitive, so an application that depends on this extension but does not add
+             quarkus-websockets-next never gets io.quarkus.websockets.next on its classpath, and the
+             class-presence-gated build step (registerWebSockets) excludes the beans that would reference
+             them (R2). -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-websockets-next</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- Quarkus Messaging RabbitMQ extension, compile-only (provided): needed solely to compile the optional
              Live Activity RabbitMQ capture interceptors (QuarkusRabbitProducerCapture / QuarkusRabbitConsumerCapture),
              which implement SmallRye Reactive Messaging's OutgoingInterceptor / IncomingInterceptor SPI and read

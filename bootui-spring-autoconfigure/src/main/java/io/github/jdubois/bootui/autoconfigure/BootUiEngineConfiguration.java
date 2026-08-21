@@ -86,6 +86,8 @@ import io.github.jdubois.bootui.engine.scheduled.ScheduledTasksService;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
 import io.github.jdubois.bootui.engine.threads.ThreadDumpService;
 import io.github.jdubois.bootui.engine.web.HttpProbeService;
+import io.github.jdubois.bootui.engine.websocket.WebSocketActivityRecorder;
+import io.github.jdubois.bootui.engine.websocket.WebSocketSettings;
 import io.github.jdubois.bootui.spi.BasePackageProvider;
 import io.github.jdubois.bootui.spi.BeanProvider;
 import io.github.jdubois.bootui.spi.ErrorContractProvider;
@@ -1065,6 +1067,61 @@ public class BootUiEngineConfiguration {
         static RabbitConsumerCaptureBeanPostProcessor bootUiRabbitConsumerCaptureBeanPostProcessor(
                 ObjectProvider<RabbitActivityRecorder> recorderProvider) {
             return new RabbitConsumerCaptureBeanPostProcessor(recorderProvider);
+        }
+    }
+
+    /**
+     * The WebSockets panel's framework-neutral backend: the settings record and the bounded activity
+     * recorder. Both are stack-agnostic and are shared by the servlet and reactive auto-configurations,
+     * which contribute their own metadata providers and {@code WebSocketService} on top.
+     *
+     * <p>The recorder has its own independent buffer, so WebSocket traffic can neither evict another
+     * panel's history nor be evicted by it.</p>
+     */
+    @Configuration(proxyBeanMethods = false)
+    static class WebSocketBackendConfiguration {
+
+        @Bean
+        @Lazy
+        @ConditionalOnMissingBean
+        WebSocketSettings bootUiWebSocketSettings(BootUiProperties properties) {
+            BootUiProperties.WebSockets websockets = properties.getWebsockets();
+            return new WebSocketSettings(
+                    websockets.isEnabled() && properties.isPanelEnabled(BootUiPanels.WEBSOCKETS),
+                    websockets.isCapturing(),
+                    websockets.getMaxEndpoints(),
+                    websockets.getMaxSessions(),
+                    websockets.getMaxSubscriptions(),
+                    websockets.getMaxActivityEntries(),
+                    websockets.getMaxTrackedSessions());
+        }
+
+        @Bean
+        @Lazy
+        @ConditionalOnMissingBean
+        WebSocketActivityRecorder bootUiWebSocketActivityRecorder(WebSocketSettings settings) {
+            return new WebSocketActivityRecorder(settings);
+        }
+
+        /**
+         * Bridges the framework-neutral {@link WebSocketActivityRecorder} (implements {@code
+         * spi.IdleReclaimable}) to BootUI's Spring idle-reclaim mechanism, so an idle console releases the
+         * retained frame metadata exactly like every other capture buffer.
+         */
+        @Bean
+        @Lazy
+        IdleReclaimable bootUiWebSocketRecorderIdleReclaimable(WebSocketActivityRecorder recorder) {
+            return new IdleReclaimable() {
+                @Override
+                public void suspendForIdle() {
+                    recorder.suspendForIdle();
+                }
+
+                @Override
+                public void resumeFromIdle() {
+                    recorder.resumeFromIdle();
+                }
+            };
         }
     }
 

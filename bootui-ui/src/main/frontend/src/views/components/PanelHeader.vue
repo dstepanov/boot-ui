@@ -11,6 +11,7 @@ const props = defineProps({
   loading: {type: Boolean, default: false},
   error: {type: [String, Object], default: null},
   lastFetched: {type: Number, default: null},
+  lastFetchedLabel: {type: String, default: null},
   refreshable: {type: Boolean, default: true},
   autoRefresh: {type: Boolean, default: null},
   autoRefreshable: {type: Boolean, default: true},
@@ -52,6 +53,10 @@ const lastFetchedText = computed(() => {
   if (!props.lastFetched) return null
   return formatRelative(props.lastFetched, now.value)
 })
+const lastFetchedDisplayText = computed(() => {
+  if (!lastFetchedText.value) return null
+  return props.lastFetchedLabel ? `${props.lastFetchedLabel} ${lastFetchedText.value}` : lastFetchedText.value
+})
 const loadError = computed(() => {
   if (!props.error) return null
   if (typeof props.error === 'object' && props.error !== null && 'serverUnreachable' in props.error) {
@@ -87,7 +92,7 @@ onBeforeUnmount(stopRelativeTimer)
       </div>
     </div>
     <div class="panel-header__actions">
-      <span v-if="lastFetchedText" class="last-fetched-text">{{ lastFetchedText }}</span>
+      <span v-if="lastFetchedDisplayText" class="last-fetched-text">{{ lastFetchedDisplayText }}</span>
       <AutoRefreshToggle
         v-if="hasAutoRefresh"
         :model-value="autoRefresh"

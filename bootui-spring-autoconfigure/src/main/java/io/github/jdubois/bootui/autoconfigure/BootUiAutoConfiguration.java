@@ -51,6 +51,10 @@ import io.github.jdubois.bootui.autoconfigure.transactions.BootUiTransactionExec
 import io.github.jdubois.bootui.autoconfigure.transactions.BootUiTransactionManagerListenerRegistrar;
 import io.github.jdubois.bootui.autoconfigure.transactions.TransactionsController;
 import io.github.jdubois.bootui.autoconfigure.web.*;
+import io.github.jdubois.bootui.autoconfigure.websocket.BootUiWebSocketCaptureConfigurer;
+import io.github.jdubois.bootui.autoconfigure.websocket.BootUiWebSocketSessionRegistry;
+import io.github.jdubois.bootui.autoconfigure.websocket.SpringWebSocketMetadataProvider;
+import io.github.jdubois.bootui.autoconfigure.websocket.WebSocketController;
 import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
@@ -58,6 +62,9 @@ import io.github.jdubois.bootui.engine.safety.ApiTokenAuthenticator;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
 import io.github.jdubois.bootui.engine.telemetry.TelemetryStore;
 import io.github.jdubois.bootui.engine.transactions.TransactionRecorder;
+import io.github.jdubois.bootui.engine.websocket.WebSocketActivityRecorder;
+import io.github.jdubois.bootui.engine.websocket.WebSocketService;
+import io.github.jdubois.bootui.engine.websocket.WebSocketSettings;
 import java.nio.file.Paths;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -179,6 +186,7 @@ import tools.jackson.databind.ObjectMapper;
     SqlTraceController.class,
     TransactionsController.class,
     RestClientTraceController.class,
+    BootUiAutoConfiguration.WebSocketConfiguration.class,
     ThreadDumpController.class,
     MemoryController.class,
     DismissedRulesController.class,
@@ -220,6 +228,7 @@ public class BootUiAutoConfiguration {
             SqlTraceController.class.getName(),
             TransactionsController.class.getName(),
             RestClientTraceController.class.getName(),
+            WebSocketController.class.getName(),
             HealthController.class.getName(),
             DatabaseConnectionPoolsController.class.getName(),
             HttpExchangesController.class.getName(),
@@ -346,6 +355,69 @@ public class BootUiAutoConfiguration {
         @ConditionalOnMissingBean(AuditEventRepository.class)
         AuditEventRepository bootUiAuditEventRepository() {
             return new InMemoryAuditEventRepository();
+        }
+    }
+
+    /**
+     * The servlet WebSockets panel backend, wired only when {@code spring-websocket} and
+     * {@code spring-messaging} are both on the classpath. Every WebSocket type is referenced from inside
+     * this {@code @ConditionalOnClass}-gated nested configuration (never from the always-active root
+     * config), so an application without {@code spring-boot-starter-websocket} never links them.
+     *
+     * <p>The capture configurer is a plain {@code WebSocketMessageBrokerConfigurer}: it only contributes
+     * when the application itself enabled STOMP, it adds one decorator factory and one interceptor per
+     * client channel, and it changes no broker, transport, or destination configuration. When
+     * {@code bootui.websockets.enabled=false} the configurer is not registered at all, so BootUI
+     * contributes nothing to the application's WebSocket pipeline.</p>
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(
+            name = {
+                "org.springframework.web.socket.server.support.WebSocketHandlerMapping",
+                "org.springframework.messaging.simp.annotation.support.SimpAnnotationMethodMessageHandler"
+            })
+    @ConditionalOnProperty(prefix = "bootui.panels.websockets", name = "enabled", matchIfMissing = true)
+    static class WebSocketConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        SpringWebSocketMetadataProvider bootUiSpringWebSocketMetadataProvider(ApplicationContext context) {
+            return new SpringWebSocketMetadataProvider(context);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        BootUiWebSocketSessionRegistry bootUiWebSocketSessionRegistry(WebSocketSettings settings) {
+            return new BootUiWebSocketSessionRegistry(settings);
+        }
+
+        @Bean
+        @ConditionalOnProperty(prefix = "bootui.websockets", name = "enabled", matchIfMissing = true)
+        BootUiWebSocketCaptureConfigurer bootUiWebSocketCaptureConfigurer(
+                WebSocketActivityRecorder recorder,
+                BootUiWebSocketSessionRegistry registry,
+                SpringWebSocketMetadataProvider metadataProvider) {
+            return new BootUiWebSocketCaptureConfigurer(recorder, registry, metadataProvider);
+        }
+
+        @Bean
+        @Lazy
+        @ConditionalOnMissingBean
+        WebSocketService bootUiWebSocketService(
+                SpringWebSocketMetadataProvider metadataProvider,
+                BootUiWebSocketSessionRegistry registry,
+                WebSocketActivityRecorder recorder,
+                WebSocketSettings settings,
+                BootUiExposure exposure) {
+            return new WebSocketService(metadataProvider, registry, recorder, settings, exposure);
+        }
+
+        @Bean
+        @Lazy
+        WebSocketController bootUiWebSocketController(
+                ObjectProvider<WebSocketService> serviceProvider,
+                ObjectProvider<WebSocketActivityRecorder> recorderProvider) {
+            return new WebSocketController(serviceProvider, recorderProvider);
         }
     }
 

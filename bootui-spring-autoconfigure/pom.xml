@@ -203,6 +203,23 @@
             <optional>true</optional>
         </dependency>
         <dependency>
+            <!-- spring-websocket: WebSocketHandlerMapping/WebSocketHandlerDecorator for the
+                 WebSockets panel's topology reader and STOMP capture decorator. Version is managed
+                 by the Spring Boot parent BOM. Optional so it is not propagated to applications;
+                 WebSocketBackendConfiguration's classpath gate handles safe absence. -->
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-websocket</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <!-- spring-messaging: SimpAnnotationMethodMessageHandler and the STOMP channel
+                 interceptor types the WebSockets panel reads destinations from. Declared optional in
+                 spring-websocket's own POM, so it must be listed explicitly here. -->
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-messaging</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
             <groupId>org.liquibase</groupId>
             <artifactId>liquibase-core</artifactId>
             <optional>true</optional>

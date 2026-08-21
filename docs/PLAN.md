@@ -39,7 +39,7 @@ will therefore be additive rather than an extension of the SQL-specific panels.
 | Planned  | Declarative HTTP client registry | Services | Spring HTTP clients / Quarkus REST Client metadata | No | Planned |
 | Planned  | gRPC | Services | Spring gRPC / Quarkus gRPC registries and metrics | No | Planned |
 | Planned  | Spring Batch | Services | Spring Batch `JobExplorer` / `JobRepository` | No | Planned |
-| Planned  | WebSocket endpoints | Services | Spring WebSocket/STOMP / Quarkus WebSockets Next | No (capture only) | Planned |
+| Delivered | WebSocket endpoints | Services | Spring WebSocket/STOMP / Quarkus WebSockets Next | No (capture only) | Delivered |
 | Planned  | Error-contract catalogue | Services | Spring exception handlers / Quarkus exception mappers | No | Delivered |
 | Shipped  | Slow-SQL ranking and URI attribution | Database | Existing SQL Trace and HTTP exchange evidence | No | ✅ Shipped |
 | Planned  | Correlation-ID filtering | Diagnostics | Existing request and Live Activity capture | No (capture only) | Planned |
@@ -354,7 +354,7 @@ Acceptance criteria:
   completed, stopped, and failed executions, step skip/rollback counts, masked parameters, long failure descriptions, and
   high-cardinality paging without external services.
 
-### 3.10 WebSocket endpoints — Services 📋 Planned
+### 3.10 WebSocket endpoints — Services ✅ Delivered
 
 BootUI's Mappings panel explains request/response HTTP routes, but long-lived WebSocket endpoints, STOMP message mappings,
 active sessions, subscriptions, and frame activity remain invisible. This panel provides a bounded, metadata-only view

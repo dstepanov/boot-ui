@@ -12,6 +12,7 @@ const DatabaseAdvisor = () => import('./views/DatabaseAdvisor.vue')
 const SqlTrace = () => import('./views/SqlTrace.vue')
 const Transactions = () => import('./views/Transactions.vue')
 const RestClientTrace = () => import('./views/RestClientTrace.vue')
+const WebSockets = () => import('./views/WebSockets.vue')
 const Data = () => import('./views/Data.vue')
 const Hibernate = () => import('./views/Hibernate.vue')
 const HibernateStatistics = () => import('./views/HibernateStatistics.vue')
@@ -712,6 +713,30 @@ export const routes = [
         'time limiter',
         'timeout',
         'fallback'
+      ]
+    }
+  },
+  {
+    path: '/websockets',
+    name: 'websockets',
+    component: WebSockets,
+    meta: {
+      group: groups.services,
+      icon: 'bi-broadcast-pin',
+      title: 'WebSockets',
+      shortcut: 'ws',
+      keywords: [
+        'websocket',
+        'stomp',
+        'sockjs',
+        'realtime',
+        'real time',
+        'push',
+        'socket',
+        'subscriptions',
+        'broker',
+        'frames',
+        'connections'
       ]
     }
   },

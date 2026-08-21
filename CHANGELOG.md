@@ -9,6 +9,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **WebSockets panel.** A new `websockets` panel and stable `/bootui/api/websockets/**` contract report the WebSocket
+  endpoints an application declares, the connections currently open against them, STOMP subscriptions, and a bounded log
+  of recent frame **metadata** — direction, frame type, destination, and payload size. Message payloads are never read,
+  decoded, or stored on any stack, and provider session ids are replaced by a short one-way hash. Frame capture is
+  installed only through Spring MVC's public `WebSocketMessageBrokerConfigurer` seams; Spring WebFlux and Quarkus report
+  endpoints and live connections with `frameCaptureSupported=false` and a concrete reason rather than pretending. The
+  panel refreshes over Server-Sent Events and exposes local-only Pause/Resume and Clear actions, both gated by
+  `bootui.panels.websockets.read-only`. Configurable under `bootui.websockets.*`.
 - **Meter provenance and explanation in the Metrics panel.** Meters are grouped by the integration family that
   registered them (JVM, process, system, HTTP server and client, datasources, caches, messaging, resilience, gRPC,
   framework internals, and application/unclassified), each group naming the contributing library, its registry

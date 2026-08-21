@@ -260,6 +260,15 @@ public class QuarkusPanelAvailability {
     public static final String RABBIT_PRESENT_KEY = "bootui.internal.rabbit-present";
 
     /**
+     * Build-time config key written by the {@code registerWebSockets} build step to signal that
+     * {@code quarkus-websockets-next} is present, the connection-observing beans were wired, and at least
+     * one {@code @WebSocket} endpoint was found in the index. Read back here (default {@code false}) so the
+     * WebSockets panel lights up only for applications that actually declare an endpoint, mirroring
+     * {@link #RABBIT_PRESENT_KEY}.
+     */
+    public static final String WEBSOCKETS_PRESENT_KEY = "bootui.internal.websockets-present";
+
+    /**
      * Runtime-config key carrying the build-time REST Client Reactive presence decision. The deployment
      * processor emits it (default {@code false}) only when the REST Client Reactive capability is present
      * and the launch mode is non-production. The recorder is produced unconditionally; the panel remains
@@ -319,6 +328,10 @@ public class QuarkusPanelAvailability {
     private static final String RABBIT_ABSENT =
             "Not available: this application does not use RabbitMQ messaging. Add the quarkus-messaging-rabbitmq"
                     + " extension (with an @Incoming/@Outgoing channel) to enable the RabbitMQ panel.";
+
+    private static final String WEBSOCKETS_ABSENT =
+            "Not available: this application declares no WebSocket endpoint. Add the quarkus-websockets-next"
+                    + " extension and a @WebSocket endpoint to enable the WebSockets panel.";
 
     private static final String REST_CLIENT_TRACE_ABSENT =
             "Not available: this application does not use Quarkus REST Client Reactive. Add the"
@@ -421,6 +434,7 @@ public class QuarkusPanelAvailability {
             Map.entry(BootUiPanels.EMAIL, EMAIL_ABSENT),
             Map.entry(BootUiPanels.KAFKA, KAFKA_ABSENT),
             Map.entry(BootUiPanels.RABBITMQ, RABBIT_ABSENT),
+            Map.entry(BootUiPanels.WEBSOCKETS, WEBSOCKETS_ABSENT),
             Map.entry(BootUiPanels.REST_CLIENT_TRACE, REST_CLIENT_TRACE_ABSENT),
             Map.entry(BootUiPanels.SQL_TRACE, SQL_TRACE_ABSENT),
             Map.entry(BootUiPanels.PROFILE_DIFF, PROFILE_DIFF_ABSENT),
@@ -480,6 +494,7 @@ public class QuarkusPanelAvailability {
     private final boolean kafkaPresent;
 
     private final boolean rabbitPresent;
+    private final boolean webSocketsPresent;
     private final boolean restClientTracePresent;
 
     private final boolean securityLogsAvailable;
@@ -526,6 +541,8 @@ public class QuarkusPanelAvailability {
                 config.getOptionalValue(KAFKA_PRESENT_KEY, Boolean.class).orElse(false);
         this.rabbitPresent =
                 config.getOptionalValue(RABBIT_PRESENT_KEY, Boolean.class).orElse(false);
+        this.webSocketsPresent =
+                config.getOptionalValue(WEBSOCKETS_PRESENT_KEY, Boolean.class).orElse(false);
         this.restClientTracePresent = config.getOptionalValue(REST_CLIENT_TRACE_PRESENT_KEY, Boolean.class)
                 .orElse(false);
         boolean securityPresent = config.getOptionalValue(SECURITY_LOGS_PRESENT_KEY, Boolean.class)
@@ -555,6 +572,7 @@ public class QuarkusPanelAvailability {
                 Map.entry(BootUiPanels.EMAIL, emailPresent),
                 Map.entry(BootUiPanels.KAFKA, kafkaPresent),
                 Map.entry(BootUiPanels.RABBITMQ, rabbitPresent),
+                Map.entry(BootUiPanels.WEBSOCKETS, webSocketsPresent),
                 Map.entry(BootUiPanels.REST_CLIENT_TRACE, restClientTracePresent),
                 Map.entry(BootUiPanels.SECURITY_LOGS, securityLogsAvailable),
                 Map.entry(BootUiPanels.SQL_TRACE, connectionPoolsPresent),

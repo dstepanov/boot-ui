@@ -59,6 +59,9 @@ import io.github.jdubois.bootui.engine.telemetry.SpanEnricher;
 import io.github.jdubois.bootui.engine.threads.ThreadDumpService;
 import io.github.jdubois.bootui.engine.web.HttpExchangeBuffer;
 import io.github.jdubois.bootui.engine.web.HttpProbeService;
+import io.github.jdubois.bootui.engine.websocket.WebSocketActivityRecorder;
+import io.github.jdubois.bootui.engine.websocket.WebSocketService;
+import io.github.jdubois.bootui.engine.websocket.WebSocketSettings;
 import io.github.jdubois.bootui.quarkus.beans.QuarkusBeanProvider;
 import io.github.jdubois.bootui.quarkus.config.QuarkusConfigProvider;
 import io.github.jdubois.bootui.quarkus.databaseadvisor.QuarkusDatabaseAdvisorDataSourceProvider;
@@ -74,6 +77,7 @@ import io.github.jdubois.bootui.quarkus.scheduled.QuarkusScheduledTaskProvider;
 import io.github.jdubois.bootui.quarkus.security.QuarkusSecuritySnapshotProviderImpl;
 import io.github.jdubois.bootui.quarkus.web.GitHubApiClient;
 import io.github.jdubois.bootui.quarkus.web.QuarkusGitHubSettings;
+import io.github.jdubois.bootui.quarkus.websocket.QuarkusWebSocketMetadataProvider;
 import io.github.jdubois.bootui.spi.CacheProvider;
 import io.github.jdubois.bootui.spi.ConnectionPoolProvider;
 import io.github.jdubois.bootui.spi.FlywayProvider;
@@ -82,6 +86,7 @@ import io.github.jdubois.bootui.spi.HibernateStatisticsProvider;
 import io.github.jdubois.bootui.spi.LiquibaseProvider;
 import io.github.jdubois.bootui.spi.LoggerProvider;
 import io.github.jdubois.bootui.spi.TraceIdProvider;
+import io.github.jdubois.bootui.spi.WebSocketSessionProvider;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.quarkus.runtime.LaunchMode;
 import io.smallrye.config.SmallRyeConfig;
@@ -1058,6 +1063,63 @@ public class BootUiEngineProducer {
     @Singleton
     public DevServicesReportService devServicesReportService() {
         return new DevServicesReportService();
+    }
+
+    /**
+     * The WebSockets panel settings. Frame <em>metadata</em> only: there is deliberately no property that
+     * could turn message-payload capture on, because BootUI never captures a payload on any stack.
+     */
+    @Produces
+    @Singleton
+    public WebSocketSettings webSocketSettings(Config config) {
+        return new WebSocketSettings(
+                config.getOptionalValue("bootui.websockets.enabled", Boolean.class)
+                        .orElse(true),
+                config.getOptionalValue("bootui.websockets.capturing", Boolean.class)
+                        .orElse(true),
+                config.getOptionalValue("bootui.websockets.max-endpoints", Integer.class)
+                        .orElse(200),
+                config.getOptionalValue("bootui.websockets.max-sessions", Integer.class)
+                        .orElse(200),
+                config.getOptionalValue("bootui.websockets.max-subscriptions", Integer.class)
+                        .orElse(500),
+                config.getOptionalValue("bootui.websockets.max-activity-entries", Integer.class)
+                        .orElse(500),
+                config.getOptionalValue("bootui.websockets.max-tracked-sessions", Integer.class)
+                        .orElse(2_000));
+    }
+
+    /**
+     * The WebSockets panel activity recorder. Produced <em>unconditionally</em> because it holds no
+     * {@code io.quarkus.websockets.next} type; the connection-observing beans that feed it are gated
+     * separately (see {@code BootUiQuarkusProcessor.registerWebSockets}). Without them the recorder simply
+     * stays empty and the panel reports itself unavailable.
+     */
+    @Produces
+    @Singleton
+    public WebSocketActivityRecorder webSocketActivityRecorder(WebSocketSettings settings) {
+        return new WebSocketActivityRecorder(settings);
+    }
+
+    /**
+     * The WebSockets panel service. The session provider is optional: it exists only when
+     * {@code quarkus-websockets-next} is on the classpath, and its absence simply means no live sessions are
+     * listed rather than a broken panel.
+     */
+    @Produces
+    @Singleton
+    public WebSocketService webSocketService(
+            QuarkusWebSocketMetadataProvider metadataProvider,
+            Instance<WebSocketSessionProvider> sessionProvider,
+            WebSocketActivityRecorder recorder,
+            WebSocketSettings settings,
+            QuarkusExposurePolicy exposure) {
+        return new WebSocketService(
+                metadataProvider,
+                sessionProvider.isResolvable() ? sessionProvider.get() : null,
+                recorder,
+                settings,
+                exposure);
     }
 
     /**

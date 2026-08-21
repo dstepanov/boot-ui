@@ -63,6 +63,10 @@ import io.github.jdubois.bootui.quarkus.web.QuarkusHttpExchangeCaptureFilter;
 import io.github.jdubois.bootui.quarkus.web.SecurityLogsResource;
 import io.github.jdubois.bootui.quarkus.web.SqlTraceResource;
 import io.github.jdubois.bootui.quarkus.web.TransactionsResource;
+import io.github.jdubois.bootui.quarkus.websocket.QuarkusWebSockets;
+import io.github.jdubois.bootui.quarkus.websocket.RawWebSocketCallback;
+import io.github.jdubois.bootui.quarkus.websocket.RawWebSocketEndpoint;
+import io.github.jdubois.bootui.quarkus.websocket.WebSocketsRecorder;
 import io.github.jdubois.bootui.spi.ErrorHandlerDescriptor;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
@@ -97,6 +101,7 @@ import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -240,6 +245,37 @@ class BootUiQuarkusProcessor {
             "io.github.jdubois.bootui.quarkus.rabbit.QuarkusRabbitProducerCapture";
     private static final String RABBIT_CONSUMER_CAPTURE_CLASS =
             "io.github.jdubois.bootui.quarkus.rabbit.QuarkusRabbitConsumerCapture";
+
+    // Referenced by class name only: QuarkusWebSocketSessionProvider and QuarkusWebSocketConnectionCapture
+    // import io.quarkus.websockets.next, so the deployment classloader must never load them while augmenting
+    // an application without quarkus-websockets-next (loading them would link an API that must stay absent —
+    // R2). registerWebSocketBeans gates them on runtime class presence of WEBSOCKET_CONNECTION_CLASS.
+    private static final String WEBSOCKET_SESSION_PROVIDER_CLASS =
+            "io.github.jdubois.bootui.quarkus.websocket.QuarkusWebSocketSessionProvider";
+    private static final String WEBSOCKET_CONNECTION_CAPTURE_CLASS =
+            "io.github.jdubois.bootui.quarkus.websocket.QuarkusWebSocketConnectionCapture";
+
+    // The runtime type whose presence tells registerWebSocketBeans that quarkus-websockets-next is on the
+    // application's classpath. There is no dedicated WEBSOCKETS_NEXT Capability constant in Quarkus core, so
+    // this mirrors the Email and RabbitMQ class-presence pattern. The provided-scope quarkus-websockets-next
+    // dependency adds this class transitively, but only when the application itself declares that extension —
+    // the provided scope is not transitive (R2).
+    private static final String WEBSOCKET_CONNECTION_CLASS = "io.quarkus.websockets.next.WebSocketConnection";
+
+    private static final DotName WEBSOCKET_ANNOTATION = DotName.createSimple("io.quarkus.websockets.next.WebSocket");
+
+    /**
+     * The WebSockets Next callback annotations, in the order the panel lists them. Read from the Jandex index
+     * by name only, so the deployment classloader never loads the annotation classes themselves.
+     */
+    private static final List<DotName> WEBSOCKET_CALLBACK_ANNOTATIONS = List.of(
+            DotName.createSimple("io.quarkus.websockets.next.OnOpen"),
+            DotName.createSimple("io.quarkus.websockets.next.OnTextMessage"),
+            DotName.createSimple("io.quarkus.websockets.next.OnBinaryMessage"),
+            DotName.createSimple("io.quarkus.websockets.next.OnPingMessage"),
+            DotName.createSimple("io.quarkus.websockets.next.OnPongMessage"),
+            DotName.createSimple("io.quarkus.websockets.next.OnClose"),
+            DotName.createSimple("io.quarkus.websockets.next.OnError"));
 
     private static final String SCHEDULED_TASK_RUN_RECORDER_CLASS =
             "io.github.jdubois.bootui.quarkus.scheduled.QuarkusScheduledTaskRunRecorder";
@@ -2127,6 +2163,142 @@ class BootUiQuarkusProcessor {
      * Annotation members absent from the Jandex instance fall back to the annotation defaults ({@code ""} for
      * the strings, {@code 0} for {@code delay}, {@code MINUTES} for {@code delayUnit}).
      */
+    /**
+     * Captures the host application's {@code @WebSocket} endpoints at build time and exposes them to the
+     * runtime as a synthetic {@link QuarkusWebSockets} bean (via {@link WebSocketsRecorder}), registers the
+     * two {@code io.quarkus.websockets.next}-importing runtime beans, and publishes
+     * {@code bootui.internal.websockets-present=true} so the WebSockets panel lights up in the manifest.
+     *
+     * <p>Build-time capture is used for the same reason as Mappings and Scheduled Tasks: WebSockets Next has
+     * no runtime API that enumerates declared endpoints with their callbacks, and reading the Jandex index
+     * avoids a build-step cycle with {@link SyntheticBeanBuildItem}. The index is read by
+     * {@link DotName} only, so the deployment classloader never loads a WebSockets Next class while
+     * augmenting an application that does not have the extension (R2).</p>
+     *
+     * <p>{@link QuarkusWebSocketSessionProvider} and {@link QuarkusWebSocketConnectionCapture} are
+     * {@code @ApplicationScoped} beans in the Jandex-indexed extension runtime jar, so Arc would discover
+     * them unconditionally; they are therefore actively {@linkplain ExcludedTypeBuildItem excluded} when the
+     * extension is absent, exactly like the Kafka and RabbitMQ capture beans. The present-key is emitted only
+     * when an endpoint was actually found, so an application that adds the extension without declaring an
+     * endpoint gets an honestly unavailable panel rather than an empty one that looks broken.</p>
+     *
+     * <p>Capture here is connection lifecycle only. WebSockets Next exposes no message-interception SPI, so
+     * the report states {@code frameCaptureSupported=false} with a reason; no message payload is read on any
+     * stack.</p>
+     */
+    @BuildStep
+    void registerWebSocketBeans(
+            LaunchModeBuildItem launchMode,
+            BuildProducer<AdditionalBeanBuildItem> additionalBeans,
+            BuildProducer<ExcludedTypeBuildItem> excludedTypes) {
+        registerCapabilityGatedBeans(
+                webSocketsPresent(launchMode),
+                additionalBeans,
+                excludedTypes,
+                WEBSOCKET_SESSION_PROVIDER_CLASS,
+                WEBSOCKET_CONNECTION_CAPTURE_CLASS);
+    }
+
+    /**
+     * Companion of {@link #registerWebSocketBeans} that reads the endpoint topology. It is a separate build
+     * step because {@link BeanArchiveIndexBuildItem} is produced <em>after</em> the bean archive is assembled
+     * from {@link AdditionalBeanBuildItem}s: producing both from one step is a build-chain cycle.
+     */
+    @BuildStep
+    @Record(ExecutionTime.STATIC_INIT)
+    void registerWebSocketEndpoints(
+            LaunchModeBuildItem launchMode,
+            BeanArchiveIndexBuildItem beanArchiveIndex,
+            WebSocketsRecorder recorder,
+            BuildProducer<SyntheticBeanBuildItem> syntheticBeans,
+            BuildProducer<RunTimeConfigurationDefaultBuildItem> runtimeDefaults) {
+        if (!webSocketsPresent(launchMode)) {
+            return; // no quarkus-websockets-next (or production): the panel stays unavailable
+        }
+        List<RawWebSocketEndpoint> endpoints = scanWebSocketEndpoints(beanArchiveIndex.getIndex());
+        syntheticBeans.produce(SyntheticBeanBuildItem.configure(QuarkusWebSockets.class)
+                .scope(Singleton.class)
+                .runtimeValue(recorder.create(endpoints))
+                .unremovable()
+                .done());
+        if (!endpoints.isEmpty()) {
+            runtimeDefaults.produce(
+                    new RunTimeConfigurationDefaultBuildItem(QuarkusPanelAvailability.WEBSOCKETS_PRESENT_KEY, "true"));
+        }
+    }
+
+    private static boolean webSocketsPresent(LaunchModeBuildItem launchMode) {
+        return launchMode.getLaunchMode() != LaunchMode.NORMAL
+                && QuarkusClassLoader.isClassPresentAtRuntime(WEBSOCKET_CONNECTION_CLASS);
+    }
+
+    /**
+     * Reads every {@code @WebSocket} class from the index and renders it, plus its callback methods, into the
+     * recordable carriers. Only annotation-declared endpoints are captured, matching the panel's documented
+     * scope; nothing about the messages those callbacks handle is read.
+     */
+    private static List<RawWebSocketEndpoint> scanWebSocketEndpoints(IndexView index) {
+        List<RawWebSocketEndpoint> endpoints = new ArrayList<>();
+        for (AnnotationInstance annotation : index.getAnnotations(WEBSOCKET_ANNOTATION)) {
+            if (annotation.target() == null || annotation.target().kind() != AnnotationTarget.Kind.CLASS) {
+                continue;
+            }
+            ClassInfo endpointClass = annotation.target().asClass();
+            String handlerClass = endpointClass.name().toString();
+            AnnotationValue endpointId = annotation.value("endpointId");
+            AnnotationValue path = annotation.value("path");
+            endpoints.add(new RawWebSocketEndpoint(
+                    endpointId == null || endpointId.asString().isBlank() ? handlerClass : endpointId.asString(),
+                    path == null ? null : path.asString(),
+                    handlerClass,
+                    enumMemberOrNull(annotation, "inboundProcessingMode"),
+                    scanWebSocketCallbacks(endpointClass)));
+        }
+        endpoints.sort(Comparator.comparing(
+                endpoint -> endpoint.path() == null ? "" : endpoint.path(), Comparator.naturalOrder()));
+        return endpoints;
+    }
+
+    private static List<RawWebSocketCallback> scanWebSocketCallbacks(ClassInfo endpointClass) {
+        List<RawWebSocketCallback> callbacks = new ArrayList<>();
+        for (DotName callbackAnnotation : WEBSOCKET_CALLBACK_ANNOTATIONS) {
+            for (MethodInfo method : endpointClass.methods()) {
+                if (!method.hasAnnotation(callbackAnnotation)) {
+                    continue;
+                }
+                callbacks.add(new RawWebSocketCallback(
+                        callbackType(callbackAnnotation),
+                        endpointClass.name().toString(),
+                        method.name(),
+                        method.parametersCount() == 0
+                                ? null
+                                : method.parameterType(0).name().toString()));
+            }
+        }
+        return callbacks;
+    }
+
+    /** Renders {@code io.quarkus.websockets.next.OnTextMessage} as {@code ON_TEXT_MESSAGE}. */
+    private static String callbackType(DotName annotation) {
+        // DotName.local() only strips the package for componentized names, and Jandex hands these back simple.
+        String name = annotation.toString();
+        String simpleName = name.substring(name.lastIndexOf('.') + 1);
+        StringBuilder rendered = new StringBuilder();
+        for (int index = 0; index < simpleName.length(); index++) {
+            char character = simpleName.charAt(index);
+            if (index > 0 && Character.isUpperCase(character)) {
+                rendered.append('_');
+            }
+            rendered.append(Character.toUpperCase(character));
+        }
+        return rendered.toString();
+    }
+
+    private static String enumMemberOrNull(AnnotationInstance annotation, String name) {
+        AnnotationValue value = annotation.value(name);
+        return value == null ? null : value.asEnum();
+    }
+
     private static List<RawScheduledTask> scanScheduledTasks(IndexView index) {
         List<RawScheduledTask> tasks = new ArrayList<>();
         for (AnnotationInstance annotation : index.getAnnotations(SCHEDULED_ANNOTATION)) {

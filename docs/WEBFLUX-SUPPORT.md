@@ -173,7 +173,7 @@ same runtime-built status as its servlet equivalent, and WebFlux's functional `S
 handler — discovery reads bean *types* without creating them, so a `FactoryBean` declaring advice is never
 forced into existence just to build the catalogue.
 
-### 6.3 Rebuilt with a new reactive capture layer (8 panels)
+### 6.3 Rebuilt with a new reactive capture layer (9 panels)
 
 The DTO and UI are reused unchanged; only the capture/streaming source was rewritten because the servlet original
 depended on `SseEmitter` (SQL Trace, Log Tail, Security Logs, Exceptions, REST Client, Transactions) or
@@ -189,6 +189,7 @@ depended on `SseEmitter` (SQL Trace, Log Tail, Security Logs, Exceptions, REST C
 | Copilot       | `ReactiveCopilotController` over the same `AgentSessionStore`, SSE via `ReactiveBootUiChangeStream`                     |
 | Claude Code   | `ReactiveClaudeCodeController` over the same `AgentSessionStore`, SSE via `ReactiveBootUiChangeStream`                  |
 | REST Client   | `ReactiveRestClientTraceController` — same `RestClientTraceRecorder` engine, SSE via `ReactiveBootUiChangeStream`. Availability is gated on `RestClientTraceRecorder#hasInstrumentedClient()` (a `WebClient.Builder` auto-configured with the BootUI customizer must have been built); the `RestClient`/`RestTemplate` interceptors are not linked on a WebFlux-only classpath (their `@ConditionalOnClass` gate requires `spring-boot-restclient`), so the recorder only sees `WebClient` customization on this stack, which is the correct signal. |
+| WebSockets    | `ReactiveWebSocketController` + `ReactiveWebSocketMetadataProvider` — same `WebSocketService` engine, SSE via `ReactiveBootUiChangeStream`. Endpoint topology is read from the reactive `SimpleUrlHandlerMapping` beans that map `org.springframework.web.reactive.socket.WebSocketHandler`s. **Fidelity gap, accepted and reported honestly:** `@EnableWebSocketMessageBroker` and its `WebSocketHandlerDecoratorFactory`/`ChannelInterceptor` seams are servlet-only, so the reactive report sets `frameCaptureSupported=false` with that reason and the panel shows endpoints only — it never fabricates a frame log or an empty capture buffer. There is likewise no reactive session registry, so `sessionTrackingSupported=false` and the Sessions table reads *not supported on this stack* rather than implying no client is connected. |
 
 **`ReactiveBootUiChangeStream`** is a small shared `Sinks.Many`-backed SSE broadcaster (`open()` /
 `signal()` / `close()`) used by every "push an update when something changes" panel above, instead of each controller

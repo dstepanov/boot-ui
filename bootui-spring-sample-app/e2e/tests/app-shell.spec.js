@@ -38,6 +38,7 @@ const allPanelLinks = [
   {id: 'scheduled', title: 'Scheduled Tasks', heading: /Scheduled Tasks/},
   {id: 'rest-client-trace', title: 'REST Client', heading: /^REST Client$/},
   {id: 'fault-tolerance', title: 'Fault Tolerance', heading: /^Fault Tolerance/},
+  {id: 'websockets', title: 'WebSockets', heading: /^WebSockets/},
   {id: 'ai', title: 'AI Framework', heading: /AI Framework/},
   {id: 'cache', title: 'Cache', heading: /^Cache$/},
   {id: 'traces', title: 'Traces', heading: /^Traces/},
@@ -350,7 +351,7 @@ test.describe('BootUI app shell', () => {
       {title: 'Configuration', count: 6},
       {title: 'Database', count: 7},
       {title: 'Security', count: 2},
-      {title: 'Services', count: 9},
+      {title: 'Services', count: 10},
       {title: 'Diagnostics', count: 5},
       {title: 'Developer tools', count: 5}
     ]
@@ -390,11 +391,12 @@ test.describe('BootUI app shell', () => {
       'Security Logs'
     ])
 
-    await page.getByRole('button', {name: /Services\s+9/}).click()
+    await page.getByRole('button', {name: /Services\s+10/}).click()
     await expect(page.getByRole('group', {name: 'Services panels'}).locator('.bootui-nav-link__label')).toHaveText([
       'Scheduled Tasks',
       'REST Client',
       'Fault Tolerance',
+      'WebSockets',
       'AI Framework',
       'Cache',
       'Email',
