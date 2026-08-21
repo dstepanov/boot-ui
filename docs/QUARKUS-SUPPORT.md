@@ -419,8 +419,10 @@ advisor endpoints, and the shell-chrome `GET /bootui/api/overview` endpoint is s
   step in the extension), whose `handle()` method reads a CDI-injected `LaunchMode` and answers a plain `404` for
   the configured UI/API surface and the private `/bootui` classpath mount only when it is `LaunchMode.NORMAL` — an
   immediate no-op pass-through otherwise, so dev/`@QuarkusTest` behavior is unaffected. Net effect: the public and
-  internal BootUI paths are plain 404s in production, at parity with the Spring adapter (which never registers any BootUI
-  route when inactive, so nothing is reachable there either).
+  internal BootUI paths are plain 404s in production, at parity with the Spring adapter, whose
+  `BootUiShellGuardAutoConfiguration` answers the same 404 for the same reserved `/bootui` mount whenever BootUI's
+  activation condition resolves to disabled — Spring Boot's default static-resource handling exposed the packaged shell
+  there for exactly the same reason (#856).
   Proven by a genuine `LaunchMode.NORMAL` build+run via `QuarkusProdModeTest`
   (`BootUiQuarkusProdShellGuardBootTest`, in the dedicated `bootui-quarkus-prod-shell-guard-integration-tests`
   module — kept separate from every `@QuarkusTest`-based module because Quarkus's own test framework refuses to mix

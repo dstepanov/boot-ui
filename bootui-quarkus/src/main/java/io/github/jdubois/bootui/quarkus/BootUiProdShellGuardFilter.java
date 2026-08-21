@@ -21,8 +21,9 @@ import org.eclipse.microprofile.config.Config;
  * Quarkus offers no build-time mechanism to exclude a single path from it (see
  * {@code BootUiQuarkusProcessor}'s class Javadoc for the full investigation). Left alone, that would leave
  * the empty SPA shell's {@code index.html}/JS/CSS reachable in production, just with no working API behind
- * it — this filter is what turns that into a plain 404, at parity with the Spring adapter (which never
- * registers any BootUI route when inactive, so nothing is reachable there either).
+ * it — this filter is what turns that into a plain 404, at parity with the Spring adapter, where
+ * {@code BootUiShellGuardAutoConfiguration} answers the same 404 for the same reserved mount whenever
+ * BootUI's activation condition resolves to disabled (#856).
  *
  * <p>This bean is registered by its own, deliberately <strong>always-on</strong> build step
  * ({@code BootUiQuarkusProcessor#registerProdShellGuard}) — unlike every other BootUI bean/resource, which
