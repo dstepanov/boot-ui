@@ -3,6 +3,12 @@ package io.github.jdubois.bootui.core.dto;
 import java.util.List;
 
 public record LoggersReport(List<String> availableLevels, List<LoggerDto> loggers, PageMetadata page) {
+
+    public LoggersReport {
+        availableLevels = DtoCollections.immutableCopy(availableLevels);
+        loggers = DtoCollections.immutableCopy(loggers);
+    }
+
     public LoggersReport(List<String> availableLevels, List<LoggerDto> loggers) {
         this(
                 availableLevels,

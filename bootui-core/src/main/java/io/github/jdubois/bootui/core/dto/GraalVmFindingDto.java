@@ -16,4 +16,9 @@ public record GraalVmFindingDto(
         int occurrenceCount,
         List<String> sampleOccurrences,
         String recommendation,
-        String learnMoreUrl) {}
+        String learnMoreUrl) {
+
+    public GraalVmFindingDto {
+        sampleOccurrences = DtoCollections.immutableCopy(sampleOccurrences);
+    }
+}

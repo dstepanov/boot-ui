@@ -12,4 +12,10 @@ public record BeanSummary(
         String resource,
         List<String> dependencies,
         List<String> aliases,
-        String classification) {}
+        String classification) {
+
+    public BeanSummary {
+        dependencies = DtoCollections.immutableCopy(dependencies);
+        aliases = DtoCollections.immutableCopy(aliases);
+    }
+}

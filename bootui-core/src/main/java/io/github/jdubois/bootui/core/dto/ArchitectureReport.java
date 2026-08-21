@@ -16,4 +16,12 @@ public record ArchitectureReport(
         List<ArchitectureSeverityCountDto> severityCounts,
         ArchitectureScanStatusDto scan,
         List<ArchitectureRuleResultDto> results,
-        List<ArchitectureRuleResultDto> analysisErrors) {}
+        List<ArchitectureRuleResultDto> analysisErrors) {
+
+    public ArchitectureReport {
+        basePackages = DtoCollections.immutableCopy(basePackages);
+        severityCounts = DtoCollections.immutableCopy(severityCounts);
+        results = DtoCollections.immutableCopy(results);
+        analysisErrors = DtoCollections.immutableCopy(analysisErrors);
+    }
+}

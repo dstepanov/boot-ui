@@ -34,10 +34,10 @@ public record RestClientTraceReport(
         List<String> warnings) {
 
     public RestClientTraceReport {
-        clientTypes = clientTypes == null ? List.of() : List.copyOf(clientTypes);
-        entries = entries == null ? List.of() : List.copyOf(entries);
-        topCalls = topCalls == null ? List.of() : List.copyOf(topCalls);
-        warnings = warnings == null ? List.of() : List.copyOf(warnings);
+        clientTypes = DtoCollections.immutableCopy(clientTypes);
+        entries = DtoCollections.immutableCopy(entries);
+        topCalls = DtoCollections.immutableCopy(topCalls);
+        warnings = DtoCollections.immutableCopy(warnings);
     }
 
     public static RestClientTraceReport unavailable(String reason) {

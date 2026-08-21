@@ -18,6 +18,10 @@ public record HibernateRuleResultDto(
         String learnMoreUrl,
         boolean dismissed) {
 
+    public HibernateRuleResultDto {
+        sampleViolations = DtoCollections.immutableCopy(sampleViolations);
+    }
+
     public HibernateRuleResultDto(
             String id,
             String name,

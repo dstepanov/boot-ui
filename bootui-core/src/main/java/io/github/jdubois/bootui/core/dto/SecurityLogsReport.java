@@ -13,6 +13,11 @@ public record SecurityLogsReport(
         List<SecurityLogEventDto> events,
         PageMetadata page) {
 
+    public SecurityLogsReport {
+        typeSummaries = DtoCollections.immutableCopy(typeSummaries);
+        events = DtoCollections.immutableCopy(events);
+    }
+
     public static SecurityLogsReport unavailable(String reason, int maxLogs) {
         return new SecurityLogsReport(
                 false, reason, maxLogs, List.of(), List.of(), new PageMetadata(0, 0, 0, 0, 0, false));

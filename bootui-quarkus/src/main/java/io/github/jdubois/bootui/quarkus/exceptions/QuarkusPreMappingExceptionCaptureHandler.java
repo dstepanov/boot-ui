@@ -1,12 +1,15 @@
 package io.github.jdubois.bootui.quarkus.exceptions;
 
 import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
+import io.github.jdubois.bootui.quarkus.QuarkusBootUiPaths;
 import io.github.jdubois.bootui.spi.TraceIdProvider;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ArcContainer;
 import io.quarkus.arc.InstanceHandle;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
 import io.vertx.ext.web.RoutingContext;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.resteasy.reactive.server.core.ResteasyReactiveRequestContext;
 import org.jboss.resteasy.reactive.server.spi.ServerRestHandler;
 
@@ -40,12 +43,17 @@ import org.jboss.resteasy.reactive.server.spi.ServerRestHandler;
  * CDI. Its CDI-backed dependencies ({@link ExceptionStore}, the optional {@link TraceIdProvider}, and {@code
  * CurrentVertxRequest}) are therefore resolved lazily, per invocation, via {@link Arc#container()} — cheap for
  * {@code @Singleton}/request-scoped beans and safe even before the container is fully up (guarded to a silent
- * no-op). Every path is wrapped so a diagnostics failure can never disrupt the application's real exception
- * handling or response.
+ * no-op). The live MicroProfile {@code Config} that decides which paths are BootUI's own is read through
+ * {@code ConfigProvider} instead, because the config bean is {@code @Dependent} and this handler has no
+ * lifecycle hook to release a programmatic lookup. Every path is wrapped so a diagnostics failure can never
+ * disrupt the application's real exception handling or response.
+ *
+ * <p>BootUI's own traffic is never captured. The exclusion goes through
+ * {@link QuarkusBootUiPaths#isBootUiRequest}, the single matcher shared with the HTTP-exchange and
+ * exception capture filters, so it holds under a non-default {@code quarkus.http.root-path} and for a custom
+ * {@code bootui.path} mount alike.
  */
 public final class QuarkusPreMappingExceptionCaptureHandler implements ServerRestHandler {
-
-    private static final String BASE_PATH = "/bootui";
 
     @Override
     public void handle(ResteasyReactiveRequestContext requestContext) throws Exception {
@@ -60,7 +68,7 @@ public final class QuarkusPreMappingExceptionCaptureHandler implements ServerRes
             }
             RoutingContext rc = currentRoutingContext(container);
             String path = rc == null ? null : rc.normalizedPath();
-            if (path != null && (path.equals(BASE_PATH) || path.startsWith(BASE_PATH + "/"))) {
+            if (QuarkusBootUiPaths.isBootUiRequest(currentConfig(), path)) {
                 return; // never capture BootUI's own traffic
             }
             InstanceHandle<ExceptionStore> storeHandle = container.instance(ExceptionStore.class);
@@ -92,6 +100,22 @@ public final class QuarkusPreMappingExceptionCaptureHandler implements ServerRes
         try {
             InstanceHandle<CurrentVertxRequest> handle = container.instance(CurrentVertxRequest.class);
             return handle.isAvailable() ? handle.get().getCurrent() : null;
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    /**
+     * The live MicroProfile {@link Config}, or {@code null} when it cannot be resolved. Read through
+     * {@link ConfigProvider} rather than an Arc lookup because the config bean is {@code @Dependent}: a
+     * programmatic lookup would hand back a handle this handler has no lifecycle hook to close, while
+     * {@code ConfigProvider} returns the same running {@code SmallRyeConfig} with no creational context at
+     * all. When it cannot be resolved, BootUI path matching degrades to the internal {@code /bootui} mounts,
+     * which still excludes the default deployment. Fully guarded so capture never disrupts request handling.
+     */
+    private static Config currentConfig() {
+        try {
+            return ConfigProvider.getConfig();
         } catch (RuntimeException ex) {
             return null;
         }

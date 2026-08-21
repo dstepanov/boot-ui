@@ -15,4 +15,9 @@ public record TraceSummaryDto(
         long durationNanos,
         int spanCount,
         boolean hasError,
-        boolean hasAi) {}
+        boolean hasAi) {
+
+    public TraceSummaryDto {
+        services = DtoCollections.immutableCopy(services);
+    }
+}

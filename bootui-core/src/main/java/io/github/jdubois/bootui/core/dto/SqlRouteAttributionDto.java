@@ -41,9 +41,9 @@ public record SqlRouteAttributionDto(
         List<String> notes) {
 
     public SqlRouteAttributionDto {
-        supportedCorrelations = supportedCorrelations == null ? List.of() : List.copyOf(supportedCorrelations);
-        routes = routes == null ? List.of() : List.copyOf(routes);
-        notes = notes == null ? List.of() : List.copyOf(notes);
+        supportedCorrelations = DtoCollections.immutableCopy(supportedCorrelations);
+        routes = DtoCollections.immutableCopy(routes);
+        notes = DtoCollections.immutableCopy(notes);
         unattributed = unattributed == null ? SqlAttributionBucketDto.empty(null) : unattributed;
         ambiguous = ambiguous == null ? SqlAttributionBucketDto.empty(null) : ambiguous;
     }

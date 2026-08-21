@@ -9,6 +9,10 @@ import java.util.List;
 public record GitHubSecuritySignalDto(
         String label, String status, Integer count, String unavailableReason, List<GitHubDependabotAlertDto> alerts) {
 
+    public GitHubSecuritySignalDto {
+        alerts = DtoCollections.immutableCopy(alerts);
+    }
+
     public GitHubSecuritySignalDto(String label, String status, Integer count, String unavailableReason) {
         this(label, status, count, unavailableReason, List.of());
     }

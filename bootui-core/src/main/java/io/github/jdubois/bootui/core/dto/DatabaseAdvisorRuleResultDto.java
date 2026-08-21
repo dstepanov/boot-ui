@@ -19,6 +19,10 @@ public record DatabaseAdvisorRuleResultDto(
         String learnMoreUrl,
         boolean dismissed) {
 
+    public DatabaseAdvisorRuleResultDto {
+        sampleViolations = DtoCollections.immutableCopy(sampleViolations);
+    }
+
     public DatabaseAdvisorRuleResultDto(
             String id,
             String name,

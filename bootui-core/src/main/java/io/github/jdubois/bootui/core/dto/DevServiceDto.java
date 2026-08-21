@@ -18,4 +18,10 @@ public record DevServiceDto(
         Map<String, Object> connectionDetails,
         boolean restartable,
         boolean logsAvailable,
-        String note) {}
+        String note) {
+
+    public DevServiceDto {
+        ports = DtoCollections.immutableCopy(ports);
+        connectionDetails = DtoCollections.immutableCopy(connectionDetails);
+    }
+}

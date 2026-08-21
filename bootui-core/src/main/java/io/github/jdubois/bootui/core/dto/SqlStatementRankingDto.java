@@ -57,8 +57,8 @@ public record SqlStatementRankingDto(
         boolean entryIdsTruncated) {
 
     public SqlStatementRankingDto {
-        topFor = topFor == null ? List.of() : List.copyOf(topFor);
-        callSites = callSites == null ? List.of() : List.copyOf(callSites);
-        entryIds = entryIds == null ? List.of() : List.copyOf(entryIds);
+        topFor = DtoCollections.immutableCopy(topFor);
+        callSites = DtoCollections.immutableCopy(callSites);
+        entryIds = DtoCollections.immutableCopy(entryIds);
     }
 }

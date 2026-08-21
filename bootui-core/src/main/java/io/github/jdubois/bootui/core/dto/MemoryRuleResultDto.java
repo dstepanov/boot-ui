@@ -19,6 +19,10 @@ public record MemoryRuleResultDto(
         String learnMoreUrl,
         boolean dismissed) {
 
+    public MemoryRuleResultDto {
+        sampleViolations = DtoCollections.immutableCopy(sampleViolations);
+    }
+
     public MemoryRuleResultDto(
             String id,
             String name,

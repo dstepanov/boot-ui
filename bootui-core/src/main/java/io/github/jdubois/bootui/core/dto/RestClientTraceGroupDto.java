@@ -31,6 +31,6 @@ public record RestClientTraceGroupDto(
         List<String> callSites) {
 
     public RestClientTraceGroupDto {
-        callSites = callSites == null ? List.of() : List.copyOf(callSites);
+        callSites = DtoCollections.immutableCopy(callSites);
     }
 }

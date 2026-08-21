@@ -30,4 +30,13 @@ public record DatabaseAdvisorReport(
         List<DatabaseAdvisorSeverityCountDto> severityCounts,
         DatabaseAdvisorScanStatusDto scan,
         List<DatabaseAdvisorRuleResultDto> results,
-        List<DatabaseAdvisorDiagnosticDto> diagnostics) {}
+        List<DatabaseAdvisorDiagnosticDto> diagnostics) {
+
+    public DatabaseAdvisorReport {
+        dataSourceNames = DtoCollections.immutableCopy(dataSourceNames);
+        dataSources = DtoCollections.immutableCopy(dataSources);
+        severityCounts = DtoCollections.immutableCopy(severityCounts);
+        results = DtoCollections.immutableCopy(results);
+        diagnostics = DtoCollections.immutableCopy(diagnostics);
+    }
+}

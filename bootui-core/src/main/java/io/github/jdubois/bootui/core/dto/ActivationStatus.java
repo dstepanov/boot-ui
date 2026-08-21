@@ -5,4 +5,9 @@ import java.util.List;
 /**
  * Reason why BootUI activated, plus current safety settings.
  */
-public record ActivationStatus(boolean enabled, boolean localhostOnly, String reason, List<String> warnings) {}
+public record ActivationStatus(boolean enabled, boolean localhostOnly, String reason, List<String> warnings) {
+
+    public ActivationStatus {
+        warnings = DtoCollections.immutableCopy(warnings);
+    }
+}

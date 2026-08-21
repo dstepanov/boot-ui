@@ -27,6 +27,10 @@ public record ErrorContractReport(
         List<ErrorContractEntryDto> entries,
         PageMetadata page) {
 
+    public ErrorContractReport {
+        entries = DtoCollections.immutableCopy(entries);
+    }
+
     /** The unavailable report for a stack with no error-contract backend. */
     public static ErrorContractReport unavailable(String reason, int maxEntries) {
         return new ErrorContractReport(

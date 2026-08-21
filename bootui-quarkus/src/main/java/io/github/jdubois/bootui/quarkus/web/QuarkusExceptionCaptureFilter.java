@@ -1,6 +1,7 @@
 package io.github.jdubois.bootui.quarkus.web;
 
 import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
+import io.github.jdubois.bootui.quarkus.QuarkusBootUiPaths;
 import io.github.jdubois.bootui.quarkus.exceptions.QuarkusResourceHandlers;
 import io.github.jdubois.bootui.spi.TraceIdProvider;
 import io.quarkus.vertx.http.runtime.filters.Filters;
@@ -9,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.Config;
 
 /**
  * Captures unhandled HTTP request failures into the shared {@link ExceptionStore} — the Quarkus analogue
@@ -17,7 +19,9 @@ import jakarta.inject.Inject;
  * modes, so production stays dark. It records in {@link RoutingContext#addBodyEndHandler} so a failure set
  * by a downstream handler is final, and only ever observes — it never short-circuits the response.
  *
- * <p>BootUI's own {@code /bootui} traffic is excluded so the panel never captures its internals, and the
+ * <p>BootUI's own traffic is excluded so the panel never captures its internals — via
+ * {@link QuarkusBootUiPaths#isBootUiRequest}, so the exclusion holds under a non-default
+ * {@code quarkus.http.root-path} and for a custom {@code bootui.path} mount alike — and the
  * request path is taken without its query string to avoid surfacing secrets. The store dedups by
  * cause-chain identity, so a failure also logged by Quarkus (and seen by {@code QuarkusExceptionLogHandler})
  * counts once. In practice {@code QuarkusErrorHandler} logs an unhandled failure synchronously — long before
@@ -46,18 +50,19 @@ import jakarta.inject.Inject;
 @ApplicationScoped
 public class QuarkusExceptionCaptureFilter {
 
-    private static final String BASE_PATH = "/bootui";
-
     /** After the safety filter (priority 1000); only ever records, never short-circuits. */
     private static final int PRIORITY = 900;
 
     private final ExceptionStore store;
     private final TraceIdProvider traceIdProvider;
+    private final Config config;
 
     @Inject
-    public QuarkusExceptionCaptureFilter(ExceptionStore store, Instance<TraceIdProvider> traceIdProvider) {
+    public QuarkusExceptionCaptureFilter(
+            ExceptionStore store, Instance<TraceIdProvider> traceIdProvider, Config config) {
         this.store = store;
         this.traceIdProvider = traceIdProvider.isResolvable() ? traceIdProvider.get() : null;
+        this.config = config;
     }
 
     public void register(@Observes Filters filters) {
@@ -66,7 +71,7 @@ public class QuarkusExceptionCaptureFilter {
 
     void handle(RoutingContext rc) {
         String path = rc.normalizedPath();
-        if (path != null && (path.equals(BASE_PATH) || path.startsWith(BASE_PATH + "/"))) {
+        if (QuarkusBootUiPaths.isBootUiRequest(config, path)) {
             rc.next();
             return;
         }

@@ -13,4 +13,9 @@ public record DependencyDto(
         String source,
         int vulnerabilityCount,
         String highestSeverity,
-        List<DependencyVulnerabilityDto> vulnerabilities) {}
+        List<DependencyVulnerabilityDto> vulnerabilities) {
+
+    public DependencyDto {
+        vulnerabilities = DtoCollections.immutableCopy(vulnerabilities);
+    }
+}

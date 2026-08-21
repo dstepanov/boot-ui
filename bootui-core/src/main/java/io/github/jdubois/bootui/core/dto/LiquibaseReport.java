@@ -5,4 +5,9 @@ import java.util.List;
 /**
  * Top-level Liquibase migration report.
  */
-public record LiquibaseReport(boolean liquibasePresent, int total, List<LiquibaseDatabaseDto> databases) {}
+public record LiquibaseReport(boolean liquibasePresent, int total, List<LiquibaseDatabaseDto> databases) {
+
+    public LiquibaseReport {
+        databases = DtoCollections.immutableCopy(databases);
+    }
+}

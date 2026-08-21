@@ -16,6 +16,10 @@ public record MetricMeterDto(
         List<MetricAvailableTagDto> availableTags,
         MetricProvenanceDto provenance) {
 
+    public MetricMeterDto {
+        availableTags = DtoCollections.immutableCopy(availableTags);
+    }
+
     public MetricMeterDto(
             String name, String description, String baseUnit, String type, List<MetricAvailableTagDto> availableTags) {
         this(name, description, baseUnit, type, availableTags, null);

@@ -16,4 +16,9 @@ public record HttpSessionDto(
         Long idleSeconds,
         int maxInactiveIntervalSeconds,
         int attributeCount,
-        List<HttpSessionAttributeDto> attributes) {}
+        List<HttpSessionAttributeDto> attributes) {
+
+    public HttpSessionDto {
+        attributes = DtoCollections.immutableCopy(attributes);
+    }
+}

@@ -1,4 +1,5 @@
 <script setup>
+import 'bootstrap/js/dist/collapse'
 import {computed, onBeforeUnmount, onMounted, ref} from 'vue'
 import {actionBusyMessage, apiFetch, getJson, isActionBusyError} from '../api.js'
 import {formatClockTime} from '../utils/format.js'

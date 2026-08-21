@@ -1,5 +1,5 @@
 <script setup>
-import {nextTick, ref, watch} from 'vue'
+import {nextTick, onMounted, ref, watch} from 'vue'
 import {confirmState, settleConfirm} from '../../utils/useConfirm.js'
 
 const dialogEl = ref(null)
@@ -11,30 +11,30 @@ function supportsModal() {
   return dialogEl.value && typeof dialogEl.value.showModal === 'function'
 }
 
-watch(
-  () => confirmState.open,
-  async (open) => {
-    const el = dialogEl.value
-    if (!el) return
-    if (open) {
-      // Remember the control that launched the prompt so focus can return to it.
-      trigger = document.activeElement
-      if (!el.open) {
-        if (supportsModal()) el.showModal()
-        else el.setAttribute('open', '')
-      }
-      await nextTick()
-      // Default focus to the safe choice: Cancel for destructive prompts.
-      const target = confirmState.options.danger ? cancelBtn.value : confirmBtn.value
-      target?.focus()
-    } else if (el.open) {
-      if (typeof el.close === 'function') el.close()
-      else el.removeAttribute('open')
-      if (trigger && typeof trigger.focus === 'function') trigger.focus()
-      trigger = null
+async function syncDialog(open) {
+  const el = dialogEl.value
+  if (!el) return
+  if (open) {
+    // Remember the control that launched the prompt so focus can return to it.
+    trigger = document.activeElement
+    if (!el.open) {
+      if (supportsModal()) el.showModal()
+      else el.setAttribute('open', '')
     }
+    await nextTick()
+    // Default focus to the safe choice: Cancel for destructive prompts.
+    const target = confirmState.options.danger ? cancelBtn.value : confirmBtn.value
+    target?.focus()
+  } else if (el.open) {
+    if (typeof el.close === 'function') el.close()
+    else el.removeAttribute('open')
+    if (trigger && typeof trigger.focus === 'function') trigger.focus()
+    trigger = null
   }
-)
+}
+
+watch(() => confirmState.open, syncDialog)
+onMounted(() => syncDialog(confirmState.open))
 
 // Escape on a modal <dialog> fires a native `cancel` event; handle it (and the
 // fallback keydown) through the shared settle path so the promise resolves false.

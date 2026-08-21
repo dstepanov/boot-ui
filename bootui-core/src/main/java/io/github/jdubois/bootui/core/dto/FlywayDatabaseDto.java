@@ -15,4 +15,9 @@ public record FlywayDatabaseDto(
         boolean migrateEnabled,
         String migrateDisabledReason,
         boolean cleanEnabled,
-        String cleanDisabledReason) {}
+        String cleanDisabledReason) {
+
+    public FlywayDatabaseDto {
+        migrations = DtoCollections.immutableCopy(migrations);
+    }
+}

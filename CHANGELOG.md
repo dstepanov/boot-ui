@@ -66,6 +66,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `RAPI-ERR-010` (inconsistent error contracts across handlers for the same exception), and `RAPI-ERR-011`
   (exception handlers that read stack traces into their response). The catalogue now ships 56 rules.
 
+### Fixed
+
+- **BootUI's own Quarkus traffic stays out of HTTP Exchanges, Live Activity, and Exceptions under a non-default
+  `quarkus.http.root-path` or a custom `bootui.path` mount.** The HTTP-exchange, exception, pre-mapping exception, and
+  log-based capture points now recognize BootUI's surface through one shared matcher that strips the configured root
+  path and honors the configured UI/API mounts, instead of matching the literal `/bootui` prefix each on its own. A
+  request logged by Quarkus' own error handler while serving the console is excluded too. Application paths that merely
+  resemble the console, such as `/bootui-other`, stay captured (#857).
+
 ### Security
 
 - **Malformed `Host` headers are rejected instead of being treated as absent.** `LocalhostGuard` now parses the
