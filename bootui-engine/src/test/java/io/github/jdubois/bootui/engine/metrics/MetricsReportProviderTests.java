@@ -4,16 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.jdubois.bootui.core.dto.MetricDetailDto;
+import io.github.jdubois.bootui.core.dto.MetricGroupDto;
 import io.github.jdubois.bootui.core.dto.MetricMeasurementDto;
 import io.github.jdubois.bootui.core.dto.MetricMeterDto;
+import io.github.jdubois.bootui.core.dto.MetricProvenanceDto;
 import io.github.jdubois.bootui.core.dto.MetricsReport;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -280,5 +284,270 @@ class MetricsReportProviderTests {
         assertThat(detail.samples()).isEmpty();
         assertThat(detail.samplePage().limit()).isEqualTo(MetricsReportProvider.DEFAULT_SAMPLE_LIMIT);
         assertThat(detail.samplesTruncated()).isFalse();
+    }
+
+    @Test
+    void metricsGroupsMetersByProvenanceAndReconcilesCountsWithTheMatchedSet() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Gauge.builder("jvm.memory.used", new AtomicInteger(3), AtomicInteger::get)
+                .baseUnit("bytes")
+                .tag("area", "heap")
+                .tag("id", "eden")
+                .register(registry);
+        Timer.builder("http.server.requests")
+                .description("Duration of HTTP server request handling")
+                .tag("uri", "/orders")
+                .register(registry);
+        Counter.builder("orders.processed").register(registry);
+
+        MetricsReport report = provider(registry).metrics();
+
+        assertThat(report.catalogueVersion()).isEqualTo(MeterFamilyCatalogue.VERSION);
+        assertThat(report.groups()).extracting(MetricGroupDto::id).containsExactly("jvm", "http-server", "application");
+        assertThat(report.groups().stream().mapToInt(MetricGroupDto::meterCount).sum())
+                .isEqualTo(report.page().matched());
+
+        MetricGroupDto jvm = group(report, "jvm");
+        assertThat(jvm.label()).isEqualTo("JVM");
+        assertThat(jvm.contributor()).isEqualTo("Micrometer JVM binders");
+        assertThat(jvm.summary()).isNotBlank();
+        assertThat(jvm.interpretation()).isNotBlank();
+        assertThat(jvm.meterCount()).isEqualTo(1);
+        assertThat(jvm.describedMeterCount())
+                .as("the curated explanation does not count as registry documentation")
+                .isZero();
+        assertThat(jvm.families()).containsExactly("JVM memory");
+        assertThat(jvm.commonTagKeys()).containsExactly("area", "id");
+        assertThat(jvm.baseUnits()).containsExactly("bytes");
+
+        MetricGroupDto httpServer = group(report, "http-server");
+        assertThat(httpServer.meterCount()).isEqualTo(1);
+        assertThat(httpServer.describedMeterCount())
+                .as("meters carrying a registry description are counted as documented")
+                .isEqualTo(1);
+        assertThat(httpServer.families()).containsExactly("HTTP server requests");
+
+        MetricGroupDto application = group(report, "application");
+        assertThat(application.meterCount()).isEqualTo(1);
+        assertThat(application.describedMeterCount()).isZero();
+        assertThat(application.families()).isEmpty();
+    }
+
+    @Test
+    void metricsExplainsMetersFromTheRegistryFirstAndTheCatalogueSecond() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Gauge.builder("jvm.memory.used", new AtomicInteger(3), AtomicInteger::get)
+                .register(registry);
+        Timer.builder("http.server.requests")
+                .description("Duration of HTTP server request handling")
+                .register(registry);
+        Counter.builder("orders.processed").register(registry);
+
+        MetricsReport report = provider(registry).metrics();
+
+        MetricProvenanceDto curated = provenance(report, "jvm.memory.used");
+        assertThat(curated.classified()).isTrue();
+        assertThat(curated.groupId()).isEqualTo("jvm");
+        assertThat(curated.familyId()).isEqualTo("jvm.memory");
+        assertThat(curated.familyLabel()).isEqualTo("JVM memory");
+        assertThat(curated.explanationSource()).isEqualTo(MeterProvenanceClassifier.SOURCE_CURATED);
+        assertThat(curated.explanation()).isEqualTo("Heap and non-heap memory usage per memory pool.");
+        assertThat(curated.interpretation()).isNotBlank();
+
+        MetricProvenanceDto nativeDescription = provenance(report, "http.server.requests");
+        assertThat(nativeDescription.classified()).isTrue();
+        assertThat(nativeDescription.explanationSource()).isEqualTo(MeterProvenanceClassifier.SOURCE_NATIVE);
+        assertThat(nativeDescription.explanation()).isEqualTo("Duration of HTTP server request handling");
+
+        MetricProvenanceDto unknown = provenance(report, "orders.processed");
+        assertThat(unknown.classified()).isFalse();
+        assertThat(unknown.groupId()).isEqualTo(MeterFamilyCatalogue.APPLICATION_GROUP_ID);
+        assertThat(unknown.familyId()).isNull();
+        assertThat(unknown.explanation()).isNull();
+        assertThat(unknown.explanationSource()).isEqualTo(MeterProvenanceClassifier.SOURCE_UNKNOWN);
+    }
+
+    @Test
+    void metricsNeverLeaksTagValuesIntoProvenanceOrGroups() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Counter.builder("jvm.gc.pause").tag("cause", "s3cret-token-value").register(registry);
+
+        MetricsReport report = provider(registry).metrics();
+
+        assertThat(report.groups().toString()).doesNotContain("s3cret-token-value");
+        assertThat(provenance(report, "jvm.gc.pause").toString()).doesNotContain("s3cret-token-value");
+        assertThat(group(report, "jvm").commonTagKeys()).containsExactly("cause");
+    }
+
+    @Test
+    void metricsFiltersByGroupWhileKeepingTheGroupListNavigable() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Gauge.builder("jvm.memory.used", new AtomicInteger(3), AtomicInteger::get)
+                .register(registry);
+        Counter.builder("jvm.classes.unloaded").register(registry);
+        Counter.builder("orders.processed").register(registry);
+
+        MetricsReport report = provider(registry).metrics(null, null, "jvm", null, null, null, null);
+
+        assertThat(report.meters())
+                .extracting(MetricMeterDto::name)
+                .containsExactly("jvm.classes.unloaded", "jvm.memory.used");
+        assertThat(report.page().matched()).isEqualTo(2);
+        assertThat(report.page().total()).isEqualTo(3);
+        assertThat(report.groups()).extracting(MetricGroupDto::id).containsExactly("jvm", "application");
+        assertThat(group(report, "jvm").meterCount()).isEqualTo(report.page().matched());
+    }
+
+    @Test
+    void metricsFiltersByProvenanceAndExplanationSource() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Gauge.builder("jvm.memory.used", new AtomicInteger(3), AtomicInteger::get)
+                .register(registry);
+        Timer.builder("http.server.requests").description("Native description").register(registry);
+        Counter.builder("orders.processed").register(registry);
+
+        MetricsReportProvider provider = provider(registry);
+
+        assertThat(provider.metrics(null, null, null, "classified", null, null, null)
+                        .meters())
+                .extracting(MetricMeterDto::name)
+                .containsExactly("http.server.requests", "jvm.memory.used");
+        assertThat(provider.metrics(null, null, null, "UNCLASSIFIED", null, null, null)
+                        .meters())
+                .extracting(MetricMeterDto::name)
+                .containsExactly("orders.processed");
+        assertThat(provider.metrics(null, null, null, null, "native", null, null)
+                        .meters())
+                .extracting(MetricMeterDto::name)
+                .containsExactly("http.server.requests");
+        assertThat(provider.metrics(null, null, null, null, "CURATED", null, null)
+                        .meters())
+                .extracting(MetricMeterDto::name)
+                .containsExactly("jvm.memory.used");
+        assertThat(provider.metrics(null, null, null, null, "unknown", null, null)
+                        .meters())
+                .extracting(MetricMeterDto::name)
+                .containsExactly("orders.processed");
+        assertThat(provider.metrics(null, null, "jvm", "classified", "CURATED", null, null)
+                        .meters())
+                .extracting(MetricMeterDto::name)
+                .containsExactly("jvm.memory.used");
+    }
+
+    @Test
+    void metricsRejectsUnknownProvenanceFiltersCanonically() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Counter.builder("orders.processed").register(registry);
+        MetricsReportProvider provider = provider(registry);
+
+        assertThatThrownBy(() -> provider.metrics(null, null, "not-a-group", null, null, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageStartingWith("Metric group must be one of: application, cache");
+        assertThatThrownBy(() -> provider.metrics(null, null, null, "maybe", null, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Metric provenance must be one of: classified, unclassified");
+        assertThatThrownBy(() -> provider.metrics(null, null, null, null, "GUESSED", null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Metric explanation source must be one of: CURATED, NATIVE, UNKNOWN");
+    }
+
+    @Test
+    void metricsGroupsCoverEveryMatchingMeterEvenWhenThePageIsTruncated() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        for (int index = 0; index < 120; index++) {
+            Counter.builder("jvm.gc.pause." + index).register(registry);
+            Counter.builder("orders.processed." + index).register(registry);
+        }
+
+        MetricsReport report = provider(registry).metrics(null, null, null, null, null, null, "10");
+
+        assertThat(report.meters()).hasSize(10);
+        assertThat(report.page().matched()).isEqualTo(240);
+        assertThat(report.groups().stream().mapToInt(MetricGroupDto::meterCount).sum())
+                .isEqualTo(240);
+        assertThat(group(report, "jvm").meterCount()).isEqualTo(120);
+        assertThat(group(report, "application").meterCount()).isEqualTo(120);
+    }
+
+    @Test
+    void groupSummariesStayBoundedForHighCardinalityRegistries() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        // Every meter carries the same 300 tag keys, so each key clears the "shared by most meters" threshold and
+        // the caps are the only thing keeping the summary small.
+        List<Tag> sharedTags = new ArrayList<>();
+        for (int key = 0; key < 300; key++) {
+            sharedTags.add(Tag.of(String.format("tag%03d", key), "value"));
+        }
+        for (int index = 0; index < 20; index++) {
+            Counter.builder("orders.processed." + index)
+                    .baseUnit("unit" + index)
+                    .tags(Tags.of(sharedTags))
+                    .register(registry);
+        }
+
+        MetricGroupDto application = group(provider(registry).metrics(), "application");
+
+        assertThat(application.commonTagKeys())
+                .as("shared tag keys are capped, and the cap actually bites")
+                .hasSize(MetricsReportProvider.MAX_COMMON_TAG_KEYS);
+        assertThat(application.baseUnits())
+                .as("base units are capped")
+                .hasSize(MetricsReportProvider.MAX_GROUP_BASE_UNITS);
+        assertThat(application.families()).isEmpty();
+        assertThat(application.meterCount()).isEqualTo(20);
+    }
+
+    @Test
+    void detailCarriesProvenanceForTheRequestedMeter() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Gauge.builder("jvm.memory.used", new AtomicInteger(3), AtomicInteger::get)
+                .register(registry);
+
+        MetricDetailDto detail = provider(registry).metric("jvm.memory.used", null);
+
+        assertThat(detail.provenance()).isNotNull();
+        assertThat(detail.provenance().groupId()).isEqualTo("jvm");
+        assertThat(detail.provenance().explanationSource()).isEqualTo(MeterProvenanceClassifier.SOURCE_CURATED);
+    }
+
+    @Test
+    void unavailableRegistryReportsAnEmptyCatalogueRatherThanGuessing() {
+        MetricsReport report = provider(null).metrics();
+
+        assertThat(report.groups()).isEmpty();
+        assertThat(report.catalogueVersion()).isEqualTo(MeterFamilyCatalogue.VERSION);
+        assertThat(provider(null).metric("anything", null).provenance()).isNull();
+    }
+
+    @Test
+    void unknownMeterNamesStillCarryProvenanceWhenARegistryIsPresent() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        MetricDetailDto unknown = provider(registry).metric("orders.processed", null);
+
+        assertThat(unknown.metricsAvailable()).isTrue();
+        assertThat(unknown.provenance()).isNotNull();
+        assertThat(unknown.provenance().classified()).isFalse();
+        assertThat(unknown.provenance().groupId()).isEqualTo(MeterFamilyCatalogue.APPLICATION_GROUP_ID);
+        assertThat(unknown.provenance().explanationSource()).isEqualTo(MeterProvenanceClassifier.SOURCE_UNKNOWN);
+
+        MetricDetailDto curatedButAbsent = provider(registry).metric("jvm.gc.pause.absent", null);
+        assertThat(curatedButAbsent.provenance().groupId()).isEqualTo("jvm");
+        assertThat(curatedButAbsent.provenance().explanationSource())
+                .isEqualTo(MeterProvenanceClassifier.SOURCE_CURATED);
+    }
+
+    private static MetricGroupDto group(MetricsReport report, String id) {
+        return report.groups().stream()
+                .filter(group -> group.id().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No group " + id + " in " + report.groups()));
+    }
+
+    private static MetricProvenanceDto provenance(MetricsReport report, String meterName) {
+        return report.meters().stream()
+                .filter(meter -> meter.name().equals(meterName))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("No meter " + meterName))
+                .provenance();
     }
 }

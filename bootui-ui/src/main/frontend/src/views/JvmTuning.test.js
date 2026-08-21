@@ -156,6 +156,13 @@ describe('JvmTuning', () => {
     expect(wrapper.find('#virtualThreadsEnabled').exists()).toBe(false)
     expect(wrapper.find('#kubernetesBurstableEnabled').element.checked).toBe(false)
     expect(wrapper.find('#kubernetesActuatorEnabled').element.checked).toBe(true)
+    const memorySegments = wrapper.findAll('.breakdown-bar .progress-bar')
+    expect(
+      memorySegments.find((segment) => segment.attributes('title').startsWith('Direct')).attributes('style')
+    ).toContain('color: rgb(33, 37, 41)')
+    expect(
+      memorySegments.find((segment) => segment.attributes('title').startsWith('Thread stacks')).attributes('style')
+    ).toContain('color: rgb(33, 37, 41)')
   })
 
   it('shows an information bubble when virtual threads are detected', async () => {

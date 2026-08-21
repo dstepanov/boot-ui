@@ -489,7 +489,8 @@ public class ReactiveBootUiMcpTools {
                     "get_metrics",
                     McpToolDescriptions.spring("get_metrics"),
                     BootUiPanels.METRICS,
-                    args -> metricsBean.metrics(args.query(), null, "0", String.valueOf(args.limit()))));
+                    args -> metricsBean.metrics(
+                            args.query(), null, null, null, null, "0", String.valueOf(args.limit()))));
         }
         LiveMemoryController liveMemoryBean = liveMemory.getIfAvailable();
         if (liveMemoryBean != null) {

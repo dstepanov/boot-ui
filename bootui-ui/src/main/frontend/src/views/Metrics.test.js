@@ -4,8 +4,46 @@ import {ref} from 'vue'
 
 import Metrics from './Metrics.vue'
 
-function meter(name, type = 'COUNTER') {
-  return {name, description: `${name} description`, baseUnit: null, type, availableTags: []}
+function provenance(overrides = {}) {
+  return {
+    groupId: 'jvm',
+    groupLabel: 'JVM',
+    contributor: 'Micrometer JVM binders',
+    familyId: 'jvm.memory',
+    familyLabel: 'JVM memory',
+    classified: true,
+    explanation: 'Heap and non-heap memory usage per memory pool.',
+    explanationSource: 'CURATED',
+    interpretation: 'Used, committed and maximum bytes are gauges per area and pool id.',
+    ...overrides
+  }
+}
+
+function meter(name, type = 'COUNTER', provenanceOverrides = {}) {
+  return {
+    name,
+    description: `${name} description`,
+    baseUnit: null,
+    type,
+    availableTags: [],
+    provenance: provenance(provenanceOverrides)
+  }
+}
+
+function group(overrides = {}) {
+  return {
+    id: 'jvm',
+    label: 'JVM',
+    contributor: 'Micrometer JVM binders',
+    summary: 'Memory pools, garbage collection, threads and class loading reported by the JVM itself.',
+    interpretation: 'Gauges are point-in-time readings while counters accumulate for the process lifetime.',
+    meterCount: 1,
+    describedMeterCount: 1,
+    families: ['JVM memory'],
+    commonTagKeys: ['area', 'id'],
+    baseUnits: ['bytes'],
+    ...overrides
+  }
 }
 
 function metricsReport(meters = [], overrides = {}) {
@@ -22,6 +60,8 @@ function metricsReport(meters = [], overrides = {}) {
       returned: meters.length,
       hasMore: false
     },
+    groups: meters.length ? [group({meterCount: meters.length, describedMeterCount: meters.length})] : [],
+    catalogueVersion: '2026.1',
     ...overrides
   }
 }
@@ -39,6 +79,7 @@ function metricDetail(name, overrides = {}) {
     totalSamples: 1,
     samplePage: {total: 1, matched: 1, offset: 0, limit: 100, returned: 1, hasMore: false},
     samplesTruncated: false,
+    provenance: provenance(),
     ...overrides
   }
 }
@@ -50,6 +91,13 @@ function stubFetch(handler) {
   })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
+}
+
+function mountMetricsWithDetail(detail) {
+  stubFetch((url) =>
+    url.includes('/detail') ? detail : metricsReport([meter(detail.name, 'COUNTER', detail.provenance)])
+  )
+  return mountMetrics()
 }
 
 function mountMetrics(platform) {
@@ -209,6 +257,132 @@ describe('Metrics', () => {
         .filter((url) => url.includes('/detail'))
         .some((url) => new URL(url, 'http://localhost').searchParams.get('offset') === '0')
     ).toBe(true)
+  })
+
+  it('groups meters by provenance and explains the selected group', async () => {
+    vi.useFakeTimers()
+    const fetchMock = stubFetch((url) =>
+      url.includes('/detail') ? metricDetail('jvm.memory.used') : metricsReport([meter('jvm.memory.used', 'GAUGE')])
+    )
+    const wrapper = mountMetrics()
+    await flushPromises()
+
+    const chip = wrapper.findAll('.provenance-chip').find((button) => button.text().includes('JVM'))
+    expect(chip.attributes('aria-pressed')).toBe('false')
+    expect(wrapper.text()).toContain('Catalogue 2026.1')
+
+    await chip.trigger('click')
+    vi.advanceTimersByTime(251)
+    await flushPromises()
+
+    expect(chip.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.text()).toContain('Micrometer JVM binders')
+    expect(wrapper.text()).toContain('1 of 1 documented by the registry')
+    const groupedRequest = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .filter((url) => url.includes('/metrics?'))
+      .at(-1)
+    expect(new URL(groupedRequest, 'http://localhost').searchParams.get('group')).toBe('jvm')
+  })
+
+  it('sends provenance and explanation-source filters to the server', async () => {
+    vi.useFakeTimers()
+    const fetchMock = stubFetch((url) =>
+      url.includes('/detail') ? metricDetail('jvm.memory.used') : metricsReport([meter('jvm.memory.used', 'GAUGE')])
+    )
+    const wrapper = mountMetrics()
+    await flushPromises()
+
+    await wrapper.get('select[aria-label="Filter meters by provenance"]').setValue('unclassified')
+    await wrapper.get('select[aria-label="Filter meters by explanation source"]').setValue('UNKNOWN')
+    vi.advanceTimersByTime(251)
+    await flushPromises()
+
+    const params = new URL(
+      fetchMock.mock.calls
+        .map(([input]) => String(input))
+        .filter((url) => url.includes('/metrics?'))
+        .at(-1),
+      'http://localhost'
+    ).searchParams
+    expect(params.get('provenance')).toBe('unclassified')
+    expect(params.get('explanation')).toBe('UNKNOWN')
+  })
+
+  it('distinguishes native descriptions from curated explanations and undocumented meters', async () => {
+    const wrapper = mountMetricsWithDetail(
+      metricDetail('app.orders.processed', {
+        provenance: provenance({
+          groupId: 'application',
+          groupLabel: 'Application / unclassified',
+          contributor: 'Application or unrecognized instrumentation',
+          familyId: null,
+          familyLabel: null,
+          classified: false,
+          explanation: null,
+          explanationSource: 'UNKNOWN',
+          interpretation: null
+        })
+      })
+    )
+    await flushPromises()
+
+    const detailProvenance = wrapper.get('.card .provenance-detail')
+    expect(detailProvenance.text()).toContain('Not documented')
+    expect(detailProvenance.text()).toContain('BootUI does not explain it')
+    expect(detailProvenance.text()).toContain('contributed by Application or unrecognized instrumentation')
+    expect(detailProvenance.text()).not.toContain('Micrometer JVM binders')
+  })
+
+  it('keeps an active group visible when other filters exclude it from the facets', async () => {
+    vi.useFakeTimers()
+    let listResponses = 0
+    stubFetch((url) => {
+      if (url.includes('/detail')) return metricDetail('jvm.memory.used')
+      listResponses++
+      if (listResponses <= 2) return metricsReport([meter('jvm.memory.used', 'GAUGE')])
+      return metricsReport([], {
+        groups: [group({id: 'application', label: 'Application / unclassified', meterCount: 4})]
+      })
+    })
+    const wrapper = mountMetrics()
+    await flushPromises()
+
+    await wrapper
+      .findAll('.provenance-chip')
+      .find((chip) => chip.text().includes('JVM'))
+      .trigger('click')
+    vi.advanceTimersByTime(251)
+    await flushPromises()
+
+    await wrapper.get('select[aria-label="Filter meters by provenance"]').setValue('unclassified')
+    vi.advanceTimersByTime(251)
+    await flushPromises()
+
+    const jvmChip = wrapper.findAll('.provenance-chip').find((chip) => chip.text().includes('JVM'))
+    expect(jvmChip, 'the active group stays clearable even when the facets drop it').toBeTruthy()
+    expect(jvmChip.attributes('aria-pressed')).toBe('true')
+  })
+
+  it('attributes catalogue interpretation even when the description is native', async () => {
+    const wrapper = mountMetricsWithDetail(
+      metricDetail('http.server.requests', {
+        provenance: provenance({
+          groupId: 'http-server',
+          groupLabel: 'HTTP server',
+          familyId: 'http.server.requests',
+          familyLabel: 'HTTP server requests',
+          explanation: 'Duration of HTTP server request handling',
+          explanationSource: 'NATIVE',
+          interpretation: 'Read the count and total together over the same interval.'
+        })
+      })
+    )
+    await flushPromises()
+
+    const detailProvenance = wrapper.get('.card .provenance-detail')
+    expect(detailProvenance.text()).toContain('Native description')
+    expect(detailProvenance.text()).toContain('How to read this family (BootUI catalogue)')
   })
 
   it('renders a clear empty state for server-side filters', async () => {

@@ -33,12 +33,12 @@ const breakdown = computed(() => {
   const c = data.value?.calculation
   if (!c) return []
   const segments = [
-    {key: 'heap', label: 'Heap', bytes: c.heapBytes, color: '#198754'},
-    {key: 'metaspace', label: 'Metaspace', bytes: c.metaspaceBytes, color: '#0d6efd'},
-    {key: 'codeCache', label: 'Code cache', bytes: c.codeCacheBytes, color: '#6610f2'},
-    {key: 'directMemory', label: 'Direct', bytes: c.directMemoryBytes, color: '#fd7e14'},
-    {key: 'stacks', label: 'Thread stacks', bytes: c.stackBytesTotal, color: '#ffc107'},
-    {key: 'headroom', label: 'Headroom', bytes: c.headRoomBytes, color: '#6c757d'}
+    {key: 'heap', label: 'Heap', bytes: c.heapBytes, color: '#198754', textColor: '#ffffff'},
+    {key: 'metaspace', label: 'Metaspace', bytes: c.metaspaceBytes, color: '#0d6efd', textColor: '#ffffff'},
+    {key: 'codeCache', label: 'Code cache', bytes: c.codeCacheBytes, color: '#6610f2', textColor: '#ffffff'},
+    {key: 'directMemory', label: 'Direct', bytes: c.directMemoryBytes, color: '#fd7e14', textColor: '#212529'},
+    {key: 'stacks', label: 'Thread stacks', bytes: c.stackBytesTotal, color: '#ffc107', textColor: '#212529'},
+    {key: 'headroom', label: 'Headroom', bytes: c.headRoomBytes, color: '#6c757d', textColor: '#ffffff'}
   ]
   const total = segments.reduce((sum, s) => sum + Math.max(0, s.bytes || 0), 0)
   return segments.map((s) => ({
@@ -209,7 +209,7 @@ function formatPercentage(value) {
               <div
                 v-for="seg in breakdown"
                 :key="seg.key"
-                :style="{width: seg.percent + '%', backgroundColor: seg.color}"
+                :style="{width: seg.percent + '%', backgroundColor: seg.color, color: seg.textColor}"
                 :title="seg.label + ': ' + formatBytes(seg.bytes)"
                 class="progress-bar"
               >
@@ -422,7 +422,6 @@ function formatPercentage(value) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #fff;
   font-weight: 500;
 }
 

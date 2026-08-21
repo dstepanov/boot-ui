@@ -2,8 +2,10 @@ package io.github.jdubois.bootui.engine.metrics;
 
 import io.github.jdubois.bootui.core.dto.MetricAvailableTagDto;
 import io.github.jdubois.bootui.core.dto.MetricDetailDto;
+import io.github.jdubois.bootui.core.dto.MetricGroupDto;
 import io.github.jdubois.bootui.core.dto.MetricMeasurementDto;
 import io.github.jdubois.bootui.core.dto.MetricMeterDto;
+import io.github.jdubois.bootui.core.dto.MetricProvenanceDto;
 import io.github.jdubois.bootui.core.dto.MetricSampleDto;
 import io.github.jdubois.bootui.core.dto.MetricTagDto;
 import io.github.jdubois.bootui.core.dto.MetricsReport;
@@ -44,6 +46,28 @@ public class MetricsReportProvider {
 
     private static final int MAX_TAG_VALUES = 100;
 
+    static final int MAX_COMMON_TAG_KEYS = 8;
+
+    private static final int MAX_TRACKED_TAG_KEYS = 256;
+
+    /** Upper bound on series inspected per meter name when deriving common tag keys for a group summary. */
+    private static final int MAX_TAG_KEY_SERIES_PER_METER = 64;
+
+    static final int MAX_GROUP_BASE_UNITS = 6;
+
+    static final int MAX_GROUP_FAMILIES = 12;
+
+    private static final String CLASSIFIED = "classified";
+
+    private static final String UNCLASSIFIED = "unclassified";
+
+    private static final List<String> VALID_PROVENANCE = List.of(CLASSIFIED, UNCLASSIFIED);
+
+    private static final List<String> VALID_EXPLANATION_SOURCES = List.of(
+            MeterProvenanceClassifier.SOURCE_CURATED,
+            MeterProvenanceClassifier.SOURCE_NATIVE,
+            MeterProvenanceClassifier.SOURCE_UNKNOWN);
+
     private static final Comparator<String> NULL_SAFE_STRING = Comparator.nullsFirst(Comparator.naturalOrder());
 
     private static final List<String> VALID_TYPES = java.util.Arrays.stream(Meter.Type.values())
@@ -58,6 +82,8 @@ public class MetricsReportProvider {
 
     private final Predicate<Meter> meterFilter;
 
+    private final MeterProvenanceClassifier classifier = new MeterProvenanceClassifier();
+
     public MetricsReportProvider(Supplier<MeterRegistry> registrySupplier, Predicate<Meter> meterFilter) {
         this.registrySupplier = registrySupplier;
         this.meterFilter = meterFilter;
@@ -68,10 +94,32 @@ public class MetricsReportProvider {
     }
 
     public MetricsReport metrics(String query, String type, String offset, String limit) {
+        return metrics(query, type, null, null, null, offset, limit);
+    }
+
+    /**
+     * Bounded meter list with provenance groups.
+     *
+     * <p>{@code group}, {@code provenance} and {@code explanation} narrow the list by curated provenance group,
+     * by whether the meter is classified at all, and by where its explanation comes from. The returned groups
+     * are aggregated over the meters matching every filter <em>except</em> {@code group}, so the group list
+     * stays navigable while the selected group's count equals {@code page.matched}.</p>
+     */
+    public MetricsReport metrics(
+            String query,
+            String type,
+            String group,
+            String provenance,
+            String explanation,
+            String offset,
+            String limit) {
         int requestedOffset = parseOffset(offset);
         int requestedLimit = parseLimit(limit, DEFAULT_METER_LIMIT);
         String normalizedQuery = normalize(query);
         String normalizedType = parseType(type);
+        String normalizedGroup = parseGroup(group);
+        String normalizedProvenance = parseProvenance(provenance);
+        String normalizedExplanation = parseExplanation(explanation);
 
         MeterRegistry registry = registry();
         if (registry == null) {
@@ -80,22 +128,29 @@ public class MetricsReportProvider {
 
         Map<String, List<Meter>> metersByName = metersByName(visibleMeters(registry.getMeters()));
         TreeSet<String> availableTypes = new TreeSet<>();
-        List<Map.Entry<String, List<Meter>>> matching = new ArrayList<>();
+        List<MeterEntry> beforeGroupFilter = new ArrayList<>();
         for (Map.Entry<String, List<Meter>> entry : metersByName.entrySet()) {
-            String meterType = firstType(entry.getValue());
-            if (meterType != null) {
-                availableTypes.add(meterType);
+            MeterEntry meterEntry = toEntry(entry.getKey(), entry.getValue());
+            if (meterEntry.type() != null) {
+                availableTypes.add(meterEntry.type());
             }
-            if (matches(
-                    entry.getKey(), firstDescription(entry.getValue()), meterType, normalizedQuery, normalizedType)) {
-                matching.add(entry);
+            if (matches(meterEntry, normalizedQuery, normalizedType, normalizedProvenance, normalizedExplanation)) {
+                beforeGroupFilter.add(meterEntry);
             }
         }
+
+        List<MetricGroupDto> groups = toGroups(beforeGroupFilter);
+        List<MeterEntry> matching = normalizedGroup.isEmpty()
+                ? beforeGroupFilter
+                : beforeGroupFilter.stream()
+                        .filter(entry ->
+                                normalizedGroup.equals(entry.provenance().groupId()))
+                        .toList();
 
         int fromIndex = Math.min(requestedOffset, matching.size());
         int toIndex = Math.min(fromIndex + requestedLimit, matching.size());
         List<MetricMeterDto> meters = matching.subList(fromIndex, toIndex).stream()
-                .map(entry -> toMeterDto(entry.getKey(), entry.getValue()))
+                .map(this::toMeterDto)
                 .toList();
         PageMetadata page = new PageMetadata(
                 metersByName.size(),
@@ -104,7 +159,14 @@ public class MetricsReportProvider {
                 requestedLimit,
                 meters.size(),
                 toIndex < matching.size());
-        return new MetricsReport(true, metersByName.size(), meters, List.copyOf(availableTypes), page);
+        return new MetricsReport(
+                true,
+                metersByName.size(),
+                meters,
+                List.copyOf(availableTypes),
+                page,
+                groups,
+                MeterFamilyCatalogue.VERSION);
     }
 
     public MetricDetailDto metric(String name, List<String> tagFilters) {
@@ -146,10 +208,11 @@ public class MetricsReportProvider {
                 samples.size(),
                 toIndex < matchingMeters.size());
 
+        String description = firstDescription(meters);
         return new MetricDetailDto(
                 true,
                 normalizedName,
-                firstDescription(meters),
+                description,
                 firstBaseUnit(meters),
                 firstType(meters),
                 aggregateMeasurements(matchingMeters),
@@ -157,7 +220,8 @@ public class MetricsReportProvider {
                 samples,
                 matchingMeters.size(),
                 samplePage,
-                fromIndex > 0 || toIndex < matchingMeters.size());
+                fromIndex > 0 || toIndex < matchingMeters.size(),
+                classifier.provenance(normalizedName, description));
     }
 
     private MeterRegistry registry() {
@@ -165,7 +229,14 @@ public class MetricsReportProvider {
     }
 
     private MetricsReport emptyReport(boolean metricsAvailable, int limit) {
-        return new MetricsReport(metricsAvailable, 0, List.of(), List.of(), new PageMetadata(0, 0, 0, limit, 0, false));
+        return new MetricsReport(
+                metricsAvailable,
+                0,
+                List.of(),
+                List.of(),
+                new PageMetadata(0, 0, 0, limit, 0, false),
+                List.of(),
+                MeterFamilyCatalogue.VERSION);
     }
 
     private Map<String, List<Meter>> metersByName(List<Meter> meters) {
@@ -182,16 +253,65 @@ public class MetricsReportProvider {
     }
 
     private boolean matches(
-            String name, String description, String type, String normalizedQuery, String normalizedType) {
+            MeterEntry entry,
+            String normalizedQuery,
+            String normalizedType,
+            String normalizedProvenance,
+            String normalizedExplanation) {
         boolean matchesQuery = normalizedQuery.isEmpty()
-                || normalize(name).contains(normalizedQuery)
-                || normalize(description).contains(normalizedQuery);
-        return matchesQuery && (normalizedType.isEmpty() || normalizedType.equals(type));
+                || normalize(entry.name()).contains(normalizedQuery)
+                || normalize(entry.description()).contains(normalizedQuery);
+        if (!matchesQuery) {
+            return false;
+        }
+        if (!normalizedType.isEmpty() && !normalizedType.equals(entry.type())) {
+            return false;
+        }
+        if (!normalizedProvenance.isEmpty()
+                && !normalizedProvenance.equals(entry.provenance().classified() ? CLASSIFIED : UNCLASSIFIED)) {
+            return false;
+        }
+        return normalizedExplanation.isEmpty()
+                || normalizedExplanation.equals(entry.provenance().explanationSource());
     }
 
-    private MetricMeterDto toMeterDto(String name, List<Meter> meters) {
+    private MeterEntry toEntry(String name, List<Meter> meters) {
+        String description = firstDescription(meters);
+        return new MeterEntry(
+                name,
+                meters,
+                description,
+                firstBaseUnit(meters),
+                firstType(meters),
+                classifier.provenance(name, description));
+    }
+
+    private MetricMeterDto toMeterDto(MeterEntry entry) {
         return new MetricMeterDto(
-                name, firstDescription(meters), firstBaseUnit(meters), firstType(meters), availableTags(meters));
+                entry.name(),
+                entry.description(),
+                entry.baseUnit(),
+                entry.type(),
+                availableTags(entry.meters()),
+                entry.provenance());
+    }
+
+    private List<MetricGroupDto> toGroups(List<MeterEntry> entries) {
+        Map<String, GroupAccumulator> accumulators = new LinkedHashMap<>();
+        for (MeterEntry entry : entries) {
+            accumulators
+                    .computeIfAbsent(entry.provenance().groupId(), groupId -> new GroupAccumulator())
+                    .add(entry);
+        }
+
+        List<MetricGroupDto> groups = new ArrayList<>();
+        Map<String, MeterGroup> groupsById = MeterFamilyCatalogue.groupsById();
+        for (Map.Entry<String, GroupAccumulator> entry : accumulators.entrySet()) {
+            MeterGroup group = groupsById.getOrDefault(entry.getKey(), MeterFamilyCatalogue.applicationGroup());
+            groups.add(entry.getValue().toDto(group));
+        }
+        groups.sort(Comparator.comparingInt(group -> MeterFamilyCatalogue.groupOrder(group.id())));
+        return List.copyOf(groups);
     }
 
     private MetricDetailDto emptyDetail(boolean metricsAvailable, String name, int limit) {
@@ -206,7 +326,10 @@ public class MetricsReportProvider {
                 List.of(),
                 0,
                 new PageMetadata(0, 0, 0, limit, 0, false),
-                false);
+                false,
+                // Provenance is derived from the meter name alone, so an unknown name is still described honestly as
+                // long as a registry is present. Without a registry there is nothing to explain.
+                metricsAvailable ? classifier.provenance(name, null) : null);
     }
 
     private String firstDescription(List<Meter> meters) {
@@ -281,6 +404,43 @@ public class MetricsReportProvider {
         }
         if (!VALID_TYPES.contains(normalized)) {
             throw new IllegalArgumentException("Metric type must be one of: " + String.join(", ", VALID_TYPES));
+        }
+        return normalized;
+    }
+
+    private String parseGroup(String group) {
+        String normalized = normalize(group);
+        if (normalized.isEmpty()) {
+            return "";
+        }
+        List<String> validGroups =
+                MeterFamilyCatalogue.groupsById().keySet().stream().sorted().toList();
+        if (!validGroups.contains(normalized)) {
+            throw new IllegalArgumentException("Metric group must be one of: " + String.join(", ", validGroups));
+        }
+        return normalized;
+    }
+
+    private String parseProvenance(String provenance) {
+        String normalized = normalize(provenance);
+        if (normalized.isEmpty()) {
+            return "";
+        }
+        if (!VALID_PROVENANCE.contains(normalized)) {
+            throw new IllegalArgumentException(
+                    "Metric provenance must be one of: " + String.join(", ", VALID_PROVENANCE));
+        }
+        return normalized;
+    }
+
+    private String parseExplanation(String explanation) {
+        String normalized = normalize(explanation).toUpperCase(Locale.ROOT);
+        if (normalized.isEmpty()) {
+            return "";
+        }
+        if (!VALID_EXPLANATION_SOURCES.contains(normalized)) {
+            throw new IllegalArgumentException(
+                    "Metric explanation source must be one of: " + String.join(", ", VALID_EXPLANATION_SOURCES));
         }
         return normalized;
     }
@@ -399,8 +559,96 @@ public class MetricsReportProvider {
         return Integer.compare(sortedLeft.size(), sortedRight.size());
     }
 
-    private static final class BoundedTagValues {
+    /** One meter name with its registry metadata and resolved provenance, shared by filtering and grouping. */
+    private record MeterEntry(
+            String name,
+            List<Meter> meters,
+            String description,
+            String baseUnit,
+            String type,
+            MetricProvenanceDto provenance) {}
 
+    /**
+     * Bounded aggregation of one provenance group: meter and documentation counts, the curated families that
+     * matched, the tag keys shared by most of the group's meters, and the native base units in use.
+     *
+     * <p>Only tag <em>keys</em> are collected. Tag values never reach a group summary, so a high-cardinality or
+     * sensitive tag value cannot leak into an explanation, and the tracked key set itself is capped.</p>
+     */
+    private static final class GroupAccumulator {
+
+        private final Map<String, Integer> tagKeyCounts = new TreeMap<>();
+
+        private final TreeSet<String> families = new TreeSet<>();
+
+        private final TreeSet<String> baseUnits = new TreeSet<>();
+
+        private int meterCount;
+
+        private int describedMeterCount;
+
+        private void add(MeterEntry entry) {
+            meterCount++;
+            if (entry.description() != null && !entry.description().isBlank()) {
+                describedMeterCount++;
+            }
+            if (entry.baseUnit() != null && !entry.baseUnit().isBlank()) {
+                baseUnits.add(entry.baseUnit());
+            }
+            String familyLabel = entry.provenance().familyLabel();
+            if (familyLabel != null && !familyLabel.isBlank() && families.size() < MAX_GROUP_FAMILIES) {
+                families.add(familyLabel);
+            }
+            for (String tagKey : tagKeys(entry.meters())) {
+                if (tagKeyCounts.containsKey(tagKey) || tagKeyCounts.size() < MAX_TRACKED_TAG_KEYS) {
+                    tagKeyCounts.merge(tagKey, 1, Integer::sum);
+                }
+            }
+        }
+
+        private MetricGroupDto toDto(MeterGroup group) {
+            return new MetricGroupDto(
+                    group.id(),
+                    group.label(),
+                    group.contributor(),
+                    group.summary(),
+                    group.interpretation(),
+                    meterCount,
+                    describedMeterCount,
+                    List.copyOf(families),
+                    commonTagKeys(),
+                    baseUnits.stream().limit(MAX_GROUP_BASE_UNITS).toList());
+        }
+
+        /** Tag keys carried by at least half of the group's meters, most common first, then alphabetical. */
+        private List<String> commonTagKeys() {
+            int threshold = Math.max(1, (meterCount + 1) / 2);
+            return tagKeyCounts.entrySet().stream()
+                    .filter(entry -> entry.getValue() >= threshold)
+                    .sorted(Map.Entry.<String, Integer>comparingByValue()
+                            .reversed()
+                            .thenComparing(Map.Entry.comparingByKey()))
+                    .limit(MAX_COMMON_TAG_KEYS)
+                    .map(Map.Entry::getKey)
+                    .toList();
+        }
+
+        private static TreeSet<String> tagKeys(List<Meter> meters) {
+            TreeSet<String> keys = new TreeSet<>(NULL_SAFE_STRING);
+            int inspected = 0;
+            for (Meter meter : meters) {
+                if (inspected++ >= MAX_TAG_KEY_SERIES_PER_METER) {
+                    break;
+                }
+                for (Tag tag : meter.getId().getTags()) {
+                    keys.add(tag.getKey());
+                }
+            }
+            return keys;
+        }
+    }
+
+    private static final class BoundedTagValues {
         private final TreeSet<String> values = new TreeSet<>(NULL_SAFE_STRING);
 
         private boolean truncated;

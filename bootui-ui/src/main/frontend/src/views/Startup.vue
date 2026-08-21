@@ -344,6 +344,6 @@ function treeStepHasChildren(stepId) {
 
 .startup-duration-label--slowest {
   background-color: #ff0000;
-  color: #fff;
+  color: #212529;
 }
 </style>

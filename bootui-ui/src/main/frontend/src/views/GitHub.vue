@@ -571,8 +571,14 @@ function securitySignalUrl(signal) {
             <div class="fw-semibold">{{ drawerTitle }}</div>
             <div class="text-muted small">{{ drawerSubtitle }}</div>
           </div>
-          <button class="btn btn-sm btn-outline-secondary" type="button" @click="activeDrawer = null">
-            <i class="bi bi-x-lg"></i>
+          <button
+            aria-label="Close details"
+            class="btn btn-sm btn-outline-secondary"
+            title="Close details"
+            type="button"
+            @click="activeDrawer = null"
+          >
+            <i aria-hidden="true" class="bi bi-x-lg"></i>
           </button>
         </div>
 

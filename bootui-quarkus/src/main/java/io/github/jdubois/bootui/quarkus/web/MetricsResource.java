@@ -37,10 +37,13 @@ public class MetricsResource {
     public Response metrics(
             @QueryParam("q") String query,
             @QueryParam("type") String type,
+            @QueryParam("group") String group,
+            @QueryParam("provenance") String provenance,
+            @QueryParam("explanation") String explanation,
             @QueryParam("offset") String offset,
             @QueryParam("limit") String limit) {
         try {
-            MetricsReport report = provider.metrics(query, type, offset, limit);
+            MetricsReport report = provider.metrics(query, type, group, provenance, explanation, offset, limit);
             return Response.ok(report).build();
         } catch (IllegalArgumentException ex) {
             return badRequest(ex);

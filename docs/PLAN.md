@@ -43,7 +43,7 @@ will therefore be additive rather than an extension of the SQL-specific panels.
 | Planned  | Error-contract catalogue | Services | Spring exception handlers / Quarkus exception mappers | No | Delivered |
 | Shipped  | Slow-SQL ranking and URI attribution | Database | Existing SQL Trace and HTTP exchange evidence | No | ✅ Shipped |
 | Planned  | Correlation-ID filtering | Diagnostics | Existing request and Live Activity capture | No (capture only) | Planned |
-| Planned  | Meter provenance and explanation | Diagnostics | Existing meter registry and curated catalogue | No | Planned |
+| Done     | Meter provenance and explanation | Diagnostics | Existing meter registry and curated catalogue | No | Shipped |
 | Shipped  | Cache tiering and hit ratios | Services | Existing cache managers and native statistics | No | Implemented |
 
 ## 3. Feature specifications
@@ -623,7 +623,12 @@ Acceptance criteria:
   overlong values, masking and live exposure changes, copy denial/success, exact/non-match filtering, child propagation,
   eviction, and equivalent behavior on all three adapters.
 
-### 3.15 Meter provenance and explanation — Metrics 📋 Planned
+### 3.15 Meter provenance and explanation — Metrics ✅ Shipped
+
+**Status: completed.** Shipped in the existing Metrics panel (see `docs/FEATURES.md` → *Metrics*): meters are grouped by
+provenance, explanations are sourced from the registry first and a curated, versioned catalogue second, and
+`GET /bootui/api/metrics` gained `group`, `provenance`, and `explanation` filters plus `groups` and `catalogueVersion`,
+identically on Spring MVC, Spring WebFlux, and Quarkus.
 
 The Metrics panel is close to a raw registry dump: it shows meter names, tags, and values without explaining which
 integration contributed a family, what the measurements mean, or how related meters should be read together. This
