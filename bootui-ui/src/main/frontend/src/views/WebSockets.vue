@@ -25,6 +25,7 @@ const directionFilter = ref('')
 const busy = ref(null)
 const lastFetched = ref(null)
 const tab = ref('endpoints')
+const tabButtons = ref([])
 
 async function fetchReport() {
   error.value = null
@@ -111,6 +112,28 @@ const tabs = computed(() => [
   {id: 'subscriptions', label: 'Subscriptions', count: subscriptions.value.length},
   {id: 'activity', label: 'Activity', count: activity.value.length}
 ])
+
+function selectTab(id) {
+  tab.value = id
+}
+
+function handleTabKeydown(event, index) {
+  let nextIndex
+  if (event.key === 'ArrowRight') {
+    nextIndex = (index + 1) % tabs.value.length
+  } else if (event.key === 'ArrowLeft') {
+    nextIndex = (index - 1 + tabs.value.length) % tabs.value.length
+  } else if (event.key === 'Home') {
+    nextIndex = 0
+  } else if (event.key === 'End') {
+    nextIndex = tabs.value.length - 1
+  } else {
+    return
+  }
+  event.preventDefault()
+  selectTab(tabs.value[nextIndex].id)
+  tabButtons.value[nextIndex]?.focus()
+}
 
 const subtitle = computed(() => {
   if (!available.value || !report.value) return null
@@ -262,32 +285,35 @@ function clearActivity() {
       :loading="loading"
       :error="error"
       :last-fetched="lastFetched"
+      last-fetched-label="Snapshot"
       :refreshable="manifestAvailable"
       :auto-refreshable="manifestAvailable"
+      auto-refresh-title="Refresh when WebSocket activity changes while this tab is visible"
       v-model:auto-refresh="autoRefresh"
       :auto-refresh-state="connectionState"
       @refresh="load"
       @retry-auto-refresh="retryConnection"
     >
       <template #actions>
-        <SpinnerButton
-          v-if="report && report.frameCaptureSupported"
-          :loading="busy === 'capture'"
-          :disabled="!available || readOnly || busy"
-          class="ms-2"
-          :class="report.capturing ? 'btn btn-sm btn-outline-warning' : 'btn btn-sm btn-outline-success'"
-          :icon="report.capturing ? 'bi-pause-fill' : 'bi-record-fill'"
-          :label="report.capturing ? 'Pause' : 'Resume'"
-          @click="toggleCapture"
-        />
-        <SpinnerButton
-          :loading="busy === 'clear'"
-          :disabled="!available || readOnly || busy || !clearable"
-          class="btn btn-sm btn-outline-danger ms-2"
-          icon="bi-trash"
-          label="Clear"
-          @click="clearActivity"
-        />
+        <div class="websockets-header-actions">
+          <SpinnerButton
+            v-if="report && report.frameCaptureSupported"
+            :loading="busy === 'capture'"
+            :disabled="!available || readOnly || busy"
+            :class="report.capturing ? 'btn btn-sm btn-outline-warning' : 'btn btn-sm btn-outline-success'"
+            :icon="report.capturing ? 'bi-pause-fill' : 'bi-record-fill'"
+            :label="report.capturing ? 'Pause' : 'Resume'"
+            @click="toggleCapture"
+          />
+          <SpinnerButton
+            :loading="busy === 'clear'"
+            :disabled="!available || readOnly || busy || !clearable"
+            class="btn btn-sm btn-outline-danger"
+            icon="bi-trash"
+            label="Clear"
+            @click="clearActivity"
+          />
+        </div>
       </template>
     </PanelHeader>
 
@@ -319,58 +345,81 @@ function clearActivity() {
           Frame capture is currently paused; frames captured before it was paused remain below.
         </div>
 
-        <p class="text-muted small">
-          BootUI records frame metadata only — direction, type, destination, and payload size. Message payloads are
-          never read or stored. Frame totals count everything seen since startup, so they keep their value after the
-          retained buffer is cleared.
-        </p>
+        <aside class="websockets-privacy-note">
+          <span class="websockets-privacy-note__icon" aria-hidden="true">
+            <i class="bi bi-shield-check"></i>
+          </span>
+          <p class="mb-0 small">
+            <strong class="d-block text-body">Payload-safe by design</strong>
+            BootUI records frame metadata only — direction, type, destination, and payload size. Message payloads are
+            never read or stored. Frame totals count everything seen since startup, so they keep their value after the
+            retained buffer is cleared.
+          </p>
+        </aside>
 
-        <div v-if="stats" class="row g-3 mb-3">
+        <dl v-if="stats" class="row g-2 mb-3 websockets-stats" aria-label="WebSocket activity summary">
           <div class="col-6 col-md-3">
-            <div class="border rounded p-2 h-100">
-              <div class="text-muted small">Open sessions</div>
-              <div class="fs-5 fw-semibold">{{ formatNumber(stats.openSessions) }}</div>
+            <div class="websockets-stat h-100">
+              <dt><i class="bi bi-link-45deg" aria-hidden="true"></i>Open sessions</dt>
+              <dd>{{ formatNumber(stats.openSessions) }}</dd>
             </div>
           </div>
           <div class="col-6 col-md-3">
-            <div class="border rounded p-2 h-100">
-              <div class="text-muted small">Subscriptions</div>
-              <div class="fs-5 fw-semibold">{{ formatNumber(stats.subscriptions) }}</div>
+            <div class="websockets-stat h-100">
+              <dt><i class="bi bi-bell" aria-hidden="true"></i>Subscriptions</dt>
+              <dd>{{ formatNumber(stats.subscriptions) }}</dd>
             </div>
           </div>
           <div class="col-6 col-md-3">
-            <div class="border rounded p-2 h-100">
-              <div class="text-muted small">Inbound frames <span class="text-body-secondary">(total)</span></div>
-              <div class="fs-5 fw-semibold">{{ formatNumber(stats.inboundFrames) }}</div>
-              <div class="text-muted small">{{ formatBytes(stats.inboundBytes) }}</div>
+            <div class="websockets-stat h-100">
+              <dt><i class="bi bi-arrow-down-left" aria-hidden="true"></i>Inbound frames <span>(total)</span></dt>
+              <dd>{{ formatNumber(stats.inboundFrames) }}</dd>
+              <small>{{ formatBytes(stats.inboundBytes) }}</small>
             </div>
           </div>
           <div class="col-6 col-md-3">
-            <div class="border rounded p-2 h-100">
-              <div class="text-muted small">Outbound frames <span class="text-body-secondary">(total)</span></div>
-              <div class="fs-5 fw-semibold">{{ formatNumber(stats.outboundFrames) }}</div>
-              <div class="text-muted small">{{ formatBytes(stats.outboundBytes) }}</div>
+            <div class="websockets-stat h-100">
+              <dt><i class="bi bi-arrow-up-right" aria-hidden="true"></i>Outbound frames <span>(total)</span></dt>
+              <dd>{{ formatNumber(stats.outboundFrames) }}</dd>
+              <small>{{ formatBytes(stats.outboundBytes) }}</small>
             </div>
           </div>
-        </div>
-
-        <dl v-if="report.brokerPrefixes.length || report.applicationDestinationPrefixes.length" class="row small mb-3">
-          <template v-if="report.applicationDestinationPrefixes.length">
-            <dt class="col-sm-3">Application prefixes</dt>
-            <dd class="col-sm-9 font-monospace">{{ report.applicationDestinationPrefixes.join(', ') }}</dd>
-          </template>
-          <template v-if="report.brokerPrefixes.length">
-            <dt class="col-sm-3">Broker prefixes</dt>
-            <dd class="col-sm-9 font-monospace">{{ report.brokerPrefixes.join(', ') }}</dd>
-          </template>
-          <template v-if="report.userDestinationPrefix">
-            <dt class="col-sm-3">User prefix</dt>
-            <dd class="col-sm-9 font-monospace">{{ report.userDestinationPrefix }}</dd>
-          </template>
         </dl>
 
-        <div class="mb-3 d-flex gap-2 flex-wrap">
+        <section
+          v-if="report.brokerPrefixes.length || report.applicationDestinationPrefixes.length"
+          class="websockets-routing"
+          aria-labelledby="websockets-routing-title"
+        >
+          <h3 id="websockets-routing-title" class="websockets-section-title">
+            <i class="bi bi-signpost-split" aria-hidden="true"></i>Broker routing
+          </h3>
+          <dl class="websockets-routing__list">
+            <div v-if="report.applicationDestinationPrefixes.length">
+              <dt>Application prefixes</dt>
+              <dd>
+                <code>{{ report.applicationDestinationPrefixes.join(', ') }}</code>
+              </dd>
+            </div>
+            <div v-if="report.brokerPrefixes.length">
+              <dt>Broker prefixes</dt>
+              <dd>
+                <code>{{ report.brokerPrefixes.join(', ') }}</code>
+              </dd>
+            </div>
+            <div v-if="report.userDestinationPrefix">
+              <dt>User prefix</dt>
+              <dd>
+                <code>{{ report.userDestinationPrefix }}</code>
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <div class="websockets-toolbar">
+          <label class="visually-hidden" for="websockets-filter">Filter WebSocket data</label>
           <input
+            id="websockets-filter"
             v-model="filter"
             class="form-control form-control-sm websockets-filter-input"
             aria-label="Filter WebSocket endpoints, sessions and activity"
@@ -388,14 +437,25 @@ function clearActivity() {
           </select>
         </div>
 
-        <ul class="nav nav-tabs mb-3">
+        <ul class="nav nav-tabs websockets-tabs" role="tablist" aria-label="WebSocket data">
           <li v-for="entry in tabs" :key="entry.id" class="nav-item">
             <button
+              :id="`websockets-tab-${entry.id}`"
+              ref="tabButtons"
               type="button"
               class="nav-link"
               :class="{active: tab === entry.id}"
-              :aria-current="tab === entry.id ? 'page' : undefined"
-              @click="tab = entry.id"
+              role="tab"
+              :aria-selected="tab === entry.id"
+              :aria-controls="`websockets-panel-${entry.id}`"
+              :tabindex="tab === entry.id ? 0 : -1"
+              @click="selectTab(entry.id)"
+              @keydown="
+                handleTabKeydown(
+                  $event,
+                  tabs.findIndex((candidate) => candidate.id === entry.id)
+                )
+              "
             >
               {{ entry.label }}
               <span class="badge text-bg-secondary ms-1">{{ formatNumber(entry.count) }}</span>
@@ -403,7 +463,13 @@ function clearActivity() {
           </li>
         </ul>
 
-        <div v-if="tab === 'endpoints'" class="table-responsive">
+        <div
+          v-if="tab === 'endpoints'"
+          id="websockets-panel-endpoints"
+          class="table-responsive websockets-table"
+          role="tabpanel"
+          aria-labelledby="websockets-tab-endpoints"
+        >
           <div v-if="report.endpointsTruncated" class="alert alert-secondary small py-2">
             Only the first {{ formatNumber(report.maxEndpoints) }} endpoints are shown.
           </div>
@@ -427,7 +493,10 @@ function clearActivity() {
                   <span class="badge text-bg-secondary">{{ endpoint.kind }}</span>
                   <span v-if="endpoint.sockJs" class="badge text-bg-info ms-1">SockJS</span>
                 </td>
-                <td class="text-truncate websockets-handler-cell small font-monospace">
+                <td
+                  class="text-truncate websockets-handler-cell small font-monospace"
+                  :title="endpoint.handlerClass || undefined"
+                >
                   {{ endpoint.handlerClass || '—' }}
                 </td>
                 <td>{{ formatNumber(endpoint.openSessions) }}</td>
@@ -437,7 +506,9 @@ function clearActivity() {
                     >metadata</span
                   >
                 </td>
-                <td class="small text-truncate websockets-callbacks-cell">{{ callbackSummary(endpoint) }}</td>
+                <td class="small text-truncate websockets-callbacks-cell" :title="callbackSummary(endpoint)">
+                  {{ callbackSummary(endpoint) }}
+                </td>
               </tr>
               <tr v-if="!filteredEndpoints.length">
                 <td class="text-center text-muted py-4" colspan="6">
@@ -448,7 +519,13 @@ function clearActivity() {
           </table>
         </div>
 
-        <div v-else-if="tab === 'sessions'" class="table-responsive">
+        <div
+          v-else-if="tab === 'sessions'"
+          id="websockets-panel-sessions"
+          class="table-responsive websockets-table"
+          role="tabpanel"
+          aria-labelledby="websockets-tab-sessions"
+        >
           <div v-if="report.sessionsTruncated" class="alert alert-secondary small py-2">
             Only the first {{ formatNumber(report.maxSessions) }} sessions are shown.
           </div>
@@ -466,7 +543,9 @@ function clearActivity() {
             </thead>
             <tbody>
               <tr v-for="session in filteredSessions" :key="session.id">
-                <td class="font-monospace small text-truncate websockets-session-cell">{{ session.id }}</td>
+                <td class="font-monospace small text-truncate websockets-session-cell" :title="session.id">
+                  {{ session.id }}
+                </td>
                 <td class="font-monospace small text-truncate websockets-path-cell">{{ session.path || '—' }}</td>
                 <td class="text-muted small text-nowrap">{{ formatTimestamp(session.openedAt) }}</td>
                 <td>
@@ -492,7 +571,13 @@ function clearActivity() {
           </table>
         </div>
 
-        <div v-else-if="tab === 'subscriptions'" class="table-responsive">
+        <div
+          v-else-if="tab === 'subscriptions'"
+          id="websockets-panel-subscriptions"
+          class="table-responsive websockets-table"
+          role="tabpanel"
+          aria-labelledby="websockets-tab-subscriptions"
+        >
           <div v-if="report.subscriptionsTruncated" class="alert alert-secondary small py-2">
             Only the first {{ formatNumber(report.maxSubscriptions) }} subscriptions are shown.
           </div>
@@ -510,7 +595,9 @@ function clearActivity() {
                 <td class="font-monospace fw-semibold text-truncate websockets-path-cell">
                   {{ subscription.destination || '—' }}
                 </td>
-                <td class="font-monospace small text-truncate websockets-session-cell">{{ subscription.sessionId }}</td>
+                <td class="font-monospace small text-truncate websockets-session-cell" :title="subscription.sessionId">
+                  {{ subscription.sessionId }}
+                </td>
                 <td class="font-monospace small">{{ subscription.id }}</td>
                 <td class="text-muted small text-nowrap">{{ formatTimestamp(subscription.subscribedAt) }}</td>
               </tr>
@@ -521,7 +608,13 @@ function clearActivity() {
           </table>
         </div>
 
-        <div v-else class="table-responsive">
+        <div
+          v-else
+          id="websockets-panel-activity"
+          class="table-responsive websockets-table"
+          role="tabpanel"
+          aria-labelledby="websockets-tab-activity"
+        >
           <table class="table table-sm table-hover align-middle">
             <thead>
               <tr>
@@ -545,7 +638,12 @@ function clearActivity() {
                   <span class="badge text-bg-secondary">{{ entry.frameType }}</span>
                 </td>
                 <td class="font-monospace small text-truncate websockets-path-cell">{{ entry.destination || '—' }}</td>
-                <td class="font-monospace small text-truncate websockets-session-cell">{{ entry.sessionId || '—' }}</td>
+                <td
+                  class="font-monospace small text-truncate websockets-session-cell"
+                  :title="entry.sessionId || undefined"
+                >
+                  {{ entry.sessionId || '—' }}
+                </td>
                 <td class="text-nowrap small">{{ formatOptionalBytes(entry.payloadBytes) }}</td>
                 <td>
                   <span v-if="entry.success" class="badge text-bg-success">ok</span>
@@ -566,6 +664,145 @@ function clearActivity() {
 </template>
 
 <style scoped>
+.websockets-header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.websockets-privacy-note {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--bootui-green) 5%, var(--bootui-surface-solid));
+  border: 1px solid color-mix(in srgb, var(--bootui-green) 15%, var(--bootui-border-subtle));
+  border-radius: var(--bootui-radius-md);
+  color: var(--bootui-text-muted);
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.websockets-privacy-note__icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--bootui-green) 12%, transparent);
+  border-radius: var(--bootui-radius-sm);
+  color: var(--bootui-green-dark);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 2rem;
+  justify-content: center;
+  width: 2rem;
+}
+
+.websockets-stats {
+  margin-top: 0;
+}
+
+.websockets-stat {
+  background: color-mix(in srgb, var(--bootui-surface-solid) 88%, transparent);
+  border: 1px solid var(--bootui-border-subtle);
+  border-radius: var(--bootui-radius-md);
+  padding: 0.75rem 0.85rem;
+}
+
+.websockets-stat dt {
+  align-items: center;
+  color: var(--bootui-text-muted);
+  display: flex;
+  font-size: 0.875rem;
+  font-weight: 500;
+  gap: 0.4rem;
+  line-height: 1.35;
+}
+
+.websockets-stat dt i {
+  color: var(--bootui-green-dark);
+}
+
+.websockets-stat dt span {
+  color: var(--bootui-text-subtle);
+}
+
+.websockets-stat dd {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0.3rem 0 0;
+}
+
+.websockets-stat small {
+  color: var(--bootui-text-muted);
+}
+
+.websockets-routing {
+  border-bottom: 1px solid var(--bootui-border-subtle);
+  margin-bottom: 1rem;
+  padding: 0.15rem 0 1rem;
+}
+
+.websockets-section-title {
+  align-items: center;
+  display: flex;
+  font-size: 0.875rem;
+  font-weight: 700;
+  gap: 0.45rem;
+  margin: 0 0 0.7rem;
+}
+
+.websockets-section-title i {
+  color: var(--bootui-green-dark);
+}
+
+.websockets-routing__list {
+  display: grid;
+  gap: 0.6rem 1.5rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.websockets-routing__list dt {
+  color: var(--bootui-text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-bottom: 0.2rem;
+}
+
+.websockets-routing__list dd {
+  margin: 0;
+}
+
+.websockets-routing__list code {
+  background: color-mix(in srgb, var(--bootui-blue) 7%, var(--bootui-surface-solid));
+  border: 1px solid color-mix(in srgb, var(--bootui-blue) 14%, var(--bootui-border-subtle));
+  border-radius: var(--bootui-radius-sm);
+  color: var(--bootui-text);
+  display: inline-block;
+  font-size: 0.875rem;
+  padding: 0.2rem 0.45rem;
+}
+
+.websockets-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.websockets-tabs {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.websockets-tabs .nav-item {
+  flex: 0 0 auto;
+}
+
+.websockets-table {
+  overscroll-behavior-inline: contain;
+}
+
 .websockets-path-cell {
   max-width: 240px;
 }
@@ -592,5 +829,44 @@ function clearActivity() {
 
 .websockets-direction-select {
   max-width: 160px;
+}
+
+@media (max-width: 575.98px) {
+  .websockets-header-actions {
+    margin-left: auto;
+  }
+
+  .websockets-privacy-note {
+    padding: 0.75rem;
+  }
+
+  .websockets-routing__list {
+    grid-template-columns: 1fr;
+  }
+
+  .websockets-filter-input,
+  .websockets-direction-select {
+    max-width: none;
+    width: 100%;
+  }
+
+  .websockets-tabs {
+    margin-left: -1rem;
+    margin-right: -1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .websockets-table {
+    margin-left: -1rem;
+    margin-right: -1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    width: calc(100% + 2rem);
+  }
+
+  .websockets-table table {
+    min-width: 52rem;
+  }
 }
 </style>

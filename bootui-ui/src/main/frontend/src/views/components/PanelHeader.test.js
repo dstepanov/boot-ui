@@ -137,6 +137,20 @@ describe('PanelHeader', () => {
     wrapper.unmount()
   })
 
+  it('can identify what the relative timestamp describes', () => {
+    const wrapper = mount(PanelHeader, {
+      props: {
+        title: 'WebSockets',
+        lastFetched: Date.now(),
+        lastFetchedLabel: 'Snapshot'
+      }
+    })
+
+    expect(wrapper.get('.last-fetched-text').text()).toBe('Snapshot just now')
+
+    wrapper.unmount()
+  })
+
   it('shows a server-not-running tip for browser network failures', () => {
     const wrapper = mount(PanelHeader, {
       props: {

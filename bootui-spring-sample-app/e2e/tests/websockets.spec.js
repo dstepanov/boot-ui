@@ -46,9 +46,15 @@ test.describe('WebSockets view', () => {
     await openView('websockets', 'WebSockets')
 
     for (const label of ['Sessions', 'Subscriptions', 'Activity', 'Endpoints']) {
-      await page.getByRole('button', {name: new RegExp(`^${label}`)}).click()
-      await expect(page.getByRole('button', {name: new RegExp(`^${label}`)})).toHaveClass(/active/)
+      const tab = page.getByRole('tab', {name: new RegExp(`^${label}`)})
+      await tab.click()
+      await expect(tab).toHaveAttribute('aria-selected', 'true')
     }
+
+    const endpoints = page.getByRole('tab', {name: /^Endpoints/})
+    await endpoints.press('ArrowRight')
+    await expect(page.getByRole('tab', {name: /^Sessions/})).toBeFocused()
+    await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'websockets-tab-sessions')
   })
 
   test('filtering by path narrows the endpoint table', async ({openView, page}) => {

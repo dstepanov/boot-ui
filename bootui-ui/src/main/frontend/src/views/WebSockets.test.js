@@ -215,6 +215,10 @@ describe('WebSockets panel', () => {
     expect(text).toContain('Message payloads are never read or stored')
     expect(text).not.toContain('payloadPreview')
     expect(text).not.toContain('body')
+    expect(wrapper.findComponent(PanelHeader).props('lastFetchedLabel')).toBe('Snapshot')
+    expect(wrapper.findComponent(PanelHeader).props('autoRefreshTitle')).toBe(
+      'Refresh when WebSocket activity changes while this tab is visible'
+    )
   })
 
   it('marks endpoints without a capture seam as metadata only', async () => {
@@ -323,6 +327,24 @@ describe('WebSockets panel', () => {
 
     await wrapper.get('select.websockets-direction-select').setValue('OUTBOUND')
     expect(wrapper.text()).not.toContain('SUBSCRIBE')
+  })
+
+  it('exposes keyboard-operable tab semantics', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(populatedReport())))
+    wrapper = mount(WebSockets, {attachTo: document.body})
+    await flushPromises()
+
+    const tabs = wrapper.findAll('[role="tab"]')
+    expect(tabs).toHaveLength(4)
+    expect(tabs[0].attributes('aria-selected')).toBe('true')
+    expect(wrapper.findAll('[role="tabpanel"]')).toHaveLength(1)
+    expect(wrapper.get('[role="tabpanel"]').attributes('aria-labelledby')).toBe('websockets-tab-endpoints')
+
+    await tabs[0].trigger('keydown', {key: 'ArrowRight'})
+
+    expect(wrapper.get('#websockets-tab-sessions').attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(wrapper.get('#websockets-tab-sessions').element)
+    expect(wrapper.get('[role="tabpanel"]').attributes('aria-labelledby')).toBe('websockets-tab-sessions')
   })
 
   it('filters endpoints and explains when nothing matches', async () => {

@@ -102,6 +102,17 @@ function updateValue(event) {
   gap: 0.35rem;
 }
 
+@media (max-width: 575.98px) {
+  .auto-refresh-toggle .form-check-input {
+    min-block-size: 1rem;
+    min-inline-size: 2em;
+  }
+
+  .auto-refresh-label {
+    min-block-size: 44px;
+  }
+}
+
 .auto-refresh-paused {
   align-items: center;
   background: color-mix(in srgb, var(--bootui-surface, #ffffff) 82%, transparent);
