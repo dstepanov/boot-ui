@@ -34,6 +34,11 @@ describe('Log Tail', () => {
     expect(wrapper.get('.panel-header__title').text()).toBe('Log Tail')
     expect(EventSourceStub.instances).toHaveLength(1)
 
+    const status = wrapper.get('[role="status"][aria-label="Log stream status"]')
+    EventSourceStub.instances[0].onopen()
+    await flushPromises()
+    expect(status.text()).toBe('Connected')
+
     const log = wrapper.get('[role="log"]')
     expect(log.attributes('aria-live')).toBe('polite')
     expect(log.attributes('aria-relevant')).toBe('additions')

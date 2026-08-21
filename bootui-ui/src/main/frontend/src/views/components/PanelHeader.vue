@@ -171,6 +171,7 @@ onBeforeUnmount(stopRelativeTimer)
   letter-spacing: -0.015em;
   line-height: 1.2;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .panel-header__subtitle-row {

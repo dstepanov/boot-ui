@@ -134,7 +134,7 @@ onBeforeUnmount(() => disconnect(false))
       :refreshable="false"
     >
       <template #actions>
-        <span :class="statusClass" class="badge">{{ status }}</span>
+        <span :class="statusClass" aria-label="Log stream status" class="badge" role="status">{{ status }}</span>
       </template>
     </PanelHeader>
 

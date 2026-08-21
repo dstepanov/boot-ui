@@ -5,7 +5,7 @@ test.describe('Log Tail view (Quarkus)', () => {
   test('connects to the SSE stream, then can pause and resume', async ({openView, page}) => {
     await openView('log-tail', 'Log Tail')
 
-    const status = page.locator('h2 + .badge, .d-flex .badge').first()
+    const status = page.getByRole('status', {name: 'Log stream status'})
     await expect(status).toHaveText(/Connected/, {timeout: 15_000})
 
     // Generate a log line via the sample API.
