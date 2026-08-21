@@ -44,7 +44,15 @@ public final class BootUiApiContractCatalog {
                     "sessions",
                     "totalSessions",
                     fields("actionEnabled", JsonType.BOOLEAN, "valueExposure", JsonType.STRING)),
-            inventory("metrics", "/metrics", "metricsAvailable", "meters"),
+            read(
+                    "metrics",
+                    "/metrics",
+                    fields(
+                            "metricsAvailable", JsonType.BOOLEAN,
+                            "total", JsonType.INTEGER,
+                            "meters", JsonType.ARRAY,
+                            "groups", JsonType.ARRAY,
+                            "catalogueVersion", JsonType.STRING)),
             memory("live-memory", "/live-memory"),
             memory("jvm-tuning", "/jvm-tuning"),
             read(
@@ -61,6 +69,20 @@ public final class BootUiApiContractCatalog {
             read("startup", "/startup", fields("steps", JsonType.ARRAY)),
             advisor("graalvm", "/graalvm", "findings"),
             inventory("scheduled", "/scheduled", "schedulingPresent", "tasks"),
+            read(
+                    "resilience",
+                    "/resilience",
+                    fields(
+                            "resiliencePresent", JsonType.BOOLEAN,
+                            "unavailableReason", JsonType.NULLABLE_STRING,
+                            "captureEnabled", JsonType.BOOLEAN,
+                            "providers", JsonType.ARRAY,
+                            "totalPolicies", JsonType.INTEGER,
+                            "policies", JsonType.ARRAY,
+                            "policyCountsByType", JsonType.OBJECT,
+                            "events", JsonType.ARRAY,
+                            "maxEvents", JsonType.INTEGER,
+                            "warnings", JsonType.ARRAY)),
             pagedList(
                     "config",
                     "/config",
@@ -108,6 +130,8 @@ public final class BootUiApiContractCatalog {
                             "clearEnabled", JsonType.BOOLEAN,
                             "managerCount", JsonType.INTEGER,
                             "cacheCount", JsonType.INTEGER,
+                            "tierCount", JsonType.INTEGER,
+                            "truncated", JsonType.BOOLEAN,
                             "managers", JsonType.ARRAY,
                             "operations", JsonType.ARRAY,
                             "warnings", JsonType.ARRAY)),

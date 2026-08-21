@@ -126,6 +126,48 @@
             <artifactId>flyway-core</artifactId>
             <optional>true</optional>
         </dependency>
+        <!--
+          Resilience panel providers. Resilience4j ships each protection as its own artifact and an
+          application typically adopts only some of them, so every module stays optional and each is read by
+          a separately loaded reader class. Spring Retry is likewise optional and unmanaged by the Spring
+          Boot 4.1 BOM, so both carry explicit versions from the root pom.
+        -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-circuitbreaker</artifactId>
+            <version>${resilience4j.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-retry</artifactId>
+            <version>${resilience4j.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-ratelimiter</artifactId>
+            <version>${resilience4j.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-bulkhead</artifactId>
+            <version>${resilience4j.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-timelimiter</artifactId>
+            <version>${resilience4j.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+            <version>${spring-retry.version}</version>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
@@ -315,15 +357,39 @@
             <scope>test</scope>
         </dependency>
         <!--
-          Test-scope only: CracRuntimeInventoryCollectorTests constructs a real RedisCacheManager (over a
-          mocked RedisConnectionFactory, no live Redis needed) to verify the remote-backed cache manager
-          exclusion (see CracRuntimeInventoryCollector.isRedisCacheManager). Version is managed by the
-          Spring Boot BOM imported at the root pom.
+          Spring Data Redis, optional (not transitive): compiled against by RedisSpringCacheInspector, which
+          reads a RedisCache's configured time-to-live and locally recorded statistics for the Cache panel's
+          tier view. optional=true keeps it out of a Redis-absent application's classpath; the inspector class
+          is only instantiated (and therefore only class-loaded) after SpringCacheInspectors' ClassUtils
+          presence check, so R2 (no optional-dependency classloading trap) holds. Also used at test scope by
+          CracRuntimeInventoryCollectorTests, which constructs a real RedisCacheManager over a mocked
+          RedisConnectionFactory (no live Redis needed). Version is managed by the Spring Boot BOM imported at
+          the root pom.
         -->
         <dependency>
             <groupId>org.springframework.data</groupId>
             <artifactId>spring-data-redis</artifactId>
-            <scope>test</scope>
+            <optional>true</optional>
+        </dependency>
+        <!--
+          Caffeine, optional (not transitive): compiled against by CaffeineSpringCacheInspector, which reads a
+          Caffeine cache's public Policy (maximum size, expiry) and CacheStats counters. Gated the same way as
+          Spring Data Redis above.
+        -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!--
+          spring-context-support, optional (not transitive): provides Spring's CaffeineCacheManager, which
+          CaffeineSpringCacheManagerInspector classifies. Gated on both this type and Caffeine itself, because
+          an application can carry Caffeine for another purpose (a JCache region factory) without it.
+        -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context-support</artifactId>
+            <optional>true</optional>
         </dependency>
     </dependencies>
 

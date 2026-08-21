@@ -618,12 +618,17 @@ Data sources:
 
 - Micrometer `MeterRegistry`.
 - Spring Boot Actuator metrics auto-configuration when present.
+- A curated, versioned BootUI catalogue of well-known meter families, used only when the registry itself
+  documents nothing.
 
 Features:
 
 - List meters by name, description, base unit, and Micrometer type.
+- Group meters by provenance: the integration family that registered them, with the contributing library named.
+- Explain a meter from its registry description first, then from the curated catalogue, and say which source was
+  used (`NATIVE`, `CURATED`, or `UNKNOWN`).
 - Search meters by name or description.
-- Filter meters by type.
+- Filter meters by type, provenance group, classified/unclassified provenance, and explanation source.
 - Inspect a meter's current measurements.
 - Show available tag keys and values for each meter.
 - Filter live values by tag key/value.
@@ -634,6 +639,21 @@ Acceptance criteria:
 
 - Missing Micrometer infrastructure produces a clear empty state.
 - Browser responses use BootUI DTOs, not raw registry internals.
+- Provenance is evidence-backed: classification uses meter names only, never tag values, and an unrecognized
+  meter is reported as unclassified with no invented explanation. Curated text is static BootUI content, so no
+  application value flows into an explanation and the panel keeps the metrics contract's existing exposure
+  posture: meter names, tag keys, and tag values are reported as the registry holds them and are not passed
+  through the property-masking policy, which applies to configuration values rather than telemetry.
+- Every matched meter belongs to exactly one provenance group, and group counts reconcile with the matched
+  total even when the returned page is truncated.
+- Groups are facets of the type-, search-, provenance-, and explanation-filtered set computed *before* the group
+  filter is applied, so selecting a group narrows the meter list without collapsing the group summary the user
+  is choosing from. With a group filter applied, that group's count equals the matched total.
+- Classification is name-based, so an application meter that borrows a binder-owned namespace
+  (`tomcat.orders.active`) is attributed to that binder. Prefixes an application is plausibly likely to reuse
+  (`http.server`, `http.client`, `kafka`, `executor`, `cache`) are narrowed to the sub-namespaces the
+  instrumentation actually publishes.
+- The report names the catalogue version that produced its curated explanations.
 - Tag values remain browser-bounded so high-cardinality meters do not freeze the UI.
 - Polling does not overlap slow requests.
 - Switching meter, tag filters, or statistic resets the live graph history.
@@ -877,6 +897,8 @@ Features:
 - Show recent exchanges with timestamp, method, path, status, duration, response size when available, and trace id when a
   common propagation header or the server's active tracing context supplies one.
 - Show request and response headers in row details.
+- Offer a client-side **Copy as cURL** action in row details that rebuilds a runnable command template from the retained
+  exchange metadata, without capturing a body or replaying the request.
 - Provide server-side filtering by path/URL/trace id, method, and status class with bounded paging.
 - Hide BootUI self-requests by default through `bootui.monitoring.exclude-self`.
 
@@ -885,6 +907,10 @@ Acceptance criteria:
 - The recorder is bounded by `bootui.http-exchanges.max-exchanges`, defaulting to 200.
 - Secret-like headers and query parameters are masked unless value exposure is explicitly set to `FULL`.
 - The panel is read-only and returns a stable unavailable DTO when no `HttpExchangeRepository` is available.
+- Copy as cURL performs no request and changes no state; it shows the command before copying, keeps query-parameter
+  names but replaces every value with a placeholder, copies only allowlisted unmasked request headers, POSIX-quotes
+  every argument, copies the recorded path without normalization, and explains what it left out. It reports a clear
+  reason instead of guessing when the recorded URL or method is unusable.
 
 ### 5.14.2 Live Activity Panel
 
@@ -1784,6 +1810,91 @@ Acceptance criteria:
 - R2DBC-only WebFlux applications and Quarkus return an explained unavailable state rather than a silently empty
   transaction list; the Quarkus adapter does not advertise the `get_transactions` MCP tool.
 
+### 5.17.6 SQL Trace Rankings and Request Attribution
+
+Purpose: answer "Which statements dominate the database time I just captured, and which inbound request routes are
+paying for them?"
+
+Data sources:
+
+- The existing bounded `SqlTraceRecorder` window. No second statement recorder, JDBC wrapper, or SQL parsing library is
+  introduced.
+- The adapter's existing inbound-request evidence: the Spring MVC request-correlation registry, the Spring WebFlux HTTP
+  exchange trace registry, and the framework-neutral HTTP exchange buffer on Quarkus.
+- The adapter's existing trace-id provider, plus the framework's own best-matching route pattern where the adapter
+  already resolves one.
+- The Mappings panel's existing `MappingProvider`, used to resolve a captured path back to a declared route template on
+  a runtime that reports no per-request pattern. No new route enumeration is introduced.
+
+Features:
+
+- Aggregate retained executions by a normalized statement. Normalization is a dependency-free lexical pass that replaces
+  string, numeric, and boolean literals and existing bind markers with `?`, collapses `IN (...)` lists, and normalizes
+  whitespace, so equivalent parameterized executions fold into one group without exposing any bound value.
+- Rank normalized statements by cumulative duration, maximum duration, execution count, average duration, error count,
+  p95 duration, and p99 duration. Each ranked group carries all metrics, p50/p95/p99 durations over the retained window,
+  its share of retained database time, the criteria it is actually top-ranked for (`topFor`), the existing N+1 flag and
+  call sites, and bounded execution ids for deep linking with an explicit `entryIdsTruncated` flag when the group ran
+  more times than the deep link retains. A group that scores zero on a criterion is never ranked for it.
+- Attribute executions to inbound requests using trace id first, then the serving thread only where thread affinity is
+  reliable, then the request's time window. Each tier requires a unique candidate; two or more equally good candidates
+  produce an ambiguous result rather than a guess.
+- Group attributed work by the framework's normalized route template when the adapter supplies one; otherwise resolve
+  the captured path against the application's declared route templates, and fall back to a masked request path
+  (identifier-looking segments replaced with `{value}`, query string and fragment discarded) only when neither is
+  available. Template resolution is conservative: a declared template must match segment for segment and be the single
+  most literal match, and two equally plausible declarations resolve to no template at all. Raw query strings and
+  path-parameter values are never used as a grouping key, and each route group declares its `routeSource`.
+- Report per-route requests, executions, distinct statements, cumulative/maximum/average duration, error count, share of
+  retained database time, the correlation tiers that produced the grouping, and a bounded list of that route's top
+  statements.
+- Keep executions that could not be correlated and executions that more than one request matched in explicit
+  `unattributed` and `ambiguous` buckets, each with its own executions, duration, error count, share, and a reason.
+- State the retained window (retained statements, buffer size, evictions, total captured, oldest and newest retained
+  timestamps, total retained duration) in the contract so rankings are read as bounded diagnostic evidence rather than
+  lifetime metrics.
+- Serve the whole report from a single safe `GET /bootui/api/sql-trace/insights`, computed on request. Nothing is
+  computed on page load beyond the panel's normal fetch, and no state is mutated.
+
+Availability:
+
+- Available on Spring MVC, Spring WebFlux, and Quarkus whenever SQL Trace itself is available. The report declares which
+  correlation tiers the runtime supports instead of silently degrading.
+- Spring MVC supports trace-id, serving-thread, and time-window correlation, and supplies route templates from the
+  best-matching handler pattern.
+- Spring WebFlux supports trace-id and time-window correlation only, because a reactive request is not pinned to one
+  thread; it supplies route templates from the best-matching reactive pattern. Its request evidence ships with the
+  OpenTelemetry correlation configuration, so without an OpenTelemetry starter route attribution reports itself
+  unavailable with that reason instead of showing every statement as unattributed. Statement rankings are unaffected.
+- Quarkus supports trace-id and time-window correlation only. RESTEasy Reactive exposes no per-request route template to
+  the adapter, so Quarkus resolves route templates from the application's declared JAX-RS `@Path` mappings and falls
+  back to a masked path when no declaration matches unambiguously.
+
+Out of scope for the current release surface:
+
+- Execution plans, table statistics, index recommendations, and active query profiling.
+- Capturing bind values, query strings, path-parameter values, request bodies, or any SQL text beyond what the SQL Trace
+  recorder already retains.
+- Persistence beyond the SQL Trace retention window, lifetime counters, SQL rewriting, and any causal claim that the
+  retained evidence does not support.
+
+Acceptance criteria:
+
+- Ranking, normalization, aggregation, bounding, attribution, and advisory policy live in framework-neutral,
+  JSON-free engine services; core DTO records stay immutable, annotation-free, and byte-compatible across Jackson 3 and
+  Jackson 2.
+- Equivalent parameterized executions aggregate into one normalized group and no ranked statement, route key, or advisor
+  finding exposes a bound value, raw query string, or path-parameter value.
+- Ranked statements, routes, and the route-by-statement cross product are bounded before serialization, and truncation
+  is disclosed in the payload rather than silently applied.
+- A statement whose owning request cannot be uniquely identified appears in the `unattributed` or `ambiguous` bucket and
+  never in a route group. A statement carrying a trace id that no retained request carries is never attributed by a
+  weaker tier, and a statement that was already running before a request began is never absorbed into it.
+- `GET /bootui/api/sql-trace/insights` is a safe read that honors localhost, Host, and panel enablement policy
+  identically on Spring MVC, Spring WebFlux, and Quarkus, and returns the same report shape on all three.
+- The Database advisor's `DB-RUNTIME-001` rule reports only statement shapes with repeated distinct texts and a literal
+  in a filtering position, states its confidence and limitations, and includes no captured literal values.
+
 ### 5.18 Cache Panel
 
 Purpose: answer "Which cache managers and caches exist, how are they used, and can I clear them during local
@@ -2005,7 +2116,7 @@ Initial endpoints:
 | `/bootui/api/startup`                        | GET    | Startup timeline                                                                       |
 | `/bootui/api/threads`                        | GET    | Stable, paged live thread snapshot with state counts and deadlock info                 |
 | `/bootui/api/threads/download`               | POST   | Confirmation-gated raw text thread dump download                                       |
-| `/bootui/api/metrics`                        | GET    | Searchable/type-filtered Micrometer meter list, paged at 200 by default (1,000 maximum) |
+| `/bootui/api/metrics`                        | GET    | Micrometer meter list with search, type, `group`, `provenance`, and `explanation` filters, paged at 200 by default (1,000 maximum) |
 | `/bootui/api/metrics/detail`                 | GET    | Meter detail with tag filters and samples paged at 100 by default (1,000 maximum)       |
 | `/bootui/api/database-connection-pools/pools` | GET    | JDBC connection pool metadata                                                          |
 | `/bootui/api/database-connection-pools/pools/{name}/snapshot` | GET | Live connection pool utilization snapshot                                   |
@@ -2022,6 +2133,7 @@ Initial endpoints:
 | `/bootui/api/heap-dump/delete`               | POST   | Delete a retained heap dump                                                            |
 | `/bootui/api/heap-dump/download`             | GET    | Download a raw heap dump only when explicitly enabled                                  |
 | `/bootui/api/scheduled`                      | GET    | Scheduled tasks                                                                        |
+| `/bootui/api/resilience`                     | GET    | Resilience policy inventory and bounded resilience events                              |
 | `/bootui/api/http-probe`                          | POST   | Local HTTP probe                                                                       |
 | `/bootui/api/log-tail/recent`                    | GET    | Recent log lines                                                                       |
 | `/bootui/api/log-tail/stream`                    | GET    | Log stream over Server-Sent Events                                                     |
@@ -2048,6 +2160,7 @@ Initial endpoints:
 | `/bootui/api/database-advisor`       | GET    | Latest Database advisor report, with per-datasource read status and scan diagnostics   |
 | `/bootui/api/database-advisor/scan`  | POST   | Run explicit read-only, bounded physical-schema checks                                 |
 | `/bootui/api/sql-trace`                       | GET    | Retained SQL execution report and aggregate statistics                                |
+| `/bootui/api/sql-trace/insights`              | GET    | Ranked normalized statements and request-route attribution over the retained window   |
 | `/bootui/api/sql-trace/clear`                 | POST   | Clear the retained SQL execution buffer                                                |
 | `/bootui/api/sql-trace/recording`             | POST   | Pause/resume SQL execution capture at runtime                                          |
 | `/bootui/api/sql-trace/stream`                | GET    | SQL Trace change notifications over Server-Sent Events (re-fetch trigger)              |
@@ -2059,6 +2172,7 @@ Initial endpoints:
 | `/bootui/api/architecture/scan`              | POST   | Run explicit ArchUnit hygiene checks                                                   |
 | `/bootui/api/rest-api`                   | GET    | Latest REST API Advisor scan report                                                    |
 | `/bootui/api/rest-api/scan`              | POST   | Run explicit read-only REST API best-practice checks                                   |
+| `/bootui/api/rest-api/error-contract`    | GET    | Declared exception handlers (paged, declaration-only; never invokes a handler)         |
 | `/bootui/api/spring`                     | GET    | Latest Spring Advisor scan report                                                      |
 | `/bootui/api/spring/scan`                | POST   | Run explicit read-only Spring context and configuration checks                         |
 | `/bootui/api/memory`                     | GET    | Latest Memory Advisor scan report                                                      |
@@ -2098,6 +2212,7 @@ Initial endpoints:
 | `/bootui/api/websockets/capture`             | POST   | Pause/resume WebSocket frame-metadata capture at runtime                                |
 | `/bootui/api/websockets/stream`              | GET    | WebSockets change notifications over Server-Sent Events (re-fetch trigger)              |
 | `/bootui/api/sql-trace`                      | GET    | Current bounded SQL trace snapshot and aggregate statistics                             |
+| `/bootui/api/sql-trace/insights`             | GET    | Ranked normalized statements and request-route attribution over the retained window     |
 | `/bootui/api/transactions`                   | GET    | Current bounded transaction-boundary snapshot and aggregate statistics                 |
 | `/bootui/api/activity`                       | GET    | Merged Live Activity stream and KPI summary (params: `type`, `severity`, `since`, `limit`, plus `q`, `until`, `cursor`, `pageSize` when persistence is enabled) |
 | `/bootui/api/activity/stream`                | GET    | Live Activity change notifications over Server-Sent Events (re-fetch trigger)           |
@@ -2281,7 +2396,8 @@ Design rules:
     `get_sql_traces`, `get_transactions`, `get_traces`, `get_log_tail`, `get_http_exchanges`, and
     `get_rest_client_traces`.
   - Runtime and integration reads: `get_overview`, `get_health`, `get_config`, `get_beans`, `get_mappings`,
-    `get_loggers`, `get_conditions`, `get_http_sessions`, `get_scheduled_tasks`, `get_cache_stats`,
+    `get_loggers`, `get_conditions`, `get_http_sessions`, `get_scheduled_tasks`, `get_resilience`,
+    `get_cache_stats`,
     `get_database_connection_pools`, `get_metrics`, `get_live_memory`, `get_jvm_tuning`, `get_heap_dump_report`,
     `get_threads`, `get_startup_timeline`, `get_profile_diff`, `get_spring_data_repositories`,
     `get_flyway_migrations`, `get_liquibase_changesets`, `get_spring_security`, `get_ai_overview`, `get_emails`,
@@ -2371,6 +2487,7 @@ Top-level navigation:
 - Services:
   - Scheduled Tasks.
   - REST Client.
+  - Resilience.
   - WebSockets.
   - AI Framework.
   - Cache.

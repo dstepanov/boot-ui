@@ -24,6 +24,10 @@ import io.github.jdubois.bootui.quarkus.devservices.DevServicesRecorder;
 import io.github.jdubois.bootui.quarkus.devservices.QuarkusDevServices;
 import io.github.jdubois.bootui.quarkus.devservices.QuarkusDevServicesProvider;
 import io.github.jdubois.bootui.quarkus.devservices.RawDevService;
+import io.github.jdubois.bootui.quarkus.errorcontract.ErrorContractRecorder;
+import io.github.jdubois.bootui.quarkus.errorcontract.QuarkusErrorContract;
+import io.github.jdubois.bootui.quarkus.errorcontract.QuarkusErrorContractProvider;
+import io.github.jdubois.bootui.quarkus.errorcontract.RawErrorHandler;
 import io.github.jdubois.bootui.quarkus.exceptions.QuarkusExceptionCapture;
 import io.github.jdubois.bootui.quarkus.exceptions.QuarkusPreMappingExceptionCaptureHandler;
 import io.github.jdubois.bootui.quarkus.logging.QuarkusLogTailCapture;
@@ -35,6 +39,12 @@ import io.github.jdubois.bootui.quarkus.mcp.BootUiMcpProducer;
 import io.github.jdubois.bootui.quarkus.mcp.QuarkusMcpEnvelope;
 import io.github.jdubois.bootui.quarkus.mcp.QuarkusMcpFailureReporter;
 import io.github.jdubois.bootui.quarkus.mcp.QuarkusMcpTools;
+import io.github.jdubois.bootui.quarkus.resilience.QuarkusResilienceCapture;
+import io.github.jdubois.bootui.quarkus.resilience.QuarkusResiliencePolicies;
+import io.github.jdubois.bootui.quarkus.resilience.QuarkusResiliencePolicyProvider;
+import io.github.jdubois.bootui.quarkus.resilience.RawResiliencePolicy;
+import io.github.jdubois.bootui.quarkus.resilience.RawResilienceSetting;
+import io.github.jdubois.bootui.quarkus.resilience.ResiliencePoliciesRecorder;
 import io.github.jdubois.bootui.quarkus.scheduled.QuarkusScheduledTaskProvider;
 import io.github.jdubois.bootui.quarkus.scheduled.QuarkusScheduledTasks;
 import io.github.jdubois.bootui.quarkus.scheduled.RawScheduledTask;
@@ -57,6 +67,7 @@ import io.github.jdubois.bootui.quarkus.websocket.QuarkusWebSockets;
 import io.github.jdubois.bootui.quarkus.websocket.RawWebSocketCallback;
 import io.github.jdubois.bootui.quarkus.websocket.RawWebSocketEndpoint;
 import io.github.jdubois.bootui.quarkus.websocket.WebSocketsRecorder;
+import io.github.jdubois.bootui.spi.ErrorHandlerDescriptor;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.ExcludedTypeBuildItem;
@@ -86,6 +97,7 @@ import io.quarkus.maven.dependency.ResolvedDependency;
 import io.quarkus.resteasy.reactive.server.spi.PreExceptionMapperHandlerBuildItem;
 import io.quarkus.runtime.LaunchMode;
 import jakarta.inject.Singleton;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -106,6 +118,7 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
+import org.jboss.jandex.ParameterizedType;
 import org.jboss.jandex.Type;
 
 /**
@@ -162,6 +175,13 @@ class BootUiQuarkusProcessor {
     // `io.github.jdubois.bootui.sample`), exactly the boundary the shared engine `InternalPackageMatcher`
     // already draws for the Quarkus adapter (`io.github.jdubois.bootui.quarkus` + `...core`).
     private static final String BOOTUI_PACKAGE_PREFIX = "io.github.jdubois.bootui.quarkus";
+
+    /** {@code ACC_SYNTHETIC}, as defined by the JVM class-file format (not exposed by {@link Modifier}). */
+    private static final int SYNTHETIC = 0x1000;
+
+    /** {@code ACC_BRIDGE}, as defined by the JVM class-file format (not exposed by {@link Modifier}). */
+    private static final int BRIDGE = 0x0040;
+
     private static final String BOOTUI_PATH_PREFIX = "/bootui";
 
     // Referenced by class name only: this is the sole OpenTelemetry-importing type in the extension, and
@@ -333,7 +353,10 @@ class BootUiQuarkusProcessor {
                         QuarkusDependencyProvider.class,
                         QuarkusConfigProvider.class,
                         QuarkusScheduledTaskProvider.class,
+                        QuarkusResiliencePolicyProvider.class,
+                        QuarkusResilienceCapture.class,
                         QuarkusMappingProvider.class,
+                        QuarkusErrorContractProvider.class,
                         QuarkusDevServicesProvider.class,
                         DevServicesResource.class,
                         QuarkusPanelAvailability.class,
@@ -716,6 +739,35 @@ class BootUiQuarkusProcessor {
             DotName.createSimple("jakarta.ws.rs.BeanParam"));
 
     private static final DotName PRODUCES = DotName.createSimple("jakarta.ws.rs.Produces");
+
+    /** The Jakarta REST provider SPI implemented by a global exception mapper. */
+    private static final DotName EXCEPTION_MAPPER = DotName.createSimple("jakarta.ws.rs.ext.ExceptionMapper");
+
+    /** Quarkus REST's per-method exception mapper, usable globally or on a {@code @Path} resource. */
+    private static final DotName SERVER_EXCEPTION_MAPPER =
+            DotName.createSimple("org.jboss.resteasy.reactive.server.ServerExceptionMapper");
+
+    /** {@code @Priority} — the Jakarta REST provider ordering signal (lower wins). */
+    private static final DotName PRIORITY = DotName.createSimple("jakarta.annotation.Priority");
+
+    private static final DotName PROVIDER = DotName.createSimple("jakarta.ws.rs.ext.Provider");
+
+    /** Quarkus REST's declarative status override on an exception-mapping method. */
+    private static final DotName RESPONSE_STATUS = DotName.createSimple("org.jboss.resteasy.reactive.ResponseStatus");
+
+    private static final DotName JAKARTA_RESPONSE = DotName.createSimple("jakarta.ws.rs.core.Response");
+    private static final DotName REST_RESPONSE = DotName.createSimple("org.jboss.resteasy.reactive.RestResponse");
+
+    /**
+     * Async carriers unwrapped (by name, one level at a time) to reach the declared payload of an
+     * exception-mapping method. Matching on the name keeps the deployment module free of any hard reference
+     * to Mutiny or the JDK concurrency types.
+     */
+    private static final Set<DotName> ERROR_CONTRACT_ASYNC_WRAPPERS = Set.of(
+            DotName.createSimple("io.smallrye.mutiny.Uni"),
+            DotName.createSimple("java.util.concurrent.CompletionStage"),
+            DotName.createSimple("java.util.concurrent.CompletableFuture"));
+
     private static final DotName CONSUMES = DotName.createSimple("jakarta.ws.rs.Consumes");
 
     /**
@@ -1341,6 +1393,41 @@ class BootUiQuarkusProcessor {
     }
 
     /**
+     * Captures the host application's <em>declared</em> exception handlers at build time and replays them
+     * into a synthetic {@link QuarkusErrorContract} bean for the REST API panel's error-contract catalogue.
+     *
+     * <p>Two declaration families are indexed: Jakarta REST {@code ExceptionMapper} implementations (global
+     * providers) and Quarkus REST {@code @ServerExceptionMapper} methods (global when declared on a plain
+     * bean, resource-local when declared on a {@code @Path} resource). Discovery has to happen here because
+     * Quarkus exposes no runtime enumeration of resolved mappers, and because only the Jandex index carries
+     * the generic signature ({@code ExceptionMapper<X>}) and the annotations the catalogue reports. Nothing
+     * is instantiated or invoked: this reads declarations only, so exception handling itself is unchanged.</p>
+     *
+     * <p>BootUI's own mappers are filtered out by package, mirroring {@code registerMappings} and the Spring
+     * provider. The step only runs in a non-production launch mode (in {@link LaunchMode#NORMAL} the whole
+     * BootUI API is dark); when it does not run, the runtime {@code QuarkusErrorContractProvider} sees an
+     * unsatisfied {@code Instance} and the engine renders an explicitly unavailable report rather than a
+     * misleading empty one.</p>
+     */
+    @BuildStep
+    @Record(ExecutionTime.STATIC_INIT)
+    void registerErrorContract(
+            LaunchModeBuildItem launchMode,
+            BeanArchiveIndexBuildItem beanArchiveIndex,
+            ErrorContractRecorder recorder,
+            BuildProducer<SyntheticBeanBuildItem> syntheticBeans) {
+        if (launchMode.getLaunchMode() == LaunchMode.NORMAL) {
+            return; // production: the BootUI API is not wired, so the captured declarations would be unused
+        }
+        List<RawErrorHandler> handlers = scanErrorHandlers(beanArchiveIndex.getIndex());
+        syntheticBeans.produce(SyntheticBeanBuildItem.configure(QuarkusErrorContract.class)
+                .scope(Singleton.class)
+                .runtimeValue(recorder.create(handlers))
+                .unremovable()
+                .done());
+    }
+
+    /**
      * Captures Arc's resolved injection graph after validation and exposes it to the runtime adapter as a
      * generated classpath resource. Arc intentionally keeps this model at build time; a generated resource
      * avoids a late synthetic-bean cycle and is loaded into Quarkus' dev/test runtime classloader.
@@ -1428,6 +1515,281 @@ class BootUiQuarkusProcessor {
         return mappings;
     }
 
+    /**
+     * Builds the raw declared-exception-handler list from the Jandex index: every concrete
+     * {@code @Provider} {@code ExceptionMapper} implementation plus every {@code @ServerExceptionMapper}
+     * method. An {@code ExceptionMapper} that carries no {@code @Provider} is never consulted at runtime, so
+     * reporting it would claim a contract the application does not have. BootUI's own classes are skipped by
+     * FQN.
+     */
+    static List<RawErrorHandler> scanErrorHandlers(IndexView index) {
+        List<RawErrorHandler> handlers = new ArrayList<>();
+        for (ClassInfo mapper : index.getAllKnownImplementors(EXCEPTION_MAPPER)) {
+            if (mapper.isInterface() || Modifier.isAbstract(mapper.flags()) || isBootUiClass(mapper)) {
+                continue;
+            }
+            if (mapper.declaredAnnotation(PROVIDER) == null) {
+                continue; // not registered as a provider, so it never participates in exception resolution
+            }
+            MethodInfo toResponse = exceptionMapperMethod(index, mapper);
+            List<String> exceptionTypes = exceptionMapperTypes(index, mapper, toResponse);
+            if (exceptionTypes.isEmpty()) {
+                continue; // an ExceptionMapper whose handled type cannot be read is not reportable
+            }
+            Type returnType = toResponse == null ? null : toResponse.returnType();
+            handlers.add(new RawErrorHandler(
+                    ErrorHandlerDescriptor.JAKARTA_REST_EXCEPTION_MAPPER,
+                    mapper.name().toString(),
+                    toResponse == null ? "toResponse" : toResponse.name(),
+                    exceptionTypes,
+                    ErrorHandlerDescriptor.SCOPE_GLOBAL,
+                    null,
+                    priorityOf(mapper.declaredAnnotation(PRIORITY)),
+                    null,
+                    isDynamicStatus(returnType),
+                    returnType == null ? null : returnType.name().toString(),
+                    bodyTypeOf(returnType),
+                    mediaTypeList(mapper.declaredAnnotation(PRODUCES))));
+        }
+        for (AnnotationInstance annotation : index.getAnnotations(SERVER_EXCEPTION_MAPPER)) {
+            if (annotation.target() == null || annotation.target().kind() != AnnotationTarget.Kind.METHOD) {
+                continue;
+            }
+            MethodInfo method = annotation.target().asMethod();
+            ClassInfo declaringClass = method.declaringClass();
+            if (isBootUiClass(declaringClass)) {
+                continue;
+            }
+            List<String> exceptionTypes = serverExceptionMapperTypes(index, annotation, method);
+            if (exceptionTypes.isEmpty()) {
+                continue; // no declared exception type is readable, so there is nothing honest to report
+            }
+            boolean resourceLocal = declaringClass.declaredAnnotation(PATH) != null;
+            Type returnType = method.returnType();
+            AnnotationInstance status = method.annotation(RESPONSE_STATUS);
+            List<String> produces = mediaTypeList(method.annotation(PRODUCES));
+            handlers.add(new RawErrorHandler(
+                    ErrorHandlerDescriptor.QUARKUS_SERVER_EXCEPTION_MAPPER,
+                    declaringClass.name().toString(),
+                    method.name(),
+                    exceptionTypes,
+                    resourceLocal ? ErrorHandlerDescriptor.SCOPE_CONTROLLER : ErrorHandlerDescriptor.SCOPE_GLOBAL,
+                    resourceLocal ? declaringClass.name().toString() : null,
+                    declaredPriority(annotation),
+                    statusOf(status),
+                    isDynamicStatus(returnType),
+                    returnType.name().toString(),
+                    bodyTypeOf(returnType),
+                    produces.isEmpty() ? mediaTypeList(declaringClass.declaredAnnotation(PRODUCES)) : produces));
+        }
+        return handlers;
+    }
+
+    /** {@code true} when the class belongs to BootUI's own Quarkus adapter (mirrors the mappings filter). */
+    private static boolean isBootUiClass(ClassInfo classInfo) {
+        String name = classInfo.name().toString();
+        return name.equals(BOOTUI_PACKAGE_PREFIX) || name.startsWith(BOOTUI_PACKAGE_PREFIX + ".");
+    }
+
+    /**
+     * The {@code toResponse(X)} implementation of an {@code ExceptionMapper}, skipping compiler-generated
+     * bridge methods.
+     *
+     * <p>Bridge methods are matched on their {@code SYNTHETIC}/{@code BRIDGE} class-file flags rather than
+     * on an erased parameter type: {@code ExceptionMapper<E extends Throwable>} erases {@code E} to
+     * {@code java.lang.Throwable}, not to {@code java.lang.Object}, so a parameter-name check would let the
+     * bridge through and report {@code Throwable} as the handled type.</p>
+     */
+    private static MethodInfo exceptionMapperMethod(IndexView index, ClassInfo mapper) {
+        MethodInfo fallback = null;
+        for (ClassInfo current = mapper; current != null; current = superClass(index, current)) {
+            for (MethodInfo method : current.methods()) {
+                if (!"toResponse".equals(method.name()) || method.parametersCount() != 1) {
+                    continue;
+                }
+                if (isBridgeMethod(method)) {
+                    fallback = fallback == null ? method : fallback;
+                    continue;
+                }
+                return method;
+            }
+        }
+        return fallback;
+    }
+
+    /** The indexed superclass, or {@code null} at {@code Object} or when the superclass is not indexed. */
+    private static ClassInfo superClass(IndexView index, ClassInfo classInfo) {
+        DotName superName = classInfo.superName();
+        if (superName == null || DotName.OBJECT_NAME.equals(superName)) {
+            return null;
+        }
+        return index.getClassByName(superName);
+    }
+
+    /** Whether a method is compiler-generated (synthetic or a generics bridge). */
+    private static boolean isBridgeMethod(MethodInfo method) {
+        return (method.flags() & (SYNTHETIC | BRIDGE)) != 0;
+    }
+
+    /**
+     * The handled exception type of an {@code ExceptionMapper}, read from the {@code ExceptionMapper<X>}
+     * generic signature — walking the superclass chain, because a mapper may inherit the interface — and
+     * falling back to the {@code toResponse} parameter when the signature is not readable.
+     */
+    private static List<String> exceptionMapperTypes(IndexView index, ClassInfo mapper, MethodInfo toResponse) {
+        for (ClassInfo current = mapper; current != null; current = superClass(index, current)) {
+            for (Type interfaceType : current.interfaceTypes()) {
+                if (!interfaceType.name().equals(EXCEPTION_MAPPER)
+                        || interfaceType.kind() != Type.Kind.PARAMETERIZED_TYPE) {
+                    continue;
+                }
+                List<Type> arguments = interfaceType.asParameterizedType().arguments();
+                if (!arguments.isEmpty() && arguments.get(0).kind() == Type.Kind.CLASS) {
+                    return List.of(arguments.get(0).name().toString());
+                }
+            }
+        }
+        if (toResponse != null && !isBridgeMethod(toResponse)) {
+            return List.of(toResponse.parameterType(0).name().toString());
+        }
+        return List.of();
+    }
+
+    /**
+     * The handled exception types of a {@code @ServerExceptionMapper} method: the annotation's explicit
+     * {@code value()} when present, otherwise the method's {@code Throwable} parameters (Quarkus' own rule).
+     */
+    private static List<String> serverExceptionMapperTypes(
+            IndexView index, AnnotationInstance annotation, MethodInfo method) {
+        AnnotationValue declared = annotation.value();
+        if (declared != null) {
+            List<String> types = Arrays.stream(declared.asClassArray())
+                    .map(type -> type.name().toString())
+                    .distinct()
+                    .toList();
+            if (!types.isEmpty()) {
+                return types;
+            }
+        }
+        List<String> fromParameters = new ArrayList<>();
+        for (Type parameter : method.parameterTypes()) {
+            if (isThrowable(index, parameter.name())
+                    && !fromParameters.contains(parameter.name().toString())) {
+                fromParameters.add(parameter.name().toString());
+            }
+        }
+        return List.copyOf(fromParameters);
+    }
+
+    /**
+     * Whether a parameter type is an exception. The class hierarchy is walked in the index when it is
+     * present; JDK and library exceptions are not in the application's bean archive, so the walk falls back
+     * to the universally-followed {@code …Exception}/{@code …Error}/{@code Throwable} naming convention. A
+     * false positive here can only ever add an over-reported declaration, never invoke anything.
+     */
+    private static boolean isThrowable(IndexView index, DotName typeName) {
+        DotName current = typeName;
+        for (int depth = 0; depth < 20 && current != null; depth++) {
+            String name = current.toString();
+            if (name.equals("java.lang.Throwable")) {
+                return true;
+            }
+            ClassInfo classInfo = index.getClassByName(current);
+            if (classInfo == null) {
+                return name.endsWith("Exception") || name.endsWith("Error") || name.endsWith("Throwable");
+            }
+            current = classInfo.superName();
+        }
+        return false;
+    }
+
+    /** The {@code @Priority} value, or {@code null} when the declaration carries none. */
+    private static Integer priorityOf(AnnotationInstance priority) {
+        if (priority == null || priority.value() == null) {
+            return null;
+        }
+        return priority.value().asInt();
+    }
+
+    /**
+     * The priority declared on {@code @ServerExceptionMapper} itself, which is the only ordering signal
+     * Quarkus REST consults for these methods. {@code null} when the declaration relies on the default.
+     */
+    private static Integer declaredPriority(AnnotationInstance serverExceptionMapper) {
+        AnnotationValue priority = serverExceptionMapper.value("priority");
+        return priority == null ? null : priority.asInt();
+    }
+
+    /** The statically declared status, or {@code null} when the annotation carries no readable value. */
+    private static String statusOf(AnnotationInstance responseStatus) {
+        if (responseStatus == null || responseStatus.value() == null) {
+            return null;
+        }
+        return String.valueOf(responseStatus.value().asInt());
+    }
+
+    /**
+     * Whether the response status is only decided at runtime, which is the case when the method hands back a
+     * {@code Response} or {@code RestResponse} (possibly wrapped in an async carrier) that carries its own
+     * status.
+     */
+    private static boolean isDynamicStatus(Type returnType) {
+        Type payload = unwrapAsync(returnType);
+        return payload != null
+                && (payload.name().equals(JAKARTA_RESPONSE) || payload.name().equals(REST_RESPONSE));
+    }
+
+    /**
+     * The declared response-body type where the signature exposes it: the {@code RestResponse<T>} argument,
+     * the plain returned type, or {@code null} for {@code void} and for the opaque {@code Response}.
+     */
+    private static String bodyTypeOf(Type returnType) {
+        Type payload = unwrapAsync(returnType);
+        if (payload == null
+                || payload.kind() == Type.Kind.VOID
+                || payload.name().equals(JAKARTA_RESPONSE)) {
+            return null;
+        }
+        if (payload.name().equals(REST_RESPONSE)) {
+            if (payload.kind() != Type.Kind.PARAMETERIZED_TYPE) {
+                return null;
+            }
+            List<Type> arguments = payload.asParameterizedType().arguments();
+            return arguments.isEmpty() ? null : arguments.get(0).name().toString();
+        }
+        return payload.name().toString();
+    }
+
+    /** Peels {@code Uni}/{@code CompletionStage}/{@code CompletableFuture} wrappers off a return type. */
+    private static Type unwrapAsync(Type type) {
+        Type current = type;
+        for (int depth = 0; depth < 3; depth++) {
+            if (current == null || current.kind() != Type.Kind.PARAMETERIZED_TYPE) {
+                return current;
+            }
+            ParameterizedType parameterized = current.asParameterizedType();
+            if (!ERROR_CONTRACT_ASYNC_WRAPPERS.contains(parameterized.name())
+                    || parameterized.arguments().isEmpty()) {
+                return current;
+            }
+            current = parameterized.arguments().get(0);
+        }
+        return current;
+    }
+
+    /** The declared media types of a {@code @Produces} annotation as a sorted list, empty when unset. */
+    private static List<String> mediaTypeList(AnnotationInstance annotation) {
+        if (annotation == null || annotation.value() == null) {
+            return List.of();
+        }
+        return Arrays.stream(annotation.value().asStringArray())
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim)
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
     /** The simple HTTP verb ({@code GET}, {@code POST}, …) of a JAX-RS method, or {@code null} if it has none. */
     private static String httpMethodOf(MethodInfo method) {
         for (String httpMethod : JAXRS_HTTP_METHODS) {
@@ -1511,6 +1873,280 @@ class BootUiQuarkusProcessor {
                 .done());
         runtimeDefaults.produce(
                 new RunTimeConfigurationDefaultBuildItem(QuarkusPanelAvailability.DEV_SERVICES_PRESENT_KEY, "true"));
+    }
+
+    private static final String CIRCUIT_BREAKER_STATES_CLASS =
+            "io.github.jdubois.bootui.quarkus.resilience.SmallRyeCircuitBreakerStates";
+
+    private static final DotName FT_CIRCUIT_BREAKER =
+            DotName.createSimple("org.eclipse.microprofile.faulttolerance.CircuitBreaker");
+
+    private static final DotName FT_RETRY = DotName.createSimple("org.eclipse.microprofile.faulttolerance.Retry");
+
+    private static final DotName FT_TIMEOUT = DotName.createSimple("org.eclipse.microprofile.faulttolerance.Timeout");
+
+    private static final DotName FT_BULKHEAD = DotName.createSimple("org.eclipse.microprofile.faulttolerance.Bulkhead");
+
+    private static final DotName FT_FALLBACK = DotName.createSimple("org.eclipse.microprofile.faulttolerance.Fallback");
+
+    private static final DotName FT_RATE_LIMIT = DotName.createSimple("io.smallrye.faulttolerance.api.RateLimit");
+
+    private static final DotName FT_CIRCUIT_BREAKER_NAME =
+            DotName.createSimple("io.smallrye.faulttolerance.api.CircuitBreakerName");
+
+    /**
+     * Captures the host application's MicroProfile / SmallRye Fault Tolerance policies at build time and
+     * replays them into a synthetic {@link QuarkusResiliencePolicies} bean for the Resilience panel, mirroring
+     * {@link #registerScheduledTasks} exactly. SmallRye keeps no runtime registry of guarded methods — its only
+     * runtime API, {@code CircuitBreakerMaintenance}, can answer for a breaker only when the developer gave it
+     * a {@code @CircuitBreakerName} — so the declared policies are read from the
+     * {@link BeanArchiveIndexBuildItem} Jandex index, which spans the application beans the fault-tolerance
+     * interceptors enhance.
+     *
+     * <p>The same capability gate also decides two other things. It lights the Resilience panel up in the
+     * manifest ({@link QuarkusPanelAvailability#RESILIENCE_PRESENT_KEY}), true even with zero annotated
+     * methods, and it registers {@code SmallRyeCircuitBreakerStates} — the one BootUI class that imports
+     * {@code io.smallrye.faulttolerance} — or {@linkplain ExcludedTypeBuildItem excludes} it from discovery
+     * otherwise, so Arc never links the fault-tolerance API in an application that does not have it (R2).</p>
+     *
+     * <p>When the gate is closed the synthetic bean is not produced, so
+     * {@code QuarkusResiliencePolicyProvider}'s {@code Instance} is unsatisfied, the panel is reported
+     * unavailable, and the always-produced {@code ResilienceEventRecorder} simply stays empty — Live Activity
+     * renders no {@code RESILIENCE} entries. Only annotation-discovered policies are captured; programmatic
+     * {@code Guard}/{@code FaultTolerance} builders are not, matching the panel's documented scope.</p>
+     */
+    @BuildStep
+    void registerResilienceBeans(
+            LaunchModeBuildItem launchMode,
+            Capabilities capabilities,
+            BuildProducer<AdditionalBeanBuildItem> additionalBeans,
+            BuildProducer<ExcludedTypeBuildItem> excludedTypes,
+            BuildProducer<RunTimeConfigurationDefaultBuildItem> runtimeDefaults) {
+        // No quarkus-smallrye-fault-tolerance (or production): keep the io.smallrye.faulttolerance-importing
+        // state port out of bean discovery so Arc never links the fault-tolerance API, and leave the panel
+        // unavailable (RESILIENCE_PRESENT_KEY defaults to false).
+        registerCapabilityGatedBeans(
+                resiliencePresent(launchMode, capabilities),
+                additionalBeans,
+                excludedTypes,
+                runtimeDefaults,
+                QuarkusPanelAvailability.RESILIENCE_PRESENT_KEY,
+                CIRCUIT_BREAKER_STATES_CLASS);
+    }
+
+    /**
+     * Second half of the Resilience build-time wiring: the Jandex scan and the synthetic policy bean.
+     *
+     * <p>This is deliberately a separate build step from {@link #registerResilienceBeans}. Arc's own
+     * {@code BeanArchiveProcessor} consumes {@link AdditionalBeanBuildItem} to produce the
+     * {@link BeanArchiveIndexBuildItem}, so a single step that both reads the index and registers an
+     * additional bean would form a build-chain cycle and fail augmentation.</p>
+     */
+    @BuildStep
+    @Record(ExecutionTime.STATIC_INIT)
+    void registerResiliencePolicies(
+            LaunchModeBuildItem launchMode,
+            Capabilities capabilities,
+            BeanArchiveIndexBuildItem beanArchiveIndex,
+            ResiliencePoliciesRecorder recorder,
+            BuildProducer<SyntheticBeanBuildItem> syntheticBeans) {
+        if (!resiliencePresent(launchMode, capabilities)) {
+            return;
+        }
+        List<RawResiliencePolicy> policies = scanResiliencePolicies(beanArchiveIndex.getIndex());
+        syntheticBeans.produce(SyntheticBeanBuildItem.configure(QuarkusResiliencePolicies.class)
+                .scope(Singleton.class)
+                .runtimeValue(recorder.create(policies))
+                .unremovable()
+                .done());
+    }
+
+    /** Both Resilience build steps gate on exactly the same decision, so they cannot drift apart. */
+    private static boolean resiliencePresent(LaunchModeBuildItem launchMode, Capabilities capabilities) {
+        return launchMode.getLaunchMode() != LaunchMode.NORMAL
+                && capabilities.isPresent(Capability.SMALLRYE_FAULT_TOLERANCE);
+    }
+
+    /**
+     * Reads every MicroProfile / SmallRye Fault Tolerance annotation from {@code index} into a
+     * {@link RawResiliencePolicy} list. Both method- and class-level annotations are captured (a class-level
+     * annotation guards every business method of the bean, which is exactly how SmallRye applies it), and each
+     * annotation contributes its own policy row so a method guarded by {@code @Retry} <em>and</em>
+     * {@code @CircuitBreaker} shows both protections rather than one merged approximation.
+     *
+     * <p>Members absent from the Jandex instance fall back to the specification's documented defaults and are
+     * reported with {@code DEFAULT} provenance; members written in the annotation are reported as
+     * {@code CONFIGURED}. Values overridden through MicroProfile Fault Tolerance configuration keys are
+     * resolved later, at request time, by {@code QuarkusResiliencePolicyProvider}.</p>
+     */
+    static List<RawResiliencePolicy> scanResiliencePolicies(IndexView index) {
+        List<RawResiliencePolicy> policies = new ArrayList<>();
+        collectResiliencePolicies(index, FT_CIRCUIT_BREAKER, "CIRCUIT_BREAKER", policies);
+        collectResiliencePolicies(index, FT_RETRY, "RETRY", policies);
+        collectResiliencePolicies(index, FT_RATE_LIMIT, "RATE_LIMITER", policies);
+        collectResiliencePolicies(index, FT_BULKHEAD, "BULKHEAD", policies);
+        collectResiliencePolicies(index, FT_TIMEOUT, "TIME_LIMITER", policies);
+        collectResiliencePolicies(index, FT_FALLBACK, "FALLBACK", policies);
+        return policies;
+    }
+
+    private static void collectResiliencePolicies(
+            IndexView index, DotName annotationName, String type, List<RawResiliencePolicy> policies) {
+        for (AnnotationInstance annotation : index.getAnnotations(annotationName)) {
+            AnnotationTarget target = annotation.target();
+            if (target == null) {
+                continue;
+            }
+            if (target.kind() == AnnotationTarget.Kind.METHOD) {
+                MethodInfo method = target.asMethod();
+                policies.add(toRawResiliencePolicy(
+                        annotation,
+                        type,
+                        method.declaringClass(),
+                        method.name(),
+                        circuitBreakerNameOf(method.annotation(FT_CIRCUIT_BREAKER_NAME))));
+            } else if (target.kind() == AnnotationTarget.Kind.CLASS) {
+                ClassInfo declaringClass = target.asClass();
+                policies.add(toRawResiliencePolicy(
+                        annotation,
+                        type,
+                        declaringClass,
+                        "",
+                        circuitBreakerNameOf(declaringClass.declaredAnnotation(FT_CIRCUIT_BREAKER_NAME))));
+            }
+        }
+    }
+
+    /** The {@code @CircuitBreakerName} value, or {@code ""} when the breaker is anonymous. */
+    private static String circuitBreakerNameOf(AnnotationInstance circuitBreakerName) {
+        if (circuitBreakerName == null || circuitBreakerName.value() == null) {
+            return "";
+        }
+        return circuitBreakerName.value().asString();
+    }
+
+    /**
+     * Maps one scanned annotation onto the raw policy record.
+     *
+     * <p>A circuit breaker carrying {@code @CircuitBreakerName} is named by that name rather than by the
+     * method it guards: the name is what SmallRye's {@code CircuitBreakerMaintenance} is keyed by, what the
+     * developer wrote, and what state-transition events report — so naming the policy anything else would
+     * split one breaker across two identities in the panel. The guarded method stays visible as
+     * {@code target}.</p>
+     */
+    private static RawResiliencePolicy toRawResiliencePolicy(
+            AnnotationInstance annotation,
+            String type,
+            ClassInfo declaringClass,
+            String methodName,
+            String circuitBreakerName) {
+        String simpleAnnotation = annotation.name().withoutPackagePrefix();
+        String className = declaringClass.name().toString();
+        String simpleClass = declaringClass.simpleName();
+        String label = methodName.isEmpty() ? simpleClass : simpleClass + "#" + methodName;
+        String name = "CIRCUIT_BREAKER".equals(type) && !circuitBreakerName.isEmpty() ? circuitBreakerName : label;
+        return new RawResiliencePolicy(
+                name,
+                type,
+                simpleAnnotation,
+                className,
+                methodName,
+                circuitBreakerName,
+                resilienceSettings(annotation, simpleAnnotation));
+    }
+
+    /**
+     * The annotation members the panel reports, in a fixed per-annotation order. Class-array members
+     * ({@code failOn}, {@code retryOn}, …) are deliberately omitted: they are exception-type filters rather
+     * than the thresholds and budgets the panel explains, and rendering them adds unbounded identifiers.
+     */
+    private static List<RawResilienceSetting> resilienceSettings(AnnotationInstance annotation, String simpleName) {
+        List<RawResilienceSetting> settings = new ArrayList<>();
+        switch (simpleName) {
+            case "CircuitBreaker" -> {
+                addResilienceSetting(settings, annotation, "requestVolumeThreshold", "20");
+                addResilienceSetting(settings, annotation, "failureRatio", "0.5");
+                addResilienceSetting(settings, annotation, "successThreshold", "1");
+                addResilienceSetting(settings, annotation, "delay", "5000");
+                addResilienceSetting(settings, annotation, "delayUnit", "MILLIS");
+            }
+            case "Retry" -> {
+                addResilienceSetting(settings, annotation, "maxRetries", "3");
+                addResilienceSetting(settings, annotation, "delay", "0");
+                addResilienceSetting(settings, annotation, "delayUnit", "MILLIS");
+                addResilienceSetting(settings, annotation, "maxDuration", "180000");
+                addResilienceSetting(settings, annotation, "durationUnit", "MILLIS");
+                addResilienceSetting(settings, annotation, "jitter", "200");
+                addResilienceSetting(settings, annotation, "jitterDelayUnit", "MILLIS");
+            }
+            case "RateLimit" -> {
+                addResilienceSetting(settings, annotation, "value", "100");
+                addResilienceSetting(settings, annotation, "window", "1");
+                addResilienceSetting(settings, annotation, "windowUnit", "SECONDS");
+                addResilienceSetting(settings, annotation, "minSpacing", "0");
+                addResilienceSetting(settings, annotation, "minSpacingUnit", "SECONDS");
+                addResilienceSetting(settings, annotation, "type", "FIXED");
+            }
+            case "Bulkhead" -> {
+                addResilienceSetting(settings, annotation, "value", "10");
+                addResilienceSetting(settings, annotation, "waitingTaskQueue", "10");
+            }
+            case "Timeout" -> {
+                addResilienceSetting(settings, annotation, "value", "1000");
+                addResilienceSetting(settings, annotation, "unit", "MILLIS");
+            }
+            case "Fallback" -> addResilienceSetting(settings, annotation, "fallbackMethod", "");
+            default -> {
+                // An annotation BootUI does not model contributes no settings rather than a guessed shape.
+            }
+        }
+        return settings;
+    }
+
+    /**
+     * Adds one member row: the value written in the annotation ({@code CONFIGURED}) or the specification
+     * default ({@code DEFAULT}). A defaulted member with an empty default (an unset {@code fallbackMethod})
+     * is omitted entirely rather than rendered as a blank row.
+     */
+    private static void addResilienceSetting(
+            List<RawResilienceSetting> settings,
+            AnnotationInstance annotation,
+            String member,
+            String specificationDefault) {
+        AnnotationValue value = annotation.value(member);
+        if (value == null) {
+            if (!specificationDefault.isEmpty()) {
+                settings.add(new RawResilienceSetting(member, specificationDefault, "DEFAULT"));
+            }
+            return;
+        }
+        String rendered = renderAnnotationValue(value);
+        if (!rendered.isEmpty()) {
+            settings.add(new RawResilienceSetting(member, rendered, "CONFIGURED"));
+        }
+    }
+
+    /**
+     * Renders a Jandex annotation value the way a developer wrote it. {@code AnnotationValue#toString()} is
+     * deliberately not used: it renders {@code member = value} and quotes strings, so a threshold would reach
+     * the panel as {@code requestVolumeThreshold = 4} and a fallback as {@code "recover"}. Typed accessors are
+     * used per kind instead, and an unmodelled kind falls back to an empty string so the row is omitted rather
+     * than showing Jandex internals.
+     */
+    private static String renderAnnotationValue(AnnotationValue value) {
+        return switch (value.kind()) {
+            case ENUM -> value.asEnum();
+            case STRING -> value.asString();
+            case BOOLEAN -> Boolean.toString(value.asBoolean());
+            case BYTE -> Byte.toString(value.asByte());
+            case SHORT -> Short.toString(value.asShort());
+            case INTEGER -> Integer.toString(value.asInt());
+            case LONG -> Long.toString(value.asLong());
+            case FLOAT -> Float.toString(value.asFloat());
+            case DOUBLE -> Double.toString(value.asDouble());
+            case CHARACTER -> Character.toString(value.asChar());
+            default -> "";
+        };
     }
 
     private static final DotName SCHEDULED_ANNOTATION = DotName.createSimple("io.quarkus.scheduler.Scheduled");

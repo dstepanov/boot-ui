@@ -1135,15 +1135,7 @@ function onGlobalKeydown(e) {
 }
 
 :global(body) {
-  background:
-    radial-gradient(circle at top left, rgba(25, 135, 84, 0.18), transparent 34rem),
-    linear-gradient(135deg, #f6fbf8 0%, #eef6ff 46%, #f7f4ff 100%);
-}
-
-:global(:root[data-bootui-theme='dark'] body) {
-  background:
-    radial-gradient(circle at top left, rgba(52, 208, 104, 0.12), transparent 34rem),
-    linear-gradient(135deg, #0d1a12 0%, #0f1929 46%, #100f1a 100%);
+  background: radial-gradient(circle at top left, var(--bootui-bg-body-orb), transparent 34rem), var(--bootui-bg-body);
 }
 
 :global(:root[data-bootui-theme='dark'] .card) {
@@ -1320,10 +1312,22 @@ function onGlobalKeydown(e) {
 }
 
 :global(.card) {
+  background: var(--bootui-surface);
   border: 1px solid var(--bootui-border);
   border-radius: var(--bootui-radius-lg);
   box-shadow: var(--bootui-shadow-sm);
+  color: var(--bootui-text);
   transition: border-color 180ms ease;
+}
+
+:global(.card-header) {
+  background: transparent;
+  border-bottom-color: var(--bootui-border-subtle);
+  padding: 1rem 1.25rem;
+}
+
+:global(.card-body) {
+  padding: 1.25rem;
 }
 
 :global(.btn),
@@ -1332,6 +1336,26 @@ function onGlobalKeydown(e) {
 :global(.form-control),
 :global(.form-select) {
   border-radius: var(--bootui-radius-md);
+}
+
+:global(.btn) {
+  font-weight: 600;
+}
+
+:global(.form-control),
+:global(.form-select) {
+  border-color: var(--bootui-border-alt);
+}
+
+:global(.form-control:hover),
+:global(.form-select:hover) {
+  border-color: color-mix(in srgb, var(--bootui-green) 34%, var(--bootui-border-alt));
+}
+
+:global(.form-control:focus),
+:global(.form-select:focus) {
+  border-color: var(--bootui-green);
+  box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--bootui-green) 18%, transparent);
 }
 
 /* DESIGN.md "Buttons": the primary action is solid Spring green, not Bootstrap's
@@ -1394,6 +1418,32 @@ function onGlobalKeydown(e) {
 
 :global(.bootui-data-table) {
   min-width: var(--bootui-table-min-width, 42rem);
+}
+
+:global(.table > thead > tr > th) {
+  color: var(--bootui-text-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+:global(.table > :not(caption) > * > *) {
+  padding-block: 0.75rem;
+}
+
+/* Selected master-list rows are dense technical surfaces, so their nested
+   identifiers and metadata must inherit a single accessible foreground. */
+:global(.list-group-item-action.active) {
+  --bs-list-group-active-bg: #0a53be;
+  --bs-list-group-active-border-color: #0a53be;
+}
+
+:global(.list-group-item-action.active code) {
+  color: inherit;
+}
+
+:global(.list-group-item-action.active .text-muted) {
+  color: rgba(255, 255, 255, 0.85) !important;
 }
 
 /* A card header that carries a section title should be a real heading. Normalise
@@ -2168,6 +2218,12 @@ function onGlobalKeydown(e) {
     align-items: flex-start;
     flex-direction: column;
     gap: 0.65rem;
+  }
+
+  :global(.card-header),
+  :global(.card-body) {
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 
   :global(button),

@@ -482,7 +482,7 @@ The REST API panel runs a curated, zero-config ruleset against the host applicat
 (`@RestController` / `@Controller` handler methods on Spring or JAX-RS resources on Quarkus) at runtime. Like the
 Architecture panel, it imports the compiled handlers from bounded application base packages and derives a read-only
 model — HTTP method(s), path(s), parameters and their annotations, return type, `produces`/`consumes`, validation flags,
-and declared throws. It then evaluates 53 REST best-practice rules across eight categories: routing
+and declared throws. It then evaluates 56 REST best-practice rules across eight categories: routing
 and HTTP-method mapping, resource naming, status codes and responses, input validation and binding, DTO and payload
 contracts, pagination, versioning and content negotiation, and error handling and documentation. The `RAPI-DOC-*`
 documentation rules only run when Swagger or MicroProfile OpenAPI annotations are on the host classpath.
@@ -493,6 +493,28 @@ identifier, category, severity, recommendation, and a learn-more link, and the r
 rules, sorted by severity and finding count. The heuristics complement — rather than replace — an API design review or
 contract testing. See [REST-API-CHECKS.md](REST-API-CHECKS.md) for the full catalogue of rules and what
 each one inspects.
+
+The panel also shows the application's **declared error contract**: every `@ControllerAdvice` /
+`@RestControllerAdvice` / `@ExceptionHandler` method on Spring MVC and WebFlux, and every Jakarta REST
+`@Provider` `ExceptionMapper` and Quarkus REST `@ServerExceptionMapper` on Quarkus. Each row names the handled
+exception type, the declaring component and method, the scope (application-wide, narrowed, or
+controller-local), the resolved precedence, the declared HTTP status, the response-body category (RFC 9457
+`ProblemDetail`, a custom object, a string, empty, or explicitly unresolved), and the declared media types.
+This is a pure declaration read: no handler is instantiated or invoked, no request is synthesized, and no
+exception is thrown to observe a response — so anything the declarations cannot prove is reported as
+unresolved rather than guessed. Only the application's own declarations are listed: the handlers the
+framework itself contributes (Spring Boot's `BasicErrorController`, Quarkus's built-in RESTEasy Reactive and
+Jackson mappers) are identical in every application, so an application that declares nothing shows an empty
+catalogue on all three stacks. When a retained failure in the Exceptions panel can be attributed to exactly
+one declared handler, that panel links straight to that declaration in this catalogue; ambiguous and unmatched
+failures stay unlinked.
+
+Three cases are deliberately reported as unresolved rather than guessed. An advice that implements `Ordered`
+chooses its position at runtime, so its whole precedence group is reported as ambiguous. A Spring handler
+without `@ResponseBody` (directly or through `@RestControllerAdvice`) renders a view rather than a body, so its
+body category is unresolved instead of being read from the return type. On Quarkus only `@Provider`-annotated
+`ExceptionMapper`s are listed, because an unregistered implementation never participates in exception
+resolution.
 
 > **Not available in GraalVM native images.** The advisor scans compiled `.class` files via ArchUnit's
 > `ClassFileImporter`, which is incompatible with a native executable; the panel is automatically hidden when the
@@ -892,6 +914,20 @@ while a selected meter's concrete tagged samples use 100-row pages (also capped 
 matching and displayed counts, provides load-more and sample Previous/Next controls, and keeps tag-value choices bounded to
 the first 100 sorted values per key with an explicit truncation badge.
 
+Meters are also grouped by **provenance**: the integration family that registered them (JVM binders, process and system
+binders, HTTP server and client instrumentation, datasource pools, caches, messaging clients, resilience libraries, gRPC,
+framework internals) with anything unrecognized filed under "Application / unclassified". Each group names the library
+that contributes it, how many of its meters the registry itself documents, the curated families that matched, and the tag
+keys most of its meters share. Selecting a group filters the meter list on the server; two additional filters narrow by
+provenance (known integration vs application/unclassified) and by explanation source.
+
+Explanations are honest about where they come from. A meter's own registry description always wins and is marked
+**Native description**; when the registry documents nothing, BootUI falls back to a curated, versioned catalogue of
+well-known meter families and marks the text **BootUI catalogue**; a meter that has neither is marked **Not documented**
+and BootUI says so instead of guessing. Classification matches meter names only — never tag values — on exact names or
+dot-segment prefixes, so an application meter such as `orders.processed` is never absorbed into a curated family. The
+report carries the catalogue version so an explanation can be traced back to the catalogue that produced it.
+
 On Quarkus the panel is identical, served over Micrometer directly (Quarkus has no Actuator): it reads the live composite
 `MeterRegistry` when the application adds a `quarkus-micrometer` registry (for example
 `quarkus-micrometer-registry-prometheus`), and otherwise renders as unavailable while staying in the sidebar. As on Spring
@@ -1224,13 +1260,46 @@ untouched so application database access is never compromised.
 
 Executions are retained in a bounded in-memory ring buffer (most recent first) alongside aggregate stats (total/average/
 max time, slow-query and failure counts, per-category counters, and evictions). The panel also groups identical
-statements into a "Most frequent statements" table and flags repeated `SELECT`s that look like an **N+1 access pattern**
+statements into a "Most frequent statements" table (a fallback shown when statement rankings are unavailable) and flags repeated `SELECT`s that look like an **N+1 access pattern**
 (the repeat count is configurable via `bootui.sql-trace.n-plus-one-threshold`); a flagged group also lists the distinct
 call site(s) — class, method, and line — that issued it, most-recently-seen first and bounded to a handful of entries,
 so you can jump straight to the repository or service method causing the repetition. Each execution row expands to
 reveal the full statement, bound parameters, statement type, connection id, executing thread, call site, and error. A
 configurable slow-query threshold highlights expensive statements, and local-only **Pause/Resume** and **Clear** actions
 let you stop recording without unwrapping the data source or empty the buffer.
+
+Above the execution list the panel ranks the retained window twice. **Statement rankings** aggregate executions by a
+normalized statement — literals and existing bind markers are collapsed to `?` and `IN (…)` lists folded, so equivalent
+parameterized executions group together without ever exposing a bound value — and rank them by cumulative duration,
+slowest single execution, execution count, average duration, error count, p95, or p99, alongside p50/p95/p99 durations
+and each group's share of the retained database time. A statement that scores zero on the selected criterion is not
+ranked for it, so "top by errors" never lists statements that never failed. Note that this is a *different* grouping
+from the "Most frequent statements" fallback below, which keeps literal values so you can see the exact statements that
+repeated. **Database time by request route** attributes those executions back to the
+inbound requests that issued them, grouping by the framework's own route template (`GET /api/sample/orders/{id}`) when
+the adapter can supply one, otherwise by matching the captured path against the application's own declared route
+mappings, and falling back to a masked path — identifier-looking segments replaced with `{value}`, query string
+discarded — only when neither is available. Matching a declaration is deliberately strict: it must agree segment for
+segment and be the single most literal match, and two equally plausible declarations produce no template at all. That
+strictness is a privacy property as much as a grouping one, because masking alone cannot tell a word-shaped path
+parameter such as `/api/users/alice` from a fixed route segment. Each route row shows its requests, executions, distinct statements, error
+count, and share of retained database time, and expands to that route's own top statements. Both tables deep-link into
+the filtered execution list below, so a slow ranking row is one click away from the individual executions behind it.
+
+These rankings are **diagnostic evidence over the bounded capture window, not lifetime metrics**: they describe only the
+statements still retained in the ring buffer, and the panel states that window — retained statements, buffer size,
+evictions, and the age of the oldest retained execution — inline. Attribution is deliberately conservative. BootUI
+correlates a statement to a request by trace id first, then by the serving thread only where thread affinity is
+reliable, and finally by the request's time window; each tier requires a single unambiguous candidate. Executions it
+cannot place, and executions that more than one request matched equally well, are kept in explicit **Unattributed** and
+**Ambiguous** buckets rather than being dropped or assigned to a plausible guess. On Spring WebFlux and Quarkus, where a
+request is not pinned to one thread, only trace-id and time-window correlation are used and the panel says so. A
+statement carrying a trace id that no retained request carries is left unattributed rather than handed to a weaker
+tier, and a statement that was already running when a request began is never absorbed into it. On Spring WebFlux the
+request evidence arrives with the OpenTelemetry integration, so without it the panel reports route attribution as
+unavailable and names the requirement instead of showing everything as unattributed; rankings still work. Quarkus has no
+per-request route template available to the adapter, so it resolves declared JAX-RS mappings after the fact and falls
+back to a masked path.
 
 The panel is read-mostly and privacy-conscious: parameter bindings are **not** captured by default, and even when
 capture is enabled they are suppressed under metadata-only value exposure and routed through the same masking rules as
@@ -1605,6 +1674,38 @@ being on the classpath; on Quarkus it is gated on `quarkus-websockets-next` bein
 endpoint being declared, with the endpoint topology captured at build time from the Jandex index and connection
 lifecycle observed through `@Open`/`@Closed` CDI events over `OpenConnections`.
 
+### Resilience
+
+The Resilience panel makes an application's fault-tolerance configuration visible. It lists every circuit breaker, retry,
+rate limiter, bulkhead, time limiter, and fallback the application declares, with the settings that actually apply, the
+protected operation, live circuit breaker state, and — where the library exposes them — call counters. Below the
+inventory, a bounded event feed shows what resilience machinery actually did: retried calls, exhausted retries, rejected
+calls, timeouts, short circuits, and circuit breaker state transitions.
+
+Three providers are supported, and several can be active at once:
+
+- **Resilience4j** (Spring MVC and Spring WebFlux) — read live from the `CircuitBreakerRegistry`, `RetryRegistry`,
+  `RateLimiterRegistry`, `BulkheadRegistry`, `ThreadPoolBulkheadRegistry`, and `TimeLimiterRegistry` beans, including
+  entries created lazily at runtime. Resilience4j's own event publishers feed the event feed, so state transitions and
+  retries appear without any wrapping or proxying by BootUI.
+- **Spring Retry** (Spring MVC and Spring WebFlux) — `@Retryable` metadata plus an additive `RetryListener` bean that
+  records retry attempts and exhaustion.
+- **SmallRye Fault Tolerance** (Quarkus) — `@CircuitBreaker`, `@Retry`, `@Timeout`, `@Bulkhead`, `@RateLimit`, and
+  `@Fallback` annotations are captured from the Jandex index at build time, with MicroProfile Fault Tolerance
+  configuration overrides resolved at runtime and marked as `configured` — including the MicroProfile `enabled` switches,
+  so a policy disabled through configuration is listed with a leading `enabled` = `false` setting rather than shown as if
+  it still applied. Live circuit breaker state and state-transition events come from `CircuitBreakerMaintenance` for
+  breakers carrying `@CircuitBreakerName`; SmallRye publishes no per-call event stream, so retries and rejections are not
+  individually captured there.
+
+The panel is **strictly capture-only**. BootUI never opens, closes, resets, forces, or otherwise mutates a policy, and it
+never triggers a protected call itself. Event capture is metadata only: policy name, outcome, attempt number, duration,
+the *simple name* of a failure's exception class, and circuit breaker state. Method arguments, return values, payloads
+and exception messages are never recorded. Resilience events also appear in Live Activity as `RESILIENCE` entries,
+correlated with the request that produced them, and clicking one opens this panel filtered to that policy.
+
+Set `bootui.resilience.enabled=false` to keep the live policy inventory while recording no events at all.
+
 ### AI Framework
 
 The AI Framework panel summarizes Spring AI and LangChain4j activity collected from OpenTelemetry spans emitted by their
@@ -1646,10 +1747,51 @@ default for local development, require explicit browser confirmation, and can be
 
 ![BootUI Cache panel](./images/bootui-cache.webp)
 
+**Tiering and hit ratios.** Each cache row also discloses the **backing tiers** the cache implementation describes
+through its own public API, and the **native effectiveness counters** that implementation records. A tier carries its
+level (`L0` is consulted first), implementation type, locality (in this JVM or remote), configured maximum entry count,
+configured expiry, and, when the provider's own configuration makes a bare number misleading, a short **policy note**
+explaining it (a weight-bounded Caffeine cache, for instance, states that its bound is a total weight rather than an
+entry count); tier detail is collapsed behind a keyboard-operable disclosure button so the caches table stays
+scannable. Counters are shown as their own labelled series — provider statistics are never blended with Micrometer
+meters, and both are rendered side by side when both exist. A Micrometer series that has recorded no request yet shows
+*ratio unknown* for the same reason a provider series does, rather than a misleading 0%.
+
+Everything here is read from public, supported APIs only, and BootUI never fabricates a value:
+
+- A cache implementation that does not describe its storage reports **no tiers at all** and is marked *Not described*
+  with a reason, rather than having a tier inferred from its class name.
+- A counter a provider does not expose (Caffeine has no put or explicit-removal counter, for instance) is **omitted**,
+  never rendered as zero.
+- Statistics are reported as available only when the provider says it is **recording**. Caffeine without
+  `recordStats()` and Spring Data Redis without `enableStatistics()` both report unavailable with the reason and the
+  fix, instead of an all-zero series that reads like a cold cache.
+- A **hit ratio is derived only** from a hit and a miss counter the adapter declared comparable (same counter family,
+  same scope, same window) and only when their sum is positive. An idle cache shows *ratio unknown* with the reason,
+  never "0%".
+- Reading tiers and counters **never contacts anything over the network**. In particular, no Redis entry count is
+  reported, because counting keys would be an unsolicited network round trip on panel render. Local reads stay cheap
+  too, with one honest exception: the Quarkus adapter reads a Caffeine cache's entry count through Quarkus' own
+  `keySet()` accessor, which copies the key set, so a very large Quarkus cache pays a proportional local cost when the
+  panel is opened. The Quarkus extension is dev/test-only and BootUI does not read entry counts anywhere else.
+- Large topologies are bounded (100 managers, 500 caches per manager, 20 tiers per cache) and truncation is stated in
+  the report's warnings rather than silently dropping rows.
+
+Concretely: a Caffeine cache built with `recordStats()` shows hits, misses, requests, evictions, load successes/failures,
+a hit ratio, and its configured maximum size and expiry. A `RedisCache` shows a remote tier with its configured
+time-to-live and, once `spring.cache.redis.enable-statistics=true`, the locally recorded gets/hits/misses/puts/deletes
+with the instant they have been accumulating from. A `spring.cache.type=simple` cache shows one local in-memory map tier
+and honestly reports that a plain map records nothing.
+
 On Quarkus the same panel (kept under the shared id `cache`) is served over `quarkus-cache`: the shared engine
 `CacheService` reads the live cache topology from the application's `io.quarkus.cache.CacheManager`, overlays the same
 Micrometer cache metrics (when a `quarkus-micrometer` registry is present and per-cache metrics are enabled), and the
-clear action evicts via `cache.invalidateAll()`. Because Quarkus binds caching with build-time annotations
+clear action evicts via `cache.invalidateAll()`. Tier metadata is reported the same way as on Spring — one local
+Caffeine tier per cache, with the maximum size and expiry the application configured under
+`quarkus.cache.caffeine."<name>".*` — but Quarkus's public `CaffeineCache` interface exposes **no statistics
+accessor**, so the panel reports the hit and miss counters as unavailable with that reason and points at Micrometer
+cache metrics instead, rather than reaching into Quarkus's internal `CaffeineCacheImpl` by reflection. Because Quarkus
+binds caching with build-time annotations
 (`@CacheResult`, `@CacheInvalidate`, `@CacheInvalidateAll`) woven into methods, there is no runtime registry of cached
 operations, so the operations table is replaced by a short explanatory note and the panel shows cache names + metrics +
 clear. The panel is gated on the `quarkus-cache` extension (the `CACHE` capability) and is reported unavailable, with a
@@ -1894,6 +2036,34 @@ exists. The default buffer retains 200 exchanges and can be changed with `bootui
 that capacity requires an application restart. If the repository is unavailable, the panel shows a clear unavailable
 state instead of implying that no traffic has occurred.
 
+Row details also offer **Copy as cURL**, which turns the retained metadata into a command *template* you can paste into a
+terminal. It is deliberately not a byte-for-byte replay, and the action explains every difference before you copy it:
+
+- Copying runs entirely in the browser. No request is sent, no capture state changes, and nothing is written back to the
+  application.
+- The generated command is shown in full before you copy it, so you can read exactly what will land on your clipboard —
+  and still copy it by hand if the browser denies clipboard access.
+- Query-parameter names are preserved — including repeated, empty and encoded ones — but every value becomes a `VALUE`
+  placeholder, so retained values never reach the clipboard. A masked name, or a segment with no `=` at all, is dropped
+  and reported, because an unstructured segment can be a bare token rather than a name.
+- Only a short allowlist of boring request headers is copied (`Accept`, `Accept-Language`, `Cache-Control`,
+  `Content-Type` and `User-Agent`), and only while their values are actually exposed and unmasked. Authorization,
+  cookies, proxy credentials, API keys, forwarding headers, tracing headers and unknown custom headers are omitted under
+  every exposure mode, including `bootui.expose-values=FULL`.
+- BootUI never captures request bodies, so the command carries none; body-carrying methods say a body may have existed
+  and invite you to add your own `--data`.
+- The URL, method and every header argument are POSIX single-quoted, so shell metacharacters captured from a request
+  cannot escape their argument or append another command. Credentials embedded in a recorded URL are dropped with the
+  rest of the authority userinfo.
+- The path is copied exactly as recorded, so a traversal probe such as `/a/%2e%2e/admin` stays visible instead of being
+  normalized into a different target, and `--globoff` keeps recorded brackets literal so one exchange never becomes
+  several requests. `HEAD` uses `-I` so the command cannot hang waiting for a body.
+- When the retained metadata has no absolute `http(s)` URL or no recognizable method, the action is deactivated and
+  announces the reason instead of producing a misleading command.
+
+The command is generated by a shared frontend helper over the same `HttpExchangeDto` every adapter serves, so Spring MVC,
+Spring WebFlux and Quarkus produce byte-identical text for the same exchange.
+
 On Quarkus the panel is identical, but Quarkus has no Actuator `HttpExchangeRepository`, so capture is done by a small
 Vert.x route filter that samples each completed request — recorded in the response body-end handler so status, duration
 and size are final — into a capped, framework-neutral ring buffer sized by the same `bootui.http-exchanges.max-exchanges` key (default 200) as Spring. The
@@ -1946,7 +2116,7 @@ groups:
   requests, SQL statements, exceptions, security events, scheduled-task runs, and, on Spring, cache accesses grouped by
   request or trace. `get_exception_detail` returns a selected exception group's stack trace, causes, and occurrences.
 - **Runtime and integration reads:** `get_overview`, `get_health`, `get_config`, `get_beans`, `get_mappings`,
-  `get_loggers`, `get_conditions`, `get_http_sessions`, `get_scheduled_tasks`, `get_cache_stats`,
+  `get_loggers`, `get_conditions`, `get_http_sessions`, `get_scheduled_tasks`, `get_resilience`, `get_cache_stats`,
   `get_database_connection_pools`, `get_metrics`, `get_live_memory`, `get_jvm_tuning`, `get_heap_dump_report`,
   `get_threads`, `get_startup_timeline`, `get_profile_diff`, `get_spring_data_repositories`,
   `get_flyway_migrations`, `get_liquibase_changesets`, `get_spring_security`, `get_ai_overview`, `get_emails`,

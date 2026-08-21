@@ -4,6 +4,10 @@ The Database panel runs a fixed, on-demand ruleset against the physical schema o
 application `DataSource` bean. It introspects tables, columns, primary keys, foreign keys, and indexes through plain
 JDBC `DatabaseMetaData` — it never executes DDL and never queries application data.
 
+One family, [Runtime SQL](#runtime-sql), is evaluated instead against the statements BootUI has *already* captured in
+the SQL Trace retention window. It issues no query of its own, reads no application data, and reports only the shape of
+a statement — never a captured literal value.
+
 The checks are deterministic, low-false-positive structural checks, not query/workload-based tuning suggestions. See
 [FEATURES.md](FEATURES.md#database) for scope, availability, and dialect-detection details.
 
@@ -47,7 +51,7 @@ Nothing that failed is ever reported as a passing check:
 - **MEDIUM** - a structural issue that usually warrants review before production use (a missing primary key, a mapped
   table or column that disagrees with the physical schema, a non-transactional MySQL/MariaDB storage engine, a legacy
   `utf8mb3` character set, a narrow auto-generated primary key, a composite foreign key or unique index with partially
-  nullable columns, a PostgreSQL table published for logical replication with no usable replica identity).
+  nullable columns, a PostgreSQL table published for logical replication with no usable replica identity), a statement shape that appears to embed dynamic literal values instead of bind parameters).
 - **LOW** - reserved for lower-impact hygiene findings (redundant indexes, duplicate foreign key constraints).
 
 The Rule results panel lists only checks that found findings, ordered by severity, finding count, and rule id. Each
@@ -559,6 +563,42 @@ rather than guess its physical name) is kept instead.
   identifier blocks — a real duplicate-key or silent-overwrite risk, not merely wasted numbers.
 - **Recommendation**: set the physical sequence's `INCREMENT BY` to match `allocationSize` exactly
   (`ALTER SEQUENCE ... INCREMENT BY ...`), or change `allocationSize` to match the sequence.
+
+## Runtime SQL
+
+Checks evaluated against the statements already retained in the SQL Trace capture window rather than against the
+physical schema. They read only what BootUI captured, run no query, and never reproduce a captured literal value.
+
+Because the retained window is bounded and most-recent-first, these checks describe evidence in that window only. They
+are `SKIPPED` with an explicit reason when SQL Trace is unavailable or the window holds nothing to evaluate.
+
+### DB-RUNTIME-001 - Statement appears to embed literal values instead of bind parameters
+
+- **Severity**: MEDIUM
+- **Inspects**: retained SQL Trace executions, grouped by the same normalization the SQL Trace rankings use (literals
+  and existing bind markers collapsed to `?`).
+- **Fires when**: one normalized statement shape was executed with **two or more distinct raw texts** *and* the
+  normalization replaced at least one literal in a filtering position (a `WHERE`/`AND`/`OR`/`HAVING`/`ON` comparison or
+  `IN` list). Distinct texts are counted by hash only; the texts themselves are never retained or reported.
+- **Excludes**: a shape executed with only one raw text (a genuinely constant statement, not a concatenated one), a
+  shape whose literals appear only in a projection or `VALUES` clause, and anything beyond a bounded number of tracked
+  shapes and variants per scan.
+- **Confidence**: reported as **high** when three or more distinct texts were observed, otherwise **medium**. The
+  finding also notes how many of the executions ran through a plain `Statement` rather than a `PreparedStatement`,
+  which is corroborating — not conclusive — evidence.
+- **Why it matters**: a statement whose filter values change from execution to execution is usually being built by
+  string concatenation. That defeats the database's plan cache (every variant is a new plan), and it is the shape in
+  which SQL injection defects normally appear.
+- **Limitations**: this is a **heuristic over a bounded window, not proof**. A framework that legitimately emits
+  literal SQL — a dynamic `IN` list expansion, a migration tool, a generated `LIMIT` — produces the same shape. The
+  clearest known false positive is a framework-generated discriminator: Hibernate single-table inheritance emits
+  `where dtype = 'EMPLOYEE'` as literal SQL, so an application that queries several subtypes shows one shape with
+  several distinct texts and a literal in a filtering position, which is exactly this rule's signature even though no
+  application value was concatenated. (An application that queries only one subtype does not fire the rule: the raw
+  text never changes.) Treat a finding as a prompt to read the call site, not as a vulnerability report. BootUI makes no
+  injection claim, and the evidence deliberately contains no captured literal values.
+- **Recommendation**: bind the changing values as parameters (`PreparedStatement`, JPA/Hibernate query parameters, or
+  the query DSL's own binding) instead of concatenating them into the statement text.
 
 ## Deliberately not checked
 

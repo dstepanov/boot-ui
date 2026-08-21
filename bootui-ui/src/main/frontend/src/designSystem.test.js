@@ -129,6 +129,15 @@ describe('BootUI design system contracts', () => {
     expect(block).toContain('max-width: 100%')
   })
 
+  it('keeps nested technical content legible in selected master-list rows', () => {
+    const activeRule = appSource.slice(appSource.indexOf(':global(.list-group-item-action.active)'))
+    const activeBlock = activeRule.slice(0, activeRule.indexOf('}'))
+
+    expect(activeBlock).toContain('--bs-list-group-active-bg: #0a53be')
+    expect(appSource).toContain(':global(.list-group-item-action.active code)')
+    expect(appSource).toContain(':global(.list-group-item-action.active .text-muted)')
+  })
+
   // Every route-level panel must say something on first paint. Panels that own no
   // fetch of their own (static, streaming, or embedded sub-modes) are exempt.
   it('gives every data panel a first-paint loading affordance', () => {

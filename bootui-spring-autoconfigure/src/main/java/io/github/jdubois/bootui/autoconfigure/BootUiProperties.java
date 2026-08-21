@@ -153,6 +153,8 @@ public class BootUiProperties {
     private Kafka kafka = new Kafka();
     /** JMS message capture settings for its independent Live Activity {@code MESSAGING} buffer. */
     private Jms jms = new Jms();
+
+    private Resilience resilience = new Resilience();
     /**
      * RabbitMQ (AMQP) message capture settings, feeding the Live Activity stream's
      * {@code MESSAGING} entries.
@@ -472,6 +474,14 @@ public class BootUiProperties {
 
     public void setWebsockets(WebSockets websockets) {
         this.websockets = websockets == null ? new WebSockets() : websockets;
+    }
+
+    public Resilience getResilience() {
+        return resilience;
+    }
+
+    public void setResilience(Resilience resilience) {
+        this.resilience = resilience == null ? new Resilience() : resilience;
     }
 
     public void setJms(Jms jms) {
@@ -1599,6 +1609,43 @@ public class BootUiProperties {
 
         public void setMaxTrackedSessions(int maxTrackedSessions) {
             this.maxTrackedSessions = maxTrackedSessions;
+        }
+    }
+
+    /**
+     * Resilience policy capture settings for the Resilience panel and the Live Activity stream's
+     * {@code RESILIENCE} entries.
+     *
+     * <p>Reading declared policies never depends on these settings: they only control the bounded, in-memory
+     * capture of runtime outcomes. Capture is metadata-only — a policy name, its type, the attempt number and
+     * the failing exception's class name — and BootUI never alters a policy or forces one to trip.</p>
+     */
+    public static class Resilience {
+
+        /**
+         * Whether BootUI subscribes to the resilience libraries' own event publishers and listeners. When
+         * {@code false}, declared policies are still listed but no outcome is captured and no
+         * {@code RESILIENCE} entry reaches Live Activity.
+         */
+        private boolean enabled = true;
+
+        /** Maximum number of captured resilience outcomes retained in the in-memory ring buffer. */
+        private int maxEvents = 200;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public int getMaxEvents() {
+            return maxEvents;
+        }
+
+        public void setMaxEvents(int maxEvents) {
+            this.maxEvents = maxEvents;
         }
     }
 

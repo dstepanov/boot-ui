@@ -426,8 +426,6 @@ public final class SqlTraceRecorder implements IdleReclaimable {
      * unavailable case (no data source / tracing off); this method covers the available, wrapped case.
      */
     public SqlTraceReport report(boolean exposeParameters) {
-        List<SqlTraceEntryDto> entries =
-                recent().stream().map(entry -> toDto(entry, exposeParameters)).toList();
         return new SqlTraceReport(
                 true,
                 null,
@@ -438,9 +436,19 @@ public final class SqlTraceRecorder implements IdleReclaimable {
                 getSlowQueryThresholdMillis(),
                 dataSourceNames(),
                 stats(),
-                entries,
+                entries(exposeParameters),
                 topStatements(),
                 warnings(exposeParameters));
+    }
+
+    /**
+     * The retained executions as DTOs, with bound parameters included only when {@code exposeParameters}
+     * permits it. Exposed separately from {@link #report(boolean)} so a caller that only needs the
+     * executions — such as ranking and route attribution — does not pay for the statistics and top-statement
+     * aggregations it will not read.
+     */
+    public List<SqlTraceEntryDto> entries(boolean exposeParameters) {
+        return recent().stream().map(entry -> toDto(entry, exposeParameters)).toList();
     }
 
     private List<String> warnings(boolean exposeParameters) {

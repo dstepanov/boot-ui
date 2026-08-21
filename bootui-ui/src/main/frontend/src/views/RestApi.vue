@@ -1,10 +1,15 @@
 <script setup>
+import {computed, onMounted, ref, watch} from 'vue'
+import {useRoute} from 'vue-router'
 import {useAdvisorPanel} from '../utils/useAdvisorPanel.js'
 import {panelProps} from '../utils/panelState.js'
+import {useServerPagedList} from '../utils/useServerPagedList.js'
 import AdvisorSummary from './components/AdvisorSummary.vue'
 import PanelHeader from './components/PanelHeader.vue'
 import PanelSkeleton from './components/PanelSkeleton.vue'
+import ServerListFooter from './components/ServerListFooter.vue'
 import SpinnerButton from './components/SpinnerButton.vue'
+import UnavailableState from './components/UnavailableState.vue'
 
 const props = defineProps(panelProps)
 const panel = useAdvisorPanel(props, {
@@ -15,6 +20,87 @@ const panel = useAdvisorPanel(props, {
   emptyNoFindings: 'No REST API rule findings',
   countNoun: 'finding'
 })
+
+// --- Declared error contract -----------------------------------------------------------------
+// A read-only catalogue of the exception handlers the application declares. It is loaded on mount
+// (a plain read, never a scan or a mutation) and paged/filtered entirely on the server.
+// useRoute() is undefined when the panel is mounted without a router, as the unit tests do.
+const route = useRoute()
+// The Exceptions panel links here with the declaring component of a retained failure's handler, so the
+// catalogue opens already filtered to that declaration instead of loading everything first.
+const linkedComponent = typeof route?.query?.errorContract === 'string' ? route.query.errorContract.trim() : ''
+const contractFilter = ref(linkedComponent)
+const contract = useServerPagedList(
+  'api/rest-api/error-contract',
+  'entries',
+  () => ({q: contractFilter.value.trim()}),
+  {errorContext: 'Could not load the declared error contract'}
+)
+
+const contractReport = contract.data
+const contractAvailable = computed(() => contractReport.value?.available === true)
+const contractEntries = contract.items
+const contractFilterActive = computed(() => contractFilter.value.trim().length > 0)
+const contractEmpty = computed(() => contractAvailable.value && (contractReport.value?.total ?? 0) === 0)
+const contractFilteredEmpty = computed(
+  () => contractAvailable.value && !contractEmpty.value && contractEntries.value.length === 0
+)
+
+const BODY_LABELS = {
+  PROBLEM_DETAIL: 'Problem detail',
+  CUSTOM_OBJECT: 'Custom object',
+  STRING: 'String',
+  EMPTY: 'Empty',
+  DYNAMIC: 'Runtime-decided',
+  UNRESOLVED: 'Unresolved'
+}
+
+const SOURCE_LABELS = {
+  SPRING_CONTROLLER_ADVICE: '@ControllerAdvice',
+  SPRING_CONTROLLER: '@Controller',
+  JAKARTA_REST_EXCEPTION_MAPPER: 'ExceptionMapper',
+  QUARKUS_SERVER_EXCEPTION_MAPPER: '@ServerExceptionMapper'
+}
+
+const SCOPE_LABELS = {
+  GLOBAL: 'Application-wide',
+  SCOPED: 'Selector-scoped',
+  CONTROLLER: 'Controller-local',
+  UNKNOWN: 'Unknown'
+}
+
+const bodyLabel = (value) => BODY_LABELS[value] || value
+const sourceLabel = (value) => SOURCE_LABELS[value] || value
+const scopeLabel = (value) => SCOPE_LABELS[value] || value
+
+const bodyClass = (value) =>
+  ({
+    PROBLEM_DETAIL: 'text-bg-success',
+    CUSTOM_OBJECT: 'text-bg-primary',
+    STRING: 'text-bg-secondary',
+    EMPTY: 'text-bg-secondary',
+    DYNAMIC: 'text-bg-warning',
+    UNRESOLVED: 'text-bg-light border'
+  })[value] || 'text-bg-light border'
+
+/** The declared status, or an honest marker when the declaration cannot prove one. */
+function statusLabel(entry) {
+  if (entry.status) return entry.status
+  return entry.statusSource === 'DYNAMIC' ? 'Runtime' : 'Unresolved'
+}
+
+/** Precedence is only meaningful once the engine could resolve a winner for the exception type. */
+function precedenceLabel(entry) {
+  if (entry.precedenceSource === 'UNRESOLVED') return 'Ambiguous'
+  return entry.precedence === 1 ? 'Wins' : `#${entry.precedence}`
+}
+
+function clearContractFilter() {
+  contractFilter.value = ''
+}
+
+onMounted(() => contract.load())
+watch(contractFilter, () => contract.scheduleReload())
 </script>
 
 <template>
@@ -217,5 +303,125 @@ const panel = useAdvisorPanel(props, {
         </template>
       </div>
     </template>
+
+    <div class="card mt-3">
+      <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <h3 class="fs-6 fw-semibold mb-0">Declared error contract</h3>
+          <div class="text-muted small">
+            The exception handlers this application declares, read from its own declarations. Handlers the framework
+            provides itself are not listed. Nothing is executed and no error is triggered.
+          </div>
+        </div>
+        <span v-if="contractAvailable && contractReport" class="badge text-bg-light border">
+          {{ contractReport.handlerCount }} handler(s) · {{ contractReport.exceptionTypeCount }} exception type(s)
+        </span>
+      </div>
+
+      <div class="card-body">
+        <UnavailableState
+          v-if="contractReport && !contractAvailable"
+          icon="bi-shield-exclamation"
+          :message="contractReport.unavailableReason"
+          variant="info"
+        />
+        <UnavailableState
+          v-else-if="contract.error.value && !contractReport"
+          icon="bi-exclamation-triangle"
+          :message="contract.error.value"
+          variant="warning"
+        />
+        <PanelSkeleton v-else-if="!contract.hasLoaded.value" label="Loading the declared error contract…" />
+
+        <template v-else-if="contractAvailable">
+          <UnavailableState
+            v-if="contractEmpty"
+            icon="bi-shield-slash"
+            message="This application declares no exception handlers, so every unhandled failure falls through to the framework default."
+          />
+          <template v-else>
+            <input
+              v-model="contractFilter"
+              aria-label="Filter declared error contract"
+              class="form-control mb-3"
+              placeholder="Filter by exception, handler or status…"
+            />
+            <UnavailableState v-if="contractFilteredEmpty" icon="bi-search">
+              <span
+                >No declared handler matches <strong>{{ contractFilter.trim() }}</strong
+                >.</span
+              >
+              <button class="btn btn-sm btn-outline-secondary ms-2" type="button" @click="clearContractFilter">
+                Clear filter
+              </button>
+            </UnavailableState>
+            <template v-else>
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th scope="col">Exception</th>
+                      <th scope="col">Declared by</th>
+                      <th scope="col" style="width: 130px">Scope</th>
+                      <th scope="col" style="width: 110px">Status</th>
+                      <th scope="col" style="width: 150px">Response body</th>
+                      <th scope="col" style="width: 110px">Precedence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="entry in contractEntries" :key="entry.id">
+                      <td>
+                        <code class="small" :title="entry.exceptionType">{{ entry.exceptionSimpleName }}</code>
+                      </td>
+                      <td>
+                        <code class="small" :title="entry.component"
+                          >{{ entry.componentSimpleName }}#{{ entry.method }}</code
+                        >
+                        <div class="text-muted small">{{ sourceLabel(entry.source) }}</div>
+                      </td>
+                      <td>
+                        <span class="small">{{ scopeLabel(entry.scope) }}</span>
+                        <div v-if="entry.scopeTarget" class="text-muted small font-monospace text-truncate">
+                          {{ entry.scopeTarget }}
+                        </div>
+                      </td>
+                      <td>
+                        <span class="small font-monospace">{{ statusLabel(entry) }}</span>
+                      </td>
+                      <td>
+                        <span :class="bodyClass(entry.bodyCategory)" class="badge">{{
+                          bodyLabel(entry.bodyCategory)
+                        }}</span>
+                        <div v-if="entry.bodyType" class="text-muted small font-monospace text-truncate">
+                          {{ entry.bodyType }}
+                        </div>
+                        <div v-if="entry.produces?.length" class="text-muted small font-monospace text-truncate">
+                          {{ entry.produces.join(', ') }}
+                        </div>
+                      </td>
+                      <td>
+                        <span class="small">{{ precedenceLabel(entry) }}</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-if="contractReport.truncated" class="alert alert-warning mt-3 mb-0" role="status">
+                Only the first {{ contractReport.maxEntries }} declarations are catalogued, so this list is incomplete.
+              </div>
+              <ServerListFooter
+                :loading="contract.loadingMore.value"
+                :matched="contract.matchedCount.value"
+                :page-size="contract.pageSize"
+                :shown="contract.shownCount.value"
+                :total="contract.totalCount.value"
+                item-label="declared handlers"
+                @load-more="contract.loadMore"
+              />
+            </template>
+          </template>
+        </template>
+      </div>
+    </div>
   </div>
 </template>

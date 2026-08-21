@@ -1,6 +1,7 @@
 package io.github.jdubois.bootui.quarkus;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
 import io.github.jdubois.bootui.engine.activity.ActivityInstanceIds;
 import io.github.jdubois.bootui.engine.activity.ActivityPersistenceSettings;
 import io.github.jdubois.bootui.engine.activity.ActivityStoreFactory;
@@ -16,6 +17,7 @@ import io.github.jdubois.bootui.engine.datasource.ConnectionPoolService;
 import io.github.jdubois.bootui.engine.devservices.DevServicesReportService;
 import io.github.jdubois.bootui.engine.email.EmailCaptureService;
 import io.github.jdubois.bootui.engine.email.EmailStore;
+import io.github.jdubois.bootui.engine.errorcontract.ErrorContractService;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionsService;
 import io.github.jdubois.bootui.engine.flyway.FlywayService;
@@ -42,12 +44,15 @@ import io.github.jdubois.bootui.engine.pentesting.PentestingScanner;
 import io.github.jdubois.bootui.engine.quarkusapp.QuarkusAppScanner;
 import io.github.jdubois.bootui.engine.quarkussecurity.QuarkusSecurityScanner;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceService;
 import io.github.jdubois.bootui.engine.restapi.RestApiScanner;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.safety.ApiTokenAuthenticator;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTasksService;
 import io.github.jdubois.bootui.engine.security.SecurityEventBuffer;
+import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
 import io.github.jdubois.bootui.engine.support.InternalPackageMatcher;
 import io.github.jdubois.bootui.engine.telemetry.SelfTelemetryClassifier;
 import io.github.jdubois.bootui.engine.telemetry.SpanEnricher;
@@ -60,12 +65,14 @@ import io.github.jdubois.bootui.engine.websocket.WebSocketSettings;
 import io.github.jdubois.bootui.quarkus.beans.QuarkusBeanProvider;
 import io.github.jdubois.bootui.quarkus.config.QuarkusConfigProvider;
 import io.github.jdubois.bootui.quarkus.databaseadvisor.QuarkusDatabaseAdvisorDataSourceProvider;
+import io.github.jdubois.bootui.quarkus.errorcontract.QuarkusErrorContractProvider;
 import io.github.jdubois.bootui.quarkus.health.QuarkusHealthGuidance;
 import io.github.jdubois.bootui.quarkus.hibernate.QuarkusHibernatePropertyLookup;
 import io.github.jdubois.bootui.quarkus.logging.QuarkusLoggerProvider;
 import io.github.jdubois.bootui.quarkus.mappings.QuarkusMappingProvider;
 import io.github.jdubois.bootui.quarkus.pentesting.QuarkusPentestingObservationCollector;
 import io.github.jdubois.bootui.quarkus.quarkusapp.QuarkusAppSnapshotProviderImpl;
+import io.github.jdubois.bootui.quarkus.resilience.QuarkusResiliencePolicyProvider;
 import io.github.jdubois.bootui.quarkus.scheduled.QuarkusScheduledTaskProvider;
 import io.github.jdubois.bootui.quarkus.security.QuarkusSecuritySnapshotProviderImpl;
 import io.github.jdubois.bootui.quarkus.web.GitHubApiClient;
@@ -497,8 +504,25 @@ public class BootUiEngineProducer {
      */
     @Produces
     @Singleton
-    public ExceptionsService exceptionsService(QuarkusExposurePolicy exposure) {
-        return new ExceptionsService(exposure);
+    public ExceptionsService exceptionsService(QuarkusExposurePolicy exposure, ErrorContractService errorContract) {
+        // The error-contract seam cross-links a retained failure to its declared exception mapper. It is the
+        // same conservative engine resolver Spring wires, so an ambiguous or unmatched failure stays unlinked
+        // on every stack.
+        return new ExceptionsService(exposure, errorContract);
+    }
+
+    /**
+     * The REST API panel's error-contract catalogue service. Discovery happens at build time in the
+     * deployment processor's {@code registerErrorContract} step (where the Jandex index carries the
+     * annotations and generic signatures Quarkus does not expose at runtime); the engine
+     * {@link ErrorContractService} owns classification, precedence resolution, ordering, bounding, query and
+     * paging. The concrete {@link QuarkusErrorContractProvider} is injected (not the SPI interface) so
+     * adding another provider later can never make this wiring ambiguous.
+     */
+    @Produces
+    @Singleton
+    public ErrorContractService errorContractService(QuarkusErrorContractProvider errorContractProvider) {
+        return new ErrorContractService(errorContractProvider);
     }
 
     /**
@@ -778,7 +802,9 @@ public class BootUiEngineProducer {
     @Produces
     @Singleton
     public DatabaseAdvisorScanner databaseAdvisorScanner(
-            @Any Instance<DataSource> dataSources, Instance<EntityDiscoverySource> entityDiscoverySources) {
+            @Any Instance<DataSource> dataSources,
+            Instance<EntityDiscoverySource> entityDiscoverySources,
+            Instance<SqlTraceRecorder> sqlTraceRecorders) {
         QuarkusDatabaseAdvisorDataSourceProvider dataSourceProvider =
                 new QuarkusDatabaseAdvisorDataSourceProvider(dataSources);
         Supplier<EntityDiscovery> discovery;
@@ -788,7 +814,13 @@ public class BootUiEngineProducer {
             EntityDiscoverySource source = entityDiscoverySources.get();
             discovery = source::discover;
         }
-        return DatabaseAdvisorScanner.using(dataSourceProvider::dataSources, discovery, Clock.systemUTC());
+        // Statement evidence for the runtime-SQL checks, read from the SQL Trace buffer that is already
+        // being filled. Empty when SQL Trace is off (no Agroal datasource wrapped), and those rules then
+        // skip rather than report a clean result they have no basis for.
+        Supplier<List<SqlTraceEntryDto>> observedStatements =
+                () -> sqlTraceRecorders.isResolvable() ? sqlTraceRecorders.get().entries(false) : List.of();
+        return DatabaseAdvisorScanner.using(
+                dataSourceProvider::dataSources, discovery, observedStatements, Clock.systemUTC());
     }
 
     /**
@@ -968,6 +1000,55 @@ public class BootUiEngineProducer {
     @Singleton
     public ScheduledTasksService scheduledTasksService(QuarkusScheduledTaskProvider provider) {
         return new ScheduledTasksService(provider);
+    }
+
+    /**
+     * The Resilience panel's bounded, metadata-only capture buffer. Produced <em>unconditionally</em> because
+     * {@link ResilienceEventRecorder} holds no fault-tolerance type of its own (only JDK types): the
+     * {@code io.smallrye.faulttolerance}-importing port ({@code SmallRyeCircuitBreakerStates}) that feeds it
+     * lives behind the {@code SMALLRYE_FAULT_TOLERANCE} capability gate (R2), and {@code LiveActivityResource}
+     * reads the recorder directly. When the extension is absent nothing is ever recorded and the buffer simply
+     * stays empty, so Live Activity renders no {@code RESILIENCE} entries.
+     *
+     * <p>The {@code bootui.resilience.*} keys and their defaults (enabled {@code true}, max-events
+     * {@code 200}) are kept unified with the Spring adapter's {@code BootUiProperties.Resilience}, so the same
+     * values size and gate capture identically on both frameworks. Disabling the Resilience panel also
+     * disables its underlying capture, and a disabled recorder registers no listener at all.</p>
+     */
+    @Produces
+    @Singleton
+    public ResilienceEventRecorder resilienceEventRecorder(Config config, Instance<TraceIdProvider> traceIdProvider) {
+        boolean enabled = config.getOptionalValue("bootui.resilience.enabled", Boolean.class)
+                        .orElse(true)
+                && config.getOptionalValue("bootui.panels.resilience.enabled", Boolean.class)
+                        .orElse(true);
+        int maxEvents = config.getOptionalValue("bootui.resilience.max-events", Integer.class)
+                .orElse(200);
+        ResilienceEventRecorder recorder = new ResilienceEventRecorder(enabled, maxEvents);
+        if (traceIdProvider.isResolvable()) {
+            recorder.setTraceIdProvider(traceIdProvider.get());
+        }
+        return recorder;
+    }
+
+    /**
+     * The Resilience panel report assembler. The engine {@link ResilienceService} owns only the neutral
+     * ordering, caps, per-type aggregation and availability wrapping; the Quarkus
+     * {@link QuarkusResiliencePolicyProvider} maps the build-time-captured SmallRye Fault Tolerance
+     * annotations to the neutral DTO. The concrete provider is injected (not the SPI) so resolution can never
+     * become ambiguous, mirroring the other producers.
+     *
+     * <p>Produced <em>unconditionally</em> (it holds no fault-tolerance type): when
+     * {@code quarkus-smallrye-fault-tolerance} is absent the provider's captured-policies {@code Instance} is
+     * unsatisfied, so it reports unavailable and the engine renders {@code resiliencePresent=false}.</p>
+     */
+    @Produces
+    @Singleton
+    public ResilienceService resilienceService(
+            Config config, QuarkusResiliencePolicyProvider provider, ResilienceEventRecorder recorder) {
+        int maxEvents = config.getOptionalValue("bootui.resilience.max-events", Integer.class)
+                .orElse(200);
+        return new ResilienceService(List.of(provider), recorder, maxEvents);
     }
 
     /**

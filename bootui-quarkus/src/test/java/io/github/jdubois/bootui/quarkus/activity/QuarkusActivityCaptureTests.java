@@ -10,6 +10,7 @@ import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionsService;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
+import io.github.jdubois.bootui.engine.resilience.ResilienceEventRecorder;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import io.github.jdubois.bootui.engine.security.SecurityEventBuffer;
@@ -114,6 +115,7 @@ class QuarkusActivityCaptureTests {
                 new UnsatisfiedInstance<>(),
                 new KafkaActivityRecorder(true, true, 200, 16),
                 new RabbitActivityRecorder(true, false, 200, 16),
+                new ResilienceEventRecorder(true, 200),
                 new RestClientTraceRecorder(true, true, false, false, 200, 1000, 256, 256, 5),
                 new SelfTelemetryClassifier(true, "/bootui", "/bootui/api"));
     }

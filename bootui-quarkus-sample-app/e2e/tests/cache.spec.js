@@ -25,6 +25,16 @@ test.describe('Cache view (Quarkus)', () => {
     const clearButton = productsRow.getByRole('button', {name: 'Clear'})
     await expect(clearButton).toBeEnabled()
 
+    // Quarkus's public CaffeineCache API exposes no statistics, so the panel must say so rather than
+    // render an all-zero series. The configured tier is still described.
+    await expect(productsRow).toContainText('exposes no statistics')
+    const toggle = productsRow.getByRole('button', {name: /tier/})
+    await toggle.click()
+    const tierRow = page.locator(`#${await toggle.getAttribute('aria-controls')}`)
+    await expect(tierRow).toContainText('In this JVM')
+    await expect(tierRow).toContainText('expire after write 5m')
+    await toggle.click()
+
     await clearButton.click()
     await acceptConfirm(page)
     // The success text comes from the shared bootui-engine CacheService, so it is identical on Quarkus.

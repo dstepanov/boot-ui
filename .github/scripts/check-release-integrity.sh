@@ -101,6 +101,7 @@ readonly expected_exclusions=(
   bootui-quarkus-otel-integration-tests
   bootui-quarkus-prod-shell-guard-integration-tests
   bootui-quarkus-rabbit-integration-tests
+  bootui-quarkus-resilience-integration-tests
   bootui-quarkus-rest-client-integration-tests
   bootui-quarkus-scheduler-integration-tests
   bootui-quarkus-security-integration-tests

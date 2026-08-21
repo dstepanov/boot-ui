@@ -174,6 +174,15 @@ public class QuarkusPanelAvailability {
      * methods). Mirrors {@link #HIBERNATE_PRESENT_KEY}.
      */
     public static final String SCHEDULED_PRESENT_KEY = "bootui.internal.scheduled-present";
+
+    /**
+     * Runtime-config key carrying the build-time {@code SMALLRYE_FAULT_TOLERANCE} capability decision. The
+     * deployment processor emits it as a {@code RunTimeConfigurationDefaultBuildItem} (default {@code false})
+     * whenever {@code quarkus-smallrye-fault-tolerance} is present in a non-production launch; this bean reads
+     * it back to decide whether the dynamically-available Resilience panel is lit up (true even with zero
+     * annotated methods). Mirrors {@link #SCHEDULED_PRESENT_KEY}.
+     */
+    public static final String RESILIENCE_PRESENT_KEY = "bootui.internal.resilience-present";
     /**
      * Runtime-config key carrying the build-time {@code CACHE} capability decision. The deployment processor
      * emits it as a {@code RunTimeConfigurationDefaultBuildItem} (default {@code false}); this bean reads it
@@ -282,6 +291,11 @@ public class QuarkusPanelAvailability {
     private static final String SCHEDULED_ABSENT =
             "Not available: this application has no scheduler. Add the quarkus-scheduler extension and"
                     + " annotate a method with @Scheduled to enable the Scheduled Tasks panel.";
+
+    private static final String RESILIENCE_ABSENT =
+            "Not available: this application has no fault-tolerance library. Add the"
+                    + " quarkus-smallrye-fault-tolerance extension and annotate a method with @CircuitBreaker,"
+                    + " @Retry, @Timeout, @Bulkhead or @RateLimit to enable the Resilience panel.";
 
     private static final String CACHE_ABSENT =
             "Not available: this application does not use Quarkus Cache. Add the quarkus-cache extension to"
@@ -411,6 +425,7 @@ public class QuarkusPanelAvailability {
             Map.entry(BootUiPanels.HIBERNATE, HIBERNATE_ABSENT),
             Map.entry(BootUiPanels.HIBERNATE_STATISTICS, HIBERNATE_ABSENT),
             Map.entry(BootUiPanels.SCHEDULED, SCHEDULED_ABSENT),
+            Map.entry(BootUiPanels.RESILIENCE, RESILIENCE_ABSENT),
             Map.entry(BootUiPanels.CACHE, CACHE_ABSENT),
             Map.entry(BootUiPanels.FLYWAY, FLYWAY_ABSENT),
             Map.entry(BootUiPanels.LIQUIBASE, LIQUIBASE_ABSENT),
@@ -464,6 +479,8 @@ public class QuarkusPanelAvailability {
 
     private final boolean schedulingPresent;
 
+    private final boolean resiliencePresent;
+
     private final boolean cachePresent;
 
     private final boolean flywayPresent;
@@ -506,6 +523,8 @@ public class QuarkusPanelAvailability {
                 config.getOptionalValue(HIBERNATE_PRESENT_KEY, Boolean.class).orElse(false);
         this.schedulingPresent =
                 config.getOptionalValue(SCHEDULED_PRESENT_KEY, Boolean.class).orElse(false);
+        this.resiliencePresent =
+                config.getOptionalValue(RESILIENCE_PRESENT_KEY, Boolean.class).orElse(false);
         this.cachePresent =
                 config.getOptionalValue(CACHE_PRESENT_KEY, Boolean.class).orElse(false);
         this.flywayPresent =
@@ -544,6 +563,7 @@ public class QuarkusPanelAvailability {
                 Map.entry(BootUiPanels.HIBERNATE, hibernatePresent),
                 Map.entry(BootUiPanels.HIBERNATE_STATISTICS, hibernatePresent),
                 Map.entry(BootUiPanels.SCHEDULED, schedulingPresent),
+                Map.entry(BootUiPanels.RESILIENCE, resiliencePresent),
                 Map.entry(BootUiPanels.CACHE, cachePresent),
                 Map.entry(BootUiPanels.FLYWAY, flywayPresent),
                 Map.entry(BootUiPanels.LIQUIBASE, liquibasePresent),

@@ -383,7 +383,12 @@ describe('GitHub', () => {
     expect(wrapper.find('.details-drawer').text()).toContain('#42 Add dashboard')
     expect(wrapper.find('.details-drawer').text()).not.toContain('Build')
     expect(wrapper.find('.details-drawer a.github-link-chip').text()).toContain('#42 Add dashboard')
+    const closeButton = wrapper.get('.details-drawer button[aria-label="Close details"]')
+    expect(closeButton.get('i').attributes('aria-hidden')).toBe('true')
+    await closeButton.trigger('click')
+    expect(wrapper.find('.details-drawer').exists()).toBe(false)
 
+    await metricButton(wrapper, 'Open pull requests').trigger('click')
     await metricButton(wrapper, 'Open pull requests').trigger('click')
     await flushPromises()
 

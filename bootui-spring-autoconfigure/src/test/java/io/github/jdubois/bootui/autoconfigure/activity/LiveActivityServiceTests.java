@@ -1121,6 +1121,7 @@ class LiveActivityServiceTests {
                 provider(kafka),
                 provider(jms),
                 provider(null),
+                provider(null),
                 properties);
     }
 
@@ -1154,6 +1155,7 @@ class LiveActivityServiceTests {
                 provider(kafka),
                 provider(jms),
                 provider(rabbit),
+                provider(null),
                 properties);
     }
 
@@ -1436,7 +1438,8 @@ class LiveActivityServiceTests {
                 "s",
                 null,
                 "OPEN",
-                0);
+                0,
+                null);
     }
 
     /**
@@ -1463,7 +1466,8 @@ class LiveActivityServiceTests {
                 "s",
                 null,
                 "OPEN",
-                0);
+                0,
+                null);
     }
 
     private static io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore scheduledStore(

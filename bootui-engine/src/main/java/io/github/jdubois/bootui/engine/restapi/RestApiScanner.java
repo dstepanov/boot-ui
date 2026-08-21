@@ -179,6 +179,7 @@ public final class RestApiScanner {
                 safeGlobalVersioningConfigured(),
                 model.hasExceptionHandling(),
                 model.responseStatusExceptionClasses(),
+                model.thrownExceptions(),
                 model.framework());
 
         List<RestApiRuleResultDto> results = RestApiRuleRegistry.activeRules().stream()

@@ -110,6 +110,16 @@ public abstract class AbstractBootUiApiConformanceTest {
      * Available panels whose configured-path transport is supplied by a pending sibling adapter change.
      * Concrete custom-mount consumers may exclude only those known transport gaps.
      */
+    /**
+     * Components the running application declares exception handlers on, by simple name. A stack that
+     * returns a well-shaped but empty catalogue would otherwise satisfy every assertion in
+     * {@code errorContractEndpointReturnsAStableDeclarationOnlyCatalogue}, so each sample application
+     * names its own fixtures here and the test proves discovery actually works on that stack.
+     */
+    protected Set<String> expectedErrorContractComponents() {
+        return Set.of();
+    }
+
     protected Set<String> unsupportedReadContracts() {
         return Set.of();
     }
@@ -232,6 +242,109 @@ public abstract class AbstractBootUiApiConformanceTest {
                 .as("$.page.total preserves the visible meter total")
                 .isEqualTo(report.path("total").asInt());
 
+        assertThat(report.path("catalogueVersion").asText())
+                .as("$.catalogueVersion identifies the curated meter catalogue")
+                .isNotBlank();
+        assertThat(report.path("groups").isArray()).as("$.groups").isTrue();
+        int groupedMeters = 0;
+        for (JsonNode group : report.path("groups")) {
+            assertThat(group.path("id").asText()).as("$.groups[].id").isNotBlank();
+            assertThat(group.path("label").asText()).as("$.groups[].label").isNotBlank();
+            assertThat(group.path("contributor").asText())
+                    .as("$.groups[].contributor")
+                    .isNotBlank();
+            assertThat(group.path("meterCount").asInt())
+                    .as("$.groups[].meterCount")
+                    .isPositive();
+            assertThat(group.path("describedMeterCount").asInt())
+                    .as("$.groups[].describedMeterCount never exceeds the group size")
+                    .isLessThanOrEqualTo(group.path("meterCount").asInt());
+            assertThat(group.path("families").isArray())
+                    .as("$.groups[].families")
+                    .isTrue();
+            assertThat(group.path("commonTagKeys").isArray())
+                    .as("$.groups[].commonTagKeys")
+                    .isTrue();
+            groupedMeters += group.path("meterCount").asInt();
+        }
+        assertThat(groupedMeters)
+                .as("provenance groups account for every matched meter, not just the returned page")
+                .isEqualTo(report.path("page").path("matched").asInt());
+
+        for (JsonNode meter : report.path("meters")) {
+            JsonNode provenance = meter.path("provenance");
+            assertThat(provenance.isObject()).as("$.meters[].provenance").isTrue();
+            assertThat(provenance.path("groupId").asText())
+                    .as("$.meters[].provenance.groupId")
+                    .isNotBlank();
+            assertThat(provenance.path("groupLabel").asText())
+                    .as("$.meters[].provenance.groupLabel")
+                    .isNotBlank();
+            assertThat(provenance.path("classified").isBoolean())
+                    .as("$.meters[].provenance.classified")
+                    .isTrue();
+            assertThat(provenance.path("explanationSource").asText())
+                    .as("$.meters[].provenance.explanationSource")
+                    .isIn("NATIVE", "CURATED", "UNKNOWN");
+        }
+
+        if (!report.path("groups").isEmpty()) {
+            String groupId = report.path("groups").get(0).path("id").asText();
+            Response grouped =
+                    probe().get(api("/metrics?limit=1&group=" + URLEncoder.encode(groupId, StandardCharsets.UTF_8)));
+            assertThat(grouped.status()).as("group-filtered metrics status").isEqualTo(200);
+            // Compared inside one response, so a meter registered between the two calls cannot fail the invariant.
+            int groupSize = -1;
+            for (JsonNode group : grouped.json().path("groups")) {
+                if (groupId.equals(group.path("id").asText())) {
+                    groupSize = group.path("meterCount").asInt();
+                }
+            }
+            assertThat(groupSize)
+                    .as("groups stay facets of the unfiltered set, so the requested group is still described")
+                    .isGreaterThanOrEqualTo(0);
+            assertThat(grouped.json().path("page").path("matched").asInt())
+                    .as("group filter narrows the matched set to that group")
+                    .isEqualTo(groupSize);
+            for (JsonNode meter : grouped.json().path("meters")) {
+                assertThat(meter.path("provenance").path("groupId").asText())
+                        .as("group-filtered meters belong to the requested group")
+                        .isEqualTo(groupId);
+            }
+        }
+
+        Response unclassified = probe().get(api("/metrics?limit=1&provenance=unclassified"));
+        assertThat(unclassified.status())
+                .as("provenance-filtered metrics status")
+                .isEqualTo(200);
+        for (JsonNode meter : unclassified.json().path("meters")) {
+            assertThat(meter.path("provenance").path("classified").asBoolean())
+                    .as("unclassified filter never returns classified meters")
+                    .isFalse();
+        }
+
+        Response invalidGroup = probe().get(api("/metrics?group=not-a-group"));
+        assertThat(invalidGroup.status()).as("invalid metric group status").isEqualTo(400);
+        assertThat(invalidGroup.json().path("error").asText())
+                .as("canonical metric group error")
+                .startsWith("Metric group must be one of: application");
+
+        Response invalidProvenance = probe().get(api("/metrics?provenance=maybe"));
+        assertThat(invalidProvenance.status())
+                .as("invalid metric provenance status")
+                .isEqualTo(400);
+        assertThat(invalidProvenance.json().path("error").asText())
+                .as("canonical metric provenance error")
+                .isEqualTo("Metric provenance must be one of: classified, unclassified");
+
+        Response invalidExplanation = probe().get(api("/metrics?explanation=guessed"));
+        assertThat(invalidExplanation.status())
+                .as("invalid metric explanation status")
+                .isEqualTo(400);
+        assertThat(invalidExplanation.json().path("error").asText())
+                .as("canonical metric explanation error")
+                .isEqualTo("Metric explanation source must be one of: CURATED, NATIVE, UNKNOWN");
+
         Response invalid = probe().get(api("/metrics?limit=1001"));
         assertThat(invalid.status()).as("invalid metrics limit status").isEqualTo(400);
         assertThat(invalid.isJson()).as("invalid metrics limit content type").isTrue();
@@ -266,6 +379,15 @@ public abstract class AbstractBootUiApiConformanceTest {
             assertThat(detail.json().path("samplesTruncated").isBoolean())
                     .as("$.samplesTruncated")
                     .isTrue();
+            assertThat(detail.json().path("provenance").path("groupId").asText())
+                    .as("$.provenance.groupId")
+                    .isNotBlank();
+            assertThat(detail.json()
+                            .path("provenance")
+                            .path("explanationSource")
+                            .asText())
+                    .as("$.provenance.explanationSource")
+                    .isIn("NATIVE", "CURATED", "UNKNOWN");
         }
     }
 
@@ -400,6 +522,89 @@ public abstract class AbstractBootUiApiConformanceTest {
         assertThat(activation.path("reason").isTextual())
                 .as("$.activation.reason must be a string")
                 .isTrue();
+    }
+
+    @Test
+    void cacheTiersAndStatisticsShareOneShapeOnEveryPlatform() {
+        // The Cache panel's tier and counter structure is a *nested* contract the flat catalog cannot pin,
+        // and it is the surface the shared Vue panel binds to, so every adapter has to emit the same shape:
+        // Spring MVC, Spring WebFlux and Quarkus all build it in the engine CacheService from their own
+        // CacheProvider. Values are platform-specific (Quarkus has no provider statistics at all), so this
+        // asserts shape and the honesty rules, never a reading.
+        Response response = probe().get(api("/cache"));
+        if (response.status() == 403 || response.status() == 404) {
+            return; // the panel is disabled or unavailable on this platform; the manifest test covers that
+        }
+        assertThat(response.status()).as("GET /bootui/api/cache status").isEqualTo(200);
+
+        JsonNode report = response.json();
+        int tiersSeen = 0;
+        for (JsonNode manager : report.path("managers")) {
+            for (JsonNode cache : manager.path("caches")) {
+                assertCacheStatisticsShape(
+                        cache.path("statistics"), "cache '" + cache.path("name").asText() + "'");
+                assertThat(cache.path("opaque").isBoolean())
+                        .as("$.managers[].caches[].opaque must be a boolean")
+                        .isTrue();
+                if (cache.path("opaque").asBoolean(false)) {
+                    assertThat(cache.path("opaqueReason").isTextual())
+                            .as("an opaque cache must say why its tiers are unknown")
+                            .isTrue();
+                    assertThat(cache.path("tiers"))
+                            .as("an opaque cache reports no tier")
+                            .isEmpty();
+                }
+                for (JsonNode tier : cache.path("tiers")) {
+                    tiersSeen++;
+                    assertThat(tier.path("id").isTextual())
+                            .as("$..tiers[].id must be a string")
+                            .isTrue();
+                    assertThat(tier.path("name").isTextual())
+                            .as("$..tiers[].name must be a string")
+                            .isTrue();
+                    assertThat(tier.path("level").isInt())
+                            .as("$..tiers[].level must be an int")
+                            .isTrue();
+                    assertThat(tier.path("locality").asText(""))
+                            .as("$..tiers[].locality must be a canonical locality")
+                            .isIn("LOCAL", "DISTRIBUTED", "UNKNOWN");
+                    assertThat(tier.path("maximumSize").isNull()
+                                    || tier.path("maximumSize").isNumber())
+                            .as("$..tiers[].maximumSize is a number or null, never a guess")
+                            .isTrue();
+                    assertCacheStatisticsShape(
+                            tier.path("statistics"),
+                            "a tier of '" + cache.path("name").asText() + "'");
+                }
+            }
+        }
+        assertThat(report.path("tierCount").asInt(-1))
+                .as("$.tierCount must count the reported tiers")
+                .isEqualTo(tiersSeen);
+    }
+
+    /** Pins the honesty rules of one statistics object: unavailable means a reason, and a ratio needs requests. */
+    private void assertCacheStatisticsShape(JsonNode statistics, String where) {
+        assertThat(statistics.path("available").isBoolean())
+                .as("statistics.available of %s must be a boolean", where)
+                .isTrue();
+        if (!statistics.path("available").asBoolean(false)) {
+            assertThat(statistics.path("unavailableReason").asText(""))
+                    .as("unavailable statistics of %s must carry a reason", where)
+                    .isNotBlank();
+            assertThat(statistics.path("hitRatio").isNull())
+                    .as("unavailable statistics of %s must not carry a ratio", where)
+                    .isTrue();
+        }
+        if (statistics.path("hitRatio").isNull()) {
+            assertThat(statistics.path("ratioUnavailableReason").asText(""))
+                    .as("a missing ratio of %s must say why", where)
+                    .isNotBlank();
+        } else if (statistics.path("hitRatio").isNumber()) {
+            assertThat(statistics.path("hitRatio").asDouble())
+                    .as("a reported ratio of %s must be a fraction", where)
+                    .isBetween(0.0d, 1.0d);
+        }
     }
 
     @Test
@@ -702,6 +907,113 @@ public abstract class AbstractBootUiApiConformanceTest {
         assertThat(noMatch.json().path("beans").isEmpty())
                 .as("GET /bootui/api/beans?q=<nonexistent> beans must be empty")
                 .isTrue();
+    }
+
+    @Test
+    void errorContractEndpointReturnsAStableDeclarationOnlyCatalogue() {
+        // The declared error contract is assembled by the engine's ErrorContractService from raw facts the
+        // Spring and Quarkus adapters read from bean metadata and the build-time Jandex index respectively.
+        // The engine owns classification, precedence and paging so all three stacks return one shape; this
+        // test pins that shape, the availability contract, and the fact that filtering and paging are
+        // honoured identically. It deliberately does not assert a specific handler: the sample applications
+        // differ, and the panel must never claim more than the declarations support.
+        assumeTrue(isPanelUsableInLiveManifest("rest-api"), "rest-api panel is not available in this environment");
+
+        Response root = probe().get(api("/rest-api/error-contract"));
+        assertThat(root.status())
+                .as("GET /bootui/api/rest-api/error-contract status")
+                .isEqualTo(200);
+        assertThat(root.isJson())
+                .as("GET /bootui/api/rest-api/error-contract content-type")
+                .isTrue();
+
+        JsonNode report = root.json();
+        assertThat(report.path("available").isBoolean())
+                .as("$.available must be a boolean (honest availability)")
+                .isTrue();
+        assertThat(report.path("entries").isArray())
+                .as("$.entries must be an array")
+                .isTrue();
+        assertThat(report.path("page").isObject())
+                .as("$.page must be an object (pagination metadata)")
+                .isTrue();
+        assertThat(report.path("truncated").isBoolean())
+                .as("$.truncated must be a boolean (bounded output)")
+                .isTrue();
+
+        if (!report.path("available").asBoolean()) {
+            assertThat(report.path("unavailableReason").asText(""))
+                    .as("an unavailable error contract must explain itself rather than look empty")
+                    .isNotBlank();
+            assertThat(report.path("entries").isEmpty())
+                    .as("an unavailable error contract must not report entries")
+                    .isTrue();
+            return;
+        }
+
+        for (JsonNode entry : report.path("entries")) {
+            assertThat(entry.path("id").asText(""))
+                    .as("every entry needs a stable id the UI can key on")
+                    .isNotBlank();
+            assertThat(entry.path("exceptionType").asText(""))
+                    .as("every entry names the exception type it declares it handles")
+                    .isNotBlank();
+            assertThat(entry.path("component").asText(""))
+                    .as("every entry names its declaring component")
+                    .isNotBlank();
+            assertThat(entry.path("source").asText(""))
+                    .as("every entry states where the declaration came from")
+                    .isNotBlank();
+            assertThat(entry.path("scope").asText(""))
+                    .as("every entry states its scope, using UNKNOWN rather than guessing")
+                    .isIn("GLOBAL", "SCOPED", "CONTROLLER", "UNKNOWN");
+            assertThat(entry.path("statusSource").asText(""))
+                    .as("a status is either declared, built at runtime, or honestly unresolved")
+                    .isIn("ANNOTATION", "DYNAMIC", "UNRESOLVED");
+            assertThat(entry.path("bodyCategory").asText(""))
+                    .as("a body category is classified by the engine, identically on every stack")
+                    .isIn("PROBLEM_DETAIL", "CUSTOM_OBJECT", "STRING", "EMPTY", "DYNAMIC", "UNRESOLVED");
+            assertThat(entry.path("precedenceSource").asText(""))
+                    .as("precedence is either declared, defaulted, or honestly unresolved")
+                    .isIn("DECLARED", "DEFAULT", "UNRESOLVED");
+            assertThat(entry.path("produces").isArray())
+                    .as("$.entries[].produces must be an array")
+                    .isTrue();
+        }
+
+        Set<String> expectedComponents = expectedErrorContractComponents();
+        if (!expectedComponents.isEmpty()) {
+            List<String> discovered = new ArrayList<>();
+            for (JsonNode entry : report.path("entries")) {
+                discovered.add(entry.path("componentSimpleName").asText(""));
+            }
+            assertThat(discovered)
+                    .as("this stack must actually discover the application's declared exception handlers,"
+                            + " not merely return a well-shaped empty catalogue")
+                    .containsAll(expectedComponents);
+        }
+
+        Response limited = probe().get(api("/rest-api/error-contract?limit=1"));
+        assertThat(limited.status())
+                .as("GET /bootui/api/rest-api/error-contract?limit=1 status")
+                .isEqualTo(200);
+        assertThat(limited.json().path("entries").size())
+                .as("limit=1 must return at most one entry")
+                .isLessThanOrEqualTo(1);
+
+        Response noMatch = probe().get(api("/rest-api/error-contract?q=conformanceprobexyz123nohandler"));
+        assertThat(noMatch.status())
+                .as("GET /bootui/api/rest-api/error-contract?q=<nonexistent> status")
+                .isEqualTo(200);
+        assertThat(noMatch.json().path("page").path("matched").asInt())
+                .as("a query that matches nothing must report zero matches")
+                .isZero();
+        assertThat(noMatch.json().path("entries").isEmpty())
+                .as("a query that matches nothing must return an empty page")
+                .isTrue();
+        assertThat(noMatch.json().path("total").asInt())
+                .as("the unfiltered total must survive filtering so the UI can say 'x of y'")
+                .isEqualTo(report.path("total").asInt());
     }
 
     @Test
@@ -1011,6 +1323,126 @@ public abstract class AbstractBootUiApiConformanceTest {
                 .isNotNull();
         assertThat(matching.path("masked").asBoolean()).isTrue();
         assertThat(matching.path("value").asText()).isEqualTo("******");
+    }
+
+    /**
+     * SQL Trace rankings and route attribution must present the same bounded, self-describing shape on
+     * Spring MVC, Spring WebFlux and Quarkus. Values differ per runtime and per workload; the contract does
+     * not. In particular the response must always say which correlation tiers it could use, so a stack with
+     * no thread affinity discloses that instead of looking like it lost data.
+     */
+    @Test
+    void sqlTraceInsightsAreBoundedAndDiscloseTheirCorrelationTiers() {
+        assumeTrue(isPanelUsableInLiveManifest("sql-trace"), "sql-trace panel is not available in this environment");
+
+        Response response = probe().get(api("/sql-trace/insights"));
+        assertThat(response.status()).as("GET /sql-trace/insights status").isEqualTo(200);
+        assertThat(response.isJson())
+                .as("GET /sql-trace/insights content-type (%s)", response.contentType())
+                .isTrue();
+
+        JsonNode root = response.json();
+        assertThat(root.path("available").isBoolean()).as("insights.available").isTrue();
+        assertThat(root.path("capturing").isBoolean()).as("insights.capturing").isTrue();
+        assertThat(root.path("notes").isArray()).as("insights.notes").isTrue();
+        assumeTrue(root.path("available").asBoolean(false), "SQL tracing is not active in this environment");
+
+        JsonNode window = root.path("window");
+        assertThat(window.isObject()).as("insights.window").isTrue();
+        for (String field :
+                List.of("retainedStatements", "bufferSize", "evicted", "totalCaptured", "totalDurationMillis")) {
+            assertThat(window.path(field).isNumber())
+                    .as("insights.window.%s must be numeric", field)
+                    .isTrue();
+        }
+
+        int topPerCriterion = root.path("topPerCriterion").asInt(-1);
+        assertThat(topPerCriterion).as("insights.topPerCriterion").isPositive();
+        JsonNode statements = root.path("statements");
+        assertThat(statements.isArray()).as("insights.statements").isTrue();
+        assertThat(statements.size())
+                .as("ranked statements must stay bounded by the seven ranking criteria")
+                .isLessThanOrEqualTo(7 * topPerCriterion);
+        for (JsonNode statement : statements) {
+            for (String field : List.of(
+                    "executions",
+                    "totalDurationMillis",
+                    "maxDurationMillis",
+                    "avgDurationMillis",
+                    "errorCount",
+                    "p50DurationMillis",
+                    "p95DurationMillis",
+                    "p99DurationMillis",
+                    "shareOfRetainedTimePercent")) {
+                assertThat(statement.path(field).isNumber())
+                        .as("ranked statement field '%s'", field)
+                        .isTrue();
+            }
+            assertThat(statement.path("sql").isTextual())
+                    .as("ranked statement sql")
+                    .isTrue();
+            assertThat(statement.path("entryIds").isArray())
+                    .as("ranked statement must deep-link to retained executions")
+                    .isTrue();
+            assertThat(statement.path("entryIdsTruncated").isBoolean())
+                    .as("a ranked statement must say when its deep link covers only part of the group")
+                    .isTrue();
+            JsonNode topFor = statement.path("topFor");
+            assertThat(topFor.isArray())
+                    .as("a ranked statement must say which criteria earned it its place")
+                    .isTrue();
+            assertThat(topFor.size())
+                    .as("a ranked statement cannot lead more criteria than exist")
+                    .isBetween(1, 7);
+            topFor.forEach(criterion -> assertThat(criterion.asText())
+                    .as("ranking criterion")
+                    .isIn(
+                            "TOTAL_DURATION",
+                            "MAX_DURATION",
+                            "EXECUTIONS",
+                            "AVG_DURATION",
+                            "ERROR_COUNT",
+                            "P95_DURATION",
+                            "P99_DURATION"));
+        }
+
+        JsonNode attribution = root.path("attribution");
+        assertThat(attribution.path("available").isBoolean())
+                .as("attribution.available")
+                .isTrue();
+        List<String> tiers = new ArrayList<>();
+        attribution.path("supportedCorrelations").forEach(tier -> tiers.add(tier.asText()));
+        assertThat(tiers)
+                .as("every runtime must offer trace-id correlation and disclose the tiers it uses")
+                .contains("TRACE_ID");
+        assertThat(tiers).isSubsetOf("TRACE_ID", "SERVING_THREAD", "TIME_WINDOW");
+        for (String bucket : List.of("unattributed", "ambiguous")) {
+            JsonNode node = attribution.path(bucket);
+            assertThat(node.path("executions").isNumber())
+                    .as("attribution.%s.executions", bucket)
+                    .isTrue();
+            assertThat(node.path("reason").isTextual())
+                    .as("attribution.%s must explain itself rather than showing a bare number", bucket)
+                    .isTrue();
+        }
+
+        JsonNode routes = attribution.path("routes");
+        assertThat(routes.isArray()).as("attribution.routes").isTrue();
+        assertThat(routes.size()).as("route ranking must stay bounded").isLessThanOrEqualTo(20);
+        for (JsonNode route : routes) {
+            assertThat(route.path("routeSource").asText())
+                    .as("route grouping key must declare its provenance")
+                    .isIn("ROUTE_TEMPLATE", "MASKED_PATH");
+            assertThat(route.path("route").asText())
+                    .as("a route grouping key must never carry a query string")
+                    .doesNotContain("?");
+            assertThat(route.path("topStatements").isArray())
+                    .as("route.topStatements")
+                    .isTrue();
+            assertThat(route.path("topStatements").size())
+                    .as("route-by-statement cross product must stay bounded")
+                    .isLessThanOrEqualTo(5);
+        }
     }
 
     @Test
