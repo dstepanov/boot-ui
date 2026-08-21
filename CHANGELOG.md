@@ -9,6 +9,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Meter provenance and explanation in the Metrics panel.** Meters are grouped by the integration family that
+  registered them (JVM, process, system, HTTP server and client, datasources, caches, messaging, resilience, gRPC,
+  framework internals, and application/unclassified), each group naming the contributing library, its registry
+  documentation coverage, the curated families that matched, and the tag keys its meters share. A meter's explanation
+  comes from its own registry description first (`NATIVE`), then from a curated, versioned BootUI catalogue of
+  well-known meter families (`CURATED`), and is reported as `UNKNOWN` rather than guessed when neither exists.
+  Classification uses meter names only — never tag values — so application meters are never absorbed into a curated
+  family. `GET /bootui/api/metrics` gained `group`, `provenance`, and `explanation` filters plus `groups` and
+  `catalogueVersion` in its response, identically on Spring MVC, Spring WebFlux, and Quarkus.
+- **Copy as cURL in HTTP Exchanges on Spring MVC, Spring WebFlux, and Quarkus.** Request details now offer a
+  client-side action that turns the retained exchange metadata into a runnable cURL *template*: query-parameter names
+  survive but every value becomes a placeholder, only a short allowlist of unmasked request headers is copied
+  (authorization, cookies, proxy credentials, API keys, forwarding headers, tracing headers and unknown headers are
+  omitted under every exposure mode), and every argument is POSIX-quoted so captured metacharacters cannot escape.
+  Copying sends no request and changes no state, the command is shown in full before you copy it, the action explains
+  the omitted body, values and headers, and exchanges without a usable URL or method announce a clear reason instead of
+  a misleading command.
 - **SQL Trace statement rankings and request-route attribution on Spring MVC, Spring WebFlux, and Quarkus.** A new safe
   read, `GET /bootui/api/sql-trace/insights`, ranks the retained capture window by normalized statement (cumulative,
   maximum, average duration, execution count, error count, p50/p95/p99, and share of retained database time) and

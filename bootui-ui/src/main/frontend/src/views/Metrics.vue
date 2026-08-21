@@ -1,5 +1,5 @@
 <script setup>
-import {computed, inject, onBeforeUnmount, ref, watch} from 'vue'
+import {computed, inject, onBeforeUnmount, reactive, ref, watch} from 'vue'
 import {getJson} from '../api.js'
 import {describeLoadError, formatLoadError} from '../utils/loadError.js'
 import {useAutoRefresh} from '../utils/useAutoRefresh.js'
@@ -16,6 +16,9 @@ const error = ref(null)
 const detailError = ref(null)
 const search = ref('')
 const typeFilter = ref('')
+const groupFilter = ref('')
+const provenanceFilter = ref('')
+const explanationFilter = ref('')
 const selectedName = ref('')
 const selectedTags = ref([])
 const selectedStatistic = ref('')
@@ -36,6 +39,20 @@ const metricsUnavailableHelp = computed(() =>
 
 const meters = computed(() => data.value?.meters ?? [])
 const meterPage = computed(() => data.value?.page ?? null)
+const groups = computed(() => data.value?.groups ?? [])
+const catalogueVersion = computed(() => data.value?.catalogueVersion ?? '')
+const selectedGroup = computed(() => groups.value.find((group) => group.id === groupFilter.value) ?? null)
+const groupLabels = reactive({})
+const groupChips = computed(() => {
+  const chips = groups.value.map((group) => ({id: group.id, label: group.label, meterCount: group.meterCount}))
+  if (groupFilter.value && !chips.some((chip) => chip.id === groupFilter.value)) {
+    chips.push({id: groupFilter.value, label: groupLabels[groupFilter.value] ?? groupFilter.value, meterCount: 0})
+  }
+  return chips
+})
+const provenanceFiltered = computed(() =>
+  Boolean(groupFilter.value || provenanceFilter.value || explanationFilter.value)
+)
 const meterTypes = computed(
   () => data.value?.availableTypes ?? [...new Set(meters.value.map((meter) => meter.type).filter(Boolean))].sort()
 )
@@ -84,6 +101,44 @@ function formatNumber(value) {
 
 function tagLabel(tag) {
   return `${tag.key}:${tag.value}`
+}
+
+const EXPLANATION_LABELS = {
+  NATIVE: 'Native description',
+  CURATED: 'BootUI catalogue',
+  UNKNOWN: 'Not documented'
+}
+
+const EXPLANATION_BADGES = {
+  NATIVE: 'text-bg-success',
+  CURATED: 'text-bg-info',
+  UNKNOWN: 'text-bg-secondary'
+}
+
+function explanationLabel(source) {
+  return EXPLANATION_LABELS[source] ?? EXPLANATION_LABELS.UNKNOWN
+}
+
+function explanationBadge(source) {
+  return EXPLANATION_BADGES[source] ?? EXPLANATION_BADGES.UNKNOWN
+}
+
+function coverageLabel(group) {
+  return `${group.describedMeterCount} of ${group.meterCount} documented by the registry`
+}
+
+function isGroupSelected(id) {
+  return groupFilter.value === id
+}
+
+function toggleGroup(id) {
+  groupFilter.value = isGroupSelected(id) ? '' : id
+}
+
+function clearProvenanceFilters() {
+  groupFilter.value = ''
+  provenanceFilter.value = ''
+  explanationFilter.value = ''
 }
 
 function sampleKey(sample) {
@@ -143,6 +198,9 @@ function meterParams(offset, limit) {
   const query = search.value.trim()
   if (query) params.set('q', query)
   if (typeFilter.value) params.set('type', typeFilter.value)
+  if (groupFilter.value) params.set('group', groupFilter.value)
+  if (provenanceFilter.value) params.set('provenance', provenanceFilter.value)
+  if (explanationFilter.value) params.set('explanation', explanationFilter.value)
   return params
 }
 
@@ -170,6 +228,9 @@ async function fetchMetrics({append = false, reset = false} = {}) {
       }
     } else {
       data.value = response
+    }
+    for (const group of response.groups ?? []) {
+      groupLabels[group.id] = group.label
     }
     return true
   } catch (exception) {
@@ -288,7 +349,7 @@ function appendHistoryPoint() {
   history.value = [...history.value, {timestamp: Date.now(), value: selectedMeasurement.value.value}].slice(-60)
 }
 
-watch([search, typeFilter], scheduleFilterReload)
+watch([search, typeFilter, groupFilter, provenanceFilter, explanationFilter], scheduleFilterReload)
 
 onBeforeUnmount(() => {
   meterRequestId++
@@ -320,6 +381,99 @@ const panelLoading = computed(() => loading.value || meterLoading.value || loadi
     </div>
 
     <template v-else-if="data">
+      <div v-if="groups.length" class="card mb-3">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div>
+            <div class="fw-semibold">Meter provenance</div>
+            <div class="text-muted small">
+              Meters grouped by the integration that registered them. Every meter belongs to exactly one group.
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span v-if="catalogueVersion" class="badge text-bg-light">Catalogue {{ catalogueVersion }}</span>
+            <button
+              v-if="provenanceFiltered"
+              class="btn btn-sm btn-outline-secondary"
+              type="button"
+              @click="clearProvenanceFilters"
+            >
+              Clear provenance filters
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="d-flex flex-wrap gap-2" role="group" aria-label="Filter meters by provenance group">
+            <button
+              v-for="group in groupChips"
+              :key="group.id"
+              :aria-label="`${group.label}, ${group.meterCount} meters`"
+              :aria-pressed="isGroupSelected(group.id)"
+              :class="isGroupSelected(group.id) ? 'btn-primary' : 'btn-outline-primary'"
+              class="btn btn-sm provenance-chip"
+              type="button"
+              @click="toggleGroup(group.id)"
+            >
+              {{ group.label }}
+              <span
+                :class="isGroupSelected(group.id) ? 'text-bg-light' : 'text-bg-primary'"
+                class="badge rounded-pill provenance-count"
+              >
+                {{ group.meterCount }}
+              </span>
+            </button>
+          </div>
+
+          <div v-if="selectedGroup" class="provenance-detail mt-3">
+            <div class="fw-semibold">{{ selectedGroup.label }}</div>
+            <div class="text-muted small">
+              Contributed by {{ selectedGroup.contributor }} · {{ coverageLabel(selectedGroup) }}
+            </div>
+            <p class="mb-2 mt-2">{{ selectedGroup.summary }}</p>
+            <p v-if="selectedGroup.interpretation" class="text-muted small mb-2">
+              <span class="fw-semibold">How to read this group (BootUI catalogue):</span>
+              {{ selectedGroup.interpretation }}
+            </p>
+            <dl class="row mb-0 small">
+              <template v-if="selectedGroup.families.length">
+                <dt class="col-sm-3">Families</dt>
+                <dd class="col-sm-9">{{ selectedGroup.families.join(', ') }}</dd>
+              </template>
+              <template v-if="selectedGroup.commonTagKeys.length">
+                <dt class="col-sm-3">Common tag keys</dt>
+                <dd class="col-sm-9">
+                  <code v-for="key in selectedGroup.commonTagKeys" :key="key" class="me-2">{{ key }}</code>
+                </dd>
+              </template>
+              <template v-if="selectedGroup.baseUnits.length">
+                <dt class="col-sm-3">Base units</dt>
+                <dd class="col-sm-9">{{ selectedGroup.baseUnits.join(', ') }}</dd>
+              </template>
+            </dl>
+          </div>
+
+          <div v-else class="table-responsive mt-3">
+            <table class="table table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th scope="col">Group</th>
+                  <th scope="col">Contributed by</th>
+                  <th scope="col">Meters</th>
+                  <th scope="col">Documented by the registry</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="group in groups" :key="group.id">
+                  <td>{{ group.label }}</td>
+                  <td class="text-muted small">{{ group.contributor }}</td>
+                  <td>{{ group.meterCount }}</td>
+                  <td>{{ group.describedMeterCount }} / {{ group.meterCount }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div class="row g-3">
         <div class="col-lg-4">
           <div class="card h-100" :aria-busy="meterLoading">
@@ -336,9 +490,28 @@ const panelLoading = computed(() => loading.value || meterLoading.value || loadi
                 class="form-control form-control-sm mb-2"
                 placeholder="Search names and descriptions"
               />
-              <select v-model="typeFilter" aria-label="Filter meters by type" class="form-select form-select-sm">
+              <select v-model="typeFilter" aria-label="Filter meters by type" class="form-select form-select-sm mb-2">
                 <option value="">All meter types</option>
                 <option v-for="type in meterTypes" :key="type" :value="type">{{ type }}</option>
+              </select>
+              <select
+                v-model="provenanceFilter"
+                aria-label="Filter meters by provenance"
+                class="form-select form-select-sm mb-2"
+              >
+                <option value="">All provenance</option>
+                <option value="classified">Known integration</option>
+                <option value="unclassified">Application / unclassified</option>
+              </select>
+              <select
+                v-model="explanationFilter"
+                aria-label="Filter meters by explanation source"
+                class="form-select form-select-sm"
+              >
+                <option value="">Any explanation</option>
+                <option value="NATIVE">Native description</option>
+                <option value="CURATED">BootUI catalogue</option>
+                <option value="UNKNOWN">Not documented</option>
               </select>
             </div>
             <div class="list-group list-group-flush meter-list">
@@ -352,14 +525,21 @@ const panelLoading = computed(() => loading.value || meterLoading.value || loadi
               >
                 <div class="d-flex justify-content-between align-items-start gap-2">
                   <code class="meter-name">{{ meter.name }}</code>
-                  <span class="badge text-bg-light">{{ meter.type }}</span>
+                  <span class="badge text-bg-light meter-type">{{ meter.type }}</span>
                 </div>
                 <div v-if="meter.description" class="small text-muted mt-1">{{ meter.description }}</div>
+                <div v-if="meter.provenance" class="small text-muted mt-1 meter-provenance">
+                  {{ meter.provenance.groupLabel }} ·
+                  <span class="meter-source">{{ explanationLabel(meter.provenance.explanationSource) }}</span>
+                </div>
               </button>
               <div v-if="!meters.length && meterLoading" class="p-3 text-muted small" role="status">
                 Updating meter list…
               </div>
-              <div v-else-if="!meters.length && (search.trim() || typeFilter)" class="p-3 text-muted small">
+              <div
+                v-else-if="!meters.length && (search.trim() || typeFilter || provenanceFiltered)"
+                class="p-3 text-muted small"
+              >
                 No meters match the current server-side filters.
               </div>
               <div v-else-if="!meters.length" class="p-3 text-muted small">No meters are registered yet.</div>
@@ -393,6 +573,26 @@ const panelLoading = computed(() => loading.value || meterLoading.value || loadi
               </div>
             </div>
             <div class="card-body">
+              <div v-if="detail.provenance" class="provenance-detail mb-3">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                  <span class="badge" :class="explanationBadge(detail.provenance.explanationSource)">
+                    {{ explanationLabel(detail.provenance.explanationSource) }}
+                  </span>
+                  <span class="small text-muted">
+                    {{ detail.provenance.groupLabel }} · contributed by {{ detail.provenance.contributor }}
+                    <template v-if="detail.provenance.familyLabel"> · {{ detail.provenance.familyLabel }}</template>
+                  </span>
+                </div>
+                <p v-if="detail.provenance.explanation" class="mb-1 mt-2">{{ detail.provenance.explanation }}</p>
+                <p v-else class="mb-1 mt-2 text-muted">
+                  No description is registered for this meter and its name matches no known integration, so BootUI does
+                  not explain it.
+                </p>
+                <p v-if="detail.provenance.interpretation" class="text-muted small mb-0">
+                  <span class="fw-semibold">How to read this family (BootUI catalogue):</span>
+                  {{ detail.provenance.interpretation }}
+                </p>
+              </div>
               <div class="row g-3 align-items-stretch">
                 <div class="col-md-4">
                   <label class="form-label small text-muted" for="metric-statistic">Statistic</label>
@@ -549,6 +749,23 @@ const panelLoading = computed(() => loading.value || meterLoading.value || loadi
 
 .meter-name {
   overflow-wrap: anywhere;
+}
+
+.provenance-chip {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.provenance-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.provenance-detail {
+  background: var(--bootui-surface-alt);
+  border: 1px solid var(--bootui-border-alt);
+  border-radius: var(--bootui-radius-lg);
+  padding: 0.85rem 1rem;
 }
 
 .chart-box {

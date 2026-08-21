@@ -8,7 +8,7 @@ import io.github.jdubois.bootui.spi.CacheManagerSnapshot;
 import io.github.jdubois.bootui.spi.CacheOperationDiscovery;
 import io.github.jdubois.bootui.spi.CacheProvider;
 import io.github.jdubois.bootui.spi.CacheSnapshot;
-import java.lang.reflect.InvocationTargetException;
+import io.github.jdubois.bootui.spi.CacheStatisticsSnapshot;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
@@ -48,6 +48,8 @@ public class SpringCacheProvider implements CacheProvider {
 
     private final BootUiSelfDataFilter selfDataFilter;
 
+    private final SpringCacheInspectors inspectors;
+
     public SpringCacheProvider(
             ObjectProvider<ListableBeanFactory> beanFactoryProvider,
             ObjectProvider<CacheOperationSource> cacheOperationSources,
@@ -64,6 +66,7 @@ public class SpringCacheProvider implements CacheProvider {
         this.cacheOperationSources = cacheOperationSources;
         this.properties = properties;
         this.selfDataFilter = selfDataFilter;
+        this.inspectors = SpringCacheInspectors.create(SpringCacheProvider.class.getClassLoader());
     }
 
     @Override
@@ -132,16 +135,77 @@ public class SpringCacheProvider implements CacheProvider {
             if (cache == null) {
                 continue;
             }
-            Object nativeCache = nativeCache(cache);
-            caches.add(new CacheSnapshot(
-                    cacheName,
-                    nativeCache == null ? null : nativeCache.getClass().getName(),
-                    estimateSize(nativeCache)));
+            caches.add(toCacheSnapshot(cacheName, cache));
         }
         // Unwrap a CacheActivityCacheManager (installed only when activity capture is enabled) so the
         // reported type/no-op status describes the real CacheManager, not the recording decorator.
         CacheManager realManager = CacheActivityAware.unwrap(entry.manager());
-        return new CacheManagerSnapshot(entry.name(), realManager.getClass().getName(), isNoOp(realManager), caches);
+        SpringCacheManagerInspector.Structure structure = structureOf(realManager);
+        return new CacheManagerSnapshot(
+                entry.name(),
+                realManager.getClass().getName(),
+                isNoOp(realManager),
+                structure.composition(),
+                structure.dynamicCaches(),
+                structure.delegateTypes(),
+                caches);
+    }
+
+    private SpringCacheManagerInspector.Structure structureOf(CacheManager manager) {
+        for (SpringCacheManagerInspector inspector : inspectors.managerInspectors()) {
+            Optional<SpringCacheManagerInspector.Structure> structure = safeInspect(inspector, manager);
+            if (structure.isPresent()) {
+                return structure.get();
+            }
+        }
+        return new SpringCacheManagerInspector.Structure(
+                CacheManagerSnapshot.COMPOSITION_UNKNOWN, CacheManagerSnapshot.DYNAMIC_UNKNOWN, List.of());
+    }
+
+    private Optional<SpringCacheManagerInspector.Structure> safeInspect(
+            SpringCacheManagerInspector inspector, CacheManager manager) {
+        try {
+            return inspector.inspect(manager);
+        } catch (RuntimeException | LinkageError ex) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Describes one cache with the first inspector that recognises it. A cache no inspector recognises is
+     * reported opaque — with the reason shown in the panel — rather than having a tier invented for it from
+     * its class name or reflected out of the provider's internals.
+     */
+    private CacheSnapshot toCacheSnapshot(String cacheName, Cache cache) {
+        // Look past BootUI's own activity-capture decorator so an inspector sees the provider's real cache.
+        Cache realCache = CacheActivityAware.unwrap(cache);
+        Object nativeCache = nativeCache(realCache);
+        String nativeType = nativeCache == null ? null : nativeCache.getClass().getName();
+        if (nativeCache == null) {
+            return new CacheSnapshot(
+                    cacheName,
+                    null,
+                    null,
+                    List.of(),
+                    CacheStatisticsSnapshot.unavailable(null, "This cache exposes no native cache to inspect."),
+                    "This cache exposes no native cache to inspect.");
+        }
+        for (SpringCacheInspector inspector : inspectors.cacheInspectors()) {
+            Optional<SpringCacheInspector.Inspection> inspection;
+            try {
+                inspection = inspector.inspect(realCache, nativeCache);
+            } catch (RuntimeException | LinkageError ex) {
+                continue;
+            }
+            if (inspection.isPresent() && !inspection.get().tiers().isEmpty()) {
+                SpringCacheInspector.Inspection found = inspection.get();
+                return new CacheSnapshot(cacheName, nativeType, found.size(), found.tiers(), found.statistics(), null);
+            }
+        }
+        String reason = "BootUI cannot describe the storage of " + ClassUtils.getShortName(nativeCache.getClass())
+                + " through a public API, so its tiers and statistics are unknown.";
+        return new CacheSnapshot(
+                cacheName, nativeType, null, List.of(), CacheStatisticsSnapshot.unavailable(null, reason), reason);
     }
 
     private List<CacheManagerEntry> discoverManagers(ListableBeanFactory factory) {
@@ -166,41 +230,15 @@ public class SpringCacheProvider implements CacheProvider {
         return manager.getCacheNames().stream().sorted().toList();
     }
 
+    /**
+     * Reads the native store of a cache defensively. A broken or half-present provider can throw anything
+     * here, including a {@link LinkageError} when one of its own classes is missing, and a single bad cache
+     * must never take the whole panel down.
+     */
     private Object nativeCache(Cache cache) {
         try {
             return cache.getNativeCache();
-        } catch (RuntimeException ex) {
-            return null;
-        }
-    }
-
-    private Long estimateSize(Object nativeCache) {
-        if (nativeCache == null) {
-            return null;
-        }
-        if (nativeCache instanceof Map<?, ?> map && isJdkLocalType(nativeCache)) {
-            return (long) map.size();
-        }
-        if (nativeCache instanceof Collection<?> collection && isJdkLocalType(nativeCache)) {
-            return (long) collection.size();
-        }
-        if (nativeCache.getClass().getName().startsWith("com.github.benmanes.caffeine.cache.")) {
-            return invokeLong(nativeCache, "estimatedSize");
-        }
-        return null;
-    }
-
-    private boolean isJdkLocalType(Object value) {
-        String name = value.getClass().getName();
-        return name.startsWith("java.util.") || name.startsWith("java.util.concurrent.");
-    }
-
-    private Long invokeLong(Object target, String methodName) {
-        try {
-            Method method = target.getClass().getMethod(methodName);
-            Object value = method.invoke(target);
-            return value instanceof Number number ? number.longValue() : null;
-        } catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException ex) {
+        } catch (RuntimeException | LinkageError ex) {
             return null;
         }
     }

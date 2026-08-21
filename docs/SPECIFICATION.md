@@ -618,12 +618,17 @@ Data sources:
 
 - Micrometer `MeterRegistry`.
 - Spring Boot Actuator metrics auto-configuration when present.
+- A curated, versioned BootUI catalogue of well-known meter families, used only when the registry itself
+  documents nothing.
 
 Features:
 
 - List meters by name, description, base unit, and Micrometer type.
+- Group meters by provenance: the integration family that registered them, with the contributing library named.
+- Explain a meter from its registry description first, then from the curated catalogue, and say which source was
+  used (`NATIVE`, `CURATED`, or `UNKNOWN`).
 - Search meters by name or description.
-- Filter meters by type.
+- Filter meters by type, provenance group, classified/unclassified provenance, and explanation source.
 - Inspect a meter's current measurements.
 - Show available tag keys and values for each meter.
 - Filter live values by tag key/value.
@@ -634,6 +639,21 @@ Acceptance criteria:
 
 - Missing Micrometer infrastructure produces a clear empty state.
 - Browser responses use BootUI DTOs, not raw registry internals.
+- Provenance is evidence-backed: classification uses meter names only, never tag values, and an unrecognized
+  meter is reported as unclassified with no invented explanation. Curated text is static BootUI content, so no
+  application value flows into an explanation and the panel keeps the metrics contract's existing exposure
+  posture: meter names, tag keys, and tag values are reported as the registry holds them and are not passed
+  through the property-masking policy, which applies to configuration values rather than telemetry.
+- Every matched meter belongs to exactly one provenance group, and group counts reconcile with the matched
+  total even when the returned page is truncated.
+- Groups are facets of the type-, search-, provenance-, and explanation-filtered set computed *before* the group
+  filter is applied, so selecting a group narrows the meter list without collapsing the group summary the user
+  is choosing from. With a group filter applied, that group's count equals the matched total.
+- Classification is name-based, so an application meter that borrows a binder-owned namespace
+  (`tomcat.orders.active`) is attributed to that binder. Prefixes an application is plausibly likely to reuse
+  (`http.server`, `http.client`, `kafka`, `executor`, `cache`) are narrowed to the sub-namespaces the
+  instrumentation actually publishes.
+- The report names the catalogue version that produced its curated explanations.
 - Tag values remain browser-bounded so high-cardinality meters do not freeze the UI.
 - Polling does not overlap slow requests.
 - Switching meter, tag filters, or statistic resets the live graph history.
@@ -877,6 +897,8 @@ Features:
 - Show recent exchanges with timestamp, method, path, status, duration, response size when available, and trace id when a
   common propagation header or the server's active tracing context supplies one.
 - Show request and response headers in row details.
+- Offer a client-side **Copy as cURL** action in row details that rebuilds a runnable command template from the retained
+  exchange metadata, without capturing a body or replaying the request.
 - Provide server-side filtering by path/URL/trace id, method, and status class with bounded paging.
 - Hide BootUI self-requests by default through `bootui.monitoring.exclude-self`.
 
@@ -885,6 +907,10 @@ Acceptance criteria:
 - The recorder is bounded by `bootui.http-exchanges.max-exchanges`, defaulting to 200.
 - Secret-like headers and query parameters are masked unless value exposure is explicitly set to `FULL`.
 - The panel is read-only and returns a stable unavailable DTO when no `HttpExchangeRepository` is available.
+- Copy as cURL performs no request and changes no state; it shows the command before copying, keeps query-parameter
+  names but replaces every value with a placeholder, copies only allowlisted unmasked request headers, POSIX-quotes
+  every argument, copies the recorded path without normalization, and explains what it left out. It reports a clear
+  reason instead of guessing when the recorded URL or method is unusable.
 
 ### 5.14.2 Live Activity Panel
 
@@ -2090,7 +2116,7 @@ Initial endpoints:
 | `/bootui/api/startup`                        | GET    | Startup timeline                                                                       |
 | `/bootui/api/threads`                        | GET    | Stable, paged live thread snapshot with state counts and deadlock info                 |
 | `/bootui/api/threads/download`               | POST   | Confirmation-gated raw text thread dump download                                       |
-| `/bootui/api/metrics`                        | GET    | Searchable/type-filtered Micrometer meter list, paged at 200 by default (1,000 maximum) |
+| `/bootui/api/metrics`                        | GET    | Micrometer meter list with search, type, `group`, `provenance`, and `explanation` filters, paged at 200 by default (1,000 maximum) |
 | `/bootui/api/metrics/detail`                 | GET    | Meter detail with tag filters and samples paged at 100 by default (1,000 maximum)       |
 | `/bootui/api/database-connection-pools/pools` | GET    | JDBC connection pool metadata                                                          |
 | `/bootui/api/database-connection-pools/pools/{name}/snapshot` | GET | Live connection pool utilization snapshot                                   |

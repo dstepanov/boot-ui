@@ -5,7 +5,9 @@ import PanelHeader from './components/PanelHeader.vue'
 import PanelSkeleton from './components/PanelSkeleton.vue'
 import ServerListFooter from './components/ServerListFooter.vue'
 import {formatNumber} from '../utils/format.js'
+import {buildCurlCommand} from '../utils/curlCommand.js'
 import {useAutoRefresh} from '../utils/useAutoRefresh.js'
+import {useCopyToClipboard} from '../utils/useCopyToClipboard.js'
 import {useServerPagedList} from '../utils/useServerPagedList.js'
 
 const filter = ref('')
@@ -120,6 +122,9 @@ function toggleDetails(id) {
   const next = new Set(expanded.value)
   if (next.has(id)) {
     next.delete(id)
+    if (copyFailureId.value === id) {
+      copyFailureId.value = null
+    }
   } else {
     next.add(id)
   }
@@ -128,6 +133,40 @@ function toggleDetails(id) {
 
 function isExpanded(id) {
   return expanded.value.has(id)
+}
+
+const {copiedKey, copyToClipboard} = useCopyToClipboard(4000)
+const copyStatus = ref('')
+const copyFailureId = ref(null)
+
+/**
+ * Builds the copyable command from retained metadata only. Called from the template for expanded
+ * rows, so nothing is computed for exchanges the user has not opened, and nothing is sent anywhere.
+ */
+function curlFor(exchange) {
+  return buildCurlCommand(exchange)
+}
+
+function curlKey(exchange) {
+  return `curl-${exchange.id}`
+}
+
+async function copyCurl(exchange) {
+  const {command, unavailableReason} = curlFor(exchange)
+  if (!command) {
+    // The control stays focusable, so a click must still say why nothing happened.
+    copyStatus.value = unavailableReason || ''
+    return
+  }
+  copyStatus.value = ''
+  copyFailureId.value = null
+  const copied = await copyToClipboard(command, curlKey(exchange))
+  if (copied) {
+    // Deliberately without the query string: recorded parameter values must not leak into feedback.
+    copyStatus.value = `cURL template copied for ${exchange.method || 'the'} ${exchange.path || 'request'}.`
+    return
+  }
+  copyFailureId.value = exchange.id
 }
 
 watch([filter, method, statusClass], scheduleReload)
@@ -153,6 +192,8 @@ onMounted(() => {
       v-model:auto-refresh="autoRefresh"
       @refresh="refreshNow"
     />
+
+    <p aria-live="polite" class="visually-hidden http-exchanges-copy-status" role="status">{{ copyStatus }}</p>
 
     <div v-if="unavailableReason" class="alert alert-warning" role="alert">
       <strong>HTTP exchange recording is unavailable.</strong>
@@ -245,6 +286,57 @@ onMounted(() => {
             <tr v-if="isExpanded(exchange.id)" :key="`${exchange.id}-details`" class="http-exchanges-detail-row">
               <td colspan="8">
                 <div class="http-exchanges-detail">
+                  <div class="http-exchanges-curl mb-3">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                      <button
+                        :aria-describedby="
+                          curlFor(exchange).unavailableReason ? `curl-unavailable-${exchange.id}` : undefined
+                        "
+                        :aria-disabled="curlFor(exchange).command ? undefined : 'true'"
+                        :class="[
+                          'btn btn-outline-secondary btn-sm rounded-pill http-exchanges-curl-copy',
+                          {'http-exchanges-curl-copy-inactive': !curlFor(exchange).command}
+                        ]"
+                        type="button"
+                        @click="copyCurl(exchange)"
+                      >
+                        <i
+                          :class="['bi', copiedKey === curlKey(exchange) ? 'bi-check2' : 'bi-terminal', 'me-1']"
+                          aria-hidden="true"
+                        ></i>
+                        {{ copiedKey === curlKey(exchange) ? 'Copied' : 'Copy as cURL' }}
+                      </button>
+                      <span class="small text-muted">
+                        A safe template built from retained metadata. Nothing is sent and no state changes.
+                      </span>
+                    </div>
+                    <pre
+                      v-if="curlFor(exchange).command"
+                      aria-label="Generated cURL command"
+                      class="small mb-0 mt-2 http-exchanges-curl-command"
+                      role="group"
+                      tabindex="0"
+                    ><code>{{ curlFor(exchange).command }}</code></pre>
+                    <p
+                      v-if="curlFor(exchange).unavailableReason"
+                      :id="`curl-unavailable-${exchange.id}`"
+                      class="small mb-0 mt-2 http-exchanges-curl-unavailable"
+                    >
+                      {{ curlFor(exchange).unavailableReason }}
+                    </p>
+                    <ul v-else class="small text-muted mb-0 mt-2 ps-3 http-exchanges-curl-notes">
+                      <li v-for="note in curlFor(exchange).notes" :key="note">{{ note }}</li>
+                    </ul>
+                    <div
+                      v-if="copyFailureId === exchange.id"
+                      class="alert alert-danger small py-2 mt-2 mb-0"
+                      role="alert"
+                    >
+                      The browser blocked clipboard access, so nothing was copied. Allow clipboard permission for this
+                      page, or select the command shown above and copy it manually.
+                    </div>
+                  </div>
+
                   <div v-if="hasMetadata(exchange)" class="mb-3">
                     <h3 class="h6">Metadata</h3>
                     <dl class="row small mb-0">
@@ -342,6 +434,34 @@ onMounted(() => {
 
 .http-exchanges-detail-row > td {
   padding-top: 0;
+}
+
+.http-exchanges-curl {
+  border-bottom: 1px solid var(--bs-border-color);
+  padding-bottom: 0.75rem;
+}
+
+.http-exchanges-curl-unavailable {
+  color: var(--bootui-warning-text-strong, #6f5300);
+}
+
+.http-exchanges-curl-copy-inactive {
+  opacity: 0.65;
+}
+
+.http-exchanges-curl-command {
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.5rem;
+  color: var(--bs-body-color);
+  max-height: 12rem;
+  overflow: auto;
+  padding: 0.5rem 0.75rem;
+  white-space: pre;
+}
+
+.http-exchanges-curl-notes li + li {
+  margin-top: 0.15rem;
 }
 
 .http-exchanges-detail {

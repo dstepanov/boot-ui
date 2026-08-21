@@ -44,7 +44,15 @@ public final class BootUiApiContractCatalog {
                     "sessions",
                     "totalSessions",
                     fields("actionEnabled", JsonType.BOOLEAN, "valueExposure", JsonType.STRING)),
-            inventory("metrics", "/metrics", "metricsAvailable", "meters"),
+            read(
+                    "metrics",
+                    "/metrics",
+                    fields(
+                            "metricsAvailable", JsonType.BOOLEAN,
+                            "total", JsonType.INTEGER,
+                            "meters", JsonType.ARRAY,
+                            "groups", JsonType.ARRAY,
+                            "catalogueVersion", JsonType.STRING)),
             memory("live-memory", "/live-memory"),
             memory("jvm-tuning", "/jvm-tuning"),
             read(
@@ -108,6 +116,8 @@ public final class BootUiApiContractCatalog {
                             "clearEnabled", JsonType.BOOLEAN,
                             "managerCount", JsonType.INTEGER,
                             "cacheCount", JsonType.INTEGER,
+                            "tierCount", JsonType.INTEGER,
+                            "truncated", JsonType.BOOLEAN,
                             "managers", JsonType.ARRAY,
                             "operations", JsonType.ARRAY,
                             "warnings", JsonType.ARRAY)),

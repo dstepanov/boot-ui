@@ -11,8 +11,11 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
 
 import io.github.jdubois.bootui.autoconfigure.monitoring.BootUiSelfDataFilter;
 import io.github.jdubois.bootui.core.dto.MetricDetailDto;
+import io.github.jdubois.bootui.core.dto.MetricGroupDto;
 import io.github.jdubois.bootui.core.dto.MetricMeterDto;
+import io.github.jdubois.bootui.core.dto.MetricProvenanceDto;
 import io.github.jdubois.bootui.core.dto.MetricsReport;
+import io.github.jdubois.bootui.core.dto.PageMetadata;
 import io.github.jdubois.bootui.engine.metrics.MetricsReportProvider;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -32,24 +35,60 @@ class MetricsControllerTests {
     @Test
     void metricsDelegatesToProvider() throws Exception {
         MetricsReportProvider provider = mock(MetricsReportProvider.class);
-        when(provider.metrics(eq("jvm"), eq("gauge"), eq("1"), eq("2")))
+        when(provider.metrics(eq("jvm"), eq("gauge"), eq("jvm"), eq("classified"), eq("CURATED"), eq("1"), eq("2")))
                 .thenReturn(new MetricsReport(
                         true,
                         1,
                         List.of(new MetricMeterDto(
-                                "bootui.sample.requests", "desc", "requests", "COUNTER", List.of()))));
+                                "bootui.sample.requests",
+                                "desc",
+                                "requests",
+                                "COUNTER",
+                                List.of(),
+                                new MetricProvenanceDto(
+                                        "jvm",
+                                        "JVM",
+                                        "Micrometer JVM binders",
+                                        "jvm.memory",
+                                        "JVM memory",
+                                        true,
+                                        "Heap and non-heap memory usage per memory pool.",
+                                        "CURATED",
+                                        "Used, committed and maximum bytes are gauges."))),
+                        List.of("COUNTER"),
+                        new PageMetadata(1, 1, 0, 200, 1, false),
+                        List.of(new MetricGroupDto(
+                                "jvm",
+                                "JVM",
+                                "Micrometer JVM binders",
+                                "JVM internals.",
+                                "Gauges are point-in-time readings.",
+                                1,
+                                1,
+                                List.of("JVM memory"),
+                                List.of("area"),
+                                List.of("bytes"))),
+                        "2026.1"));
 
         MockMvc mvc = standaloneSetup(new MetricsController(provider)).build();
 
         mvc.perform(get("/bootui/api/metrics")
                         .param("q", "jvm")
                         .param("type", "gauge")
+                        .param("group", "jvm")
+                        .param("provenance", "classified")
+                        .param("explanation", "CURATED")
                         .param("offset", "1")
                         .param("limit", "2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.metricsAvailable").value(true))
                 .andExpect(jsonPath("$.total").value(1))
-                .andExpect(jsonPath("$.meters[0].name").value("bootui.sample.requests"));
+                .andExpect(jsonPath("$.catalogueVersion").value("2026.1"))
+                .andExpect(jsonPath("$.groups[0].id").value("jvm"))
+                .andExpect(jsonPath("$.groups[0].contributor").value("Micrometer JVM binders"))
+                .andExpect(jsonPath("$.meters[0].name").value("bootui.sample.requests"))
+                .andExpect(jsonPath("$.meters[0].provenance.groupId").value("jvm"))
+                .andExpect(jsonPath("$.meters[0].provenance.explanationSource").value("CURATED"));
     }
 
     @Test
@@ -96,6 +135,23 @@ class MetricsControllerTests {
         mvc.perform(get("/bootui/api/metrics").param("limit", "many"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Metric limit must be between 1 and 1000"));
+    }
+
+    @Test
+    void unknownProvenanceFiltersAreMappedToCanonicalBadRequests() throws Exception {
+        MetricsReportProvider provider = new MetricsReportProvider(() -> null, meter -> true);
+        MockMvc mvc = standaloneSetup(new MetricsController(provider)).build();
+
+        mvc.perform(get("/bootui/api/metrics").param("group", "nope"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(Matchers.startsWith("Metric group must be one of: application")));
+        mvc.perform(get("/bootui/api/metrics").param("provenance", "maybe"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Metric provenance must be one of: classified, unclassified"));
+        mvc.perform(get("/bootui/api/metrics").param("explanation", "guessed"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error")
+                        .value("Metric explanation source must be one of: CURATED, NATIVE, UNKNOWN"));
     }
 
     @Test

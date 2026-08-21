@@ -123,6 +123,12 @@ their Live Activity `MESSAGING` capture work identically to the servlet adapter 
 an imperative, blocking broker API, but its work runs on the application's JMS template/listener threads; the WebFlux
 panel only reads the shared in-memory recorder.
 
+The Cache panel's tier and native-statistics reporting is likewise identical on both Spring adapters: it is produced by
+the shared `SpringCacheProvider` and its classloading-gated inspectors, which depend only on Spring's cache abstraction
+and the cache provider's own public API, never on a servlet or reactive type. A WebFlux application configured with
+`spring.cache.type=simple` therefore shows the same single local in-memory map tier — and the same honest "a plain map
+records nothing" statistics state — that the servlet adapter shows for the same configuration.
+
 CRaC uses the same framework-neutral scanner and Spring runtime inventory on MVC and WebFlux. Its pool inventory includes
 R2DBC factories, and its task/scheduling checks use Spring context APIs rather than servlet types. Generated assets still
 target a JVM process and Spring's checkpoint lifecycle; they do not imply Quarkus or native-image support.

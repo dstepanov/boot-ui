@@ -242,6 +242,109 @@ public abstract class AbstractBootUiApiConformanceTest {
                 .as("$.page.total preserves the visible meter total")
                 .isEqualTo(report.path("total").asInt());
 
+        assertThat(report.path("catalogueVersion").asText())
+                .as("$.catalogueVersion identifies the curated meter catalogue")
+                .isNotBlank();
+        assertThat(report.path("groups").isArray()).as("$.groups").isTrue();
+        int groupedMeters = 0;
+        for (JsonNode group : report.path("groups")) {
+            assertThat(group.path("id").asText()).as("$.groups[].id").isNotBlank();
+            assertThat(group.path("label").asText()).as("$.groups[].label").isNotBlank();
+            assertThat(group.path("contributor").asText())
+                    .as("$.groups[].contributor")
+                    .isNotBlank();
+            assertThat(group.path("meterCount").asInt())
+                    .as("$.groups[].meterCount")
+                    .isPositive();
+            assertThat(group.path("describedMeterCount").asInt())
+                    .as("$.groups[].describedMeterCount never exceeds the group size")
+                    .isLessThanOrEqualTo(group.path("meterCount").asInt());
+            assertThat(group.path("families").isArray())
+                    .as("$.groups[].families")
+                    .isTrue();
+            assertThat(group.path("commonTagKeys").isArray())
+                    .as("$.groups[].commonTagKeys")
+                    .isTrue();
+            groupedMeters += group.path("meterCount").asInt();
+        }
+        assertThat(groupedMeters)
+                .as("provenance groups account for every matched meter, not just the returned page")
+                .isEqualTo(report.path("page").path("matched").asInt());
+
+        for (JsonNode meter : report.path("meters")) {
+            JsonNode provenance = meter.path("provenance");
+            assertThat(provenance.isObject()).as("$.meters[].provenance").isTrue();
+            assertThat(provenance.path("groupId").asText())
+                    .as("$.meters[].provenance.groupId")
+                    .isNotBlank();
+            assertThat(provenance.path("groupLabel").asText())
+                    .as("$.meters[].provenance.groupLabel")
+                    .isNotBlank();
+            assertThat(provenance.path("classified").isBoolean())
+                    .as("$.meters[].provenance.classified")
+                    .isTrue();
+            assertThat(provenance.path("explanationSource").asText())
+                    .as("$.meters[].provenance.explanationSource")
+                    .isIn("NATIVE", "CURATED", "UNKNOWN");
+        }
+
+        if (!report.path("groups").isEmpty()) {
+            String groupId = report.path("groups").get(0).path("id").asText();
+            Response grouped =
+                    probe().get(api("/metrics?limit=1&group=" + URLEncoder.encode(groupId, StandardCharsets.UTF_8)));
+            assertThat(grouped.status()).as("group-filtered metrics status").isEqualTo(200);
+            // Compared inside one response, so a meter registered between the two calls cannot fail the invariant.
+            int groupSize = -1;
+            for (JsonNode group : grouped.json().path("groups")) {
+                if (groupId.equals(group.path("id").asText())) {
+                    groupSize = group.path("meterCount").asInt();
+                }
+            }
+            assertThat(groupSize)
+                    .as("groups stay facets of the unfiltered set, so the requested group is still described")
+                    .isGreaterThanOrEqualTo(0);
+            assertThat(grouped.json().path("page").path("matched").asInt())
+                    .as("group filter narrows the matched set to that group")
+                    .isEqualTo(groupSize);
+            for (JsonNode meter : grouped.json().path("meters")) {
+                assertThat(meter.path("provenance").path("groupId").asText())
+                        .as("group-filtered meters belong to the requested group")
+                        .isEqualTo(groupId);
+            }
+        }
+
+        Response unclassified = probe().get(api("/metrics?limit=1&provenance=unclassified"));
+        assertThat(unclassified.status())
+                .as("provenance-filtered metrics status")
+                .isEqualTo(200);
+        for (JsonNode meter : unclassified.json().path("meters")) {
+            assertThat(meter.path("provenance").path("classified").asBoolean())
+                    .as("unclassified filter never returns classified meters")
+                    .isFalse();
+        }
+
+        Response invalidGroup = probe().get(api("/metrics?group=not-a-group"));
+        assertThat(invalidGroup.status()).as("invalid metric group status").isEqualTo(400);
+        assertThat(invalidGroup.json().path("error").asText())
+                .as("canonical metric group error")
+                .startsWith("Metric group must be one of: application");
+
+        Response invalidProvenance = probe().get(api("/metrics?provenance=maybe"));
+        assertThat(invalidProvenance.status())
+                .as("invalid metric provenance status")
+                .isEqualTo(400);
+        assertThat(invalidProvenance.json().path("error").asText())
+                .as("canonical metric provenance error")
+                .isEqualTo("Metric provenance must be one of: classified, unclassified");
+
+        Response invalidExplanation = probe().get(api("/metrics?explanation=guessed"));
+        assertThat(invalidExplanation.status())
+                .as("invalid metric explanation status")
+                .isEqualTo(400);
+        assertThat(invalidExplanation.json().path("error").asText())
+                .as("canonical metric explanation error")
+                .isEqualTo("Metric explanation source must be one of: CURATED, NATIVE, UNKNOWN");
+
         Response invalid = probe().get(api("/metrics?limit=1001"));
         assertThat(invalid.status()).as("invalid metrics limit status").isEqualTo(400);
         assertThat(invalid.isJson()).as("invalid metrics limit content type").isTrue();
@@ -276,6 +379,15 @@ public abstract class AbstractBootUiApiConformanceTest {
             assertThat(detail.json().path("samplesTruncated").isBoolean())
                     .as("$.samplesTruncated")
                     .isTrue();
+            assertThat(detail.json().path("provenance").path("groupId").asText())
+                    .as("$.provenance.groupId")
+                    .isNotBlank();
+            assertThat(detail.json()
+                            .path("provenance")
+                            .path("explanationSource")
+                            .asText())
+                    .as("$.provenance.explanationSource")
+                    .isIn("NATIVE", "CURATED", "UNKNOWN");
         }
     }
 
@@ -410,6 +522,89 @@ public abstract class AbstractBootUiApiConformanceTest {
         assertThat(activation.path("reason").isTextual())
                 .as("$.activation.reason must be a string")
                 .isTrue();
+    }
+
+    @Test
+    void cacheTiersAndStatisticsShareOneShapeOnEveryPlatform() {
+        // The Cache panel's tier and counter structure is a *nested* contract the flat catalog cannot pin,
+        // and it is the surface the shared Vue panel binds to, so every adapter has to emit the same shape:
+        // Spring MVC, Spring WebFlux and Quarkus all build it in the engine CacheService from their own
+        // CacheProvider. Values are platform-specific (Quarkus has no provider statistics at all), so this
+        // asserts shape and the honesty rules, never a reading.
+        Response response = probe().get(api("/cache"));
+        if (response.status() == 403 || response.status() == 404) {
+            return; // the panel is disabled or unavailable on this platform; the manifest test covers that
+        }
+        assertThat(response.status()).as("GET /bootui/api/cache status").isEqualTo(200);
+
+        JsonNode report = response.json();
+        int tiersSeen = 0;
+        for (JsonNode manager : report.path("managers")) {
+            for (JsonNode cache : manager.path("caches")) {
+                assertCacheStatisticsShape(
+                        cache.path("statistics"), "cache '" + cache.path("name").asText() + "'");
+                assertThat(cache.path("opaque").isBoolean())
+                        .as("$.managers[].caches[].opaque must be a boolean")
+                        .isTrue();
+                if (cache.path("opaque").asBoolean(false)) {
+                    assertThat(cache.path("opaqueReason").isTextual())
+                            .as("an opaque cache must say why its tiers are unknown")
+                            .isTrue();
+                    assertThat(cache.path("tiers"))
+                            .as("an opaque cache reports no tier")
+                            .isEmpty();
+                }
+                for (JsonNode tier : cache.path("tiers")) {
+                    tiersSeen++;
+                    assertThat(tier.path("id").isTextual())
+                            .as("$..tiers[].id must be a string")
+                            .isTrue();
+                    assertThat(tier.path("name").isTextual())
+                            .as("$..tiers[].name must be a string")
+                            .isTrue();
+                    assertThat(tier.path("level").isInt())
+                            .as("$..tiers[].level must be an int")
+                            .isTrue();
+                    assertThat(tier.path("locality").asText(""))
+                            .as("$..tiers[].locality must be a canonical locality")
+                            .isIn("LOCAL", "DISTRIBUTED", "UNKNOWN");
+                    assertThat(tier.path("maximumSize").isNull()
+                                    || tier.path("maximumSize").isNumber())
+                            .as("$..tiers[].maximumSize is a number or null, never a guess")
+                            .isTrue();
+                    assertCacheStatisticsShape(
+                            tier.path("statistics"),
+                            "a tier of '" + cache.path("name").asText() + "'");
+                }
+            }
+        }
+        assertThat(report.path("tierCount").asInt(-1))
+                .as("$.tierCount must count the reported tiers")
+                .isEqualTo(tiersSeen);
+    }
+
+    /** Pins the honesty rules of one statistics object: unavailable means a reason, and a ratio needs requests. */
+    private void assertCacheStatisticsShape(JsonNode statistics, String where) {
+        assertThat(statistics.path("available").isBoolean())
+                .as("statistics.available of %s must be a boolean", where)
+                .isTrue();
+        if (!statistics.path("available").asBoolean(false)) {
+            assertThat(statistics.path("unavailableReason").asText(""))
+                    .as("unavailable statistics of %s must carry a reason", where)
+                    .isNotBlank();
+            assertThat(statistics.path("hitRatio").isNull())
+                    .as("unavailable statistics of %s must not carry a ratio", where)
+                    .isTrue();
+        }
+        if (statistics.path("hitRatio").isNull()) {
+            assertThat(statistics.path("ratioUnavailableReason").asText(""))
+                    .as("a missing ratio of %s must say why", where)
+                    .isNotBlank();
+        } else if (statistics.path("hitRatio").isNumber()) {
+            assertThat(statistics.path("hitRatio").asDouble())
+                    .as("a reported ratio of %s must be a fraction", where)
+                    .isBetween(0.0d, 1.0d);
+        }
     }
 
     @Test
