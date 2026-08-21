@@ -3,6 +3,7 @@ package io.github.jdubois.bootui.engine.restapi;
 import io.github.jdubois.bootui.engine.restapi.RestApiModel.ControllerModel;
 import io.github.jdubois.bootui.engine.restapi.RestApiModel.ExceptionHandlerModel;
 import io.github.jdubois.bootui.engine.restapi.RestApiModel.HandlerMethodModel;
+import io.github.jdubois.bootui.engine.restapi.RestApiModel.ThrownExceptionModel;
 import java.util.List;
 
 /**
@@ -18,6 +19,7 @@ record RestApiContext(
         boolean globalVersioningConfigured,
         boolean hasExceptionHandling,
         List<String> responseStatusExceptionClasses,
+        List<ThrownExceptionModel> thrownExceptions,
         RestApiModel.Framework framework) {
 
     RestApiContext {
@@ -26,6 +28,7 @@ record RestApiContext(
         handlers = List.copyOf(handlers);
         exceptionHandlers = List.copyOf(exceptionHandlers);
         responseStatusExceptionClasses = List.copyOf(responseStatusExceptionClasses);
+        thrownExceptions = List.copyOf(thrownExceptions);
     }
 
     boolean jaxRs() {

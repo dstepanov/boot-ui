@@ -10,6 +10,7 @@ import org.slf4j.MDC;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.servlet.HandlerMapping;
 
 class RequestCorrelationFilterTests {
 
@@ -51,6 +52,35 @@ class RequestCorrelationFilterTests {
         long now = System.currentTimeMillis();
         assertThat(traceRegistry.match("GET", "/bootui/api/activity/stream", now - 1000, now + 1000))
                 .isNull();
+    }
+
+    @Test
+    void capturesTheMatchedRouteTemplateSoSqlAttributionCanGroupWithoutPathValues() throws Exception {
+        RequestCorrelationRegistry registry = new RequestCorrelationRegistry(10);
+        RequestCorrelationFilter filter =
+                new RequestCorrelationFilter(registry, new HttpExchangeTraceRegistry(10), "/bootui");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/sample/orders/42");
+        request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/api/sample/orders/{id}");
+
+        filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
+
+        RequestCorrelation record = registry.snapshot().get(0);
+        assertThat(record.routeTemplate()).isEqualTo("/api/sample/orders/{id}");
+        assertThat(record.path()).isEqualTo("/api/sample/orders/42");
+    }
+
+    @Test
+    void leavesTheRouteTemplateNullWhenNoHandlerPatternMatched() throws Exception {
+        RequestCorrelationRegistry registry = new RequestCorrelationRegistry(10);
+        RequestCorrelationFilter filter =
+                new RequestCorrelationFilter(registry, new HttpExchangeTraceRegistry(10), "/bootui");
+
+        filter.doFilter(
+                new MockHttpServletRequest("GET", "/api/sample/unmapped"),
+                new MockHttpServletResponse(),
+                new MockFilterChain());
+
+        assertThat(registry.snapshot().get(0).routeTemplate()).isNull();
     }
 
     @Test

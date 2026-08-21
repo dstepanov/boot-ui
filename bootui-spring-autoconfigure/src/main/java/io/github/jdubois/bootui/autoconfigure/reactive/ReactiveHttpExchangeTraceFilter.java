@@ -6,8 +6,10 @@ import io.github.jdubois.bootui.autoconfigure.web.HttpExchangeTraceRegistry.Http
 import io.github.jdubois.bootui.spi.TraceIdProvider;
 import org.springframework.core.Ordered;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.web.reactive.HandlerMapping;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilterChain;
+import org.springframework.web.util.pattern.PathPattern;
 import reactor.core.publisher.Mono;
 
 /**
@@ -66,8 +68,31 @@ public final class ReactiveHttpExchangeTraceFilter extends AbstractReactiveBootU
         String path = request.getURI() == null ? null : request.getURI().getPath();
         return chain.filter(exchange).doFinally(signal -> {
             String traceId = safeCurrentTraceId();
-            registry.record(new HttpExchangeTrace(start, System.currentTimeMillis(), method, path, traceId));
+            registry.record(new HttpExchangeTrace(
+                    start, System.currentTimeMillis(), method, path, traceId, routeTemplate(exchange)));
         });
+    }
+
+    /**
+     * The route pattern WebFlux matched for this request, such as {@code /api/orders/{id}}. The handler
+     * mapping publishes it as an exchange attribute while {@code chain.filter} runs, and exchange
+     * attributes outlive that call, so reading it from {@code doFinally} sees the matched pattern. Returns
+     * {@code null} when nothing matched, so SQL Trace reports the route as unknown rather than inferring
+     * one from a path that may embed identifiers. Fully guarded, like the trace-id read beside it.
+     */
+    private String routeTemplate(ServerWebExchange exchange) {
+        try {
+            Object pattern = exchange.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+            if (pattern == null) {
+                return null;
+            }
+            String template =
+                    pattern instanceof PathPattern pathPattern ? pathPattern.getPatternString() : pattern.toString();
+            template = template == null ? "" : template.trim();
+            return template.isEmpty() ? null : template;
+        } catch (RuntimeException | NoClassDefFoundError ex) {
+            return null;
+        }
     }
 
     private String safeCurrentTraceId() {

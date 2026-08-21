@@ -78,7 +78,16 @@ public final class SqlTraceGrouping {
         return group(entries, nPlusOneThreshold).stream().anyMatch(SqlTraceGroupDto::potentialNPlusOne);
     }
 
-    /** Collapse runs of whitespace into single spaces and trim, returning "" for null. */
+    /**
+     * Collapse runs of whitespace into single spaces and trim, returning "" for null.
+     *
+     * <p>This is deliberately <em>not</em> {@link SqlStatementNormalizer}. The N+1 grouping shown next to the
+     * executions table keeps literal values so an operator can see the exact statements that repeated, and
+     * changing it to fold literals would silently alter the existing SQL Trace contract and its N+1
+     * detection. The rankings and the {@code DB-RUNTIME-001} advisor rule use the literal-free normalizer
+     * instead, precisely because they must aggregate equivalent statements without exposing a bound value.
+     * The two therefore group differently on purpose, and the panel labels which one it is showing.</p>
+     */
     private static String normalizeSql(String sql) {
         return sql == null ? "" : sql.replaceAll("\\s+", " ").trim();
     }

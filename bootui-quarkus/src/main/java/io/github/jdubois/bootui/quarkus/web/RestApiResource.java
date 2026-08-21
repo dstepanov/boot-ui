@@ -1,7 +1,9 @@
 package io.github.jdubois.bootui.quarkus.web;
 
+import io.github.jdubois.bootui.core.dto.ErrorContractReport;
 import io.github.jdubois.bootui.core.dto.RestApiReport;
 import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
+import io.github.jdubois.bootui.engine.errorcontract.ErrorContractService;
 import io.github.jdubois.bootui.engine.restapi.RestApiScanner;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -9,6 +11,7 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 
 /**
@@ -34,12 +37,16 @@ public class RestApiResource {
 
     private final DismissedRulesStore dismissedRules;
 
+    private final ErrorContractService errorContract;
+
     private volatile RestApiReport lastReport;
 
     @Inject
-    public RestApiResource(RestApiScanner scanner, DismissedRulesStore dismissedRules) {
+    public RestApiResource(
+            RestApiScanner scanner, DismissedRulesStore dismissedRules, ErrorContractService errorContract) {
         this.scanner = scanner;
         this.dismissedRules = dismissedRules;
+        this.errorContract = errorContract;
         this.lastReport = scanner.initialReport();
     }
 
@@ -47,6 +54,20 @@ public class RestApiResource {
     @Produces(MediaType.APPLICATION_JSON)
     public RestApiReport restApi() {
         return scanner.applyDismissals(lastReport, dismissedRules.load());
+    }
+
+    /**
+     * The declared error contract ({@code GET /bootui/api/rest-api/error-contract}), the Quarkus analogue of
+     * the Spring adapter's {@code RestApiController#errorContract}. It reads the build-time-captured
+     * exception-mapper declarations: no mapper is instantiated or invoked, and exception resolution is
+     * unchanged.
+     */
+    @GET
+    @Path("/error-contract")
+    @Produces(MediaType.APPLICATION_JSON)
+    public ErrorContractReport errorContract(
+            @QueryParam("q") String query, @QueryParam("offset") Integer offset, @QueryParam("limit") Integer limit) {
+        return errorContract.report(query, offset, limit);
     }
 
     @POST

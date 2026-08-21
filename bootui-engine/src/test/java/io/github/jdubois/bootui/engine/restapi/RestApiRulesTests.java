@@ -45,6 +45,7 @@ class RestApiRulesTests {
                 globalVersioningConfigured,
                 model.hasExceptionHandling(),
                 model.responseStatusExceptionClasses(),
+                model.thrownExceptions(),
                 model.framework());
     }
 

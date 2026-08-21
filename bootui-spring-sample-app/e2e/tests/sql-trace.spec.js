@@ -39,6 +39,79 @@ test.describe('SQL Trace view', () => {
     await expect(executions).toContainText('Thread')
   })
 
+  test('ranks normalized statements and attributes them to the request route that issued them', async ({
+    openView,
+    page
+  }) => {
+    await openView('sql-trace', 'SQL Trace')
+
+    // Start from an empty buffer so shares, counts and attribution describe only what this test drove.
+    const clearButton = page.getByRole('button', {name: 'Clear'})
+    if (await clearButton.isEnabled()) {
+      await clearButton.click()
+      await acceptConfirm(page)
+      await expect(page.locator('.alert-success')).toBeVisible()
+    }
+
+    // Two executions of the same parameterized query with different bound values must fold into ONE
+    // normalized group, and a second route must appear alongside it.
+    expect((await page.request.get('/api/sample/product-search?term=console')).status()).toBe(200)
+    expect((await page.request.get('/api/sample/product-search?term=laptop')).status()).toBe(200)
+    expect((await page.request.get('/api/sample/products')).status()).toBe(200)
+
+    await page.getByTitle('Refresh', {exact: true}).click()
+
+    const rankings = page.locator('section').filter({hasText: 'Statement rankings'}).first()
+    await expect(rankings).toBeVisible()
+    // The window is stated explicitly: these are bounded diagnostics, not lifetime metrics.
+    await expect(rankings).toContainText('not lifetime metrics')
+
+    const rankingRows = rankings.locator('table.sql-ranking-table tbody tr')
+    await expect(rankingRows.first()).toBeVisible()
+
+    // Normalization must have removed the bound values: no ranked statement may show a quoted literal.
+    const rankedSql = await rankings.locator('table.sql-ranking-table code.sql-text').allInnerTexts()
+    expect(rankedSql.length).toBeGreaterThan(0)
+    for (const sql of rankedSql) {
+      expect(sql).not.toContain("'")
+      expect(sql.toLowerCase()).not.toContain('console')
+      expect(sql.toLowerCase()).not.toContain('laptop')
+    }
+
+    // Re-ranking by a different criterion is a client-side re-sort of the same evidence.
+    await page.locator('#sql-ranking-metric').selectOption('executions')
+    await expect(rankingRows.first()).toBeVisible()
+
+    const routes = page.locator('section').filter({hasText: 'Database time by request route'}).first()
+    await expect(routes).toBeVisible()
+    // Spring MVC has a reliable serving thread, so all three tiers are advertised.
+    await expect(routes).toContainText('trace id')
+    await expect(routes).toContainText('serving thread')
+    // Unattributed and ambiguous work is always visible, never silently folded into a route.
+    await expect(routes).toContainText('Unattributed')
+    await expect(routes).toContainText('Ambiguous')
+
+    const routeRow = routes.locator('table.sql-route-table tbody tr').first()
+    await expect(routeRow).toBeVisible()
+    // Routes group by template or masked path — never by the raw query string we sent above.
+    const routeKeys = await routes.locator('table.sql-route-table tbody code').allInnerTexts()
+    for (const key of routeKeys) {
+      expect(key).not.toContain('?')
+      expect(key).not.toContain('term=')
+    }
+
+    // Expanding a route reveals its own top statements.
+    await routeRow.getByRole('button', {name: /Expand statements for/}).click()
+    await expect(routes.locator('tr.sql-detail-row')).toBeVisible()
+
+    // The deep link filters the execution list to that route's retained executions only.
+    await routeRow.getByRole('button', {name: /Show retained executions for/}).click()
+    const executions = page.locator('section').filter({hasText: 'Recent executions'}).first()
+    await expect(executions).toContainText('Showing only the retained executions linked from')
+    await page.getByRole('button', {name: 'Show all executions'}).click()
+    await expect(executions).not.toContainText('Showing only the retained executions linked from')
+  })
+
   test('can pause and resume recording', async ({openView, page}) => {
     await openView('sql-trace', 'SQL Trace')
 

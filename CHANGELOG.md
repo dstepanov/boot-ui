@@ -7,6 +7,48 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Copy as cURL in HTTP Exchanges on Spring MVC, Spring WebFlux, and Quarkus.** Request details now offer a
+  client-side action that turns the retained exchange metadata into a runnable cURL *template*: query-parameter names
+  survive but every value becomes a placeholder, only a short allowlist of unmasked request headers is copied
+  (authorization, cookies, proxy credentials, API keys, forwarding headers, tracing headers and unknown headers are
+  omitted under every exposure mode), and every argument is POSIX-quoted so captured metacharacters cannot escape.
+  Copying sends no request and changes no state, the command is shown in full before you copy it, the action explains
+  the omitted body, values and headers, and exchanges without a usable URL or method announce a clear reason instead of
+  a misleading command.
+- **SQL Trace statement rankings and request-route attribution on Spring MVC, Spring WebFlux, and Quarkus.** A new safe
+  read, `GET /bootui/api/sql-trace/insights`, ranks the retained capture window by normalized statement (cumulative,
+  maximum, average duration, execution count, error count, p50/p95/p99, and share of retained database time) and
+  attributes those executions back to the inbound request routes that issued them. Normalization collapses literals and
+  bind markers to `?`, so equivalent parameterized executions aggregate without exposing a bound value, and routes group
+  by the framework's own route template where the adapter has one, otherwise by matching the captured path against the
+  application's own declared route mappings, falling back to a masked path — never a raw query string or path-parameter
+  value. Correlation is trace-id first, then serving thread only where thread affinity is
+  reliable, then time window, with every tier requiring a unique candidate; work that cannot be placed stays in explicit
+  unattributed and ambiguous buckets. Rankings are bounded diagnostic evidence over the stated retention window, not
+  lifetime metrics, and both tables deep-link into the filtered execution list.
+- **New Database advisor rule `DB-RUNTIME-001`.** Reports statement shapes whose raw text changes between executions
+  while the normalized form stays the same and a changing literal sits in a filtering position — the signature of values
+  concatenated into SQL instead of bound. Evidence is counts and literal-free statement shapes only, with explicit
+  confidence and limitations; it is deliberately not a SQL-injection finding.
+- **The REST API panel now shows the application's declared error contract.** Spring `@ControllerAdvice`,
+  `@RestControllerAdvice` and `@ExceptionHandler` methods (MVC and WebFlux) and Quarkus Jakarta REST `@Provider`
+  `ExceptionMapper` implementations and `@ServerExceptionMapper` methods are catalogued in one framework-neutral,
+  pageable view: handled exception type, declaring component and method, scope, resolved precedence, declared
+  status, response-body category (including RFC 9457 `ProblemDetail`), and declared media types. The catalogue is a
+  pure declaration read — no handler is instantiated or invoked, no request is synthesized, and no exception is
+  thrown — so anything the declarations cannot prove is reported as unresolved instead of guessed. Only the
+  application's own declarations are catalogued, so an application that declares none shows an empty catalogue
+  rather than the framework's built-in handlers.
+- **The Exceptions panel links a retained failure to the handler that declares its response** when the exception
+  type and the retained request evidence identify exactly one declared handler, and the link opens the REST API
+  catalogue already filtered to that declaration. Ambiguous and unmatched failures stay unlinked rather than
+  inventing a relationship.
+- **Three evidence-based REST API advisor rules**: `RAPI-ERR-009` (declared exceptions with no handler),
+  `RAPI-ERR-010` (inconsistent error contracts across handlers for the same exception), and `RAPI-ERR-011`
+  (exception handlers that read stack traces into their response). The catalogue now ships 56 rules.
+
 ## [1.14.1] - 2026-08-20
 
 Patch release that restores Spring native and Quarkus Docker startup, fixes the native-image build bootstrap on AMD64,

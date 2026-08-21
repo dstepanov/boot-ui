@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
 import io.github.jdubois.bootui.core.dto.RestApiReport;
 import io.github.jdubois.bootui.core.dto.RestApiScanStatusDto;
 import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
+import io.github.jdubois.bootui.engine.errorcontract.ErrorContractService;
 import io.github.jdubois.bootui.engine.restapi.RestApiScanner;
 import java.util.List;
 import java.util.Set;
@@ -53,8 +54,8 @@ class RestApiControllerTests {
         when(dismissedRules.load()).thenReturn(Set.of("RAPI-IGNORED"));
         when(scanner.applyDismissals(eq(initial), eq(Set.of("RAPI-IGNORED")))).thenReturn(dismissedView);
 
-        MockMvc mvc =
-                standaloneSetup(new RestApiController(scanner, dismissedRules)).build();
+        MockMvc mvc = standaloneSetup(new RestApiController(scanner, dismissedRules, new ErrorContractService(null)))
+                .build();
 
         mvc.perform(get("/bootui/api/rest-api"))
                 .andExpect(status().isOk())
@@ -72,8 +73,8 @@ class RestApiControllerTests {
         when(dismissedRules.load()).thenReturn(Set.of());
         when(scanner.applyDismissals(eq(scanned), any())).thenReturn(scanned);
 
-        MockMvc mvc =
-                standaloneSetup(new RestApiController(scanner, dismissedRules)).build();
+        MockMvc mvc = standaloneSetup(new RestApiController(scanner, dismissedRules, new ErrorContractService(null)))
+                .build();
 
         mvc.perform(post("/bootui/api/rest-api/scan"))
                 .andExpect(status().isOk())

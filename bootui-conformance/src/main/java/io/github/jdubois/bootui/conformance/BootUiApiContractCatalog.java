@@ -122,6 +122,8 @@ public final class BootUiApiContractCatalog {
                             "clearEnabled", JsonType.BOOLEAN,
                             "managerCount", JsonType.INTEGER,
                             "cacheCount", JsonType.INTEGER,
+                            "tierCount", JsonType.INTEGER,
+                            "truncated", JsonType.BOOLEAN,
                             "managers", JsonType.ARRAY,
                             "operations", JsonType.ARRAY,
                             "warnings", JsonType.ARRAY)),

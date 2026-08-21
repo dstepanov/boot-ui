@@ -1,10 +1,13 @@
 package io.github.jdubois.bootui.autoconfigure.sqltrace;
 
+import io.github.jdubois.bootui.autoconfigure.activity.RequestCorrelationRegistry;
 import io.github.jdubois.bootui.autoconfigure.config.BootUiExposure;
 import io.github.jdubois.bootui.autoconfigure.stream.BootUiChangeStream;
+import io.github.jdubois.bootui.core.dto.SqlTraceInsightsReport;
 import io.github.jdubois.bootui.core.dto.SqlTraceRecordingRequest;
 import io.github.jdubois.bootui.core.dto.SqlTraceReport;
 import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
+import io.github.jdubois.bootui.spi.MappingProvider;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.event.ContextClosedEvent;
@@ -37,6 +40,8 @@ public class SqlTraceController {
 
     private final ObjectProvider<SqlTraceRecorder> recorderProvider;
     private final ObjectProvider<DataSource> dataSourceProvider;
+    private final ObjectProvider<RequestCorrelationRegistry> correlationProvider;
+    private final ObjectProvider<MappingProvider> mappingProvider;
     private final BootUiExposure exposure;
     private final BootUiChangeStream changeStream;
     private Runnable recorderUnsubscribe;
@@ -44,9 +49,13 @@ public class SqlTraceController {
     public SqlTraceController(
             ObjectProvider<SqlTraceRecorder> recorderProvider,
             ObjectProvider<DataSource> dataSourceProvider,
+            ObjectProvider<RequestCorrelationRegistry> correlationProvider,
+            ObjectProvider<MappingProvider> mappingProvider,
             BootUiExposure exposure) {
         this.recorderProvider = recorderProvider;
         this.dataSourceProvider = dataSourceProvider;
+        this.correlationProvider = correlationProvider;
+        this.mappingProvider = mappingProvider;
         this.exposure = exposure;
         this.changeStream = new BootUiChangeStream("sql-trace");
         SqlTraceRecorder recorder = recorderProvider.getIfAvailable();
@@ -77,6 +86,19 @@ public class SqlTraceController {
     @GetMapping
     public SqlTraceReport trace() {
         return SqlTraceControllerSupport.trace(recorderProvider, exposure, dataSourceProvider);
+    }
+
+    /**
+     * Slow-statement rankings and per-route database attribution over the retained trace window.
+     *
+     * <p>A separate read from {@link #trace()} on purpose: the chronological trace is polled and is read
+     * per profile by the per-request views, and it must stay cheap. Ranking and attribution are computed
+     * only when a user actually opens them, and they read the same retained buffer, so nothing extra is
+     * captured or kept to serve this.</p>
+     */
+    @GetMapping("/insights")
+    public SqlTraceInsightsReport insights() {
+        return SqlTraceInsightsSupport.servletInsights(recorderProvider, correlationProvider, mappingProvider);
     }
 
     @PostMapping("/clear")

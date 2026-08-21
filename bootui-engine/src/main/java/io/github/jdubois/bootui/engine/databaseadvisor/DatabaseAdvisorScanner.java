@@ -6,6 +6,7 @@ import io.github.jdubois.bootui.core.dto.DatabaseAdvisorReport;
 import io.github.jdubois.bootui.core.dto.DatabaseAdvisorRuleResultDto;
 import io.github.jdubois.bootui.core.dto.DatabaseAdvisorScanStatusDto;
 import io.github.jdubois.bootui.core.dto.DatabaseAdvisorSeverityCountDto;
+import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
 import io.github.jdubois.bootui.engine.action.ActionOperations;
 import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.hibernate.EntityDiscovery;
@@ -49,6 +50,7 @@ public final class DatabaseAdvisorScanner {
 
     private final Supplier<List<NamedDataSource>> dataSourceSupplier;
     private final Supplier<EntityDiscovery> entityDiscoverySupplier;
+    private final Supplier<List<SqlTraceEntryDto>> observedStatementSupplier;
     private final Clock clock;
     private final DatabaseAdvisorLimits limits;
     private final SingleFlightAction singleFlight = new SingleFlightAction();
@@ -57,17 +59,36 @@ public final class DatabaseAdvisorScanner {
             Supplier<List<NamedDataSource>> dataSourceSupplier,
             Supplier<EntityDiscovery> entityDiscoverySupplier,
             Clock clock) {
+        return using(dataSourceSupplier, entityDiscoverySupplier, List::of, clock);
+    }
+
+    /**
+     * The scanner with runtime statement evidence. {@code observedStatementSupplier} hands over the
+     * statements SQL Trace has already retained so the runtime-SQL rules have something to reason about;
+     * supply {@link List#of()} when SQL tracing is not available, and those rules skip rather than pass.
+     */
+    public static DatabaseAdvisorScanner using(
+            Supplier<List<NamedDataSource>> dataSourceSupplier,
+            Supplier<EntityDiscovery> entityDiscoverySupplier,
+            Supplier<List<SqlTraceEntryDto>> observedStatementSupplier,
+            Clock clock) {
         return new DatabaseAdvisorScanner(
-                dataSourceSupplier, entityDiscoverySupplier, clock, DatabaseAdvisorLimits.DEFAULTS);
+                dataSourceSupplier,
+                entityDiscoverySupplier,
+                observedStatementSupplier,
+                clock,
+                DatabaseAdvisorLimits.DEFAULTS);
     }
 
     private DatabaseAdvisorScanner(
             Supplier<List<NamedDataSource>> dataSourceSupplier,
             Supplier<EntityDiscovery> entityDiscoverySupplier,
+            Supplier<List<SqlTraceEntryDto>> observedStatementSupplier,
             Clock clock,
             DatabaseAdvisorLimits limits) {
         this.dataSourceSupplier = dataSourceSupplier;
         this.entityDiscoverySupplier = entityDiscoverySupplier;
+        this.observedStatementSupplier = observedStatementSupplier;
         this.clock = clock;
         this.limits = limits;
     }
@@ -78,7 +99,18 @@ public final class DatabaseAdvisorScanner {
             Supplier<EntityDiscovery> entityDiscoverySupplier,
             Clock clock,
             DatabaseAdvisorLimits limits) {
-        return new DatabaseAdvisorScanner(dataSourceSupplier, entityDiscoverySupplier, clock, limits);
+        return new DatabaseAdvisorScanner(dataSourceSupplier, entityDiscoverySupplier, List::of, clock, limits);
+    }
+
+    /** Test seam: explicit bounds plus runtime statement evidence. */
+    static DatabaseAdvisorScanner using(
+            Supplier<List<NamedDataSource>> dataSourceSupplier,
+            Supplier<EntityDiscovery> entityDiscoverySupplier,
+            Supplier<List<SqlTraceEntryDto>> observedStatementSupplier,
+            Clock clock,
+            DatabaseAdvisorLimits limits) {
+        return new DatabaseAdvisorScanner(
+                dataSourceSupplier, entityDiscoverySupplier, observedStatementSupplier, clock, limits);
     }
 
     public DatabaseAdvisorReport initialReport() {
@@ -130,7 +162,8 @@ public final class DatabaseAdvisorScanner {
         boolean hibernateAvailable = !entityDiscovery.entities().isEmpty();
         List<MappedEntityFacts> mappedEntities = HibernateSchemaBridge.toMappedEntities(entityDiscovery.entities());
 
-        DatabaseAdvisorContext context = new DatabaseAdvisorContext(schemas, hibernateAvailable, mappedEntities);
+        DatabaseAdvisorContext context =
+                new DatabaseAdvisorContext(schemas, hibernateAvailable, mappedEntities, safeObservedStatements());
         List<DatabaseAdvisorRuleResultDto> results = DatabaseAdvisorRuleRegistry.activeRules().stream()
                 .map(rule -> rule.evaluate(context))
                 .toList();
@@ -295,6 +328,19 @@ public final class DatabaseAdvisorScanner {
                     : discovery;
         } catch (RuntimeException | LinkageError ex) {
             return EntityDiscovery.empty(ex.getMessage());
+        }
+    }
+
+    /**
+     * Runtime statement evidence, fully guarded: SQL Trace being absent, disabled or failing must degrade the
+     * runtime-SQL rules to {@code SKIPPED}, never abort a schema scan that is otherwise perfectly readable.
+     */
+    private List<SqlTraceEntryDto> safeObservedStatements() {
+        try {
+            List<SqlTraceEntryDto> statements = observedStatementSupplier.get();
+            return statements == null ? List.of() : statements;
+        } catch (RuntimeException | LinkageError ex) {
+            return List.of();
         }
     }
 

@@ -1,6 +1,7 @@
 package io.github.jdubois.bootui.quarkus;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
 import io.github.jdubois.bootui.engine.activity.ActivityInstanceIds;
 import io.github.jdubois.bootui.engine.activity.ActivityPersistenceSettings;
 import io.github.jdubois.bootui.engine.activity.ActivityStoreFactory;
@@ -16,6 +17,7 @@ import io.github.jdubois.bootui.engine.datasource.ConnectionPoolService;
 import io.github.jdubois.bootui.engine.devservices.DevServicesReportService;
 import io.github.jdubois.bootui.engine.email.EmailCaptureService;
 import io.github.jdubois.bootui.engine.email.EmailStore;
+import io.github.jdubois.bootui.engine.errorcontract.ErrorContractService;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionsService;
 import io.github.jdubois.bootui.engine.flyway.FlywayService;
@@ -50,6 +52,7 @@ import io.github.jdubois.bootui.engine.safety.ApiTokenAuthenticator;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTaskRunStore;
 import io.github.jdubois.bootui.engine.scheduled.ScheduledTasksService;
 import io.github.jdubois.bootui.engine.security.SecurityEventBuffer;
+import io.github.jdubois.bootui.engine.sqltrace.SqlTraceRecorder;
 import io.github.jdubois.bootui.engine.support.InternalPackageMatcher;
 import io.github.jdubois.bootui.engine.telemetry.SelfTelemetryClassifier;
 import io.github.jdubois.bootui.engine.telemetry.SpanEnricher;
@@ -59,6 +62,7 @@ import io.github.jdubois.bootui.engine.web.HttpProbeService;
 import io.github.jdubois.bootui.quarkus.beans.QuarkusBeanProvider;
 import io.github.jdubois.bootui.quarkus.config.QuarkusConfigProvider;
 import io.github.jdubois.bootui.quarkus.databaseadvisor.QuarkusDatabaseAdvisorDataSourceProvider;
+import io.github.jdubois.bootui.quarkus.errorcontract.QuarkusErrorContractProvider;
 import io.github.jdubois.bootui.quarkus.health.QuarkusHealthGuidance;
 import io.github.jdubois.bootui.quarkus.hibernate.QuarkusHibernatePropertyLookup;
 import io.github.jdubois.bootui.quarkus.logging.QuarkusLoggerProvider;
@@ -495,8 +499,25 @@ public class BootUiEngineProducer {
      */
     @Produces
     @Singleton
-    public ExceptionsService exceptionsService(QuarkusExposurePolicy exposure) {
-        return new ExceptionsService(exposure);
+    public ExceptionsService exceptionsService(QuarkusExposurePolicy exposure, ErrorContractService errorContract) {
+        // The error-contract seam cross-links a retained failure to its declared exception mapper. It is the
+        // same conservative engine resolver Spring wires, so an ambiguous or unmatched failure stays unlinked
+        // on every stack.
+        return new ExceptionsService(exposure, errorContract);
+    }
+
+    /**
+     * The REST API panel's error-contract catalogue service. Discovery happens at build time in the
+     * deployment processor's {@code registerErrorContract} step (where the Jandex index carries the
+     * annotations and generic signatures Quarkus does not expose at runtime); the engine
+     * {@link ErrorContractService} owns classification, precedence resolution, ordering, bounding, query and
+     * paging. The concrete {@link QuarkusErrorContractProvider} is injected (not the SPI interface) so
+     * adding another provider later can never make this wiring ambiguous.
+     */
+    @Produces
+    @Singleton
+    public ErrorContractService errorContractService(QuarkusErrorContractProvider errorContractProvider) {
+        return new ErrorContractService(errorContractProvider);
     }
 
     /**
@@ -776,7 +797,9 @@ public class BootUiEngineProducer {
     @Produces
     @Singleton
     public DatabaseAdvisorScanner databaseAdvisorScanner(
-            @Any Instance<DataSource> dataSources, Instance<EntityDiscoverySource> entityDiscoverySources) {
+            @Any Instance<DataSource> dataSources,
+            Instance<EntityDiscoverySource> entityDiscoverySources,
+            Instance<SqlTraceRecorder> sqlTraceRecorders) {
         QuarkusDatabaseAdvisorDataSourceProvider dataSourceProvider =
                 new QuarkusDatabaseAdvisorDataSourceProvider(dataSources);
         Supplier<EntityDiscovery> discovery;
@@ -786,7 +809,13 @@ public class BootUiEngineProducer {
             EntityDiscoverySource source = entityDiscoverySources.get();
             discovery = source::discover;
         }
-        return DatabaseAdvisorScanner.using(dataSourceProvider::dataSources, discovery, Clock.systemUTC());
+        // Statement evidence for the runtime-SQL checks, read from the SQL Trace buffer that is already
+        // being filled. Empty when SQL Trace is off (no Agroal datasource wrapped), and those rules then
+        // skip rather than report a clean result they have no basis for.
+        Supplier<List<SqlTraceEntryDto>> observedStatements =
+                () -> sqlTraceRecorders.isResolvable() ? sqlTraceRecorders.get().entries(false) : List.of();
+        return DatabaseAdvisorScanner.using(
+                dataSourceProvider::dataSources, discovery, observedStatements, Clock.systemUTC());
     }
 
     /**

@@ -71,6 +71,47 @@ class BootUiQuarkusCacheCaptureTest {
                 .as("Micrometer cache metrics are overlaid for the 'orders' cache")
                 .isTrue();
 
+        // Tier metadata: one local Caffeine tier, described from the application's own configuration.
+        assertThat(root.path("tierCount").asInt(-1))
+                .as("the report counts the Caffeine tier")
+                .isEqualTo(1);
+        assertThat(root.path("truncated").asBoolean(true))
+                .as("a one-cache topology is never truncated")
+                .isFalse();
+        assertThat(ordersCache.path("opaque").asBoolean(true))
+                .as("a Caffeine cache is described, not opaque")
+                .isFalse();
+        assertThat(ordersCache.path("tiers")).as("exactly one tier").hasSize(1);
+        JsonNode tier = ordersCache.path("tiers").path(0);
+        assertThat(tier.path("id").asText(null)).as("tier id").isEqualTo("caffeine");
+        assertThat(tier.path("level").asInt(-1)).as("tier level").isZero();
+        assertThat(tier.path("name").asText(null)).as("tier name").isEqualTo("Caffeine");
+        assertThat(tier.path("implementationType").asText(""))
+                .as("tier implementation type")
+                .contains("Caffeine");
+        assertThat(tier.path("locality").asText(null)).as("tier locality").isEqualTo("LOCAL");
+        assertThat(tier.path("maximumSize").asLong(-1))
+                .as("the configured maximum size is read from the quoted per-cache key")
+                .isEqualTo(1000);
+        assertThat(tier.path("expiryPolicy").asText(null))
+                .as("Quarkus' own duration spelling is phrased like the Spring adapter phrases it")
+                .isEqualTo("expire after write 5m");
+        assertThat(tier.path("policyNote").asText(""))
+                .as("the panel says these limits are configuration, not a live reading")
+                .isNotBlank();
+
+        // Quarkus' public CaffeineCache exposes no statistics accessor, and BootUI says so instead of
+        // fabricating an all-zero series that would read like a stone-cold cache.
+        assertThat(ordersCache.path("statistics").path("available").asBoolean(true))
+                .as("provider statistics are honestly unavailable on Quarkus")
+                .isFalse();
+        assertThat(ordersCache.path("statistics").path("unavailableReason").asText(""))
+                .as("the reason names the alternative")
+                .contains("Micrometer");
+        assertThat(tier.path("statistics").path("available").asBoolean(true))
+                .as("the tier repeats the same unavailable state")
+                .isFalse();
+
         // The clear action (state-changing, behind the shared LocalhostGuard write floor) evicts every cache.
         Response clear =
                 probe().request("POST", "/bootui/api/cache/clear", JSON_HEADERS, "{\"all\":true,\"confirm\":true}");

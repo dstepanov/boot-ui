@@ -30,6 +30,49 @@ test.describe('SQL Trace + Live Activity capture (Quarkus)', () => {
     await expect(selectStatement).toBeVisible()
   })
 
+  test('ranks normalized statements and attributes them without claiming thread affinity', async ({openView, page}) => {
+    // Two executions of the same parameterized query with different values, plus a second route.
+    await page.request.get('/api/sample/product-search?term=console').catch(() => {})
+    await page.request.get('/api/sample/product-search?term=laptop').catch(() => {})
+    await page.request.get('/api/sample/products').catch(() => {})
+
+    await openView('sql-trace', 'SQL Trace')
+
+    const rankings = page.locator('section').filter({hasText: 'Statement rankings'}).first()
+    await expect(rankings).toBeVisible()
+    await expect(rankings).toContainText('not lifetime metrics')
+
+    const rankingRows = rankings.locator('table.sql-ranking-table tbody tr')
+    await expect(rankingRows.first()).toBeVisible()
+
+    // Normalization must have folded the bound values out of the ranked statement text.
+    const rankedSql = await rankings.locator('table.sql-ranking-table code.sql-text').allInnerTexts()
+    expect(rankedSql.length).toBeGreaterThan(0)
+    for (const sql of rankedSql) {
+      expect(sql).not.toContain("'")
+      expect(sql.toLowerCase()).not.toContain('console')
+      expect(sql.toLowerCase()).not.toContain('laptop')
+    }
+
+    const routes = page.locator('section').filter({hasText: 'Database time by request route'}).first()
+    await expect(routes).toBeVisible()
+    // The Vert.x event loop gives no reliable per-request thread, so this stack must NOT claim one.
+    await expect(routes).toContainText('trace id')
+    await expect(routes).not.toContainText('by serving thread')
+    // Unplaceable work stays visible in its own buckets rather than being attributed to a guess.
+    await expect(routes).toContainText('Unattributed')
+    await expect(routes).toContainText('Ambiguous')
+
+    // RESTEasy Reactive exposes no per-request route template, so the route key is either resolved from
+    // the application's own declared JAX-RS mappings or masked — and never carries the query string we
+    // sent above, nor a raw path-parameter value.
+    const routeKeys = await routes.locator('table.sql-route-table tbody code').allInnerTexts()
+    for (const key of routeKeys) {
+      expect(key).not.toContain('?')
+      expect(key).not.toContain('term=')
+    }
+  })
+
   test('Live Activity merges SQL and exceptions without the "not yet captured" banner', async ({openView, page}) => {
     // Exercise all three sources the Quarkus assembler now merges: SQL, an exception, and a request.
     await page.request.get('/api/sample/product-search?term=console').catch(() => {})

@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.github.jdubois.bootui.autoconfigure.BootUiProperties;
+import io.github.jdubois.bootui.autoconfigure.activity.RequestCorrelationRegistry;
 import io.github.jdubois.bootui.autoconfigure.config.BootUiExposure;
 import io.github.jdubois.bootui.core.ValueExposure;
 import io.github.jdubois.bootui.core.dto.SqlTraceRecordingRequest;
@@ -53,8 +54,35 @@ class SqlTraceControllerTests {
         return new BootUiExposure(properties);
     }
 
+    @SuppressWarnings("unchecked")
+    private ObjectProvider<RequestCorrelationRegistry> correlationProvider(RequestCorrelationRegistry registry) {
+        ObjectProvider<RequestCorrelationRegistry> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(registry);
+        return provider;
+    }
+
     private SqlTraceController controller(SqlTraceRecorder recorder, DataSource dataSource, ValueExposure exposure) {
-        return new SqlTraceController(recorderProvider(recorder), dataSourceProvider(dataSource), exposure(exposure));
+        return controller(recorder, dataSource, exposure, null);
+    }
+
+    private SqlTraceController controller(
+            SqlTraceRecorder recorder,
+            DataSource dataSource,
+            ValueExposure exposure,
+            RequestCorrelationRegistry correlations) {
+        return new SqlTraceController(
+                recorderProvider(recorder),
+                dataSourceProvider(dataSource),
+                correlationProvider(correlations),
+                mappingProvider(),
+                exposure(exposure));
+    }
+
+    @SuppressWarnings("unchecked")
+    private ObjectProvider<io.github.jdubois.bootui.spi.MappingProvider> mappingProvider() {
+        ObjectProvider<io.github.jdubois.bootui.spi.MappingProvider> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(null);
+        return provider;
     }
 
     @Test
