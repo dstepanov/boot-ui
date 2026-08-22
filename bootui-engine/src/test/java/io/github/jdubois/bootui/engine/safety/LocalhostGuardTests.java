@@ -357,6 +357,9 @@ class LocalhostGuardTests {
         assertThat(LocalhostGuard.extractOriginHost("http://localhost:5173")).isEqualTo("localhost");
         assertThat(LocalhostGuard.extractOriginHost(null)).isNull();
         assertThat(LocalhostGuard.extractOriginHost("   ")).isNull();
+        // The opaque origin is a sentinel for "no origin to compare", not a host named "null".
+        assertThat(LocalhostGuard.extractOriginHost("null")).isNull();
+        assertThat(LocalhostGuard.extractOriginHost("  NULL  ")).isNull();
         assertThat(LocalhostGuard.extractOriginHost("http://")).isNull();
         assertThat(LocalhostGuard.extractOriginHost("http://local host:8080")).isNull();
         assertThat(LocalhostGuard.extractOriginHost("http://[::1]junk")).isNull();
@@ -386,6 +389,14 @@ class LocalhostGuardTests {
     @Test
     void allowsStateChangingRequestWithoutOrigin() {
         assertAllowed(guard.decide(post("127.0.0.1", "localhost:8080", null, null), defaults()));
+    }
+
+    @Test
+    void rejectsOpaqueOriginOnStateChangingRequest() {
+        // "Origin: null" is the serialized opaque origin (sandboxed iframe, privacy-sensitive
+        // redirect), not a host named "null": it can never match the request host, so fail closed.
+        assertRejected(
+                guard.decide(post("127.0.0.1", "localhost:8080", "null", null), defaults()), Reason.CROSS_SITE_WRITE);
     }
 
     @Test

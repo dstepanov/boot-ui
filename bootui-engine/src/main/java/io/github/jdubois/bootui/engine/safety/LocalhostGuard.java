@@ -64,6 +64,12 @@ public final class LocalhostGuard {
 
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS");
 
+    /**
+     * The serialized opaque origin. Browsers send it for privacy-sensitive contexts (sandboxed
+     * iframes, some redirects); it is a sentinel meaning "no origin to compare", never a hostname.
+     */
+    private static final String OPAQUE_ORIGIN = "null";
+
     /** Shared immutable allow result for direct trust (loopback or a trusted range). */
     private static final Allow ALLOW_DIRECT = new Allow(true, false, null);
 
@@ -233,13 +239,17 @@ public final class LocalhostGuard {
      * (sent by some non-browser clients) is tolerated; the remaining authority is then parsed by the
      * same strict {@link #parseAuthority} used for {@code Host}, so both defenses share one parser
      * across all adapters. Returns {@code null} when no authority can be read — including for the
-     * opaque {@code null} origin — which the cross-site check treats as "not same-site".
+     * opaque {@code null} origin, which is a sentinel for "no origin to compare" rather than a host
+     * named {@code null} — which the cross-site check treats as "not same-site".
      */
     static String extractOriginHost(String value) {
         if (value == null) {
             return null;
         }
         String candidate = value.trim();
+        if (candidate.equalsIgnoreCase(OPAQUE_ORIGIN)) {
+            return null;
+        }
         int scheme = candidate.indexOf("://");
         if (scheme >= 0) {
             candidate = candidate.substring(scheme + 3);
