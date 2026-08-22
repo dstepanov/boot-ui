@@ -9,6 +9,7 @@ import io.github.jdubois.bootui.core.dto.HttpProbeResponse;
 import io.github.jdubois.bootui.spi.ServerPortSupplier;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -443,6 +444,47 @@ class HttpProbeServiceTests {
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> bounded.probe(new HttpProbeRequest("POST", "/", body, null)));
+    }
+
+    @Test
+    void unpairedSurrogatesAreChargedTheWorstCaseReplacementSize() {
+        // A lone surrogate is malformed input: String.getBytes(UTF_8) substitutes one '?' byte, but an
+        // encoder replacing with U+FFFD emits three. The budget charges the larger value so malformed
+        // input can never encode to more bytes than it was charged for.
+        HttpProbeService tiny = new HttpProbeService(() -> serverPort(), limits(6));
+        echo("/unpaired");
+
+        HttpProbeResponse accepted = tiny.probe(new HttpProbeRequest("POST", "/unpaired", "\uD83D\uD83D", null));
+        assertThat(accepted.status())
+                .as("2 lone surrogates = 6 charged bytes, exactly at the limit")
+                .isEqualTo(200);
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> tiny.probe(new HttpProbeRequest("POST", "/unpaired", "\uD83D\uD83D\uD83D", null)))
+                .withMessage("HTTP Probe request body exceeds the maximum of 6 bytes");
+    }
+
+    @Test
+    void utf8CountingNeverUnderchargesRelativeToTheEncodedBody() {
+        // Invariant guard for the counter against the real encoder: a body whose encoded form is larger
+        // than the budget must always be rejected. (The lone-surrogate worst case is pinned separately
+        // above, because String.getBytes happens to agree with the smaller charge there.)
+        String[] samples = {
+            "plain-ascii",
+            "€ euro",
+            "\uD83D\uDE80 rocket",
+            "\uD83D lone-high",
+            "trailing-high\uD83D",
+            "\uDE80 lone-low",
+            "mixed \uD83D\uDE80 \uD83D € x"
+        };
+        for (String sample : samples) {
+            int encoded = sample.getBytes(StandardCharsets.UTF_8).length;
+            HttpProbeService tiny = new HttpProbeService(() -> serverPort(), limits(encoded - 1));
+            assertThatIllegalArgumentException()
+                    .as("a body encoding to %d bytes must not pass a %d-byte budget", encoded, encoded - 1)
+                    .isThrownBy(() -> tiny.probe(new HttpProbeRequest("POST", "/", sample, null)));
+        }
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

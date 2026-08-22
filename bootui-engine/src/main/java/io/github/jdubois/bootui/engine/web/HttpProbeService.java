@@ -182,6 +182,14 @@ public class HttpProbeService {
      * Counts the UTF-8 size of {@code value}, stopping as soon as {@code cap} is exceeded (in which
      * case {@code cap + 1} is returned). Nothing is encoded or copied, so measuring an oversized value
      * costs a bounded scan instead of a full byte-array allocation.
+     *
+     * <p>The count is deliberately conservative rather than an exact prediction of one encoder's
+     * output: an unpaired surrogate is malformed input whose encoded size depends on the replacement
+     * policy in play. {@link String#getBytes(java.nio.charset.Charset)} — what
+     * {@link HttpRequest.BodyPublishers#ofString(String, java.nio.charset.Charset)} uses — substitutes a
+     * single {@code '?'} byte, but an encoder configured to replace with {@code U+FFFD} emits three.
+     * Counting the larger value keeps the budget fail-closed under every policy, so malformed input can
+     * never encode to more bytes than it was charged for.
      */
     private static long utf8Bytes(String value, int cap) {
         if (value == null || value.isEmpty()) {
@@ -201,10 +209,9 @@ public class HttpProbeService {
                 // a surrogate pair is a single supplementary code point: four UTF-8 bytes
                 total += 4;
                 i++;
-            } else if (Character.isSurrogate(current)) {
-                // an unpaired surrogate is malformed and encodes as a single replacement byte
-                total += 1;
             } else {
+                // three bytes for a BMP code point, and for an unpaired surrogate the worst-case
+                // replacement (U+FFFD) rather than the single '?' byte String.getBytes would emit
                 total += 3;
             }
             if (total > cap) {
