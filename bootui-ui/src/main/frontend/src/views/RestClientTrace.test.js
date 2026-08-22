@@ -206,6 +206,50 @@ describe('RestClientTrace', () => {
     expect(toggle.attributes('aria-expanded')).toBe('false')
   })
 
+  it('renders a placeholder for a failed call whose message metadata-only hid', async () => {
+    const failed = traceReport()
+    failed.entries = [
+      {
+        ...failed.entries[0],
+        id: 3,
+        status: null,
+        success: false,
+        errorMessage: null
+      }
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(failed)))
+
+    wrapper = mount(RestClientTrace, {props: {panel: {id: 'rest-client-trace'}}})
+    await flushPromises()
+
+    await wrapper.get('tr.rest-row button.rest-row-toggle').trigger('click')
+    const details = wrapper.get('tr.rest-detail-row').text()
+    expect(details).toContain('Error')
+    expect(details).toContain('—')
+  })
+
+  it('renders the sanitized error message for a failed call when it is present', async () => {
+    const failed = traceReport()
+    failed.entries = [
+      {
+        ...failed.entries[0],
+        id: 4,
+        status: null,
+        success: false,
+        errorMessage: 'I/O error on GET request for "https://******@api.example.com/orders"'
+      }
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(failed)))
+
+    wrapper = mount(RestClientTrace, {props: {panel: {id: 'rest-client-trace'}}})
+    await flushPromises()
+
+    await wrapper.get('tr.rest-row button.rest-row-toggle').trigger('click')
+    const details = wrapper.get('tr.rest-detail-row').text()
+    expect(details).toContain('I/O error on GET request')
+    expect(details).toContain('******@api.example.com')
+  })
+
   it('filters calls by URI text', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(traceReport())))
 

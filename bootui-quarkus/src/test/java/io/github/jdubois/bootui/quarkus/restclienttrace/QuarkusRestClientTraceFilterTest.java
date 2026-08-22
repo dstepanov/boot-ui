@@ -45,6 +45,55 @@ class QuarkusRestClientTraceFilterTest {
     }
 
     @Test
+    void sanitizesSemicolonSeparatedAndMatrixParametersBeforeStorage() {
+        RestClientTraceRecorder recorder = recorder(false);
+        QuarkusRestClientTraceFilter filter = new QuarkusRestClientTraceFilter(recorder);
+        ClientRequestContext request = request(
+                "GET", URI.create("https://example.test/orders;token=pathsecret/42?page=2;api_key=querysecret"));
+
+        filter.filter(request);
+        filter.filter(request, response(200));
+
+        assertThat(recorder.recent()).singleElement().satisfies(call -> {
+            assertThat(call.uri())
+                    .isEqualTo("https://example.test/orders;token=******/42?page=2;api_key=******")
+                    .doesNotContain("pathsecret", "querysecret");
+            assertThat(call.path()).isEqualTo("/orders;token=******/42");
+        });
+    }
+
+    @Test
+    void keepsAPathSegmentThatSharesASensitiveParameterName() {
+        RestClientTraceRecorder recorder = recorder(false);
+        QuarkusRestClientTraceFilter filter = new QuarkusRestClientTraceFilter(recorder);
+        ClientRequestContext request = request("GET", URI.create("https://example.test/api/token/refresh;v=1"));
+
+        filter.filter(request);
+        filter.filter(request, response(200));
+
+        assertThat(recorder.recent())
+                .singleElement()
+                .satisfies(call -> assertThat(call.path()).isEqualTo("/api/token/refresh;v=1"));
+    }
+
+    @Test
+    void sanitizesANestedCredentialBearingRedirectBeforeStorage() {
+        RestClientTraceRecorder recorder = recorder(false);
+        QuarkusRestClientTraceFilter filter = new QuarkusRestClientTraceFilter(recorder);
+        ClientRequestContext request =
+                request("GET", URI.create("https://example.test/go?redirect=https%3A%2F%2Falice%3Apw%40host%2Fcb"));
+
+        filter.filter(request);
+        filter.filter(request, response(200));
+
+        assertThat(recorder.recent())
+                .singleElement()
+                .satisfies(call -> assertThat(call.uri())
+                        .isEqualTo("https://example.test/go?redirect=******")
+                        .doesNotContain("alice", "pw"));
+    }
+
+    @Test
     void captureFailuresNeverEscapeIntoTheApplicationCall() {
         RestClientTraceRecorder recorder = recorder(false);
         QuarkusRestClientTraceFilter filter = new QuarkusRestClientTraceFilter(recorder);
