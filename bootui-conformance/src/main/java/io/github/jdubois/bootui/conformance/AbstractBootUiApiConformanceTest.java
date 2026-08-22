@@ -17,6 +17,7 @@ import java.io.UncheckedIOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -1138,6 +1139,73 @@ public abstract class AbstractBootUiApiConformanceTest {
         }
         if (!failures.isEmpty()) {
             fail("Confirmation-gated actions did not return 400 as expected: " + failures);
+        }
+    }
+
+    @Test
+    void httpProbeInputBudgetsAreEnforcedIdenticallyOnEveryAdapter() {
+        // The HTTP Probe request body, path and headers are bounded by the shared engine HttpProbeLimits
+        // *before* any outbound work happens. Every adapter must therefore reject over-limit input with
+        // the same canonical HTTP 400 + {"error": ...} body, and still run a probe that sits exactly on
+        // the ceiling. A probe that runs stays an HTTP 200 envelope, whatever the probed path answers.
+        assumeTrue(isPanelUsableInLiveManifest("http-probe"), "http-probe panel is not available here");
+
+        BootUiHttpProbe probe = probe();
+        Map<String, String> headers = stateChangingHeaders(probe);
+        String probePath = "/__bootui_conformance_probe__";
+
+        Response accepted = probe.request(
+                "POST", api("/http-probe"), headers, probeRequest("POST", probePath, "a".repeat(65536), 0));
+        assertThat(accepted.status())
+                .as("a probe request body exactly at the 65536-byte ceiling must still run")
+                .isEqualTo(200);
+
+        assertProbeRejection(
+                probe,
+                headers,
+                probeRequest("POST", probePath, "a".repeat(65537), 0),
+                "HTTP Probe request body exceeds the maximum of 65536 bytes");
+        assertProbeRejection(
+                probe,
+                headers,
+                probeRequest("GET", "/" + "p".repeat(2048), null, 0),
+                "HTTP Probe request path exceeds the maximum of 2048 bytes");
+        assertProbeRejection(
+                probe,
+                headers,
+                probeRequest("GET", probePath, null, 51),
+                "HTTP Probe request exceeds the maximum of 50 request headers");
+    }
+
+    private void assertProbeRejection(
+            BootUiHttpProbe probe, Map<String, String> headers, String body, String expectedError) {
+        Response response = probe.request("POST", api("/http-probe"), headers, body);
+        assertThat(response.status())
+                .as("over-limit probe input must be rejected with the canonical 400")
+                .isEqualTo(400);
+        assertThat(response.isJson())
+                .as("the probe rejection body must be JSON (%s)", response.contentType())
+                .isTrue();
+        assertThat(response.json().path("error").asText())
+                .as("the probe rejection carries the canonical engine message")
+                .isEqualTo(expectedError);
+    }
+
+    /** Builds a probe request payload with an optional body and {@code headerCount} synthetic headers. */
+    private static String probeRequest(String method, String path, String body, int headerCount) {
+        Map<String, String> headers = new LinkedHashMap<>();
+        for (int i = 0; i < headerCount; i++) {
+            headers.put("X-Conformance-" + i, "v");
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("method", method);
+        payload.put("path", path);
+        payload.put("body", body);
+        payload.put("headers", headers);
+        try {
+            return MAPPER.writeValueAsString(payload);
+        } catch (IOException ex) {
+            throw new UncheckedIOException("Failed to build HTTP probe test payload", ex);
         }
     }
 
