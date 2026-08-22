@@ -136,7 +136,8 @@ public class HttpProbeService {
             throw new IllegalArgumentException(
                     "HTTP Probe request method exceeds the maximum of " + limits.maxMethodBytes() + " bytes");
         }
-        if (exceedsUtf8Bytes(request.path(), limits.maxPathBytes())) {
+        String normalizedPath = normalizePath(request.path());
+        if (exceedsUtf8Bytes(normalizedPath, limits.maxPathBytes())) {
             throw new IllegalArgumentException(
                     "HTTP Probe request path exceeds the maximum of " + limits.maxPathBytes() + " bytes");
         }

@@ -330,6 +330,17 @@ class HttpProbeServiceTests {
     }
 
     @Test
+    void pathWithoutLeadingSlashThatExceedsTheLimitAfterNormalizationIsRejected() {
+        HttpProbeService bounded = boundedService();
+        String pathWithoutSlash = "p".repeat(HttpProbeLimits.DEFAULT_MAX_PATH_BYTES);
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> bounded.probe(new HttpProbeRequest("GET", pathWithoutSlash, null, null)))
+                .withMessage("HTTP Probe request path exceeds the maximum of " + HttpProbeLimits.DEFAULT_MAX_PATH_BYTES
+                        + " bytes");
+    }
+
+    @Test
     void methodOverTheLimitIsRejected() {
         HttpProbeService bounded = boundedService();
         String method = "M".repeat(HttpProbeLimits.DEFAULT_MAX_METHOD_BYTES + 1);

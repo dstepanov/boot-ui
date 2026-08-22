@@ -17,6 +17,7 @@ import java.io.UncheckedIOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -1192,24 +1193,20 @@ public abstract class AbstractBootUiApiConformanceTest {
 
     /** Builds a probe request payload with an optional body and {@code headerCount} synthetic headers. */
     private static String probeRequest(String method, String path, String body, int headerCount) {
-        StringBuilder json = new StringBuilder("{\"method\":\"")
-                .append(method)
-                .append("\",\"path\":\"")
-                .append(path)
-                .append("\",\"body\":");
-        if (body == null) {
-            json.append("null");
-        } else {
-            json.append('"').append(body).append('"');
-        }
-        json.append(",\"headers\":{");
+        Map<String, String> headers = new LinkedHashMap<>();
         for (int i = 0; i < headerCount; i++) {
-            if (i > 0) {
-                json.append(',');
-            }
-            json.append("\"X-Conformance-").append(i).append("\":\"v\"");
+            headers.put("X-Conformance-" + i, "v");
         }
-        return json.append("}}").toString();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("method", method);
+        payload.put("path", path);
+        payload.put("body", body);
+        payload.put("headers", headers);
+        try {
+            return MAPPER.writeValueAsString(payload);
+        } catch (IOException ex) {
+            throw new UncheckedIOException("Failed to build HTTP probe test payload", ex);
+        }
     }
 
     @Test
