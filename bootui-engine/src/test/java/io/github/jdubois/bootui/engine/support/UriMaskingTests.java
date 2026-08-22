@@ -225,4 +225,52 @@ class UriMaskingTests {
                         true, ValueExposure.MASKED))
                 .isEqualTo("https://api.example.com/go?redirect=https%3A%2F%2Fexample.com%2Fhome");
     }
+
+    @Test
+    void masksMatrixValuesUnderMetadataOnlyEvenWhenMaskSecretsIsOff() {
+        assertThat(UriMasking.maskUri("https://h/orders;token=secret", false, ValueExposure.METADATA_ONLY))
+                .isEqualTo("https://h/orders;token=" + SecretMasker.MASKED_VALUE);
+        assertThat(UriMasking.maskPath("/orders;token=secret", false, ValueExposure.METADATA_ONLY))
+                .isEqualTo("/orders;token=" + SecretMasker.MASKED_VALUE);
+    }
+
+    @Test
+    void keepsMatrixValuesVisibleUnderMaskedExposureWhenMaskSecretsIsOff() {
+        assertThat(UriMasking.maskUri("https://h/orders;token=secret", false, ValueExposure.MASKED))
+                .isEqualTo("https://h/orders;token=secret");
+    }
+
+    @Test
+    void neverMasksAPathSegmentThatSharesASensitiveParameterName() {
+        assertThat(UriMasking.maskUri("https://h/api/token/refresh;v=1", true, ValueExposure.MASKED))
+                .isEqualTo("https://h/api/token/refresh;v=1");
+        assertThat(UriMasking.maskPath("/api/token/refresh;v=1", true, ValueExposure.MASKED))
+                .isEqualTo("/api/token/refresh;v=1");
+    }
+
+    @Test
+    void masksAnEncodedSensitiveNameCarryingAMalformedEscape() {
+        assertThat(UriMasking.maskUri("https://h/x?%70assword%ZZ=secret", true, ValueExposure.MASKED))
+                .isEqualTo("https://h/x?%70assword%ZZ=" + SecretMasker.MASKED_VALUE);
+    }
+
+    @Test
+    void masksANestedCredentialUrlEndingInAMalformedEscape() {
+        assertThat(UriMasking.maskUri(
+                        "https://h/x?redirect=https%3A%2F%2Falice%3Apw%40host%2Fcb%ZZ", true, ValueExposure.MASKED))
+                .isEqualTo("https://h/x?redirect=" + SecretMasker.MASKED_VALUE);
+    }
+
+    @Test
+    void masksASensitiveNameLongerThanAnyMatcherBound() {
+        String name = "a".repeat(200) + "password";
+        assertThat(UriMasking.maskUri("https://h/x?" + name + "=secret", true, ValueExposure.MASKED))
+                .isEqualTo("https://h/x?" + name + "=" + SecretMasker.MASKED_VALUE);
+    }
+
+    @Test
+    void masksASecretAfterAnHtmlEscapedAmpersandBecauseBothCharactersSeparate() {
+        assertThat(UriMasking.maskUri("https://h/x?page=2&amp;access_token=secret", true, ValueExposure.MASKED))
+                .isEqualTo("https://h/x?page=2&amp;access_token=" + SecretMasker.MASKED_VALUE);
+    }
 }

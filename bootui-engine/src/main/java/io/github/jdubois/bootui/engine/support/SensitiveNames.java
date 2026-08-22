@@ -1,7 +1,7 @@
 package io.github.jdubois.bootui.engine.support;
 
 import io.github.jdubois.bootui.core.SecretMasker;
-import java.net.URLDecoder;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Set;
@@ -51,8 +51,9 @@ public final class SensitiveNames {
 
     /**
      * Percent-decodes a query-string component, treating {@code +} as an encoded space the way an
-     * {@code application/x-www-form-urlencoded} reader does. Malformed escapes are returned unchanged rather
-     * than raising, so masking never fails on hand-written input.
+     * {@code application/x-www-form-urlencoded} reader does. Decoding is lenient and per-escape: a malformed
+     * sequence such as {@code %ZZ} is preserved literally while the valid escapes around it are still decoded, so
+     * an encoded sensitive name cannot hide behind one bad escape. Never raises.
      */
     public static String decodeQueryComponent(String value) {
         return decode(value, true);
@@ -70,15 +71,47 @@ public final class SensitiveNames {
         if (value == null || value.isEmpty()) {
             return value;
         }
-        boolean encoded = value.indexOf('%') >= 0 || (formEncoded && value.indexOf('+') >= 0);
-        if (!encoded) {
+        if (value.indexOf('%') < 0 && !(formEncoded && value.indexOf('+') >= 0)) {
             return value;
         }
-        try {
-            String input = formEncoded ? value : value.replace("+", "%2B");
-            return URLDecoder.decode(input, StandardCharsets.UTF_8);
-        } catch (RuntimeException malformedEncoding) {
-            return value;
+        StringBuilder decoded = new StringBuilder(value.length());
+        ByteArrayOutputStream pending = new ByteArrayOutputStream();
+        int index = 0;
+        while (index < value.length()) {
+            char current = value.charAt(index);
+            int escaped = current == '%' ? decodeEscape(value, index) : -1;
+            if (escaped >= 0) {
+                pending.write(escaped);
+                index += 3;
+                continue;
+            }
+            flush(pending, decoded);
+            decoded.append(formEncoded && current == '+' ? ' ' : current);
+            index++;
         }
+        flush(pending, decoded);
+        return decoded.toString();
+    }
+
+    /** The byte encoded by the {@code %XX} escape at {@code index}, or {@code -1} when it is malformed. */
+    private static int decodeEscape(String value, int index) {
+        if (index + 2 >= value.length()) {
+            return -1;
+        }
+        int high = Character.digit(value.charAt(index + 1), 16);
+        int low = Character.digit(value.charAt(index + 2), 16);
+        return high < 0 || low < 0 ? -1 : (high << 4) + low;
+    }
+
+    /**
+     * Appends the buffered escape bytes as UTF-8. Invalid byte sequences become the replacement character rather
+     * than raising, because masking must never fail on hand-written or corrupted input.
+     */
+    private static void flush(ByteArrayOutputStream pending, StringBuilder decoded) {
+        if (pending.size() == 0) {
+            return;
+        }
+        decoded.append(pending.toString(StandardCharsets.UTF_8));
+        pending.reset();
     }
 }

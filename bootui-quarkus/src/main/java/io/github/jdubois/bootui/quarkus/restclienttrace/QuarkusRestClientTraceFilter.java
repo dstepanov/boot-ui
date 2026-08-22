@@ -2,7 +2,9 @@ package io.github.jdubois.bootui.quarkus.restclienttrace;
 
 import io.github.jdubois.bootui.core.SecretMasker;
 import io.github.jdubois.bootui.engine.restclienttrace.RestClientTraceRecorder;
+import io.github.jdubois.bootui.engine.support.CredentialRedaction;
 import io.github.jdubois.bootui.engine.support.SensitiveNames;
+import io.github.jdubois.bootui.engine.support.UriMasking;
 import jakarta.ws.rs.client.ClientRequestContext;
 import jakarta.ws.rs.client.ClientRequestFilter;
 import jakarta.ws.rs.client.ClientResponseContext;
@@ -116,40 +118,64 @@ public final class QuarkusRestClientTraceFilter implements ClientRequestFilter, 
         return new CapturedUri(value.toString(), uri.getHost(), path);
     }
 
+    /**
+     * Sanitizes a path before storage: a segment whose own name looks like a secret is masked, and each segment's
+     * {@code ;name=value} matrix parameters are sanitized like query parameters (the segment name itself is never
+     * treated as a parameter). Splitting matches display-time masking through {@link UriMasking}.
+     */
     private static String sanitizePath(String rawPath) {
         if (rawPath == null || rawPath.isEmpty()) {
             return rawPath;
         }
         String[] segments = rawPath.split("/", -1);
         for (int i = 0; i < segments.length; i++) {
-            if (SECRET_MASKER.shouldMask("path-segment", decode(segments[i], false))) {
-                segments[i] = SecretMasker.MASKED_VALUE;
-            }
+            segments[i] = sanitizeSegment(segments[i]);
         }
         return String.join("/", segments);
     }
 
+    private static String sanitizeSegment(String segment) {
+        int firstSemicolon = segment.indexOf(';');
+        String name = firstSemicolon < 0 ? segment : segment.substring(0, firstSemicolon);
+        String sanitizedName =
+                SECRET_MASKER.shouldMask("path-segment", decode(name, false)) ? SecretMasker.MASKED_VALUE : name;
+        if (firstSemicolon < 0) {
+            return sanitizedName;
+        }
+        return sanitizedName
+                + ';'
+                + UriMasking.maskParameters(
+                        segment.substring(firstSemicolon + 1), QuarkusRestClientTraceFilter::sanitizeParameter);
+    }
+
+    /**
+     * Sanitizes a query before storage. Parameters are split on {@code &} and the legacy {@code ;} through
+     * {@link UriMasking}, so a semicolon-separated secret cannot reach the recorder raw.
+     */
     private static String sanitizeQuery(String rawQuery) {
         if (rawQuery == null || rawQuery.isEmpty()) {
             return rawQuery;
         }
-        String[] parameters = rawQuery.split("&", -1);
-        for (int i = 0; i < parameters.length; i++) {
-            int equals = parameters[i].indexOf('=');
-            if (equals < 0) {
-                String decoded = decode(parameters[i], true);
-                if (SECRET_MASKER.shouldMask(decoded, decoded)) {
-                    parameters[i] = SecretMasker.MASKED_VALUE;
-                }
-                continue;
-            }
-            String rawName = parameters[i].substring(0, equals);
-            String rawValue = parameters[i].substring(equals + 1);
-            if (SECRET_MASKER.shouldMask(decode(rawName, true), decode(rawValue, true))) {
-                parameters[i] = rawName + '=' + SecretMasker.MASKED_VALUE;
-            }
+        return UriMasking.maskParameters(rawQuery, QuarkusRestClientTraceFilter::sanitizeParameter);
+    }
+
+    /**
+     * Sanitizes one {@code name=value} parameter. Unlike display-time masking this also inspects the value, since
+     * Quarkus never retains a secret it could later reveal under {@code bootui.expose-values=FULL}.
+     */
+    private static String sanitizeParameter(String parameter) {
+        int equals = parameter.indexOf('=');
+        if (equals < 0) {
+            String decoded = decode(parameter, true);
+            return SECRET_MASKER.shouldMask(decoded, decoded) ? SecretMasker.MASKED_VALUE : parameter;
         }
-        return String.join("&", parameters);
+        String rawName = parameter.substring(0, equals);
+        String rawValue = parameter.substring(equals + 1);
+        if (SECRET_MASKER.shouldMask(decode(rawName, true), decode(rawValue, true))
+                || CredentialRedaction.carriesCredentials(rawValue)) {
+            return rawName + '=' + SecretMasker.MASKED_VALUE;
+        }
+        return parameter;
     }
 
     private static String decode(String value, boolean formEncoded) {

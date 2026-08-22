@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.engine.support;
 
 import io.github.jdubois.bootui.core.SecretMasker;
 import io.github.jdubois.bootui.core.ValueExposure;
+import java.util.function.UnaryOperator;
 
 /**
  * Shared display-time masking for a captured request URI, used identically by the HTTP Exchanges panel
@@ -79,19 +80,60 @@ public final class UriMasking {
         if (exposure == ValueExposure.METADATA_ONLY) {
             return null;
         }
-        return maskParameterList(rawQuery, maskSecrets && exposure != ValueExposure.FULL);
+        return maskParameterList(rawQuery, masksByPolicy(maskSecrets, exposure));
     }
 
     /**
      * Masks {@code ;name=value} matrix parameters carried by a URI path per the live exposure policy. Path
      * segments themselves are preserved, since a path is the request's identity rather than one of its values —
-     * including under {@link ValueExposure#METADATA_ONLY}, where the sensitive matrix values are still masked.
+     * including under {@link ValueExposure#METADATA_ONLY}, which drops query and fragment values outright and so
+     * masks matrix values regardless of {@code maskSecrets}.
      */
     public static String maskPath(String path, boolean maskSecrets, ValueExposure exposure) {
         if (path == null || path.indexOf(';') < 0) {
             return path;
         }
-        return maskMatrixParameters(path, maskSecrets && exposure != ValueExposure.FULL);
+        return maskMatrixParameters(path, masksByPolicy(maskSecrets, exposure));
+    }
+
+    /**
+     * Applies {@code parameterMasker} to each {@code &}/{@code ;}-separated parameter of {@code parameters},
+     * preserving the original separators. Exposed so an adapter that sanitizes before storage — the Quarkus REST
+     * Client filter, which applies a stricter value-aware rule — splits parameters exactly the way display-time
+     * masking does instead of keeping its own splitter.
+     */
+    public static String maskParameters(String parameters, UnaryOperator<String> parameterMasker) {
+        if (parameters == null || parameters.isEmpty()) {
+            return parameters;
+        }
+        StringBuilder masked = new StringBuilder(parameters.length());
+        int start = 0;
+        for (int i = 0; i <= parameters.length(); i++) {
+            if (i < parameters.length() && parameters.charAt(i) != '&' && parameters.charAt(i) != ';') {
+                continue;
+            }
+            masked.append(parameterMasker.apply(parameters.substring(start, i)));
+            if (i < parameters.length()) {
+                masked.append(parameters.charAt(i));
+            }
+            start = i + 1;
+        }
+        return masked.toString();
+    }
+
+    /**
+     * Applies {@code parameterMasker} to the {@code ;name=value} matrix parameters of every segment of
+     * {@code path}, leaving each segment's own name untouched.
+     */
+    public static String maskPathMatrixParameters(String path, UnaryOperator<String> parameterMasker) {
+        if (path == null || path.indexOf(';') < 0) {
+            return path;
+        }
+        String[] segments = path.split("/", -1);
+        for (int i = 0; i < segments.length; i++) {
+            segments[i] = maskSegmentMatrixParameters(segments[i], parameterMasker);
+        }
+        return String.join("/", segments);
     }
 
     /**
@@ -103,7 +145,7 @@ public final class UriMasking {
         if (uri == null) {
             return null;
         }
-        boolean policyMasking = maskSecrets && exposure != ValueExposure.FULL;
+        boolean policyMasking = masksByPolicy(maskSecrets, exposure);
         int fragmentIndex = uri.indexOf('#');
         String beforeFragment = fragmentIndex < 0 ? uri : uri.substring(0, fragmentIndex);
         String fragment = fragmentIndex < 0 ? null : uri.substring(fragmentIndex + 1);
@@ -126,6 +168,18 @@ public final class UriMasking {
         return display.toString();
     }
 
+    /**
+     * Whether the live policy masks secret-named values right now. {@link ValueExposure#METADATA_ONLY} always
+     * does — it hides values wholesale — while {@link ValueExposure#FULL} never does and
+     * {@link ValueExposure#MASKED} defers to {@code bootui.mask-secrets}.
+     */
+    private static boolean masksByPolicy(boolean maskSecrets, ValueExposure exposure) {
+        if (exposure == ValueExposure.METADATA_ONLY) {
+            return true;
+        }
+        return maskSecrets && exposure != ValueExposure.FULL;
+    }
+
     /** Index at which the path begins, i.e. just past the {@code //authority} component when there is one. */
     private static int pathStart(String base) {
         int separator = base.indexOf("//");
@@ -140,31 +194,26 @@ public final class UriMasking {
     }
 
     private static String maskMatrixParameters(String path, boolean policyMasking) {
-        if (path.indexOf(';') < 0) {
-            return path;
+        return maskPathMatrixParameters(path, parameter -> maskParameter(parameter, policyMasking));
+    }
+
+    /**
+     * Masks one path segment's matrix parameters. The segment name before the first {@code ;} is left alone: a
+     * path segment is part of the request's identity, so a route such as {@code /api/token/refresh} must stay
+     * readable even though {@code token} is a sensitive <em>parameter</em> name.
+     */
+    private static String maskSegmentMatrixParameters(String segment, UnaryOperator<String> parameterMasker) {
+        int firstSemicolon = segment.indexOf(';');
+        if (firstSemicolon < 0) {
+            return segment;
         }
-        String[] segments = path.split("/", -1);
-        for (int i = 0; i < segments.length; i++) {
-            segments[i] = maskParameterList(segments[i], policyMasking);
-        }
-        return String.join("/", segments);
+        return segment.substring(0, firstSemicolon + 1)
+                + maskParameters(segment.substring(firstSemicolon + 1), parameterMasker);
     }
 
     /** Masks each {@code &}/{@code ;}-separated {@code name=value} parameter, preserving the separators used. */
     private static String maskParameterList(String parameters, boolean policyMasking) {
-        StringBuilder masked = new StringBuilder(parameters.length());
-        int start = 0;
-        for (int i = 0; i <= parameters.length(); i++) {
-            if (i < parameters.length() && parameters.charAt(i) != '&' && parameters.charAt(i) != ';') {
-                continue;
-            }
-            masked.append(maskParameter(parameters.substring(start, i), policyMasking));
-            if (i < parameters.length()) {
-                masked.append(parameters.charAt(i));
-            }
-            start = i + 1;
-        }
-        return masked.toString();
+        return maskParameters(parameters, parameter -> maskParameter(parameter, policyMasking));
     }
 
     private static String maskParameter(String parameter, boolean policyMasking) {
@@ -175,27 +224,9 @@ public final class UriMasking {
         }
         String value = parameter.substring(equalsIndex + 1);
         boolean sensitiveByName = policyMasking && SensitiveNames.isSensitive(name);
-        if (sensitiveByName || carriesCredentials(value)) {
+        if (sensitiveByName || CredentialRedaction.carriesCredentials(value)) {
             return name + '=' + SecretMasker.MASKED_VALUE;
         }
         return parameter;
-    }
-
-    /**
-     * True when a parameter value embeds a URL that itself carries credentials — a nested {@code user:secret@host}
-     * or a sensitive nested parameter — as it commonly does in a percent-encoded {@code redirect=} target. Checked
-     * both as captured and percent-decoded, and masked on the same unconditional footing as authority user-info,
-     * because a nested credential is never the value the developer meant to inspect.
-     */
-    private static boolean carriesCredentials(String value) {
-        if (value.isEmpty()) {
-            return false;
-        }
-        if (!CredentialRedaction.redactMessage(value).equals(value)) {
-            return true;
-        }
-        String decoded = SensitiveNames.decodeQueryComponent(value);
-        return !decoded.equals(value)
-                && !CredentialRedaction.redactMessage(decoded).equals(decoded);
     }
 }

@@ -101,4 +101,53 @@ class CredentialRedactionTests {
         String message = "404 for https://host/users/alice@example.com";
         assertThat(CredentialRedaction.redactMessage(message)).isEqualTo(message);
     }
+
+    @Test
+    void redactMessageMasksASensitiveNameLongerThanAnyMatcherBound() {
+        String name = "a".repeat(200) + "password";
+        assertThat(CredentialRedaction.redactMessage("failed https://h/x?" + name + "=secret"))
+                .isEqualTo("failed https://h/x?" + name + "=******");
+    }
+
+    @Test
+    void redactMessageMasksAnEncodedNestedCredentialUrl() {
+        assertThat(CredentialRedaction.redactMessage(
+                        "failed https://h/x?redirect=https%3A%2F%2Falice%3Apw%40host%2Fcb"))
+                .isEqualTo("failed https://h/x?redirect=******");
+    }
+
+    @Test
+    void redactMessageMasksAnEncodedNestedSensitiveParameter() {
+        assertThat(CredentialRedaction.redactMessage(
+                        "failed https://h/x?redirect=https%3A%2F%2Fevil%2Fcb%3Faccess_token%3Dnested"))
+                .isEqualTo("failed https://h/x?redirect=******");
+    }
+
+    @Test
+    void redactMessageMasksAnEncodedSensitiveNameCarryingAMalformedEscape() {
+        assertThat(CredentialRedaction.redactMessage("failed https://h/x?%70assword%ZZ=secret"))
+                .isEqualTo("failed https://h/x?%70assword%ZZ=******");
+    }
+
+    @Test
+    void redactMessageMasksASecretAfterAnHtmlEscapedAmpersand() {
+        assertThat(CredentialRedaction.redactMessage("failed https://h/x?page=2&amp;access_token=secret"))
+                .isEqualTo("failed https://h/x?page=2&amp;access_token=******");
+    }
+
+    @Test
+    void redactMessageLeavesAnOrdinaryNestedRedirectVisible() {
+        String message = "failed https://h/x?redirect=https%3A%2F%2Fexample.com%2Fhome";
+        assertThat(CredentialRedaction.redactMessage(message)).isEqualTo(message);
+    }
+
+    @Test
+    void carriesCredentialsDetectsNestedCredentialsAndIgnoresOrdinaryValues() {
+        assertThat(CredentialRedaction.carriesCredentials("https%3A%2F%2Falice%3Apw%40host%2Fcb"))
+                .isTrue();
+        assertThat(CredentialRedaction.carriesCredentials("https://example.com/home"))
+                .isFalse();
+        assertThat(CredentialRedaction.carriesCredentials("")).isFalse();
+        assertThat(CredentialRedaction.carriesCredentials(null)).isFalse();
+    }
 }

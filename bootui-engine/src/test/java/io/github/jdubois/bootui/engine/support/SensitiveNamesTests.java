@@ -71,4 +71,28 @@ class SensitiveNamesTests {
         assertThat(SensitiveNames.decodeQueryComponent("%2570assword")).isEqualTo("%70assword");
         assertThat(SensitiveNames.isSensitive("%2570assword")).isFalse();
     }
+
+    @Test
+    void decodesValidEscapesEvenWhenAMalformedSequenceIsPresent() {
+        assertThat(SensitiveNames.decodeQueryComponent("%70assword%ZZ")).isEqualTo("password%ZZ");
+        assertThat(SensitiveNames.isSensitive("%70assword%ZZ")).isTrue();
+        assertThat(SensitiveNames.isSensitive("api%2Dkey%")).isTrue();
+    }
+
+    @Test
+    void decodesAValueEndingInATruncatedEscape() {
+        assertThat(SensitiveNames.decodeQueryComponent("%70assword%7")).isEqualTo("password%7");
+        assertThat(SensitiveNames.isSensitive("%70assword%7")).isTrue();
+    }
+
+    @Test
+    void replacesInvalidUtf8BytesInsteadOfRaising() {
+        assertThat(SensitiveNames.decodeQueryComponent("%FF")).isEqualTo("\uFFFD");
+        assertThat(SensitiveNames.isSensitive("%FF")).isFalse();
+    }
+
+    @Test
+    void acceptsBothHexCases() {
+        assertThat(SensitiveNames.decodeQueryComponent("%2f%2F")).isEqualTo("//");
+    }
 }
