@@ -58,7 +58,11 @@ export function describeLoadError(error, context = null) {
   }
 }
 
-export function formatLoadError(error, context = null) {
-  const description = describeLoadError(error, context)
+export function formatLoadErrorDescription(description) {
+  if (!description) return ''
   return description.serverUnreachable ? `${description.title}: ${description.message}` : description.message
+}
+
+export function formatLoadError(error, context = null) {
+  return formatLoadErrorDescription(describeLoadError(error, context))
 }

@@ -244,5 +244,24 @@ describe('RestApi', () => {
 
       expect(wrapper.text()).toContain('Only the first 500 declarations are catalogued')
     })
+
+    it('renders a readable message when the contract endpoint fails', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((url) =>
+          Promise.resolve(
+            String(url).includes('error-contract')
+              ? new Response('', {status: 404})
+              : new Response(JSON.stringify(restApiReport([], 0)), {status: 200})
+          )
+        )
+      )
+
+      const wrapper = mount(RestApi)
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('Could not load the declared error contract: HTTP 404')
+      expect(wrapper.text()).not.toContain('[object Object]')
+    })
   })
 })
