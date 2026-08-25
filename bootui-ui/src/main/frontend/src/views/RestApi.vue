@@ -1,6 +1,7 @@
 <script setup>
 import {computed, onMounted, ref, watch} from 'vue'
 import {useRoute} from 'vue-router'
+import {formatLoadErrorDescription} from '../utils/loadError.js'
 import {useAdvisorPanel} from '../utils/useAdvisorPanel.js'
 import {panelProps} from '../utils/panelState.js'
 import {useServerPagedList} from '../utils/useServerPagedList.js'
@@ -38,6 +39,7 @@ const contract = useServerPagedList(
 )
 
 const contractReport = contract.data
+const contractErrorMessage = computed(() => formatLoadErrorDescription(contract.error.value))
 const contractAvailable = computed(() => contractReport.value?.available === true)
 const contractEntries = contract.items
 const contractFilterActive = computed(() => contractFilter.value.trim().length > 0)
@@ -326,9 +328,9 @@ watch(contractFilter, () => contract.scheduleReload())
           variant="info"
         />
         <UnavailableState
-          v-else-if="contract.error.value && !contractReport"
+          v-else-if="contractErrorMessage && !contractReport"
           icon="bi-exclamation-triangle"
-          :message="contract.error.value"
+          :message="contractErrorMessage"
           variant="warning"
         />
         <PanelSkeleton v-else-if="!contract.hasLoaded.value" label="Loading the declared error contract…" />
