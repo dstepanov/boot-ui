@@ -7,8 +7,26 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-08-24
+
+Feature release that adds two panels — Fault Tolerance and WebSockets — on Spring MVC, Spring WebFlux, and Quarkus,
+explains where every meter comes from in the Metrics panel, ranks retained SQL and attributes it to request routes,
+catalogues the application's declared error contract in the REST API panel, and discloses cache tiers and native hit
+ratios. It also closes several masking, activation, and input-bounding gaps found by review.
+
 ### Added
 
+- **Fault Tolerance panel.** A new `fault-tolerance` panel and stable `GET /bootui/api/fault-tolerance` contract report
+  the fault tolerance policies an application declares and the bounded, metadata-only events those policies produce
+  (retries, rejections, timeouts, short circuits, and circuit breaker state transitions), which also join Live Activity
+  as a new `FAULT_TOLERANCE` entry type. Spring reads Resilience4j registries (circuit breaker, retry, rate limiter,
+  bulkhead, thread-pool bulkhead, time limiter) and Spring Retry `@Retryable` metadata through an additive
+  `RetryListener`; Quarkus scans SmallRye Fault Tolerance declarations from the Jandex index at build time, resolves the
+  MicroProfile enabled switches so a policy turned off in configuration is reported as such, and captures live named
+  circuit-breaker state transitions. Every fault tolerance import is class-presence or capability gated, so an
+  application without those libraries is unaffected. Capture is observation only: BootUI never opens, closes, resets or
+  otherwise mutates a policy, and never records arguments, return values, payloads or raw exception messages.
+  Configurable under `bootui.fault-tolerance.*`.
 - **WebSockets panel.** A new `websockets` panel and stable `/bootui/api/websockets/**` contract report the WebSocket
   endpoints an application declares, the connections currently open against them, STOMP subscriptions, and a bounded log
   of recent frame **metadata** — direction, frame type, destination, and payload size. Message payloads are never read,
@@ -65,6 +83,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Three evidence-based REST API advisor rules**: `RAPI-ERR-009` (declared exceptions with no handler),
   `RAPI-ERR-010` (inconsistent error contracts across handlers for the same exception), and `RAPI-ERR-011`
   (exception handlers that read stack traces into their response). The catalogue now ships 56 rules.
+- **Cache tiering and native hit ratios in the Cache panel on Spring MVC, Spring WebFlux, and Quarkus.** Each cache row
+  now discloses the backing tiers the cache implementation describes through its own public API and the effectiveness
+  counters that implementation records natively. Ratios are derived only from counters an adapter declared comparable
+  (same family, scope and window) and only when their sum is positive, so nothing is fabricated: an implementation that
+  describes no storage reports no tier, and Quarkus reports statistics as unavailable because the public `CaffeineCache`
+  API exposes none. The report is bounded (100 managers, 500 caches, 20 tiers) and states truncation in its warnings.
+
+### Changed
+
+- **Panel presentation and frontend loading.** Shared panel surfaces were refined and panel-specific accessibility,
+  filtering, contrast, and responsive presentation issues resolved across the console. The confirmation dialog and the
+  Bootstrap collapse code are now deferred until the surfaces that need them are used, with deferred dialog state
+  synchronized on mount so no confirmation is missed while the chunk loads.
 
 ### Fixed
 
@@ -81,9 +112,33 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   path and honors the configured UI/API mounts, instead of matching the literal `/bootui` prefix each on its own. A
   request logged by Quarkus' own error handler while serving the console is excluded too. Application paths that merely
   resemble the console, such as `/bootui-other`, stay captured (#857).
+- **Core DTO collections are defensively copied, so a published report cannot change underneath a reader.** Every
+  collection component in `io.github.jdubois.bootui.core.dto` is now copied in its record's compact constructor,
+  including the loosely typed `Object` components that carry framework-supplied JSON payloads (OTLP span attribute
+  values, health details, configuration values and defaults, and nested Dev Services connection details). The copies
+  preserve iteration order and tolerate null elements, so serialized bytes stay identical across Jackson 3 and
+  Jackson 2 — in particular the two map components that previously used hash-ordered `Map.copyOf` and emitted unstable
+  JSON key order. A reflective contract test now fails the build for any future DTO that forgets the copy (#855).
 
 ### Security
 
+- **The packaged BootUI console is no longer reachable on Spring MVC and Spring WebFlux when BootUI is deactivated.**
+  Deactivation unwired every BootUI route, but the compiled Vue bundle ships under `META-INF/resources/bootui/`, which
+  is a default static-resource location on both stacks, so a production deployment still answered `GET
+  /bootui/index.html` and every asset under it with `200`. A shell guard, gated on the exact negation of the activation
+  condition and on the packaged shell being present, now answers `404` for the reserved `/bootui` namespace — matching
+  the Quarkus adapter. Both filters match the decoded application path, so encoded and matrix-parameter spellings such
+  as `/%62ootui/index.html` cannot resolve to the bundle, and they cover the prefixes derived from relocatable static
+  handling (`spring.mvc.servlet.path`, `spring.mvc.static-path-pattern`, `spring.webflux.static-path-pattern`) (#856).
+- **URI credentials are masked and REST-client transport errors are sanitized.** HTTP Exchanges and REST Client Trace
+  masked query-parameter values but copied the URI authority verbatim, so a `user:secret@host` credential reached the
+  browser, URL-encoded sensitive parameter names such as `%70assword` evaded the keyword check, fragments were never
+  masked, and a REST-client error message — which routinely quotes the whole request URL — was serialized raw. Inbound
+  and outbound URIs now share one engine decision for "is this name sensitive?" (matched as captured *and*
+  percent-decoded, leniently per escape so one malformed escape cannot hide the rest) and one masking helper: authority
+  user-info is removed unconditionally, even under `FULL`, while query, matrix (`;`), and fragment parameters follow the
+  live exposure policy, and `METADATA_ONLY` always masks. A value carrying a nested credential-bearing URL is masked on
+  the unconditional footing, with bounded nesting depth, in free-text error messages as well (#858).
 - **Malformed `Host` headers are rejected instead of being treated as absent.** `LocalhostGuard` now parses the
   request authority strictly on Spring MVC, Spring WebFlux, and Quarkus: an empty host (`:`), trailing junk after an
   IPv6 literal (`[::1]junk`), an unterminated bracket, a non-numeric port, a scheme or path smuggled into the header
@@ -91,6 +146,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fails the DNS-rebinding allow-list with the canonical `Host` 403 rather than falling through the intentional
   missing-`Host` allowance. Only a genuinely absent or blank `Host` keeps that allowance, and an unparsable `Origin`
   still fails closed on state-changing requests (#859).
+- **The serialized opaque `Origin` is treated as "no origin" rather than as a host named `null`.** `null` parses as a
+  perfectly valid registered name, so an opaque origin looked like a concrete host and could have compared equal on a
+  deployment that allow-listed that name. It is now matched case-insensitively before parsing, and an opaque `Origin`
+  on a state-changing request is rejected as cross-site.
+- **The HTTP Probe byte budget fails closed on malformed input.** An unpaired surrogate is now charged the worst-case
+  UTF-8 replacement size (3 bytes) instead of the single byte `String.getBytes(UTF_8)` happens to emit today, so
+  malformed input can never encode to more bytes than it was charged for under any replacement policy.
 
 ## [1.14.1] - 2026-08-20
 
@@ -1574,7 +1636,8 @@ First tagged BootUI alpha. Highlights of the harden-all-visible-panels scope:
   request history, distributed tracing, multi-service orchestration, and live
   Docker Compose lifecycle control are intentionally out of scope for the alpha.
 
-[Unreleased]: https://github.com/jdubois/boot-ui/compare/v1.14.1...HEAD
+[Unreleased]: https://github.com/jdubois/boot-ui/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/jdubois/boot-ui/compare/v1.14.1...v1.15.0
 [1.14.1]: https://github.com/jdubois/boot-ui/compare/v1.14.0...v1.14.1
 [1.14.0]: https://github.com/jdubois/boot-ui/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/jdubois/boot-ui/compare/v1.13.0...v1.13.1

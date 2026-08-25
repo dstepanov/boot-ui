@@ -89,6 +89,8 @@ const panelOrder = [
   ['vulnerabilities', 'Vulnerabilities'],
   ['scheduled', 'Scheduled Tasks'],
   ['rest-client-trace', 'REST Client'],
+  ['fault-tolerance', 'Fault Tolerance'],
+  ['websockets', 'WebSockets'],
   ['ai', 'AI Framework'],
   ['cache', 'Cache'],
   ['activity', 'Live Activity'],
@@ -1813,6 +1815,117 @@ const architecture = {
       'Log the exception through the project logging facade instead of calling printStackTrace().'
     )
   ]
+}
+
+const errorContractEntry = (
+  id,
+  exceptionType,
+  component,
+  method,
+  scope,
+  scopeTarget,
+  precedence,
+  status,
+  bodyCategory,
+  bodyType
+) => ({
+  id,
+  exceptionType,
+  exceptionSimpleName: exceptionType.substring(exceptionType.lastIndexOf('.') + 1),
+  component,
+  componentSimpleName: component.substring(component.lastIndexOf('.') + 1),
+  method,
+  source: 'EXCEPTION_HANDLER',
+  scope,
+  scopeTarget,
+  precedence,
+  precedenceSource: scope === 'GLOBAL' ? 'ORDER_ANNOTATION' : 'CONTROLLER_LOCAL',
+  status,
+  statusSource: 'RESPONSE_STATUS',
+  bodyCategory,
+  bodyType,
+  produces: ['application/problem+json']
+})
+
+const restApiErrorContract = {
+  available: true,
+  unavailableReason: null,
+  total: 5,
+  handlerCount: 5,
+  componentCount: 2,
+  exceptionTypeCount: 5,
+  truncated: false,
+  maxEntries: 200,
+  entries: [
+    errorContractEntry(
+      'ec-1',
+      'io.github.jdubois.bootui.sample.ProductNotFoundException',
+      'io.github.jdubois.bootui.sample.SampleExceptionHandler',
+      'handleProductNotFound',
+      'GLOBAL',
+      '@RestControllerAdvice',
+      0,
+      '404 NOT_FOUND',
+      'PROBLEM_DETAIL',
+      'org.springframework.http.ProblemDetail'
+    ),
+    errorContractEntry(
+      'ec-2',
+      'jakarta.validation.ConstraintViolationException',
+      'io.github.jdubois.bootui.sample.SampleExceptionHandler',
+      'handleConstraintViolation',
+      'GLOBAL',
+      '@RestControllerAdvice',
+      0,
+      '400 BAD_REQUEST',
+      'PROBLEM_DETAIL',
+      'org.springframework.http.ProblemDetail'
+    ),
+    errorContractEntry(
+      'ec-3',
+      'org.springframework.web.bind.MethodArgumentNotValidException',
+      'io.github.jdubois.bootui.sample.SampleExceptionHandler',
+      'handleValidationErrors',
+      'GLOBAL',
+      '@RestControllerAdvice',
+      0,
+      '400 BAD_REQUEST',
+      'CUSTOM_BODY',
+      'io.github.jdubois.bootui.sample.ValidationErrorResponse'
+    ),
+    errorContractEntry(
+      'ec-4',
+      'java.lang.IllegalStateException',
+      'io.github.jdubois.bootui.sample.SampleExceptionHandler',
+      'handleIllegalState',
+      'GLOBAL',
+      '@RestControllerAdvice',
+      0,
+      '409 CONFLICT',
+      'PROBLEM_DETAIL',
+      'org.springframework.http.ProblemDetail'
+    ),
+    errorContractEntry(
+      'ec-5',
+      'io.github.jdubois.bootui.sample.OrderRejectedException',
+      'io.github.jdubois.bootui.sample.OrderController',
+      'handleOrderRejected',
+      'CONTROLLER',
+      'OrderController',
+      -1,
+      '422 UNPROCESSABLE_ENTITY',
+      'PROBLEM_DETAIL',
+      'org.springframework.http.ProblemDetail'
+    )
+  ],
+  page: {
+    total: 5,
+    matched: 5,
+    offset: 0,
+    limit: 50,
+    returned: 5,
+    hasMore: false
+  }
 }
 
 const restApi = {
@@ -4561,6 +4674,572 @@ const transactions = {
   warnings: []
 }
 
+const faultTolerance = {
+  faultTolerancePresent: true,
+  unavailableReason: null,
+  captureEnabled: true,
+  providers: ['resilience4j', 'spring-retry'],
+  totalPolicies: 6,
+  policyCountsByType: {
+    CIRCUIT_BREAKER: 1,
+    RETRY: 2,
+    RATE_LIMITER: 1,
+    BULKHEAD: 1,
+    TIME_LIMITER: 1
+  },
+  policies: [
+    {
+      name: 'inventory-service',
+      type: 'CIRCUIT_BREAKER',
+      provider: 'resilience4j',
+      source: 'CircuitBreakerRegistry',
+      target: 'InventoryClient.fetchStock(String)',
+      state: 'HALF_OPEN',
+      settings: [
+        {name: 'failureRateThreshold', value: '50%', provenance: 'CONFIGURED'},
+        {name: 'slidingWindowSize', value: '8', provenance: 'CONFIGURED'},
+        {name: 'minimumNumberOfCalls', value: '4', provenance: 'CONFIGURED'},
+        {name: 'waitDurationInOpenState', value: 'PT10S', provenance: 'CONFIGURED'},
+        {name: 'permittedCallsInHalfOpenState', value: '10', provenance: 'DEFAULT'}
+      ],
+      metrics: {
+        successfulCalls: 412,
+        failedCalls: 37,
+        retriedCalls: null,
+        rejectedCalls: null,
+        timeoutCalls: null,
+        shortCircuitedCalls: 6,
+        failureRatePercent: 51.4,
+        bufferedCalls: 8
+      }
+    },
+    {
+      name: 'inventory-service',
+      type: 'RETRY',
+      provider: 'resilience4j',
+      source: 'RetryRegistry',
+      target: 'InventoryClient.fetchStock(String)',
+      state: null,
+      settings: [
+        {name: 'maxAttempts', value: '3', provenance: 'CONFIGURED'},
+        {name: 'waitDuration', value: 'PT0.05S', provenance: 'CONFIGURED'}
+      ],
+      metrics: {
+        successfulCalls: 389,
+        failedCalls: 11,
+        retriedCalls: 46,
+        rejectedCalls: null,
+        timeoutCalls: null,
+        shortCircuitedCalls: null,
+        failureRatePercent: null,
+        bufferedCalls: null
+      }
+    },
+    {
+      name: 'FlakyInventoryClient.refresh',
+      type: 'RETRY',
+      provider: 'spring-retry',
+      source: '@Retryable',
+      target: 'FlakyInventoryClient.refresh()',
+      state: null,
+      settings: [
+        {name: 'maxAttempts', value: '3', provenance: 'CONFIGURED'},
+        {name: 'retryFor', value: 'java.lang.IllegalStateException', provenance: 'CONFIGURED'},
+        {name: 'backoff.delay', value: 'PT0.05S', provenance: 'CONFIGURED'},
+        {name: 'backoff.multiplier', value: '1.0', provenance: 'DEFAULT'}
+      ],
+      metrics: {
+        successfulCalls: null,
+        failedCalls: null,
+        retriedCalls: null,
+        rejectedCalls: null,
+        timeoutCalls: null,
+        shortCircuitedCalls: null,
+        failureRatePercent: null,
+        bufferedCalls: null
+      }
+    },
+    {
+      name: 'catalog-api',
+      type: 'RATE_LIMITER',
+      provider: 'resilience4j',
+      source: 'RateLimiterRegistry',
+      target: 'CatalogApiClient.search(String)',
+      state: null,
+      settings: [
+        {name: 'limitForPeriod', value: '20', provenance: 'CONFIGURED'},
+        {name: 'limitRefreshPeriod', value: 'PT1S', provenance: 'CONFIGURED'},
+        {name: 'timeoutDuration', value: 'PT0.25S', provenance: 'CONFIGURED'}
+      ],
+      metrics: {
+        successfulCalls: 1284,
+        failedCalls: null,
+        retriedCalls: null,
+        rejectedCalls: 9,
+        timeoutCalls: null,
+        shortCircuitedCalls: null,
+        failureRatePercent: null,
+        bufferedCalls: null
+      }
+    },
+    {
+      name: 'report-export',
+      type: 'BULKHEAD',
+      provider: 'resilience4j',
+      source: 'BulkheadRegistry',
+      target: 'ReportExportService.export(ReportRequest)',
+      state: null,
+      settings: [
+        {name: 'maxConcurrentCalls', value: '4', provenance: 'CONFIGURED'},
+        {name: 'maxWaitDuration', value: 'PT0.01S', provenance: 'CONFIGURED'}
+      ],
+      metrics: {
+        successfulCalls: 96,
+        failedCalls: null,
+        retriedCalls: null,
+        rejectedCalls: 3,
+        timeoutCalls: null,
+        shortCircuitedCalls: null,
+        failureRatePercent: null,
+        bufferedCalls: null
+      }
+    },
+    {
+      name: 'slow-backend',
+      type: 'TIME_LIMITER',
+      provider: 'resilience4j',
+      source: 'TimeLimiterRegistry',
+      target: 'SlowBackendClient.call()',
+      state: null,
+      settings: [
+        {name: 'timeoutDuration', value: 'PT2S', provenance: 'CONFIGURED'},
+        {name: 'cancelRunningFuture', value: 'true', provenance: 'DEFAULT'}
+      ],
+      metrics: {
+        successfulCalls: 58,
+        failedCalls: 2,
+        retriedCalls: null,
+        rejectedCalls: null,
+        timeoutCalls: 4,
+        shortCircuitedCalls: null,
+        failureRatePercent: null,
+        bufferedCalls: null
+      }
+    }
+  ],
+  maxEvents: 200,
+  events: [
+    {
+      id: 'ft-1',
+      timestamp: nowMillis - 4 * 1000,
+      policyName: 'inventory-service',
+      policyType: 'CIRCUIT_BREAKER',
+      provider: 'resilience4j',
+      target: 'InventoryClient.fetchStock(String)',
+      outcome: 'STATE_TRANSITION',
+      attempt: null,
+      durationMillis: null,
+      failureCategory: null,
+      state: 'HALF_OPEN',
+      traceId
+    },
+    {
+      id: 'ft-2',
+      timestamp: nowMillis - 11 * 1000,
+      policyName: 'inventory-service',
+      policyType: 'CIRCUIT_BREAKER',
+      provider: 'resilience4j',
+      target: 'InventoryClient.fetchStock(String)',
+      outcome: 'SHORT_CIRCUITED',
+      attempt: null,
+      durationMillis: 0,
+      failureCategory: 'CallNotPermittedException',
+      state: null,
+      traceId
+    },
+    {
+      id: 'ft-3',
+      timestamp: nowMillis - 26 * 1000,
+      policyName: 'FlakyInventoryClient.refresh',
+      policyType: 'RETRY',
+      provider: 'spring-retry',
+      target: 'FlakyInventoryClient.refresh()',
+      outcome: 'RETRY',
+      attempt: 2,
+      durationMillis: 63,
+      failureCategory: 'IllegalStateException',
+      state: null,
+      traceId
+    },
+    {
+      id: 'ft-4',
+      timestamp: nowMillis - 31 * 1000,
+      policyName: 'slow-backend',
+      policyType: 'TIME_LIMITER',
+      provider: 'resilience4j',
+      target: 'SlowBackendClient.call()',
+      outcome: 'TIMEOUT',
+      attempt: null,
+      durationMillis: 2000,
+      failureCategory: 'TimeoutException',
+      state: null,
+      traceId
+    },
+    {
+      id: 'ft-5',
+      timestamp: nowMillis - 48 * 1000,
+      policyName: 'catalog-api',
+      policyType: 'RATE_LIMITER',
+      provider: 'resilience4j',
+      target: 'CatalogApiClient.search(String)',
+      outcome: 'REJECTED',
+      attempt: null,
+      durationMillis: 250,
+      failureCategory: 'RequestNotPermitted',
+      state: null,
+      traceId
+    },
+    {
+      id: 'ft-6',
+      timestamp: nowMillis - 63 * 1000,
+      policyName: 'inventory-service',
+      policyType: 'RETRY',
+      provider: 'resilience4j',
+      target: 'InventoryClient.fetchStock(String)',
+      outcome: 'RETRY_EXHAUSTED',
+      attempt: 3,
+      durationMillis: 214,
+      failureCategory: 'ConnectException',
+      state: null,
+      traceId
+    },
+    {
+      id: 'ft-7',
+      timestamp: nowMillis - 74 * 1000,
+      policyName: 'report-export',
+      policyType: 'BULKHEAD',
+      provider: 'resilience4j',
+      target: 'ReportExportService.export(ReportRequest)',
+      outcome: 'REJECTED',
+      attempt: null,
+      durationMillis: 10,
+      failureCategory: 'BulkheadFullException',
+      state: null,
+      traceId
+    },
+    {
+      id: 'ft-8',
+      timestamp: nowMillis - 96 * 1000,
+      policyName: 'inventory-service',
+      policyType: 'CIRCUIT_BREAKER',
+      provider: 'resilience4j',
+      target: 'InventoryClient.fetchStock(String)',
+      outcome: 'STATE_TRANSITION',
+      attempt: null,
+      durationMillis: null,
+      failureCategory: null,
+      state: 'OPEN',
+      traceId
+    }
+  ],
+  warnings: []
+}
+
+const webSockets = {
+  available: true,
+  unavailableReason: null,
+  framework: 'Spring WebSocket + STOMP',
+  capturing: true,
+  frameCaptureSupported: true,
+  frameCaptureUnavailableReason: null,
+  sessionTrackingSupported: true,
+  sessionTrackingUnavailableReason: null,
+  brokerPrefixes: ['/topic', '/queue'],
+  applicationDestinationPrefixes: ['/app'],
+  userDestinationPrefix: '/user',
+  maxEndpoints: 200,
+  maxSessions: 200,
+  maxSubscriptions: 500,
+  maxActivityEntries: 500,
+  endpointsTruncated: false,
+  sessionsTruncated: false,
+  subscriptionsTruncated: false,
+  endpoints: [
+    {
+      id: 'stomp-ws',
+      path: '/ws',
+      kind: 'STOMP',
+      handlerClass: 'org.springframework.web.socket.messaging.SubProtocolWebSocketHandler',
+      subprotocols: ['v12.stomp', 'v11.stomp', 'v10.stomp'],
+      sockJs: true,
+      allowedOrigins: ['http://localhost:*'],
+      interceptors: ['HttpSessionHandshakeInterceptor'],
+      callbacks: [
+        {
+          type: 'MESSAGE_MAPPING',
+          destination: '/app/chat',
+          declaringClass: 'io.github.jdubois.bootui.sample.websocket.SampleChatController',
+          method: 'echo',
+          messageType: 'SampleChatMessage'
+        },
+        {
+          type: 'SEND_TO',
+          destination: '/topic/chat',
+          declaringClass: 'io.github.jdubois.bootui.sample.websocket.SampleChatController',
+          method: 'echo',
+          messageType: 'SampleChatMessage'
+        }
+      ],
+      openSessions: 2,
+      inboundProcessingMode: 'CLIENT_INBOUND_CHANNEL',
+      captureInstalled: true
+    },
+    {
+      id: 'raw-echo',
+      path: '/echo',
+      kind: 'RAW',
+      handlerClass: 'io.github.jdubois.bootui.sample.websocket.SampleEchoWebSocketHandler',
+      subprotocols: [],
+      sockJs: false,
+      allowedOrigins: ['http://localhost:*'],
+      interceptors: [],
+      callbacks: [],
+      openSessions: 1,
+      inboundProcessingMode: 'HANDLER',
+      captureInstalled: true
+    }
+  ],
+  sessions: [
+    {
+      id: 'a41f0c',
+      endpointId: 'stomp-ws',
+      path: '/ws',
+      open: true,
+      openedAt: nowMillis - 8 * 60 * 1000,
+      lastActivityAt: nowMillis - 3 * 1000,
+      subprotocol: 'v12.stomp',
+      remoteAddress: '127.0.0.1',
+      localAddress: '127.0.0.1:8080',
+      messagesIn: 148,
+      messagesOut: 152,
+      bytesIn: 21_480,
+      bytesOut: 24_960,
+      closeStatus: null
+    },
+    {
+      id: 'b7d219',
+      endpointId: 'stomp-ws',
+      path: '/ws',
+      open: true,
+      openedAt: nowMillis - 4 * 60 * 1000,
+      lastActivityAt: nowMillis - 9 * 1000,
+      subprotocol: 'v12.stomp',
+      remoteAddress: '127.0.0.1',
+      localAddress: '127.0.0.1:8080',
+      messagesIn: 61,
+      messagesOut: 64,
+      bytesIn: 8_930,
+      bytesOut: 10_240,
+      closeStatus: null
+    },
+    {
+      id: 'c93a4e',
+      endpointId: 'raw-echo',
+      path: '/echo',
+      open: true,
+      openedAt: nowMillis - 2 * 60 * 1000,
+      lastActivityAt: nowMillis - 21 * 1000,
+      subprotocol: null,
+      remoteAddress: '127.0.0.1',
+      localAddress: '127.0.0.1:8080',
+      messagesIn: 24,
+      messagesOut: 24,
+      bytesIn: 1_920,
+      bytesOut: 1_920,
+      closeStatus: null
+    },
+    {
+      id: 'd10b77',
+      endpointId: 'stomp-ws',
+      path: '/ws',
+      open: false,
+      openedAt: nowMillis - 26 * 60 * 1000,
+      lastActivityAt: nowMillis - 12 * 60 * 1000,
+      subprotocol: 'v12.stomp',
+      remoteAddress: '127.0.0.1',
+      localAddress: '127.0.0.1:8080',
+      messagesIn: 302,
+      messagesOut: 311,
+      bytesIn: 44_120,
+      bytesOut: 47_360,
+      closeStatus: 1000
+    }
+  ],
+  subscriptions: [
+    {
+      id: 'sub-1',
+      endpointId: 'stomp-ws',
+      sessionId: 'a41f0c',
+      destination: '/topic/chat',
+      subscribedAt: nowMillis - 8 * 60 * 1000 + 400
+    },
+    {
+      id: 'sub-2',
+      endpointId: 'stomp-ws',
+      sessionId: 'a41f0c',
+      destination: '/user/queue/notifications',
+      subscribedAt: nowMillis - 8 * 60 * 1000 + 900
+    },
+    {
+      id: 'sub-3',
+      endpointId: 'stomp-ws',
+      sessionId: 'b7d219',
+      destination: '/topic/chat',
+      subscribedAt: nowMillis - 4 * 60 * 1000 + 300
+    },
+    {
+      id: 'sub-4',
+      endpointId: 'stomp-ws',
+      sessionId: 'b7d219',
+      destination: '/topic/inventory',
+      subscribedAt: nowMillis - 4 * 60 * 1000 + 700
+    }
+  ],
+  activity: [
+    {
+      id: 9,
+      timestamp: nowMillis - 3 * 1000,
+      endpointId: 'stomp-ws',
+      sessionId: 'a41f0c',
+      direction: 'OUTBOUND',
+      frameType: 'MESSAGE',
+      destination: '/topic/chat',
+      payloadBytes: 164,
+      durationMillis: 1,
+      success: true,
+      errorCategory: null
+    },
+    {
+      id: 8,
+      timestamp: nowMillis - 3 * 1000 - 40,
+      endpointId: 'stomp-ws',
+      sessionId: 'a41f0c',
+      direction: 'INBOUND',
+      frameType: 'SEND',
+      destination: '/app/chat',
+      payloadBytes: 148,
+      durationMillis: 2,
+      success: true,
+      errorCategory: null
+    },
+    {
+      id: 7,
+      timestamp: nowMillis - 9 * 1000,
+      endpointId: 'stomp-ws',
+      sessionId: 'b7d219',
+      direction: 'OUTBOUND',
+      frameType: 'MESSAGE',
+      destination: '/topic/inventory',
+      payloadBytes: 96,
+      durationMillis: 1,
+      success: true,
+      errorCategory: null
+    },
+    {
+      id: 6,
+      timestamp: nowMillis - 21 * 1000,
+      endpointId: 'raw-echo',
+      sessionId: 'c93a4e',
+      direction: 'INBOUND',
+      frameType: 'TEXT',
+      destination: null,
+      payloadBytes: 80,
+      durationMillis: 1,
+      success: true,
+      errorCategory: null
+    },
+    {
+      id: 5,
+      timestamp: nowMillis - 21 * 1000 - 60,
+      endpointId: 'raw-echo',
+      sessionId: 'c93a4e',
+      direction: 'OUTBOUND',
+      frameType: 'TEXT',
+      destination: null,
+      payloadBytes: 80,
+      durationMillis: 1,
+      success: true,
+      errorCategory: null
+    },
+    {
+      id: 4,
+      timestamp: nowMillis - 34 * 1000,
+      endpointId: 'stomp-ws',
+      sessionId: 'b7d219',
+      direction: 'INBOUND',
+      frameType: 'SUBSCRIBE',
+      destination: '/topic/inventory',
+      payloadBytes: 0,
+      durationMillis: 1,
+      success: true,
+      errorCategory: null
+    },
+    {
+      id: 3,
+      timestamp: nowMillis - 52 * 1000,
+      endpointId: 'stomp-ws',
+      sessionId: 'a41f0c',
+      direction: 'INBOUND',
+      frameType: 'SEND',
+      destination: '/app/chat',
+      payloadBytes: 132,
+      durationMillis: 3,
+      success: false,
+      errorCategory: 'MessageDeliveryException'
+    },
+    {
+      id: 2,
+      timestamp: nowMillis - 61 * 1000,
+      endpointId: 'stomp-ws',
+      sessionId: 'a41f0c',
+      direction: 'INBOUND',
+      frameType: 'SUBSCRIBE',
+      destination: '/user/queue/notifications',
+      payloadBytes: 0,
+      durationMillis: 1,
+      success: true,
+      errorCategory: null
+    },
+    {
+      id: 1,
+      timestamp: nowMillis - 74 * 1000,
+      endpointId: 'stomp-ws',
+      sessionId: 'a41f0c',
+      direction: 'INBOUND',
+      frameType: 'CONNECT',
+      destination: null,
+      payloadBytes: 0,
+      durationMillis: 4,
+      success: true,
+      errorCategory: null
+    }
+  ],
+  stats: {
+    endpoints: 2,
+    openSessions: 3,
+    closedSessions: 1,
+    subscriptions: 4,
+    inboundFrames: 535,
+    outboundFrames: 551,
+    inboundBytes: 76_450,
+    outboundBytes: 84_480,
+    failedFrames: 1,
+    capturedActivity: 1086,
+    evictedActivity: 586
+  },
+  warnings: []
+}
+
 const screenshots = [
   [
     'overview',
@@ -4568,7 +5247,7 @@ const screenshots = [
     'bootui-overview.webp',
     async (page) => {
       await page.getByRole('button', {name: /Run all scanners/}).click()
-      await page.getByText('9 of 9 scanners scored').waitFor()
+      await page.getByText('10 of 10 scanners scored').waitFor()
       await page.getByText('1 security alert(s)').waitFor()
     }
   ],
@@ -4669,7 +5348,7 @@ const screenshots = [
     'Hibernate Statistics',
     'bootui-hibernate-statistics.webp',
     async (page) => {
-      await page.getByText('Sessions & transactions').waitFor()
+      await page.getByText('Session lifecycle').waitFor()
       await page.getByText('Second-level cache', {exact: true}).waitFor()
       await page.getByText('io.github.jdubois.bootui.sample.domain.Product').waitFor()
     }
@@ -4720,6 +5399,26 @@ const screenshots = [
       await page.getByText('Most frequent calls').waitFor()
       await page.locator('.rest-row').first().click()
       await page.getByText('Call site').waitFor()
+    }
+  ],
+  [
+    'fault-tolerance',
+    'Fault Tolerance',
+    'bootui-fault-tolerance.webp',
+    async (page) => {
+      await page.getByText('inventory-service').first().waitFor()
+      await page.getByText('Recent events').waitFor()
+      await page.getByText('SHORT_CIRCUITED').first().waitFor()
+    }
+  ],
+  [
+    'websockets',
+    'WebSockets',
+    'bootui-websockets.webp',
+    async (page) => {
+      await page.getByText('Broker routing').waitFor()
+      await page.getByText('/topic/chat').first().waitFor()
+      await page.getByRole('tab', {name: /Endpoints/}).waitFor()
     }
   ],
   ['ai', 'AI Framework', 'bootui-ai.webp', waitForText('Token usage')],
@@ -5303,6 +6002,8 @@ async function handleApiRoute(route) {
   if (endpoint === 'ai/overview') return fulfillJson(route, aiOverview)
   if (endpoint === 'ai/tokens') return fulfillJson(route, aiTokens)
   if (endpoint === `ai/chats/${aiSpanId}`) return fulfillJson(route, aiDetail)
+  if (endpoint === 'fault-tolerance') return fulfillJson(route, faultTolerance)
+  if (endpoint === 'websockets') return fulfillJson(route, webSockets)
   if (endpoint === 'http-probe') return fulfillJson(route, probeResponse(postDataJson(request)))
   if (endpoint === 'copilot/dashboard') return fulfillJson(route, copilotDashboard)
   if (endpoint === 'copilot/sessions') return fulfillJson(route, copilotSessions)
@@ -5435,6 +6136,7 @@ async function handleApiRoute(route) {
   if (endpoint === 'pentesting/scan') return fulfillJson(route, pentesting)
   if (endpoint === 'architecture') return fulfillJson(route, architecture)
   if (endpoint === 'architecture/scan') return fulfillJson(route, architecture)
+  if (endpoint === 'rest-api/error-contract') return fulfillJson(route, restApiErrorContract)
   if (endpoint === 'rest-api') return fulfillJson(route, restApi)
   if (endpoint === 'rest-api/scan') return fulfillJson(route, restApi)
   if (endpoint === 'spring') return fulfillJson(route, isQuarkusPlatform ? quarkusAdvisor : spring)
