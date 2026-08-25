@@ -1,4 +1,4 @@
-# Spring Security Advisor checks
+# Security checks
 
 The Security panel runs a fixed, on-demand ruleset against the host application's Spring Security configuration.
 It introspects the registered `SecurityFilterChain` beans and their filter lists, simulates a bounded set of anonymous
@@ -689,7 +689,7 @@ authorization is not exposed as stable runtime metadata.
 - **Severity**: MEDIUM
 - **Detects**: A production profile where BootUI cannot observe server TLS, trusted forwarded headers, or `HttpsRedirectWebFilter`.
 - **Recommendation**: Confirm upstream TLS, configure trusted forwarded-header handling, or add reactive HTTPS redirect policy.
-- **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/exploits/https.html>
+- **Learn more**: <https://docs.spring.io/spring-security/reference/reactive/exploits/http.html>
 
 ### SEC-RXF-CONFIG-003 - Credentials or secrets should not be hardcoded in application properties
 

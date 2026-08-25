@@ -1,17 +1,25 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import {fileURLToPath} from 'node:url'
 import {viteBundler} from '@vuepress/bundler-vite'
+import {slimsearchPlugin} from '@vuepress/plugin-slimsearch'
 import {defaultTheme} from '@vuepress/theme-default'
 import {defineUserConfig} from 'vuepress'
 import {inferRoutePath} from 'vuepress/shared'
 import {toDocLink} from './doc-links.js'
+import {parseRuleCatalog} from './rule-catalog.js'
 import {createDocsSidebar} from './sidebar.js'
 
 const siteBase = normalizeBase(process.env.VUEPRESS_BASE || (process.argv.includes('dev') ? '/' : '/boot-ui/'))
 const publicSiteUrl = 'https://www.julien-dubois.com/boot-ui'
+const configDir = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineUserConfig({
   base: siteBase,
+  // The JVM Tuning panel is a memory-budget calculator, not a rule catalog, so its design record has
+  // no checks to publish alongside the other catalogs. It stays in the repository for contributors
+  // and the Runtime page links to it there.
+  pagePatterns: ['**/*.md', '!JVM-TUNING-CHECKS.md', '!.vuepress', '!node_modules'],
   lang: 'en-US',
   title: 'BootUI',
   description: 'A local-only developer console for Spring Boot 4 and Quarkus applications.',
@@ -20,13 +28,35 @@ export default defineUserConfig({
     ['meta', {name: 'theme-color', content: '#198754'}],
     ['meta', {property: 'og:type', content: 'website'}],
     ['meta', {property: 'og:title', content: 'BootUI'}],
-    ['meta', {property: 'og:description', content: 'A local-only developer console for Spring Boot 4 and Quarkus applications.'}]
+    [
+      'meta',
+      {
+        property: 'og:description',
+        content: 'A local-only developer console for Spring Boot 4 and Quarkus applications.'
+      }
+    ]
   ],
   bundler: viteBundler(),
+  // The default theme renders home feature cards as plain divs, so swap in a version that can
+  // link each card to the page it describes.
+  alias: {
+    '@theme/VPHomeFeatures.vue': path.resolve(configDir, './components/HomeFeatures.vue')
+  },
   plugins: [
     cleanDocsPermalinksPlugin(),
     cleanMarkdownDocLinksPlugin(),
-    lazyLoadMarkdownImagesPlugin()
+    lazyLoadMarkdownImagesPlugin(),
+    ruleCatalogPlugin(),
+    slimsearchPlugin({
+      indexContent: true,
+      suggestion: true,
+      customFields: [
+        {
+          getter: (page) => collectRuleIds(page),
+          formatter: 'Check: $content'
+        }
+      ]
+    })
   ],
   theme: defaultTheme({
     hostname: 'https://www.julien-dubois.com',
@@ -36,24 +66,27 @@ export default defineUserConfig({
       }
     },
     repo: 'jdubois/boot-ui',
-    docsRepo: 'https://github.com/jdubois/boot-ui',
-    docsBranch: 'main',
-    docsDir: 'docs',
-    editLink: true,
-    lastUpdated: true,
+    editLink: false,
+    lastUpdated: false,
     contributors: false,
     logo: null,
     navbar: [
       {text: 'Try it', link: toDocLink('TRY-SAMPLE-APP.md')},
       {text: 'Setup', link: toDocLink('SETUP.md')},
-      {text: 'Features', link: toDocLink('FEATURES.md')},
+      {text: 'Features', link: toDocLink('features/README.md')},
       {text: 'Properties', link: toDocLink('PROPERTIES.md')},
       {text: 'AI agents', link: toDocLink('AI-AGENTS.md')},
       {text: 'Ecosystem', link: toDocLink('WORKS-WITH.md')}
     ],
-    sidebar: createDocsSidebar()
+    sidebar: createDocsSidebar(),
+    sidebarDepth: 2
   })
 })
+
+function collectRuleIds(page) {
+  const matches = page.content.matchAll(/^###\s+([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\s+[-–]\s+(.+)$/gm)
+  return [...matches].map(([, id, title]) => `${id} ${title}`)
+}
 
 function normalizeBase(value) {
   if (!value || value === '/') {
@@ -108,16 +141,67 @@ function lazyLoadMarkdownImagesPlugin() {
 
       markdown.renderer.rules.image = (tokens, index, options, env, self) => {
         const token = tokens[index]
+        // Each panel now opens with its screenshot, so the first image on a page is the likely
+        // largest contentful paint and must not wait for the lazy-load pass.
+        const isFirstOnPage = Boolean(env) && !env.bootuiSeenMarkdownImage
+        if (env) {
+          env.bootuiSeenMarkdownImage = true
+        }
         if (token.attrIndex('loading') < 0) {
-          token.attrPush(['loading', 'lazy'])
+          token.attrPush(['loading', isFirstOnPage ? 'eager' : 'lazy'])
         }
         if (token.attrIndex('decoding') < 0) {
           token.attrPush(['decoding', 'async'])
+        }
+        if (isFirstOnPage && token.attrIndex('fetchpriority') < 0) {
+          token.attrPush(['fetchpriority', 'high'])
         }
         return rawImageRule(tokens, index, options, env, self)
       }
     }
   }
+}
+
+function ruleCatalogPlugin() {
+  return {
+    name: 'bootui-rule-catalog',
+    extendsPage(page) {
+      const rules = parseRuleCatalog(page.content ?? '')
+      if (rules.length === 0) {
+        return
+      }
+      page.data.ruleCatalog = rules
+    },
+    extendsPageOptions(options) {
+      const filePath = options.filePath ?? ''
+      if (!/-CHECKS\.md$/.test(filePath)) {
+        return
+      }
+      const content = options.content ?? fs.readFileSync(filePath, 'utf8')
+      if (parseRuleCatalog(content).length === 0) {
+        return
+      }
+      options.content = injectRuleIndex(content)
+    }
+  }
+}
+
+// Places the filter directly above the first rule group, so the page intro still reads as prose.
+function injectRuleIndex(content) {
+  const lines = content.split('\n')
+  const firstRule = lines.findIndex((line) => /^### [A-Z][A-Z0-9]*(-[A-Z0-9]+)+\b/.test(line))
+  if (firstRule < 0) {
+    return content
+  }
+  let insertAt = firstRule
+  for (let index = firstRule - 1; index >= 0; index -= 1) {
+    if (/^## /.test(lines[index])) {
+      insertAt = index
+      break
+    }
+  }
+  lines.splice(insertAt, 0, '<RuleIndex />', '')
+  return lines.join('\n')
 }
 
 function cleanMarkdownDocLinksPlugin() {

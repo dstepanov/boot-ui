@@ -12,16 +12,28 @@ actions:
 features:
   - title: Runtime observability
     details: Inspect health, metrics, memory, threads, heap dumps, startup timing, and JVM sizing from the running Spring Boot or Quarkus app.
+    link: /features/runtime
+    linkText: Runtime panels
   - title: Advisors dashboard
     details: Analyze and score your application with advanced advisors for architecture, REST API, Spring, Hibernate, JVM memory, Spring Security, pentesting, and vulnerabilities.
+    link: /features/advisors
+    linkText: Advisor catalog
   - title: Diagnostics toolbox
     details: Review traces, log tail, HTTP exchanges, local probes, architecture checks, GraalVM readiness, and dependency vulnerabilities.
-  - title: Data and services visibility
-    details: Explore database pools, Spring Data repositories, Hibernate checks, Flyway, Liquibase, scheduled tasks, caches, and dev services.
+    link: /features/diagnostics
+    linkText: Diagnostics panels
+  - title: Database insight
+    details: Inspect connection pools, SQL traces, Hibernate statistics, transactions, Spring Data repositories, Flyway, and Liquibase.
+    link: /features/database
+    linkText: Database panels
+  - title: Services and integrations
+    details: Follow scheduled tasks, REST clients, fault tolerance, WebSockets, caches, email, Kafka, RabbitMQ, and JMS.
+    link: /features/services
+    linkText: Services panels
   - title: Local safety model
     details: Stay loopback-only by default with secret masking, fail-closed activation, read-only controls, and explicit confirmation for mutating actions.
-  - title: Packaged developer console
-    details: Add one dependency — the Spring Boot starter or the Quarkus extension — and get the bundled Vue UI, REST API, and docs-backed workflow without a separate frontend deployment.
+    link: /setup/activation
+    linkText: Activation and safety
 footer: Apache-2.0 Licensed | BootUI
 ---
 
@@ -33,7 +45,7 @@ footer: Apache-2.0 Licensed | BootUI
 | ---- | ------------- |
 | Run the full demo locally | [Try the sample app](TRY-SAMPLE-APP.md) |
 | Add BootUI to a Spring Boot 4 or Quarkus app | [Setup](SETUP.md) |
-| Explore every panel | [Features](FEATURES.md) |
+| Explore every panel | [Features](features/README.md) |
 | Configure activation, safety, panels, and actions | [Properties](PROPERTIES.md) |
 | Drive BootUI from an AI coding agent | [AI agents](AI-AGENTS.md) |
 

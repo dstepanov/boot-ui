@@ -50,6 +50,12 @@
   --bootui-nav-hover-color: #146c43;
   --bootui-nav-active-bg: linear-gradient(135deg, #198754, #0d6efd);
   --bootui-nav-active-color: #ffffff;
+  --bootui-tile-bg: rgba(25, 135, 84, 0.1);
+  --bootui-tile-color: #146c43;
+  /* The filled primary button keeps DESIGN.md's white-on-Spring-green pairing in both themes, so
+     it must not track --bootui-green, which the dark theme brightens for text legibility. */
+  --bootui-btn-primary-bg: #198754;
+  --bootui-btn-primary-bg-hover: #146c43;
   --bootui-nav-group-bg: rgba(255, 255, 255, 0.58);
   --bootui-nav-group-color: #64748b;
   --vp-c-accent: var(--bootui-green);
@@ -69,6 +75,19 @@
   --content-width: 52rem;
   --homepage-width: 76rem;
   --vp-font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Advisor severity, as legible body-size text. Mirrors the console's severity vocabulary. */
+  --bootui-severity-critical: #b00020;
+  --bootui-severity-high: #a04100;
+  --bootui-severity-medium: #6f5300;
+  --bootui-severity-low: #0a53be;
+  --bootui-severity-info: #56667b;
+
+  --bootui-details-bg: rgba(25, 135, 84, 0.05);
+  --bootui-details-bg-hover: rgba(25, 135, 84, 0.09);
+  --bootui-details-border: rgba(25, 135, 84, 0.18);
+  --bootui-details-label: #146c43;
+  --bootui-details-eyebrow: #4a7360;
 }
 
 html.dark,
@@ -94,15 +113,27 @@ html[data-theme='dark'] {
   --bootui-nav-hover-bg: rgba(52, 208, 104, 0.1);
   --bootui-nav-hover-color: #4ade80;
   --bootui-nav-active-bg: linear-gradient(135deg, #198754, #2563eb);
+  --bootui-tile-bg: rgba(74, 222, 128, 0.14);
+  --bootui-tile-color: #4ade80;
   --bootui-nav-group-bg: rgba(30, 41, 59, 0.7);
   --bootui-nav-group-color: #94a3b8;
+
+  --bootui-severity-critical: #ff8a94;
+  --bootui-severity-high: #fd7e14;
+  --bootui-severity-medium: #e0a800;
+  --bootui-severity-low: #60a5fa;
+  --bootui-severity-info: #a3b1c6;
+
+  --bootui-details-bg: rgba(52, 208, 104, 0.07);
+  --bootui-details-bg-hover: rgba(52, 208, 104, 0.12);
+  --bootui-details-border: rgba(52, 208, 104, 0.22);
+  --bootui-details-label: #4ade80;
+  --bootui-details-eyebrow: #8fb3a0;
 }
 
 body {
   color: var(--bootui-text);
-  background:
-    radial-gradient(circle at top left, var(--bootui-bg-body-orb), transparent 34rem),
-    var(--bootui-bg-body);
+  background: radial-gradient(circle at top left, var(--bootui-bg-body-orb), transparent 34rem), var(--bootui-bg-body);
 }
 
 #app {
@@ -131,7 +162,6 @@ body {
   left: -5rem;
   width: 18rem;
   height: 18rem;
-  animation: float-orb 13s ease-in-out infinite;
   background: rgba(25, 135, 84, 0.22);
 }
 
@@ -140,7 +170,6 @@ body {
   bottom: 4rem;
   width: 22rem;
   height: 22rem;
-  animation: float-orb 16s ease-in-out infinite reverse;
   background: rgba(13, 110, 253, 0.16);
 }
 
@@ -174,6 +203,13 @@ body {
 
 .vp-navbar-item {
   margin-left: 0;
+}
+
+/* The theme's navbar controls center themselves with auto vertical margins, which the search
+   button does not carry, so it hangs from the top of the flex row instead of sharing the
+   center line with the menu items and the theme toggle. */
+.vp-navbar-items-wrapper > .slimsearch-button {
+  align-self: center;
 }
 
 .vp-navbar .vp-navbar-item > .auto-link,
@@ -230,6 +266,9 @@ body {
 .vp-sidebar {
   box-shadow: var(--bootui-shadow-sidebar);
   padding: 1.25rem;
+  /* The menu is its own scroll region. Chaining a wheel past its end into the
+     page would scroll the article the reader is not looking at. */
+  overscroll-behavior: contain;
 }
 
 .vp-site-name::before {
@@ -278,6 +317,30 @@ body {
 
 .vp-sidebar .vp-sidebar-item {
   border-radius: 0.9rem;
+  line-height: 1.35;
+}
+
+/* Page links and in-page heading links share one class, so the href fragment is what separates a
+   destination from a jump inside the page the reader is already on. */
+.vp-sidebar a.vp-sidebar-item:not([href*='#']) {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.vp-sidebar a.vp-sidebar-item[href*='#'] {
+  color: var(--bootui-text-muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.vp-sidebar a.vp-sidebar-item[href*='#']:not(.active):hover {
+  color: var(--bootui-nav-hover-color);
+}
+
+/* The active item keeps its gradient on hover, so its label must stay the on-gradient colour. */
+.vp-sidebar a.vp-sidebar-item:not(.vp-sidebar-heading).active:hover {
+  color: var(--bootui-nav-active-color);
+  background: var(--bootui-nav-active-bg);
 }
 
 .vp-toggle-sidebar-button {
@@ -344,9 +407,14 @@ body {
 }
 
 .vp-sidebar .vp-sidebar-children {
-  margin-left: 0.85rem;
-  padding-left: 0.5rem;
+  margin-left: 1rem;
+  padding-left: 0.6rem;
   border-left: 1px solid var(--bootui-border-alt);
+}
+
+/* Nested links already sit inside the rail, so they drop the top-level indent instead of compounding it. */
+.vp-sidebar .vp-sidebar-children .vp-sidebar-item {
+  padding-left: 0.75rem;
 }
 
 .vp-sidebar .vp-sidebar-item.active,
@@ -394,17 +462,11 @@ body {
 }
 
 .vp-home {
-  animation: fade-up 360ms ease both;
   display: flex;
   flex-direction: column;
 }
 
-.vp-page {
-  animation: fade-up 360ms ease both;
-}
-
 .vp-hero,
-.hint-container.details,
 .vp-feature,
 [vp-content] > table,
 [vp-content] > div[class*='language-'] {
@@ -418,26 +480,26 @@ body {
   order: 1;
   width: 100%;
   margin-top: 2rem;
-  padding: 3rem;
+  padding: 2.25rem 3rem 2.5rem;
   overflow: hidden;
-  background:
-    linear-gradient(135deg, rgba(25, 135, 84, 0.09), rgba(13, 110, 253, 0.07)),
-    var(--bootui-surface);
+  background: linear-gradient(135deg, rgba(25, 135, 84, 0.09), rgba(13, 110, 253, 0.07)), var(--bootui-surface);
 }
 
+/* DESIGN.md specifies the brand mark as a 2.75rem solid Spring-green square at 1rem radius with
+   a 0 0.6rem 1.2rem glow. */
 .vp-hero::before {
   display: inline-flex;
-  width: 4rem;
-  height: 4rem;
-  margin-bottom: 1rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-bottom: 0.75rem;
   align-items: center;
   justify-content: center;
-  border-radius: 1.35rem;
+  border-radius: 1rem;
   color: #ffffff;
   background: #198754;
-  box-shadow: 0 0.9rem 1.8rem rgba(25, 135, 84, 0.28);
+  box-shadow: 0 0.6rem 1.2rem rgba(25, 135, 84, 0.28);
   font-family: bootstrap-icons;
-  font-size: 1.85rem;
+  font-size: 1.35rem;
   content: '\f7ea';
 }
 
@@ -454,19 +516,41 @@ body {
   color: var(--bootui-text-muted);
 }
 
+/* The theme gives every hero child the same 1.8rem margin, so nothing groups. Bind the title to
+   the tagline and keep the separation for the actions instead. */
 .vp-hero #main-title {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
   font-size: clamp(2.4rem, 6vw, 4.5rem);
   font-weight: 800;
+  line-height: 1.1;
 }
 
 .vp-hero .vp-hero-description {
   max-width: 42rem;
+  margin-top: 0;
+  margin-bottom: 1.75rem;
+}
+
+.vp-hero .vp-hero-actions {
+  margin: 0 auto;
 }
 
 .vp-hero-actions .vp-hero-action-button.primary {
   border-color: transparent;
-  background: linear-gradient(135deg, var(--bootui-green), var(--bootui-blue));
-  box-shadow: 0 0.75rem 1.75rem rgba(13, 110, 253, 0.22);
+  color: #ffffff;
+  background: var(--bootui-btn-primary-bg);
+  box-shadow: 0 0.75rem 1.75rem rgba(25, 135, 84, 0.24);
+}
+
+.vp-hero-actions .vp-hero-action-button.primary:hover {
+  background: var(--bootui-btn-primary-bg-hover);
+}
+
+.vp-hero-actions .vp-hero-action-button.secondary:hover {
+  border-color: rgba(25, 135, 84, 0.35);
+  color: var(--bootui-nav-hover-color);
+  background: var(--bootui-nav-hover-bg);
 }
 
 .vp-hero-actions .vp-hero-action-button.secondary {
@@ -480,18 +564,92 @@ body {
   font-weight: 800;
 }
 
+/* The home feature cards replace the theme component, so the base flex layout it used to carry
+   lives here alongside the BootUI treatment. */
 .vp-features {
+  display: flex;
+  flex-wrap: wrap;
+  place-content: stretch space-between;
+  align-items: flex-start;
   gap: 1rem;
   order: 2;
+  margin-top: 2.5rem;
+  padding: 1.2rem 0;
+  border-top: 1px solid var(--vp-c-divider);
 }
 
 .vp-feature {
   position: relative;
+  flex-grow: 1;
+  flex-basis: 30%;
+  max-width: 30%;
   padding: 1.35rem;
   transition:
     border-color 180ms ease,
     transform 180ms ease,
     box-shadow 180ms ease;
+}
+
+@media (max-width: 719px) {
+  .vp-features {
+    flex-flow: column;
+  }
+
+  .vp-feature {
+    max-width: 100%;
+  }
+}
+
+/* Each card is a whole-card link to the page it describes, so it must not inherit the
+   underline and accent colour of an inline link. */
+.vp-feature-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.vp-feature-link:hover,
+.vp-feature-link:focus-visible {
+  color: inherit;
+  border-color: rgba(25, 135, 84, 0.35);
+}
+
+.vp-feature-link:focus-visible {
+  outline: 2px solid var(--bootui-green);
+  outline-offset: 3px;
+}
+
+.vp-feature-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+  color: var(--bootui-green-dark);
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.vp-feature-cta::after {
+  content: '\f285';
+  font-family: bootstrap-icons;
+  font-size: 0.72rem;
+  transition: transform 180ms ease;
+}
+
+.vp-feature-link:hover .vp-feature-cta::after,
+.vp-feature-link:focus-visible .vp-feature-cta::after {
+  transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vp-feature,
+  .vp-feature-cta::after {
+    transition: none;
+  }
+
+  .vp-feature-link:hover {
+    transform: none;
+  }
 }
 
 .vp-feature::before {
@@ -502,9 +660,8 @@ body {
   align-items: center;
   justify-content: center;
   border-radius: 1rem;
-  color: #ffffff;
-  background: var(--bootui-nav-active-bg);
-  box-shadow: 0 0.7rem 1.4rem rgba(25, 135, 84, 0.22);
+  color: var(--bootui-tile-color);
+  background: var(--bootui-tile-bg);
   font-family: bootstrap-icons;
   font-size: 1.25rem;
   line-height: 1;
@@ -527,79 +684,165 @@ body {
 }
 
 .vp-feature:nth-child(5)::before {
-  content: '\f538';
-}
-
-.vp-feature:nth-child(6)::before {
   content: '\f61f';
 }
 
-.vp-feature:hover {
+.vp-feature:nth-child(6)::before {
+  content: '\f538';
+}
+
+.vp-feature-link:hover {
   transform: translateY(-2px);
   box-shadow: var(--bootui-shadow-md);
 }
 
 .vp-feature h2 {
+  padding-bottom: 0;
+  border-bottom: none;
   color: var(--bootui-text);
   font-weight: 800;
+  font-size: 1.4rem;
+}
+
+@media (max-width: 419px) {
+  .vp-feature h2 {
+    font-size: 1.25rem;
+  }
 }
 
 .vp-feature p {
   color: var(--bootui-text-muted);
 }
 
+/* Collapsible detail blocks carry the deep-dive tier of every docs page, so they read as a
+   distinct, obviously expandable aside rather than more body prose. */
 .hint-container.details {
-  margin: 1rem 0;
   overflow: hidden;
+  margin: 1.5rem 0;
   padding: 0;
+  border: 1px solid var(--bootui-details-border);
+  border-radius: 1.1rem;
+  background: var(--bootui-details-bg);
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
 }
 
+.hint-container.details:hover {
+  border-color: rgba(25, 135, 84, 0.32);
+  background: var(--bootui-details-bg-hover);
+}
+
+.hint-container.details[open] {
+  background: var(--bootui-surface);
+  box-shadow: var(--bootui-shadow-sm);
+}
+
+/* VuePress ships a negative summary margin that assumes the container padding this rule removes;
+   left unset it pushes the row past the clipped edges. */
 .hint-container.details summary {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 1rem 1.15rem;
-  color: var(--bootui-text);
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0.9rem 1.15rem 0.9rem 1.15rem;
+  color: var(--bootui-details-label);
   cursor: pointer;
-  font-weight: 800;
+  font-size: 0.95rem;
+  font-weight: 700;
   list-style: none;
+  transition: background 180ms ease;
 }
 
 .hint-container.details summary::-webkit-details-marker {
   display: none;
 }
 
+/* Chevron affordance: a real button face, so the row is unmistakably clickable. */
 .hint-container.details summary::before {
   display: inline-flex;
-  width: 2rem;
-  height: 2rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: none;
   align-items: center;
   justify-content: center;
-  border-radius: 0.8rem;
-  color: #ffffff;
-  background: var(--bootui-nav-active-bg);
-  box-shadow: 0 0.6rem 1.2rem rgba(25, 135, 84, 0.2);
-  font-family: bootstrap-icons;
-  font-size: 0.95rem;
+  border: 1px solid var(--bootui-details-border);
+  border-radius: 0.9rem;
+  color: var(--bootui-details-label);
+  background: var(--bootui-surface-solid);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
   content: '\f285';
-  transition: transform 160ms ease;
+  font-family: bootstrap-icons;
+  font-size: 0.82rem;
+  /* Resets the rotation VuePress applies to its own triangle marker. */
+  transform: rotate(0deg);
+  transition:
+    transform 200ms ease,
+    background 180ms ease,
+    border-color 180ms ease;
+}
+
+/* The whole summary is the hit target, so the icon reacts to hover anywhere on the row. */
+.hint-container.details summary:hover::before {
+  border-color: var(--bootui-green);
+  background: var(--bootui-details-bg-hover);
+}
+
+.hint-container.details summary::after {
+  margin-left: auto;
+  color: var(--bootui-details-eyebrow);
+  content: 'Show';
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hint-container.details[open] summary::after {
+  content: 'Hide';
+}
+
+.hint-container.details summary:focus-visible {
+  border-radius: 1rem;
+  outline: 2px solid var(--bootui-green);
+  outline-offset: -2px;
 }
 
 .hint-container.details[open] summary {
   border-bottom: 1px solid var(--bootui-border);
 }
 
-.hint-container.details[open] summary::before {
+/* Matches the child combinator VuePress uses for its own open-state rotation so this wins the tie. */
+.hint-container.details[open] > summary::before {
   transform: rotate(90deg);
 }
 
 .hint-container.details > :not(summary) {
-  margin-right: 1.15rem;
-  margin-left: 1.15rem;
+  margin-right: 1.35rem;
+  margin-left: 1.35rem;
+}
+
+.hint-container.details > summary + * {
+  margin-top: 1.15rem;
 }
 
 .hint-container.details > :last-child {
-  margin-bottom: 1.15rem;
+  margin-bottom: 1.35rem;
+}
+
+html.dark .hint-container.details:hover {
+  border-color: rgba(52, 208, 104, 0.36);
+}
+
+html.dark .hint-container.details summary::before {
+  background: var(--bootui-surface-solid);
+  box-shadow: none;
+}
+
+html.dark .hint-container.details summary:hover::before {
+  border-color: var(--bootui-green);
+  background: rgba(52, 208, 104, 0.18);
 }
 
 [vp-content] img[src*='bootui-'] {
@@ -646,49 +889,19 @@ body {
   font-weight: 600;
 }
 
-.vp-page-meta,
-.vp-page-nav {
-  border-color: var(--bootui-border);
-}
-
+/* The theme renders this footer unconditionally, so it survives as an empty
+   box once the edit link and the last-updated stamp are switched off. */
 .vp-page-meta {
-  margin-top: 1.75rem;
-  border: 1px solid var(--bootui-border);
-  border-radius: 1.1rem;
-  background: var(--bootui-surface);
-  box-shadow: var(--bootui-shadow-sm);
-  gap: 0.75rem;
-}
-
-.vp-page-meta .edit-link .label {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  background: var(--bootui-nav-hover-bg);
-  padding: 0.5rem 0.75rem;
-  color: var(--bootui-nav-hover-color);
-  font-weight: 800;
-}
-
-.vp-page-meta .git-info {
-  color: var(--bootui-text-muted);
-}
-
-.vp-page-meta .meta-item-label {
-  color: var(--bootui-text-subtle);
-  font-weight: 700;
-}
-
-.vp-page-meta .meta-item-info {
-  color: var(--bootui-text-muted);
-  font-weight: 600;
+  display: none;
 }
 
 .vp-page-nav {
   gap: 1rem;
-  margin-top: 1rem;
-  padding: 0;
+  /* Carries the separation the meta footer used to provide. */
+  margin-top: 1.75rem;
   border-top: 0;
+  border-color: var(--bootui-border);
+  padding: 0;
 }
 
 .vp-page-nav .auto-link {
@@ -713,9 +926,7 @@ body {
 
 .vp-page-nav .auto-link:hover {
   border-color: rgba(25, 135, 84, 0.2);
-  background:
-    linear-gradient(135deg, rgba(25, 135, 84, 0.08), rgba(13, 110, 253, 0.06)),
-    var(--bootui-surface);
+  background: linear-gradient(135deg, rgba(25, 135, 84, 0.08), rgba(13, 110, 253, 0.06)), var(--bootui-surface);
   box-shadow: var(--bootui-shadow-md);
   color: var(--bootui-text);
   transform: translateY(-2px);
@@ -756,11 +967,6 @@ body {
 .vp-page-title h1 {
   color: var(--bootui-text);
   font-weight: 800;
-}
-
-html.dark .vp-hero-actions .vp-hero-action-button.primary,
-html[data-theme='dark'] .vp-hero-actions .vp-hero-action-button.primary {
-  color: #ffffff;
 }
 
 html.dark [vp-content] code,
@@ -833,28 +1039,12 @@ html[data-theme='dark'] [vp-content] code {
   color: var(--bootui-nav-active-color);
 }
 
-@keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(0.75rem);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes float-orb {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(1.5rem, -1rem, 0) scale(1.06);
-  }
-}
-
 @media (max-width: 719px) {
+  /* The chevron alone carries the affordance once the summary needs the full width. */
+  .hint-container.details summary::after {
+    display: none;
+  }
+
   .vp-site-name {
     padding-right: 0.65rem;
   }

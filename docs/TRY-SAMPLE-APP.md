@@ -19,7 +19,7 @@ Then open <http://localhost:8080/bootui> from a browser on the same machine.
 The image runs the sample app's `dev` profile, which is **Docker-free** (in-memory H2 database, a simple in-memory
 cache, and disabled Spring AI), so no PostgreSQL, Redis, or Ollama is needed. `BOOTUI_TRUST_CONTAINER_GATEWAY=AUTO` lets
 the browser on your host reach BootUI through Docker's bridge gateway while keeping the Host allow-list and CSRF
-defenses in force — see the [container access](SETUP.md#running-inside-a-docker-container) notes in the setup guide for details.
+defenses in force — see the [container access](setup/environments.md#running-inside-a-docker-container) notes in the setup guide for details.
 
 In this Docker-free mode most panels work normally (Configuration, Database, Spring Data, Flyway, Liquibase, Cache); the
 Chat and AI Framework panels report that AI is unavailable, and Dev Services lists no containers.
@@ -119,7 +119,7 @@ sample's reactive `SecurityWebFilterChain` and `WebFilter` pipeline with clearly
 the **Security advisor** runs its WebFlux-native 26-rule catalogue. The **REST Client** panel captures calls from Spring
 Boot's auto-configured `WebClient.Builder`, including live SSE updates and pause/resume/clear actions. **HTTP Sessions**
 stays not applicable (WebFlux has no `HttpSession`). See
-[WEBFLUX-SUPPORT.md](WEBFLUX-SUPPORT.md) for the full current status.
+[Framework support](FRAMEWORK-SUPPORT.md) for the full current status.
 
 ## BootUI on Quarkus
 
@@ -149,7 +149,7 @@ docker run --rm -p 8082:8082 \
 
 Most panels light up on Quarkus; a handful stay Spring- or framework-specific (for example GraalVM, CRaC, Conditions,
 Startup Timeline, HTTP Sessions, Spring Data, Spring Security, DevTools) and are clearly marked *not applicable*. See
-[FEATURES.md](FEATURES.md) for the full per-platform availability.
+[Features](features/README.md) for the full per-platform availability.
 
 ## Want the full experience?
 
