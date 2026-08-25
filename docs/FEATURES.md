@@ -1620,6 +1620,40 @@ identical.
 
 ![BootUI REST Client panel](./images/bootui-rest-client-trace.webp)
 
+### Fault Tolerance
+
+The Fault Tolerance panel makes an application's protective policies visible. It lists every circuit breaker, retry,
+rate limiter, bulkhead, time limiter, and fallback the application declares, with the settings that actually apply, the
+protected operation, live circuit breaker state, and — where the library exposes them — call counters. Below the
+inventory, a bounded event feed shows what fault tolerance machinery actually did: retried calls, exhausted retries, rejected
+calls, timeouts, short circuits, and circuit breaker state transitions.
+
+Three providers are supported, and several can be active at once:
+
+- **Resilience4j** (Spring MVC and Spring WebFlux) — read live from the `CircuitBreakerRegistry`, `RetryRegistry`,
+  `RateLimiterRegistry`, `BulkheadRegistry`, `ThreadPoolBulkheadRegistry`, and `TimeLimiterRegistry` beans, including
+  entries created lazily at runtime. Resilience4j's own event publishers feed the event feed, so state transitions and
+  retries appear without any wrapping or proxying by BootUI.
+- **Spring Retry** (Spring MVC and Spring WebFlux) — `@Retryable` metadata plus an additive `RetryListener` bean that
+  records retry attempts and exhaustion.
+- **SmallRye Fault Tolerance** (Quarkus) — `@CircuitBreaker`, `@Retry`, `@Timeout`, `@Bulkhead`, `@RateLimit`, and
+  `@Fallback` annotations are captured from the Jandex index at build time, with MicroProfile Fault Tolerance
+  configuration overrides resolved at runtime and marked as `configured` — including the MicroProfile `enabled` switches,
+  so a policy disabled through configuration is listed with a leading `enabled` = `false` setting rather than shown as if
+  it still applied. Live circuit breaker state and state-transition events come from `CircuitBreakerMaintenance` for
+  breakers carrying `@CircuitBreakerName`; SmallRye publishes no per-call event stream, so retries and rejections are not
+  individually captured there.
+
+The panel is **strictly capture-only**. BootUI never opens, closes, resets, forces, or otherwise mutates a policy, and it
+never triggers a protected call itself. Event capture is metadata only: policy name, outcome, attempt number, duration,
+the *simple name* of a failure's exception class, and circuit breaker state. Method arguments, return values, payloads
+and exception messages are never recorded. Fault tolerance events also appear in Live Activity as `FAULT_TOLERANCE` entries,
+correlated with the request that produced them, and clicking one opens this panel filtered to that policy.
+
+Set `bootui.fault-tolerance.enabled=false` to keep the live policy inventory while recording no events at all.
+
+![BootUI Fault Tolerance panel](./images/bootui-fault-tolerance.webp)
+
 ### WebSockets
 
 The WebSockets panel shows the WebSocket endpoints your application actually declares, the connections currently open
@@ -1677,37 +1711,7 @@ being on the classpath; on Quarkus it is gated on `quarkus-websockets-next` bein
 endpoint being declared, with the endpoint topology captured at build time from the Jandex index and connection
 lifecycle observed through `@Open`/`@Closed` CDI events over `OpenConnections`.
 
-### Fault Tolerance
-
-The Fault Tolerance panel makes an application's protective policies visible. It lists every circuit breaker, retry,
-rate limiter, bulkhead, time limiter, and fallback the application declares, with the settings that actually apply, the
-protected operation, live circuit breaker state, and — where the library exposes them — call counters. Below the
-inventory, a bounded event feed shows what fault tolerance machinery actually did: retried calls, exhausted retries, rejected
-calls, timeouts, short circuits, and circuit breaker state transitions.
-
-Three providers are supported, and several can be active at once:
-
-- **Resilience4j** (Spring MVC and Spring WebFlux) — read live from the `CircuitBreakerRegistry`, `RetryRegistry`,
-  `RateLimiterRegistry`, `BulkheadRegistry`, `ThreadPoolBulkheadRegistry`, and `TimeLimiterRegistry` beans, including
-  entries created lazily at runtime. Resilience4j's own event publishers feed the event feed, so state transitions and
-  retries appear without any wrapping or proxying by BootUI.
-- **Spring Retry** (Spring MVC and Spring WebFlux) — `@Retryable` metadata plus an additive `RetryListener` bean that
-  records retry attempts and exhaustion.
-- **SmallRye Fault Tolerance** (Quarkus) — `@CircuitBreaker`, `@Retry`, `@Timeout`, `@Bulkhead`, `@RateLimit`, and
-  `@Fallback` annotations are captured from the Jandex index at build time, with MicroProfile Fault Tolerance
-  configuration overrides resolved at runtime and marked as `configured` — including the MicroProfile `enabled` switches,
-  so a policy disabled through configuration is listed with a leading `enabled` = `false` setting rather than shown as if
-  it still applied. Live circuit breaker state and state-transition events come from `CircuitBreakerMaintenance` for
-  breakers carrying `@CircuitBreakerName`; SmallRye publishes no per-call event stream, so retries and rejections are not
-  individually captured there.
-
-The panel is **strictly capture-only**. BootUI never opens, closes, resets, forces, or otherwise mutates a policy, and it
-never triggers a protected call itself. Event capture is metadata only: policy name, outcome, attempt number, duration,
-the *simple name* of a failure's exception class, and circuit breaker state. Method arguments, return values, payloads
-and exception messages are never recorded. Fault tolerance events also appear in Live Activity as `FAULT_TOLERANCE` entries,
-correlated with the request that produced them, and clicking one opens this panel filtered to that policy.
-
-Set `bootui.fault-tolerance.enabled=false` to keep the live policy inventory while recording no events at all.
+![BootUI WebSockets panel](./images/bootui-websockets.webp)
 
 ### AI Framework
 
