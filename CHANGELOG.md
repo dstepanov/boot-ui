@@ -7,12 +7,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.15.0] - 2026-08-24
+## [1.15.0] - 2026-08-26
 
 Feature release that adds two panels — Fault Tolerance and WebSockets — on Spring MVC, Spring WebFlux, and Quarkus,
 explains where every meter comes from in the Metrics panel, ranks retained SQL and attributes it to request routes,
 catalogues the application's declared error contract in the REST API panel, and discloses cache tiers and native hit
-ratios. It also closes several masking, activation, and input-bounding gaps found by review.
+ratios. It also closes several masking, activation, and input-bounding gaps found by review, and rebuilds the
+documentation site around what readers actually came for.
 
 ### Added
 
@@ -96,8 +97,25 @@ ratios. It also closes several masking, activation, and input-bounding gaps foun
   filtering, contrast, and responsive presentation issues resolved across the console. The confirmation dialog and the
   Bootstrap collapse code are now deferred until the surfaces that need them are used, with deferred dialog state
   synchronized on mount so no confirmation is missed while the chunk loads.
+- **The documentation site is organized around what readers came for.** Local, service-free search now indexes the whole
+  site including advisor rule ids such as `SEC-AUTH-001`; the single 27k-word features page is split into one page per
+  console menu group under `/features`, with the group index still at the unchanged `/features` route; the twelve
+  diagnostic check catalogues gained an id/title/category search with a severity filter that collapses the page body to
+  match; the setup guide is four steps again, with WebFlux, Quarkus, Docker, command-line, activation-policy, and
+  troubleshooting material moved to focused pages under `/setup`; and the sidebar is regrouped into Get started,
+  Features, Reference, Diagnostic checks, Framework support, and Contributing. Markdown remains the single source of
+  truth — the check catalogues are still parsed from it at build time — and the feature, route, and conformance tests
+  that read the docs structurally were updated with it (#875).
+- **The documentation site measures traffic only after you agree.** Google Analytics is injected only once a reader
+  accepts; declining or ignoring the banner issues no third-party request at all, the decision is stored in
+  `localStorage` rather than a cookie, and withdrawing consent mutes an already-loaded tag and deletes its cookies.
+  Client-side route changes send an explicit `page_view`, and a new privacy page states what is collected (#876).
 
 ### Fixed
+
+- **A failed load of the REST API panel's declared error contract shows the reason instead of `[object Object]`.** The
+  panel passed the paged-list error descriptor straight into a string prop, so the failure rendered as the object's
+  default string form behind a Vue prop warning; it now uses the same error-formatting convention as every other panel.
 
 - **HTTP Probe input is explicitly bounded on Spring MVC, Spring WebFlux, and Quarkus.** The probe capped only the
   response body, so an oversized request body, path or header collection was bound by the adapter and forwarded to the
