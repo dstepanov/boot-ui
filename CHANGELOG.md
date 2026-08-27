@@ -7,13 +7,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.15.0] - 2026-08-26
+## [1.15.0] - 2026-08-27
 
 Feature release that adds two panels — Fault Tolerance and WebSockets — on Spring MVC, Spring WebFlux, and Quarkus,
 explains where every meter comes from in the Metrics panel, ranks retained SQL and attributes it to request routes,
-catalogues the application's declared error contract in the REST API panel, and discloses cache tiers and native hit
-ratios. It also closes several masking, activation, and input-bounding gaps found by review, and rebuilds the
-documentation site around what readers actually came for.
+catalogues the application's declared error contract in the REST API panel, discloses cache tiers and native hit
+ratios, and gives the console a theme picker with five opt-in skins. It also closes several masking, activation, and
+input-bounding gaps found by review, and rebuilds the documentation site around what readers actually came for.
 
 ### Added
 
@@ -90,6 +90,18 @@ documentation site around what readers actually came for.
   (same family, scope and window) and only when their sum is positive, so nothing is fabricated: an implementation that
   describes no storage reports no tier, and Quarkus reports statistics as unavailable because the public `CaffeineCache`
   API exposes none. The report is bounded (100 managers, 500 caches, 20 tiers) and states truncation in its warnings.
+- **A theme picker and five opt-in skins.** The light/dark toggle is replaced by a `menuitemradio` picker with roving
+  arrow/Home/End focus, Esc to close, and focus returned to its trigger, because a cycling button stops working as soon
+  as there is more than one alternative to cycle to. Alongside light and dark it offers Graphite (near-black with a
+  blue-steel accent), Minimal (paper and ink, no gradients, glass, or shadows), Cyberpunk (square geometry, HUD corner
+  brackets, chromatic aberration on display titles, and a CRT overlay), France (the French state design system's Bleu
+  France and Rouge Marianne), and Windows 95 (silver chrome, VGA palette, two-tone bevels). Each skin is a separate
+  stylesheet keyed on `html[data-bootui-theme='<id>']`, is only ever an explicit choice — `prefers-color-scheme` still
+  resolves to light or dark only — and stops its atmospheric motion under `prefers-reduced-motion`. Accessibility is
+  held constant across all seven themes: every skin declares opaque surface, field, and hovered-nav-row colors, every
+  text token must clear WCAG 2.1 AA against all three, and both a per-skin unit gate over the CSS source and the
+  Playwright contrast suite over real rendered surfaces enforce it. A skin may change how BootUI looks; it may never
+  change how much of it you can read (#878).
 
 ### Changed
 
@@ -113,6 +125,9 @@ documentation site around what readers actually came for.
 
 ### Fixed
 
+- **The theme menu is opaque in every theme.** The light and dark shells drew the menu on the translucent
+  `--bootui-surface` token with no backdrop filter, so page content read straight through the options; they now use
+  `--bootui-surface-solid`, and a regression test asserts an opaque picker in all seven themes.
 - **A failed load of the REST API panel's declared error contract shows the reason instead of `[object Object]`.** The
   panel passed the paged-list error descriptor straight into a string prop, so the failure rendered as the object's
   default string form behind a Vue prop warning; it now uses the same error-formatting convention as every other panel.
