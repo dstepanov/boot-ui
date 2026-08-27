@@ -304,6 +304,28 @@ Every skin obeys the same three rules:
   prefix would tie on specificity and lose at random. Adding a token to the light theme without a skin counterpart is
   safe — skins inherit it.
 
+#### Cyberpunk
+
+A rain-slick terminal district, and the skin that shows a novelty palette is not enough on its own. Neon accents over
+rounded cards read as "dark theme with a hue shift"; the genre lives in geometry, typography and the screen itself.
+
+- **Hard edges, everywhere.** Every radius token goes to `0`, and the shell components that hardcode their own radius
+  are zeroed explicitly — one rounded pill among square ones reads as a bug rather than a highlight. Panels wear HUD
+  corner brackets (cyan top-left, magenta bottom-right) drawn as inert `::before`/`::after` overlays. A real `clip-path`
+  chamfer would be more literal, but panels host absolutely positioned chart tooltips that it would cut off.
+- **Chromatic aberration.** Display titles carry an RGB split — magenta bleeding left, cyan bleeding right — as if the
+  beam were out of convergence. The glyph itself stays solid near-white: the split is a halo around a legible letter,
+  never a substitute for one.
+- **The HUD voice.** Micro-labels go uppercase with `0.14em` tracking. This is restricted to strings that are already
+  short and label-shaped — column heads, nav sections, status tags. Panel titles and body copy are left alone, because
+  uppercase destroys word shape and slows reading.
+- **A live CRT.** A fixed overlay carries scanlines, a vignette and a slow flicker over the whole viewport. It is
+  deliberately weak: at 13% black on one row in three it costs about 4% of luminance, invisible against the ~17:1 that
+  body copy holds over these panels. Turning it up looks better in a screenshot and worse at 2am.
+- **One authored moment.** A scan pass over the active nav row, so the selected panel reads as the live feed. Nothing
+  else in the skin animates. The flicker and the scan are atmosphere, not information, and both stop outright under
+  `prefers-reduced-motion` while the scanlines and vignette stay.
+
 #### Windows 95
 
 The most extreme of the skins, and the one that documents how far a skin may go. It exists because a local developer
