@@ -397,6 +397,14 @@ Docker's default `/proc` restrictions prevent CRIU from restoring the checkpoint
 grants broad host access, so use this image only for local development on an isolated machine — never production or a
 shared host.
 
+> **Known upstream limitation on AMX-capable Intel CPUs.** If the first start fails with
+> `Checkpoint creation failed` and the CRIU log shows `Can't set FPU registers ...: Bad address`, the host CPU supports
+> Intel AMX (Sapphire Rapids and newer — check with `grep amx_tile /proc/cpuinfo`). The CRaC project's bundled CRIU fork
+> (3.17.1-crac, shipped by every CRaC JDK vendor) passes a fixed-size register buffer that such kernels reject; this is
+> [criu#2835](https://github.com/checkpoint-restore/criu/issues/2835), fixed upstream in CRIU 4.x. Only *taking* a
+> checkpoint is affected, so a checkpoint created elsewhere still restores. Until the CRaC JDKs pick up a newer CRIU, use
+> a machine without AMX (any arm64 host, or an AMD x86_64 host) to create the checkpoint.
+
 ### How the checkpoint is taken
 
 `spring.context.checkpoint=onRefresh` asks Spring to take the checkpoint as soon
