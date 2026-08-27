@@ -1,0 +1,596 @@
+/*
+ * BootUI "Graphite" shell.
+ *
+ * Graphite is the quiet pro-tool skin: near-black neutral planes, precise
+ * hairlines, restrained luminance steps, and one blue-steel accent. It keeps the
+ * BootUI layout, type scale, focus order, and status semantics intact; only the
+ * material finish changes.
+ *
+ * Everything here is keyed on `html[data-bootui-theme='graphite']`. The leading
+ * type selector deliberately outranks the scoped `[data-v-*]` rules in App.vue
+ * and the panel components without relying on stylesheet order.
+ */
+
+html[data-bootui-theme='graphite'] {
+  --graphite-accent: #8fb7ff;
+  --graphite-accent-fill: #345f9c;
+  --graphite-accent-soft: rgba(143, 183, 255, 0.14);
+  --graphite-accent-soft-solid: #172235;
+  --graphite-black: #07080a;
+  --graphite-edge: rgba(233, 238, 246, 0.12);
+  --graphite-edge-strong: rgba(233, 238, 246, 0.18);
+  --graphite-panel: #111318;
+
+  --bootui-bg-body: linear-gradient(135deg, #07080a 0%, #0a0d11 48%, #101319 100%);
+  --bootui-bg-body-orb: rgba(143, 183, 255, 0.08);
+  --bootui-blue: #8fb7ff;
+  --bootui-border: rgba(233, 238, 246, 0.1);
+  --bootui-border-alt: rgba(233, 238, 246, 0.16);
+  --bootui-border-subtle: rgba(233, 238, 246, 0.07);
+  --bootui-chart-axis: #b7c0ca;
+  --bootui-chart-calls: #8fcfa7;
+  --bootui-chart-grid: #2a3038;
+  --bootui-chart-input: #8fb7ff;
+  --bootui-chart-output: #b8a7ff;
+  --bootui-chart-selection: #d7dde5;
+  --bootui-chart-span: #343b45;
+  --bootui-chart-tool: #8fb7ff;
+  --bootui-chart-tooltip-bg: #14171c;
+  --bootui-chart-tooltip-border: #343b45;
+  --bootui-chart-tooltip-text: #f4f6f8;
+  --bootui-chart-vector: #e9a66d;
+  --bootui-code-pane-bg: #050608;
+  --bootui-code-pane-border: rgba(233, 238, 246, 0.13);
+  --bootui-code-pane-text: #e8edf3;
+  --bootui-critical: #ff6b7a;
+  --bootui-danger: #ff6b7a;
+  --bootui-danger-text: #ff9aa4;
+  --bootui-green: #8fb7ff;
+  --bootui-green-dark: #aac8ff;
+  --bootui-heat-low-bg: #352816;
+  --bootui-heat-low-text: #f2c14d;
+  --bootui-high: #f2a365;
+  --bootui-highlight-bg: rgba(242, 193, 77, 0.14);
+  --bootui-info: #80d8ff;
+  --bootui-info-text: #9bddff;
+  --bootui-nav-active-bg: linear-gradient(135deg, #345f9c, #213654);
+  --bootui-nav-active-color: #ffffff;
+  --bootui-nav-group-bg: #101319;
+  --bootui-nav-group-color: #b7c0ca;
+  --bootui-nav-hover-bg: #1c222a;
+  --bootui-nav-hover-color: #dbe7ff;
+  --bootui-nav-link-color: #c5cdd7;
+  --bootui-radius-lg: 1.1rem;
+  --bootui-radius-md: 0.75rem;
+  --bootui-radius-pill: 999px;
+  --bootui-radius-sm: 0.5rem;
+  --bootui-radius-xl: 1.25rem;
+  --bootui-radius-xs: 0.35rem;
+  --bootui-secondary: #8f9aa7;
+  --bootui-shadow-md: 0 1.2rem 3rem rgba(0, 0, 0, 0.48);
+  --bootui-shadow-sidebar: 0.75rem 0 2rem rgba(0, 0, 0, 0.34);
+  --bootui-shadow-sm: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.28);
+  --bootui-sidebar-bg: rgba(9, 11, 14, 0.92);
+  --bootui-skeleton-base: #20262e;
+  --bootui-skeleton-shine: #313844;
+  --bootui-surface: rgba(17, 19, 24, 0.9);
+  --bootui-surface-alt: #0f1217;
+  --bootui-surface-solid: #14171c;
+  --bootui-text: #f4f6f8;
+  --bootui-text-muted: #b7c0ca;
+  --bootui-text-subtle: #a9b2bd;
+  --bootui-warning: #f2c14d;
+  --bootui-warning-text: #d7a941;
+  --bootui-warning-text-strong: #f2c14d;
+
+  color-scheme: dark;
+}
+
+html[data-bootui-theme='graphite'] body {
+  background: radial-gradient(circle at top left, var(--bootui-bg-body-orb), transparent 32rem), var(--bootui-bg-body);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .ambient-orb {
+  filter: blur(70px);
+  opacity: 0.24;
+}
+
+html[data-bootui-theme='graphite'] .ambient-orb-one {
+  background: rgba(143, 183, 255, 0.13);
+}
+
+html[data-bootui-theme='graphite'] .ambient-orb-two {
+  background: rgba(117, 127, 148, 0.14);
+}
+
+/* --------------------------------------------------------------- shell chrome */
+
+html[data-bootui-theme='graphite'] .bootui-shell {
+  background: transparent;
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .bootui-sidebar,
+html[data-bootui-theme='graphite'] .topbar {
+  backdrop-filter: blur(18px) saturate(120%);
+  background: var(--bootui-sidebar-bg);
+  border-color: var(--bootui-border-subtle);
+  box-shadow: none;
+}
+
+html[data-bootui-theme='graphite'] .bootui-sidebar {
+  border-right: 1px solid var(--bootui-border);
+}
+
+html[data-bootui-theme='graphite'] .topbar {
+  border-bottom: 1px solid var(--bootui-border-subtle);
+}
+
+html[data-bootui-theme='graphite'] .brand-card,
+html[data-bootui-theme='graphite'] .contribute-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)), var(--bootui-surface);
+  border: 1px solid var(--bootui-border);
+  box-shadow: none;
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .brand-card:hover,
+html[data-bootui-theme='graphite'] .contribute-card:hover {
+  border-color: var(--graphite-edge-strong);
+  box-shadow: var(--bootui-shadow-sm);
+  transform: translateY(-1px);
+}
+
+html[data-bootui-theme='graphite'] .brand-mark,
+html[data-bootui-theme='graphite'] .contribute-icon,
+html[data-bootui-theme='graphite'] .authentication-icon {
+  background: var(--graphite-accent-fill);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+html[data-bootui-theme='graphite'] .brand-name,
+html[data-bootui-theme='graphite'] .topbar-title {
+  color: var(--bootui-text);
+  letter-spacing: -0.02em;
+}
+
+html[data-bootui-theme='graphite'] .brand-subtitle,
+html[data-bootui-theme='graphite'] .topbar-subtitle {
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='graphite'] .bootui-footer {
+  border-top: 1px solid var(--bootui-border-subtle);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='graphite'] .bootui-footer a:hover,
+html[data-bootui-theme='graphite'] .bootui-footer__context > .bi {
+  color: var(--graphite-accent);
+}
+
+/* ---------------------------------------------------------------- navigation */
+
+html[data-bootui-theme='graphite'] .bootui-nav-group__items {
+  border-left-color: var(--bootui-border-subtle);
+}
+
+html[data-bootui-theme='graphite'] .bootui-nav-group__toggle {
+  background: var(--bootui-nav-group-bg);
+  border: 1px solid var(--bootui-border-subtle);
+  color: var(--bootui-nav-group-color);
+}
+
+html[data-bootui-theme='graphite'] .bootui-nav-group__toggle:hover,
+html[data-bootui-theme='graphite'] .bootui-nav-group__toggle.active {
+  background: var(--bootui-nav-hover-bg);
+  border-color: rgba(143, 183, 255, 0.2);
+  color: var(--bootui-nav-hover-color);
+  transform: translateX(2px);
+}
+
+html[data-bootui-theme='graphite'] .bootui-nav-group__count {
+  background: rgba(233, 238, 246, 0.08);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='graphite'] .bootui-nav-link {
+  color: var(--bootui-nav-link-color);
+}
+
+html[data-bootui-theme='graphite'] .bootui-nav-link:hover {
+  background: var(--bootui-nav-hover-bg);
+  color: var(--bootui-nav-hover-color);
+}
+
+html[data-bootui-theme='graphite'] .bootui-nav-link.active {
+  background: var(--bootui-nav-active-bg);
+  box-shadow: 0 0.8rem 1.4rem rgba(11, 17, 27, 0.34);
+  color: var(--bootui-nav-active-color);
+}
+
+html[data-bootui-theme='graphite'] .bootui-nav-link--unavailable,
+html[data-bootui-theme='graphite'] .bootui-nav-link__status {
+  color: var(--bootui-text-subtle);
+}
+
+html[data-bootui-theme='graphite'] .bootui-nav-flyout,
+html[data-bootui-theme='graphite'] .theme-menu {
+  background: rgba(20, 23, 28, 0.98);
+  border: 1px solid var(--bootui-border);
+  box-shadow: var(--bootui-shadow-md);
+}
+
+html[data-bootui-theme='graphite'] .bootui-nav-flyout__title {
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='graphite'] .brand-card:focus-visible,
+html[data-bootui-theme='graphite'] .contribute-card:focus-visible,
+html[data-bootui-theme='graphite'] .sidebar-toggle:focus-visible,
+html[data-bootui-theme='graphite'] .bootui-nav-group__toggle:focus-visible,
+html[data-bootui-theme='graphite'] .nav-hamburger:focus-visible,
+html[data-bootui-theme='graphite'] .cp-trigger:focus-visible,
+html[data-bootui-theme='graphite'] .theme-toggle:focus-visible,
+html[data-bootui-theme='graphite'] .theme-option:focus-visible,
+html[data-bootui-theme='graphite'] .bootui-nav-link:focus-visible,
+html[data-bootui-theme='graphite'] .btn:focus-visible,
+html[data-bootui-theme='graphite'] .bootui-keyboard-target:focus-visible {
+  outline: 2px solid var(--graphite-accent);
+  outline-offset: 2px;
+}
+
+/* ----------------------------------------------------------------- controls */
+
+html[data-bootui-theme='graphite'] .btn {
+  border-radius: var(--bootui-radius-md);
+  font-weight: 600;
+}
+
+html[data-bootui-theme='graphite'] .btn-primary,
+html[data-bootui-theme='graphite'] .authentication-submit {
+  --bs-btn-active-bg: #294b7d;
+  --bs-btn-active-border-color: #294b7d;
+  --bs-btn-bg: var(--graphite-accent-fill);
+  --bs-btn-border-color: var(--graphite-accent-fill);
+  --bs-btn-color: #ffffff;
+  --bs-btn-disabled-bg: var(--graphite-accent-fill);
+  --bs-btn-disabled-border-color: var(--graphite-accent-fill);
+  --bs-btn-focus-shadow-rgb: 143, 183, 255;
+  --bs-btn-hover-bg: #3f6dad;
+  --bs-btn-hover-border-color: #3f6dad;
+  --bs-btn-hover-color: #ffffff;
+  background: var(--graphite-accent-fill);
+  border-color: var(--graphite-accent-fill);
+  color: #ffffff;
+}
+
+html[data-bootui-theme='graphite'] .btn-outline-primary,
+html[data-bootui-theme='graphite'] .btn-outline-secondary {
+  --bs-btn-active-bg: var(--graphite-accent-soft-solid);
+  --bs-btn-active-border-color: rgba(143, 183, 255, 0.34);
+  --bs-btn-active-color: var(--bootui-text);
+  --bs-btn-border-color: var(--bootui-border-alt);
+  --bs-btn-color: var(--bootui-text-muted);
+  --bs-btn-disabled-border-color: var(--bootui-border);
+  --bs-btn-disabled-color: var(--bootui-text-subtle);
+  --bs-btn-focus-shadow-rgb: 143, 183, 255;
+  --bs-btn-hover-bg: var(--graphite-accent-soft-solid);
+  --bs-btn-hover-border-color: rgba(143, 183, 255, 0.34);
+  --bs-btn-hover-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .cp-trigger,
+html[data-bootui-theme='graphite'] .theme-toggle,
+html[data-bootui-theme='graphite'] .nav-hamburger,
+html[data-bootui-theme='graphite'] .sidebar-toggle {
+  background: rgba(20, 23, 28, 0.82);
+  border: 1px solid var(--bootui-border);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='graphite'] .cp-trigger:hover,
+html[data-bootui-theme='graphite'] .theme-toggle:hover,
+html[data-bootui-theme='graphite'] .nav-hamburger:hover,
+html[data-bootui-theme='graphite'] .sidebar-toggle:hover {
+  background: var(--bootui-nav-hover-bg);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .cp-trigger-hint,
+html[data-bootui-theme='graphite'] kbd {
+  background: #090b0f;
+  border: 1px solid var(--bootui-border-alt);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='graphite'] .form-control,
+html[data-bootui-theme='graphite'] .form-select,
+html[data-bootui-theme='graphite'] .input-group-text {
+  background-color: var(--bootui-surface-alt);
+  border-color: var(--bootui-border-alt);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .form-control:hover,
+html[data-bootui-theme='graphite'] .form-select:hover {
+  border-color: rgba(143, 183, 255, 0.34);
+}
+
+html[data-bootui-theme='graphite'] .form-control:focus,
+html[data-bootui-theme='graphite'] .form-select:focus {
+  background-color: var(--bootui-surface-alt);
+  border-color: var(--graphite-accent);
+  box-shadow: 0 0 0 0.2rem rgba(143, 183, 255, 0.18);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .form-control::placeholder {
+  color: var(--bootui-text-subtle);
+  opacity: 1;
+}
+
+html[data-bootui-theme='graphite'] .form-check-input:checked {
+  background-color: var(--graphite-accent-fill);
+  border-color: var(--graphite-accent-fill);
+}
+
+/* ------------------------------------------------------------------ surfaces */
+
+html[data-bootui-theme='graphite'] .card,
+html[data-bootui-theme='graphite'] .modal-content,
+html[data-bootui-theme='graphite'] .authentication-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0)), var(--bootui-surface);
+  border: 1px solid var(--bootui-border);
+  box-shadow: var(--bootui-shadow-sm);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .card-header,
+html[data-bootui-theme='graphite'] .modal-header {
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom-color: var(--bootui-border-subtle);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .list-group-item {
+  background: var(--bootui-surface-solid);
+  border-color: var(--bootui-border);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .list-group-item-action:hover,
+html[data-bootui-theme='graphite'] .list-group-item-action:focus {
+  background: var(--bootui-nav-hover-bg);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .list-group-item-action.active {
+  --bs-list-group-active-bg: var(--graphite-accent-fill);
+  --bs-list-group-active-border-color: var(--graphite-accent-fill);
+  background: var(--graphite-accent-fill);
+  border-color: var(--graphite-accent-fill);
+  color: #ffffff;
+}
+
+html[data-bootui-theme='graphite'] .table {
+  --bs-table-bg: transparent;
+  --bs-table-border-color: var(--bootui-border);
+  --bs-table-color: var(--bootui-text);
+  --bs-table-hover-bg: rgba(143, 183, 255, 0.08);
+  --bs-table-hover-color: var(--bootui-text);
+  --bs-table-striped-bg: rgba(255, 255, 255, 0.025);
+  --bs-table-striped-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .table > thead > tr > th {
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom-color: var(--bootui-border-alt);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='graphite'] .table-light,
+html[data-bootui-theme='graphite'] .table-active {
+  --bs-table-active-bg: rgba(143, 183, 255, 0.1);
+  --bs-table-active-color: var(--bootui-text);
+  --bs-table-bg: var(--bootui-surface-alt);
+  --bs-table-border-color: var(--bootui-border);
+  --bs-table-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .table-warning {
+  --bs-table-active-bg: rgba(242, 193, 77, 0.2);
+  --bs-table-active-color: var(--bootui-text);
+  --bs-table-bg: rgba(242, 193, 77, 0.12);
+  --bs-table-border-color: rgba(242, 193, 77, 0.28);
+  --bs-table-color: var(--bootui-text);
+  --bs-table-hover-bg: rgba(242, 193, 77, 0.18);
+  --bs-table-hover-color: var(--bootui-text);
+  --bs-table-striped-bg: rgba(242, 193, 77, 0.15);
+  --bs-table-striped-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .table-danger {
+  --bs-table-active-bg: rgba(255, 107, 122, 0.2);
+  --bs-table-active-color: var(--bootui-text);
+  --bs-table-bg: rgba(255, 107, 122, 0.12);
+  --bs-table-border-color: rgba(255, 107, 122, 0.28);
+  --bs-table-color: var(--bootui-text);
+  --bs-table-hover-bg: rgba(255, 107, 122, 0.18);
+  --bs-table-hover-color: var(--bootui-text);
+  --bs-table-striped-bg: rgba(255, 107, 122, 0.15);
+  --bs-table-striped-color: var(--bootui-text);
+}
+
+/* --------------------------------------------------------------- state chrome */
+
+html[data-bootui-theme='graphite'] .alert {
+  border-radius: var(--bootui-radius-md);
+}
+
+html[data-bootui-theme='graphite'] .alert-danger {
+  --bs-alert-bg: rgba(255, 107, 122, 0.12);
+  --bs-alert-border-color: rgba(255, 107, 122, 0.28);
+  --bs-alert-color: var(--bootui-danger-text);
+}
+
+html[data-bootui-theme='graphite'] .alert-info {
+  --bs-alert-bg: rgba(128, 216, 255, 0.1);
+  --bs-alert-border-color: rgba(128, 216, 255, 0.24);
+  --bs-alert-color: var(--bootui-info-text);
+}
+
+html[data-bootui-theme='graphite'] .alert-warning {
+  --bs-alert-bg: rgba(242, 193, 77, 0.11);
+  --bs-alert-border-color: rgba(242, 193, 77, 0.26);
+  --bs-alert-color: var(--bootui-warning-text-strong);
+}
+
+html[data-bootui-theme='graphite'] .badge.bg-light,
+html[data-bootui-theme='graphite'] .text-bg-light {
+  background-color: rgba(233, 238, 246, 0.12) !important;
+  color: var(--bootui-text-muted) !important;
+}
+
+html[data-bootui-theme='graphite'] .text-danger {
+  color: rgba(255, 154, 164, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='graphite'] .text-info {
+  color: rgba(155, 221, 255, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='graphite'] .text-muted {
+  color: var(--bootui-text-muted) !important;
+}
+
+html[data-bootui-theme='graphite'] .text-primary,
+html[data-bootui-theme='graphite'] .text-success {
+  color: rgba(143, 183, 255, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='graphite'] .text-warning {
+  color: rgba(242, 193, 77, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='graphite'] .status-pill,
+html[data-bootui-theme='graphite'] .profile-chip {
+  background: rgba(20, 23, 28, 0.86);
+  border: 1px solid var(--bootui-border);
+  box-shadow: none;
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='graphite'] .status-pill--active,
+html[data-bootui-theme='graphite'] .profile-chip {
+  background: rgba(143, 183, 255, 0.12);
+  border-color: rgba(143, 183, 255, 0.24);
+  color: var(--graphite-accent);
+}
+
+html[data-bootui-theme='graphite'] .status-pill--disabled,
+html[data-bootui-theme='graphite'] .status-pill--checking,
+html[data-bootui-theme='graphite'] .profile-chip.muted {
+  background: rgba(233, 238, 246, 0.08);
+  border-color: var(--bootui-border);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='graphite'] .status-pill--error,
+html[data-bootui-theme='graphite'] .status-pill--unreachable {
+  background: rgba(255, 107, 122, 0.12);
+  border-color: rgba(255, 107, 122, 0.26);
+  color: var(--bootui-danger-text);
+}
+
+/* ---------------------------------------------------------- command + theme UI */
+
+html[data-bootui-theme='graphite'] .cp-dialog {
+  background: rgba(13, 15, 20, 0.98);
+  border: 1px solid var(--bootui-border);
+  box-shadow: var(--bootui-shadow-md);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .cp-panel {
+  background: var(--bootui-surface-solid);
+  border: 1px solid var(--bootui-border);
+}
+
+html[data-bootui-theme='graphite'] .cp-item {
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .cp-item.active,
+html[data-bootui-theme='graphite'] .cp-item[aria-selected='true'] {
+  background: var(--bootui-nav-hover-bg);
+  color: var(--bootui-nav-hover-color);
+}
+
+html[data-bootui-theme='graphite'] .cp-section-label,
+html[data-bootui-theme='graphite'] .theme-option__hint,
+html[data-bootui-theme='graphite'] .theme-option__icon {
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='graphite'] .theme-option {
+  background: transparent;
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='graphite'] .theme-option:hover,
+html[data-bootui-theme='graphite'] .theme-option:focus-visible {
+  background: var(--bootui-nav-hover-bg);
+}
+
+html[data-bootui-theme='graphite'] .theme-option[aria-checked='true'] {
+  background: rgba(143, 183, 255, 0.1);
+}
+
+html[data-bootui-theme='graphite'] .theme-option[aria-checked='true'] .theme-option__icon,
+html[data-bootui-theme='graphite'] .theme-option[aria-checked='true'] .theme-option__check {
+  color: var(--graphite-accent);
+}
+
+html[data-bootui-theme='graphite'] .theme-option__label {
+  color: var(--bootui-text);
+}
+
+/* -------------------------------------------------------------- code + output */
+
+html[data-bootui-theme='graphite'] .bootui-code-pane {
+  background: var(--bootui-code-pane-bg);
+  border: 1px solid var(--bootui-code-pane-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  color: var(--bootui-code-pane-text);
+}
+
+html[data-bootui-theme='graphite'] code {
+  color: inherit;
+}
+
+html[data-bootui-theme='graphite'] .bg-light:not(.badge),
+html[data-bootui-theme='graphite'] .bg-white {
+  background-color: var(--bootui-surface-solid) !important;
+  color: var(--bootui-text) !important;
+}
+
+html[data-bootui-theme='graphite'] .progress {
+  background-color: #0b0e12;
+  border: 1px solid var(--bootui-border-subtle);
+}
+
+html[data-bootui-theme='graphite'] .progress-bar {
+  background-color: var(--graphite-accent-fill);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-bootui-theme='graphite'] .brand-card,
+  html[data-bootui-theme='graphite'] .contribute-card,
+  html[data-bootui-theme='graphite'] .bootui-nav-link,
+  html[data-bootui-theme='graphite'] .bootui-nav-group__toggle {
+    transform: none;
+  }
+}

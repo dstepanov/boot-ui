@@ -1,0 +1,656 @@
+/*
+ * BootUI "République Française" shell.
+ *
+ * This theme borrows the DSFR decision-token grammar: neutral page layers,
+ * Bleu France as the sole action colour, Rouge Marianne for critical risk, and
+ * system colours only for status. It keeps BootUI's layout, spacing, type scale,
+ * safety semantics and focus order intact.
+ *
+ * Everything here is keyed on `html[data-bootui-theme='dsfr']`. The leading type
+ * selector deliberately outranks the scoped `[data-v-*]` rules in App.vue and the
+ * panel components without relying on stylesheet order.
+ */
+
+html[data-bootui-theme='dsfr'] {
+  --bs-body-bg: var(--dsfr-grey-1000);
+  --bs-body-color: var(--bootui-text);
+  --bs-body-font-family: var(--dsfr-font);
+  --bs-border-color: var(--bootui-border);
+  --bs-link-color: var(--dsfr-blue-france-sun-113);
+  --bs-link-hover-color: var(--dsfr-blue-france-hover);
+  --bs-primary: var(--dsfr-blue-france-sun-113);
+  --bs-primary-rgb: 0, 0, 145;
+
+  --dsfr-blue-france-hover: #1212ff;
+  --dsfr-blue-france-low: #e3e3fd;
+  --dsfr-blue-france-main-525: #6a6af4;
+  --dsfr-blue-france-sun-113: #000091;
+  --dsfr-font: Marianne, Arial, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --dsfr-grey-1000: #ffffff;
+  --dsfr-grey-200: #3a3a3a;
+  --dsfr-grey-425: #666666;
+  --dsfr-grey-50: #161616;
+  --dsfr-grey-925: #e5e5e5;
+  --dsfr-grey-950: #eeeeee;
+  --dsfr-grey-975: #f6f6f6;
+  --dsfr-red-marianne-425: #c9191e;
+  --dsfr-red-marianne-main-472: #e1000f;
+
+  /* DSFR decision tokens: background-action-high-blue-france and text-default-grey. */
+  --bootui-bg-body: linear-gradient(180deg, #ffffff 0%, #f6f6f6 46%, #f5f5fe 100%);
+  --bootui-bg-body-orb: rgba(0, 0, 145, 0.08);
+  --bootui-blue: var(--dsfr-blue-france-sun-113);
+  --bootui-border: var(--dsfr-grey-925);
+  --bootui-border-alt: #dddddd;
+  --bootui-border-subtle: #eeeeee;
+  --bootui-chart-axis: var(--dsfr-grey-425);
+  --bootui-chart-calls: #18753c;
+  --bootui-chart-grid: var(--dsfr-grey-925);
+  --bootui-chart-input: var(--dsfr-blue-france-sun-113);
+  --bootui-chart-output: var(--dsfr-red-marianne-main-472);
+  --bootui-chart-selection: var(--dsfr-grey-425);
+  --bootui-chart-span: var(--dsfr-grey-925);
+  --bootui-chart-tool: var(--dsfr-blue-france-main-525);
+  --bootui-chart-tooltip-bg: var(--dsfr-grey-1000);
+  --bootui-chart-tooltip-border: var(--dsfr-grey-925);
+  --bootui-chart-tooltip-text: var(--dsfr-grey-50);
+  --bootui-chart-vector: #b34000;
+  --bootui-code-pane-bg: #161616;
+  --bootui-code-pane-border: #3a3a3a;
+  --bootui-code-pane-text: #f6f6f6;
+  --bootui-critical: var(--dsfr-red-marianne-425);
+  --bootui-danger: var(--dsfr-red-marianne-main-472);
+  --bootui-danger-text: var(--dsfr-red-marianne-425);
+  --bootui-green: #18753c;
+  --bootui-green-dark: #18753c;
+  --bootui-heat-low-bg: #ffe9e6;
+  --bootui-heat-low-text: #b34000;
+  --bootui-high: #b34000;
+  --bootui-highlight-bg: #ececfe;
+  --bootui-info: #0063cb;
+  --bootui-info-text: #0063cb;
+  --bootui-nav-active-bg: var(--dsfr-blue-france-sun-113);
+  --bootui-nav-active-color: #f5f5fe;
+  --bootui-nav-group-bg: var(--dsfr-grey-1000);
+  --bootui-nav-group-color: var(--dsfr-grey-200);
+  --bootui-nav-hover-bg: #e3e3fd;
+  --bootui-nav-hover-color: var(--dsfr-blue-france-sun-113);
+  --bootui-nav-link-color: var(--dsfr-grey-200);
+  --bootui-radius-lg: 0.25rem;
+  --bootui-radius-md: 0.125rem;
+  --bootui-radius-pill: 0.125rem;
+  --bootui-radius-sm: 0.125rem;
+  --bootui-radius-xl: 0.25rem;
+  --bootui-radius-xs: 0;
+  --bootui-secondary: var(--dsfr-grey-425);
+  --bootui-shadow-md: 0 1rem 2rem rgba(22, 22, 22, 0.12);
+  --bootui-shadow-sidebar: none;
+  --bootui-shadow-sm: 0 0.25rem 0.75rem rgba(22, 22, 22, 0.08);
+  --bootui-sidebar-bg: #ffffff;
+  --bootui-skeleton-base: var(--dsfr-grey-925);
+  --bootui-skeleton-shine: var(--dsfr-grey-1000);
+  --bootui-surface: rgba(255, 255, 255, 0.94);
+  --bootui-surface-alt: #eeeeee;
+  --bootui-surface-solid: #ffffff;
+  --bootui-text: var(--dsfr-grey-50);
+  --bootui-text-muted: var(--dsfr-grey-200);
+  --bootui-text-subtle: var(--dsfr-grey-425);
+  --bootui-warning: #b34000;
+  --bootui-warning-text: #b34000;
+  --bootui-warning-text-strong: #b34000;
+
+  color-scheme: light;
+  font-family: var(--dsfr-font);
+}
+
+html[data-bootui-theme='dsfr'] body {
+  background: radial-gradient(circle at 8% 18%, rgba(0, 0, 145, 0.08), transparent 24rem), var(--bootui-bg-body);
+  color: var(--bootui-text);
+  font-family: var(--dsfr-font);
+}
+
+html[data-bootui-theme='dsfr'] a {
+  color: var(--dsfr-blue-france-sun-113);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+html[data-bootui-theme='dsfr'] a:hover {
+  color: var(--dsfr-blue-france-hover);
+}
+
+html[data-bootui-theme='dsfr'] .ambient-orb {
+  display: none;
+}
+
+/* ----------------------------------------------------------------- shell chrome */
+
+html[data-bootui-theme='dsfr'] .bootui-shell {
+  background: transparent;
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .bootui-sidebar,
+html[data-bootui-theme='dsfr'] .topbar {
+  backdrop-filter: none;
+  background: var(--bootui-sidebar-bg);
+  box-shadow: none;
+}
+
+html[data-bootui-theme='dsfr'] .bootui-sidebar {
+  border-right: 1px solid var(--bootui-border);
+}
+
+html[data-bootui-theme='dsfr'] .topbar {
+  border-bottom: 1px solid var(--bootui-border);
+}
+
+html[data-bootui-theme='dsfr'] .brand-card,
+html[data-bootui-theme='dsfr'] .contribute-card {
+  background: var(--bootui-surface-solid);
+  border: 1px solid var(--bootui-border);
+  box-shadow: none;
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .brand-card:hover,
+html[data-bootui-theme='dsfr'] .contribute-card:hover {
+  background: var(--dsfr-grey-975);
+  border-color: var(--dsfr-blue-france-main-525);
+  box-shadow: none;
+  transform: none;
+}
+
+html[data-bootui-theme='dsfr'] .brand-mark,
+html[data-bootui-theme='dsfr'] .contribute-icon,
+html[data-bootui-theme='dsfr'] .authentication-icon {
+  background: var(--dsfr-blue-france-sun-113);
+  box-shadow: none;
+  color: #f5f5fe;
+}
+
+html[data-bootui-theme='dsfr'] .brand-name,
+html[data-bootui-theme='dsfr'] .topbar-title {
+  color: var(--dsfr-blue-france-sun-113);
+  letter-spacing: -0.01em;
+}
+
+html[data-bootui-theme='dsfr'] .brand-subtitle,
+html[data-bootui-theme='dsfr'] .topbar-subtitle {
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='dsfr'] .bootui-footer {
+  background: var(--dsfr-grey-1000);
+  border-top: 1px solid var(--bootui-border);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='dsfr'] .bootui-footer a:hover,
+html[data-bootui-theme='dsfr'] .bootui-footer__context > .bi {
+  color: var(--dsfr-blue-france-sun-113);
+}
+
+/* ------------------------------------------------------------------ navigation */
+
+html[data-bootui-theme='dsfr'] .bootui-nav-group__items {
+  border-left-color: var(--bootui-border);
+}
+
+html[data-bootui-theme='dsfr'] .bootui-nav-group__toggle {
+  background: var(--bootui-nav-group-bg);
+  border: 1px solid var(--bootui-border-subtle);
+  color: var(--bootui-nav-group-color);
+}
+
+html[data-bootui-theme='dsfr'] .bootui-nav-group__toggle:hover,
+html[data-bootui-theme='dsfr'] .bootui-nav-group__toggle.active {
+  background: var(--bootui-nav-hover-bg);
+  border-color: var(--dsfr-blue-france-main-525);
+  color: var(--bootui-nav-hover-color);
+  transform: none;
+}
+
+html[data-bootui-theme='dsfr'] .bootui-nav-group__count {
+  background: var(--dsfr-grey-950);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='dsfr'] .bootui-nav-link {
+  border-left: 3px solid transparent;
+  color: var(--bootui-nav-link-color);
+}
+
+html[data-bootui-theme='dsfr'] .bootui-nav-link:hover {
+  background: var(--bootui-nav-hover-bg);
+  border-left-color: var(--dsfr-blue-france-main-525);
+  color: var(--bootui-nav-hover-color);
+  transform: none;
+}
+
+html[data-bootui-theme='dsfr'] .bootui-nav-link.active {
+  background: var(--bootui-nav-active-bg);
+  border-left-color: var(--dsfr-red-marianne-main-472);
+  box-shadow: none;
+  color: var(--bootui-nav-active-color);
+}
+
+html[data-bootui-theme='dsfr'] .bootui-nav-link--unavailable,
+html[data-bootui-theme='dsfr'] .bootui-nav-link__status {
+  color: var(--bootui-text-subtle);
+}
+
+html[data-bootui-theme='dsfr'] .bootui-nav-flyout,
+html[data-bootui-theme='dsfr'] .theme-menu {
+  background: var(--bootui-surface-solid);
+  border: 1px solid var(--bootui-border);
+  box-shadow: var(--bootui-shadow-md);
+}
+
+html[data-bootui-theme='dsfr'] .bootui-nav-flyout__title {
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='dsfr'] .brand-card:focus-visible,
+html[data-bootui-theme='dsfr'] .contribute-card:focus-visible,
+html[data-bootui-theme='dsfr'] .sidebar-toggle:focus-visible,
+html[data-bootui-theme='dsfr'] .bootui-nav-group__toggle:focus-visible,
+html[data-bootui-theme='dsfr'] .nav-hamburger:focus-visible,
+html[data-bootui-theme='dsfr'] .cp-trigger:focus-visible,
+html[data-bootui-theme='dsfr'] .theme-toggle:focus-visible,
+html[data-bootui-theme='dsfr'] .theme-option:focus-visible,
+html[data-bootui-theme='dsfr'] .bootui-nav-link:focus-visible,
+html[data-bootui-theme='dsfr'] .btn:focus-visible,
+html[data-bootui-theme='dsfr'] .bootui-keyboard-target:focus-visible {
+  outline: 3px solid var(--dsfr-blue-france-main-525);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------- controls */
+
+html[data-bootui-theme='dsfr'] .btn {
+  border-radius: 0;
+  box-shadow: none;
+  font-weight: 700;
+}
+
+html[data-bootui-theme='dsfr'] .btn-primary,
+html[data-bootui-theme='dsfr'] .authentication-submit {
+  --bs-btn-active-bg: #2323ff;
+  --bs-btn-active-border-color: #2323ff;
+  --bs-btn-bg: var(--dsfr-blue-france-sun-113);
+  --bs-btn-border-color: var(--dsfr-blue-france-sun-113);
+  --bs-btn-color: #f5f5fe;
+  --bs-btn-disabled-bg: var(--dsfr-blue-france-sun-113);
+  --bs-btn-disabled-border-color: var(--dsfr-blue-france-sun-113);
+  --bs-btn-focus-shadow-rgb: 106, 106, 244;
+  --bs-btn-hover-bg: var(--dsfr-blue-france-hover);
+  --bs-btn-hover-border-color: var(--dsfr-blue-france-hover);
+  --bs-btn-hover-color: #ffffff;
+  background: var(--dsfr-blue-france-sun-113);
+  border-color: var(--dsfr-blue-france-sun-113);
+  color: #f5f5fe;
+}
+
+html[data-bootui-theme='dsfr'] .btn-outline-primary,
+html[data-bootui-theme='dsfr'] .btn-outline-secondary {
+  --bs-btn-active-bg: var(--bootui-nav-hover-bg);
+  --bs-btn-active-border-color: var(--dsfr-blue-france-sun-113);
+  --bs-btn-active-color: var(--dsfr-blue-france-sun-113);
+  --bs-btn-border-color: var(--dsfr-blue-france-sun-113);
+  --bs-btn-color: var(--dsfr-blue-france-sun-113);
+  --bs-btn-disabled-border-color: var(--bootui-border-alt);
+  --bs-btn-disabled-color: var(--bootui-text-subtle);
+  --bs-btn-focus-shadow-rgb: 106, 106, 244;
+  --bs-btn-hover-bg: var(--bootui-nav-hover-bg);
+  --bs-btn-hover-border-color: var(--dsfr-blue-france-sun-113);
+  --bs-btn-hover-color: var(--dsfr-blue-france-sun-113);
+}
+
+html[data-bootui-theme='dsfr'] .btn-outline-danger {
+  --bs-btn-active-bg: #ffe9e9;
+  --bs-btn-active-border-color: var(--dsfr-red-marianne-425);
+  --bs-btn-active-color: var(--dsfr-red-marianne-425);
+  --bs-btn-border-color: var(--dsfr-red-marianne-425);
+  --bs-btn-color: var(--dsfr-red-marianne-425);
+  --bs-btn-disabled-border-color: var(--bootui-border-alt);
+  --bs-btn-disabled-color: var(--bootui-text-subtle);
+  --bs-btn-focus-shadow-rgb: 201, 25, 30;
+  --bs-btn-hover-bg: #ffe9e9;
+  --bs-btn-hover-border-color: var(--dsfr-red-marianne-425);
+  --bs-btn-hover-color: var(--dsfr-red-marianne-425);
+}
+
+html[data-bootui-theme='dsfr'] .cp-trigger,
+html[data-bootui-theme='dsfr'] .theme-toggle,
+html[data-bootui-theme='dsfr'] .nav-hamburger,
+html[data-bootui-theme='dsfr'] .sidebar-toggle {
+  background: var(--bootui-surface-solid);
+  border: 1px solid var(--bootui-border);
+  border-radius: 0;
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='dsfr'] .cp-trigger:hover,
+html[data-bootui-theme='dsfr'] .theme-toggle:hover,
+html[data-bootui-theme='dsfr'] .nav-hamburger:hover,
+html[data-bootui-theme='dsfr'] .sidebar-toggle:hover {
+  background: var(--bootui-nav-hover-bg);
+  color: var(--dsfr-blue-france-sun-113);
+}
+
+html[data-bootui-theme='dsfr'] .cp-trigger-hint,
+html[data-bootui-theme='dsfr'] kbd {
+  background: var(--dsfr-grey-950);
+  border: 1px solid var(--bootui-border);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='dsfr'] .form-control,
+html[data-bootui-theme='dsfr'] .form-select,
+html[data-bootui-theme='dsfr'] .input-group-text {
+  background-color: var(--bootui-surface-alt);
+  border-color: var(--bootui-border-alt);
+  border-radius: 0;
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .form-control:hover,
+html[data-bootui-theme='dsfr'] .form-select:hover {
+  border-color: var(--dsfr-grey-425);
+}
+
+html[data-bootui-theme='dsfr'] .form-control:focus,
+html[data-bootui-theme='dsfr'] .form-select:focus {
+  background-color: var(--bootui-surface-alt);
+  border-color: var(--dsfr-blue-france-sun-113);
+  box-shadow: 0 0 0 0.2rem rgba(106, 106, 244, 0.25);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .form-control::placeholder {
+  color: var(--bootui-text-subtle);
+  opacity: 1;
+}
+
+html[data-bootui-theme='dsfr'] .form-check-input:checked {
+  background-color: var(--dsfr-blue-france-sun-113);
+  border-color: var(--dsfr-blue-france-sun-113);
+}
+
+/* ------------------------------------------------------------------ surfaces */
+
+html[data-bootui-theme='dsfr'] .card,
+html[data-bootui-theme='dsfr'] .modal-content,
+html[data-bootui-theme='dsfr'] .authentication-card {
+  background: var(--bootui-surface-solid);
+  border: 1px solid var(--bootui-border);
+  border-radius: var(--bootui-radius-lg);
+  box-shadow: var(--bootui-shadow-sm);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .card-header,
+html[data-bootui-theme='dsfr'] .modal-header {
+  background: var(--dsfr-grey-975);
+  border-bottom-color: var(--bootui-border);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .list-group-item {
+  background: var(--bootui-surface-solid);
+  border-color: var(--bootui-border);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .list-group-item-action:hover,
+html[data-bootui-theme='dsfr'] .list-group-item-action:focus {
+  background: var(--bootui-nav-hover-bg);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .list-group-item-action.active {
+  --bs-list-group-active-bg: var(--dsfr-blue-france-sun-113);
+  --bs-list-group-active-border-color: var(--dsfr-blue-france-sun-113);
+  background: var(--dsfr-blue-france-sun-113);
+  border-color: var(--dsfr-blue-france-sun-113);
+  color: #f5f5fe;
+}
+
+html[data-bootui-theme='dsfr'] .table {
+  --bs-table-bg: var(--bootui-surface-solid);
+  --bs-table-border-color: var(--bootui-border);
+  --bs-table-color: var(--bootui-text);
+  --bs-table-hover-bg: var(--bootui-nav-hover-bg);
+  --bs-table-hover-color: var(--bootui-text);
+  --bs-table-striped-bg: var(--dsfr-grey-975);
+  --bs-table-striped-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .table > thead > tr > th {
+  background: var(--dsfr-grey-975);
+  border-bottom-color: var(--bootui-border-alt);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='dsfr'] .table-active,
+html[data-bootui-theme='dsfr'] .table-light {
+  --bs-table-active-bg: var(--bootui-nav-hover-bg);
+  --bs-table-active-color: var(--bootui-text);
+  --bs-table-bg: var(--dsfr-grey-975);
+  --bs-table-border-color: var(--bootui-border);
+  --bs-table-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .table-danger {
+  --bs-table-active-bg: #ffe9e9;
+  --bs-table-active-color: var(--bootui-text);
+  --bs-table-bg: #ffe9e9;
+  --bs-table-border-color: #fddede;
+  --bs-table-color: var(--bootui-text);
+  --bs-table-hover-bg: #fddede;
+  --bs-table-hover-color: var(--bootui-text);
+  --bs-table-striped-bg: #fddede;
+  --bs-table-striped-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .table-warning {
+  --bs-table-active-bg: #ffe9e6;
+  --bs-table-active-color: var(--bootui-text);
+  --bs-table-bg: #fff4f2;
+  --bs-table-border-color: #ffd2cc;
+  --bs-table-color: var(--bootui-text);
+  --bs-table-hover-bg: #ffe9e6;
+  --bs-table-hover-color: var(--bootui-text);
+  --bs-table-striped-bg: #ffe9e6;
+  --bs-table-striped-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .bootui-table-scroll,
+html[data-bootui-theme='dsfr'] .table-responsive {
+  border: 1px solid var(--bootui-border);
+  box-shadow: none;
+}
+
+/* --------------------------------------------------------------- state chrome */
+
+html[data-bootui-theme='dsfr'] .alert {
+  border-radius: 0;
+  border-width: 1px 1px 1px 4px;
+}
+
+html[data-bootui-theme='dsfr'] .alert-danger {
+  --bs-alert-bg: #ffe9e9;
+  --bs-alert-border-color: var(--dsfr-red-marianne-425);
+  --bs-alert-color: var(--bootui-danger-text);
+}
+
+html[data-bootui-theme='dsfr'] .alert-info {
+  --bs-alert-bg: #e8edff;
+  --bs-alert-border-color: var(--bootui-info-text);
+  --bs-alert-color: var(--bootui-info-text);
+}
+
+html[data-bootui-theme='dsfr'] .alert-warning {
+  --bs-alert-bg: #ffe9e6;
+  --bs-alert-border-color: var(--bootui-warning-text-strong);
+  --bs-alert-color: var(--bootui-warning-text-strong);
+}
+
+html[data-bootui-theme='dsfr'] .badge {
+  border-radius: 0;
+  font-weight: 700;
+}
+
+html[data-bootui-theme='dsfr'] .badge.bg-light,
+html[data-bootui-theme='dsfr'] .text-bg-light {
+  background-color: var(--dsfr-grey-950) !important;
+  color: var(--bootui-text-muted) !important;
+}
+
+html[data-bootui-theme='dsfr'] .text-danger {
+  color: rgba(201, 25, 30, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='dsfr'] .text-info {
+  color: rgba(0, 99, 203, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='dsfr'] .text-muted {
+  color: var(--bootui-text-muted) !important;
+}
+
+html[data-bootui-theme='dsfr'] .text-primary {
+  color: rgba(0, 0, 145, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='dsfr'] .text-success {
+  color: rgba(24, 117, 60, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='dsfr'] .text-warning {
+  color: rgba(179, 64, 0, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='dsfr'] .profile-chip,
+html[data-bootui-theme='dsfr'] .status-pill {
+  background: var(--bootui-surface-solid);
+  border: 1px solid var(--bootui-border);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='dsfr'] .profile-chip,
+html[data-bootui-theme='dsfr'] .status-pill--active {
+  background: #b8fec9;
+  border-color: #18753c;
+  color: #18753c;
+}
+
+html[data-bootui-theme='dsfr'] .profile-chip.muted,
+html[data-bootui-theme='dsfr'] .status-pill--checking,
+html[data-bootui-theme='dsfr'] .status-pill--disabled {
+  background: var(--dsfr-grey-950);
+  border-color: var(--bootui-border-alt);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='dsfr'] .status-pill--error,
+html[data-bootui-theme='dsfr'] .status-pill--unreachable {
+  background: #ffe9e9;
+  border-color: var(--dsfr-red-marianne-425);
+  color: var(--bootui-danger-text);
+}
+
+/* ---------------------------------------------------------- command + theme UI */
+
+html[data-bootui-theme='dsfr'] .cp-dialog {
+  background: var(--bootui-surface-solid);
+  border: 1px solid var(--bootui-border);
+  box-shadow: var(--bootui-shadow-md);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .cp-panel {
+  background: var(--dsfr-grey-975);
+  border: 1px solid var(--bootui-border);
+}
+
+html[data-bootui-theme='dsfr'] .cp-item {
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .cp-item.active,
+html[data-bootui-theme='dsfr'] .cp-item:hover,
+html[data-bootui-theme='dsfr'] .cp-item[aria-selected='true'] {
+  background: var(--bootui-nav-hover-bg);
+  color: var(--bootui-nav-hover-color);
+}
+
+html[data-bootui-theme='dsfr'] .cp-section-label,
+html[data-bootui-theme='dsfr'] .theme-option__hint,
+html[data-bootui-theme='dsfr'] .theme-option__icon {
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='dsfr'] .theme-option {
+  background: transparent;
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='dsfr'] .theme-option:hover,
+html[data-bootui-theme='dsfr'] .theme-option:focus-visible {
+  background: var(--bootui-nav-hover-bg);
+}
+
+html[data-bootui-theme='dsfr'] .theme-option[aria-checked='true'] {
+  background: var(--bootui-nav-hover-bg);
+}
+
+html[data-bootui-theme='dsfr'] .theme-option[aria-checked='true'] .theme-option__check,
+html[data-bootui-theme='dsfr'] .theme-option[aria-checked='true'] .theme-option__icon {
+  color: var(--dsfr-blue-france-sun-113);
+}
+
+html[data-bootui-theme='dsfr'] .theme-option__label {
+  color: var(--bootui-text);
+}
+
+/* -------------------------------------------------------------- code + output */
+
+html[data-bootui-theme='dsfr'] .bootui-code-pane {
+  background: var(--bootui-code-pane-bg);
+  border: 1px solid var(--bootui-code-pane-border);
+  box-shadow: none;
+  color: var(--bootui-code-pane-text);
+}
+
+html[data-bootui-theme='dsfr'] .bg-light:not(.badge),
+html[data-bootui-theme='dsfr'] .bg-white {
+  background-color: var(--bootui-surface-solid) !important;
+  color: var(--bootui-text) !important;
+}
+
+html[data-bootui-theme='dsfr'] code {
+  color: inherit;
+}
+
+html[data-bootui-theme='dsfr'] .progress {
+  background-color: var(--dsfr-grey-950);
+  border: 1px solid var(--bootui-border);
+}
+
+html[data-bootui-theme='dsfr'] .progress-bar {
+  background-color: var(--dsfr-blue-france-sun-113);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-bootui-theme='dsfr'] .brand-card,
+  html[data-bootui-theme='dsfr'] .contribute-card,
+  html[data-bootui-theme='dsfr'] .cp-item,
+  html[data-bootui-theme='dsfr'] .theme-option {
+    transition: none;
+  }
+}

@@ -40,8 +40,9 @@ function contrastRatio(foreground, background) {
   )
 }
 
-test('keeps placeholders, helper text, and selected identifiers readable in both themes', async ({page, openView}) => {
-  for (const theme of ['light', 'dark']) {
+test('keeps placeholders, helper text, and selected identifiers readable in every theme', async ({page, openView}) => {
+  // Every opt-in skin re-skins these same surfaces, so all of them are held to the same bar.
+  for (const theme of ['light', 'dark', 'graphite', 'cyberpunk', 'dsfr', 'minimal', 'win95']) {
     await page.goto('/bootui/')
     await page.evaluate((value) => localStorage.setItem('bootui.theme', value), theme)
     await page.reload()

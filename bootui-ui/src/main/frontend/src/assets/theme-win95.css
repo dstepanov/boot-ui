@@ -1,0 +1,549 @@
+/*
+ * BootUI "Windows 95" shell.
+ *
+ * The light and dark themes are two lightings of the same Calm Control Room. This
+ * third mode is a deliberate departure: it re-skins the whole console as a 1995
+ * desktop application. It is opt-in only (never resolved from the system colour
+ * preference) and it changes surface, chrome, typography and geometry — never
+ * layout, semantics, focus order or the meaning of a status colour.
+ *
+ * Everything here is keyed on `html[data-bootui-theme='win95']`. The leading type
+ * selector deliberately outranks the scoped `[data-v-*]` rules in App.vue and the
+ * panel components without relying on stylesheet order.
+ */
+
+html[data-bootui-theme='win95'] {
+  /* Classic 3D bevels. Raised = control, sunken = well. */
+  --w95-face: #c0c0c0;
+  --w95-light: #ffffff;
+  --w95-highlight: #dfdfdf;
+  --w95-shadow: #808080;
+  --w95-dark: #000000;
+  --w95-desktop: #008080;
+  --w95-title: #000080;
+  --w95-title-end: #1084d0;
+  --w95-field: #ffffff;
+
+  --w95-raised:
+    inset -1px -1px 0 var(--w95-dark), inset 1px 1px 0 var(--w95-light), inset -2px -2px 0 var(--w95-shadow),
+    inset 2px 2px 0 var(--w95-highlight);
+  --w95-sunken:
+    inset -1px -1px 0 var(--w95-light), inset 1px 1px 0 var(--w95-shadow), inset -2px -2px 0 var(--w95-highlight),
+    inset 2px 2px 0 var(--w95-dark);
+  --w95-sunken-thin: inset -1px -1px 0 var(--w95-light), inset 1px 1px 0 var(--w95-shadow);
+  --w95-raised-thin: inset -1px -1px 0 var(--w95-shadow), inset 1px 1px 0 var(--w95-light);
+
+  /* Tahoma is MS Sans Serif's own successor and is present on both macOS and
+     Windows, so it carries the period feel while staying a real, hinted, legible
+     screen face. `MS Sans Serif` is kept as a first choice for actual Windows
+     machines; on everything else the stack lands on Tahoma or Verdana rather
+     than an unhinted bitmap substitute. */
+  --w95-font: 'MS Sans Serif', Tahoma, Verdana, Geneva, sans-serif;
+
+  /* Brand palette mapped onto the 16-colour VGA family. */
+  --bootui-green: #008000;
+  --bootui-green-dark: #006000;
+  --bootui-blue: #000080;
+  --bootui-text: #000000;
+  --bootui-text-muted: #3f3f3f;
+  --bootui-text-subtle: #454545;
+
+  /* Semantic status keeps its meaning; only the hue is period-corrected. */
+  --bootui-danger: #800000;
+  --bootui-danger-text: #800000;
+  --bootui-warning: #d4a000;
+  --bootui-warning-text: #6b5000;
+  --bootui-warning-text-strong: #4a3700;
+  --bootui-high: #a04000;
+  --bootui-critical: #800000;
+  --bootui-info: #008080;
+  --bootui-info-text: #004d4d;
+  --bootui-secondary: #3f3f3f;
+  --bootui-heat-low-bg: #d4d0a0;
+  --bootui-heat-low-text: #3f3200;
+
+  /* Surfaces: silver chrome floating on the teal desktop. */
+  --bootui-bg-body: var(--w95-desktop);
+  --bootui-bg-body-orb: transparent;
+  --bootui-surface: var(--w95-face);
+  --bootui-surface-solid: var(--w95-face);
+  --bootui-surface-alt: var(--w95-field);
+  --bootui-sidebar-bg: var(--w95-face);
+
+  /* Depth comes from bevels, so borders and shadows go flat. */
+  --bootui-border: var(--w95-shadow);
+  --bootui-border-subtle: var(--w95-highlight);
+  --bootui-border-alt: var(--w95-shadow);
+  --bootui-shadow-sm: none;
+  --bootui-shadow-md: none;
+  --bootui-shadow-sidebar: none;
+
+  --bootui-radius-xs: 0;
+  --bootui-radius-sm: 0;
+  --bootui-radius-md: 0;
+  --bootui-radius-lg: 0;
+  --bootui-radius-xl: 0;
+  --bootui-radius-pill: 0;
+
+  /* Selection is the Windows highlight, not the green-to-blue gradient. */
+  --bootui-nav-hover-bg: #b4b4b4;
+  --bootui-nav-hover-color: #000000;
+  --bootui-nav-active-bg: var(--w95-title);
+  --bootui-nav-active-color: #ffffff;
+  --bootui-nav-group-bg: var(--w95-face);
+  --bootui-nav-group-color: #000000;
+  --bootui-nav-link-color: #000000;
+
+  --bootui-chart-grid: #808080;
+  --bootui-chart-axis: #000000;
+  --bootui-chart-input: #000080;
+  --bootui-chart-output: #800080;
+  --bootui-chart-calls: #008000;
+  --bootui-chart-selection: #808080;
+  --bootui-chart-span: #808080;
+  --bootui-chart-tool: #0000c0;
+  --bootui-chart-vector: #800000;
+  --bootui-chart-tooltip-bg: #ffffe1;
+  --bootui-chart-tooltip-border: #000000;
+  --bootui-chart-tooltip-text: #000000;
+
+  --bootui-skeleton-base: #a8a8a8;
+  --bootui-skeleton-shine: #d4d4d4;
+
+  /* Machine output becomes the MS-DOS prompt rather than a modern terminal. */
+  --bootui-code-pane-bg: #000000;
+  --bootui-code-pane-text: #c0c0c0;
+  --bootui-code-pane-border: var(--w95-shadow);
+
+  --bootui-highlight-bg: #ffffc0;
+
+  font-family: var(--w95-font);
+}
+
+/* Only the typeface changes: the body keeps BootUI's 1rem reading baseline. A
+   literal 12px Windows 95 UI scale is unreadable on a modern display, and font
+   smoothing stays on for the same reason — the joke is the palette and the
+   chrome, never the legibility. */
+html[data-bootui-theme='win95'] body {
+  background: var(--w95-desktop);
+  color: #000000;
+  font-family: var(--w95-font);
+}
+
+/* The ambient orbs are the Calm Control Room's signature; the desktop is flat. */
+html[data-bootui-theme='win95'] .ambient-orb {
+  display: none;
+}
+
+/* Windows 95 had no easing curves, so motion is removed rather than re-timed;
+   every rounded corner is squared off, and the frosted-glass layers that give the
+   modern shell its depth are flattened, in one pass. */
+html[data-bootui-theme='win95'] *,
+html[data-bootui-theme='win95'] *::before,
+html[data-bootui-theme='win95'] *::after {
+  backdrop-filter: none !important;
+  border-radius: 0 !important;
+  text-shadow: none;
+  transition-duration: 0s !important;
+}
+
+html[data-bootui-theme='win95'] .page-slide-enter-active,
+html[data-bootui-theme='win95'] .page-slide-leave-active,
+html[data-bootui-theme='win95'] .flyout-fade-enter-active,
+html[data-bootui-theme='win95'] .flyout-fade-leave-active {
+  transition: none;
+}
+
+/* ---------------------------------------------------------------- window chrome */
+
+html[data-bootui-theme='win95'] .bootui-shell {
+  background: var(--w95-desktop);
+}
+
+html[data-bootui-theme='win95'] .bootui-sidebar {
+  background: var(--w95-face);
+  border-right: 2px solid var(--w95-shadow);
+  box-shadow: none;
+}
+
+html[data-bootui-theme='win95'] .brand-card,
+html[data-bootui-theme='win95'] .contribute-card {
+  background: var(--w95-face);
+  border: none;
+  box-shadow: var(--w95-raised);
+}
+
+html[data-bootui-theme='win95'] .brand-card:hover,
+html[data-bootui-theme='win95'] .contribute-card:hover {
+  background: var(--w95-face);
+  box-shadow: var(--w95-raised);
+  transform: none;
+}
+
+html[data-bootui-theme='win95'] .brand-mark,
+html[data-bootui-theme='win95'] .contribute-icon,
+html[data-bootui-theme='win95'] .authentication-icon {
+  background: var(--w95-title);
+  color: #ffffff;
+}
+
+html[data-bootui-theme='win95'] .brand-name,
+html[data-bootui-theme='win95'] .brand-subtitle {
+  background: none;
+  color: #000000;
+  -webkit-text-fill-color: #000000;
+}
+
+/* The topbar becomes the window title bar: navy gradient, white bold caption. */
+html[data-bootui-theme='win95'] .topbar {
+  background: linear-gradient(90deg, var(--w95-title), var(--w95-title-end));
+  border: none;
+  box-shadow: var(--w95-raised-thin);
+  margin: 2px;
+  padding: 0.3rem 0.4rem;
+}
+
+html[data-bootui-theme='win95'] .topbar-title,
+html[data-bootui-theme='win95'] .topbar-subtitle {
+  background: none;
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+}
+
+/* A 1995 caption is a chrome label rather than a display heading, so the topbar
+   title steps down from Display to Title — still a comfortable reading size. */
+html[data-bootui-theme='win95'] .topbar-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+/* Title-bar controls are raised silver buttons, like minimise/maximise/close. */
+html[data-bootui-theme='win95'] .theme-toggle,
+html[data-bootui-theme='win95'] .cp-trigger,
+html[data-bootui-theme='win95'] .nav-hamburger,
+html[data-bootui-theme='win95'] .sidebar-toggle {
+  background: var(--w95-face);
+  border: none;
+  box-shadow: var(--w95-raised);
+  color: #000000;
+}
+
+html[data-bootui-theme='win95'] .theme-toggle:hover,
+html[data-bootui-theme='win95'] .cp-trigger:hover,
+html[data-bootui-theme='win95'] .nav-hamburger:hover,
+html[data-bootui-theme='win95'] .sidebar-toggle:hover {
+  background: var(--w95-face);
+  box-shadow: var(--w95-raised);
+  color: #000000;
+  transform: none;
+}
+
+html[data-bootui-theme='win95'] .theme-toggle:active,
+html[data-bootui-theme='win95'] .cp-trigger:active,
+html[data-bootui-theme='win95'] .nav-hamburger:active,
+html[data-bootui-theme='win95'] .sidebar-toggle:active {
+  box-shadow: var(--w95-sunken);
+}
+
+html[data-bootui-theme='win95'] .cp-trigger-hint,
+html[data-bootui-theme='win95'] kbd {
+  background: var(--w95-face);
+  box-shadow: var(--w95-raised-thin);
+  color: #000000;
+}
+
+/* Status pills and profile chips read as sunken status-bar cells. */
+html[data-bootui-theme='win95'] .status-pill,
+html[data-bootui-theme='win95'] .profile-chip,
+html[data-bootui-theme='win95'] .profile-chip.muted {
+  background: var(--w95-face);
+  border: none;
+  box-shadow: var(--w95-sunken-thin);
+  color: #000000;
+}
+
+/* ------------------------------------------------------------------ navigation */
+
+html[data-bootui-theme='win95'] .bootui-nav-group__toggle {
+  background: var(--w95-face);
+  box-shadow: var(--w95-raised-thin);
+  color: #000000;
+  letter-spacing: 0;
+}
+
+html[data-bootui-theme='win95'] .bootui-nav-link {
+  border: 1px solid transparent;
+  color: #000000;
+}
+
+html[data-bootui-theme='win95'] .bootui-nav-link:hover {
+  background: var(--w95-face);
+  box-shadow: var(--w95-raised-thin);
+  color: #000000;
+  transform: none;
+}
+
+html[data-bootui-theme='win95'] .bootui-nav-link.active,
+html[data-bootui-theme='win95'] .bootui-nav-group__toggle.active {
+  background: var(--w95-title);
+  box-shadow: none;
+  color: #ffffff;
+}
+
+html[data-bootui-theme='win95'] .bootui-nav-link--unavailable {
+  color: var(--w95-shadow);
+}
+
+html[data-bootui-theme='win95'] .bootui-nav-flyout {
+  background: var(--w95-face);
+  border: none;
+  box-shadow: var(--w95-raised);
+}
+
+/* Focus stays visible — as the era's dotted focus rectangle. */
+html[data-bootui-theme='win95'] .brand-card:focus-visible,
+html[data-bootui-theme='win95'] .contribute-card:focus-visible,
+html[data-bootui-theme='win95'] .sidebar-toggle:focus-visible,
+html[data-bootui-theme='win95'] .bootui-nav-group__toggle:focus-visible,
+html[data-bootui-theme='win95'] .nav-hamburger:focus-visible,
+html[data-bootui-theme='win95'] .cp-trigger:focus-visible,
+html[data-bootui-theme='win95'] .theme-toggle:focus-visible,
+html[data-bootui-theme='win95'] .bootui-nav-link:focus-visible,
+html[data-bootui-theme='win95'] .btn:focus-visible,
+html[data-bootui-theme='win95'] .bootui-keyboard-target:focus-visible {
+  outline: 1px dotted #000000;
+  outline-offset: -4px;
+}
+
+html[data-bootui-theme='win95'] .bootui-nav-link.active:focus-visible,
+html[data-bootui-theme='win95'] .bootui-nav-group__toggle.active:focus-visible {
+  outline-color: #ffffff;
+}
+
+/* ------------------------------------------------------------------- workspace */
+
+html[data-bootui-theme='win95'] .bootui-workspace,
+html[data-bootui-theme='win95'] .content-stage {
+  background: var(--w95-face);
+}
+
+html[data-bootui-theme='win95'] .card {
+  background: var(--w95-face);
+  border: none;
+  box-shadow: var(--w95-raised);
+  color: #000000;
+}
+
+/* A card header is a group-box caption, not a second title bar: keeping it silver
+   avoids a wall of navy bars once a panel stacks several cards. */
+html[data-bootui-theme='win95'] .card-header {
+  background: var(--w95-face);
+  border-bottom: 1px solid var(--w95-shadow);
+  box-shadow: inset 0 -2px 0 var(--w95-light);
+  color: #000000;
+  font-weight: 700;
+}
+
+html[data-bootui-theme='win95'] .bootui-footer {
+  background: var(--w95-face);
+  border: none;
+  box-shadow: var(--w95-raised-thin);
+  color: #000000;
+}
+
+html[data-bootui-theme='win95'] .bootui-footer__context,
+html[data-bootui-theme='win95'] .bootui-footer a {
+  box-shadow: var(--w95-sunken-thin);
+  color: var(--w95-title);
+  padding: 0.1rem 0.4rem;
+}
+
+/* ------------------------------------------------------------------- controls */
+
+html[data-bootui-theme='win95'] .btn {
+  background: var(--w95-face);
+  border: none;
+  box-shadow: var(--w95-raised);
+  color: #000000;
+  font-weight: 400;
+}
+
+html[data-bootui-theme='win95'] .btn:hover,
+html[data-bootui-theme='win95'] .btn:focus {
+  background: var(--w95-face);
+  box-shadow: var(--w95-raised);
+  color: #000000;
+  transform: none;
+}
+
+html[data-bootui-theme='win95'] .btn:active {
+  background: var(--w95-face);
+  box-shadow: var(--w95-sunken);
+  color: #000000;
+}
+
+html[data-bootui-theme='win95'] .btn:disabled,
+html[data-bootui-theme='win95'] .btn.disabled {
+  color: var(--w95-shadow);
+  opacity: 1;
+}
+
+/* The default action keeps its emphasis the Windows way: a heavy outer border
+   rather than a filled brand colour. */
+html[data-bootui-theme='win95'] .btn-primary,
+html[data-bootui-theme='win95'] .btn-success,
+html[data-bootui-theme='win95'] .btn-danger,
+html[data-bootui-theme='win95'] .btn-warning,
+html[data-bootui-theme='win95'] .btn-info,
+html[data-bootui-theme='win95'] .btn-secondary,
+html[data-bootui-theme='win95'] .btn-outline-primary,
+html[data-bootui-theme='win95'] .btn-outline-secondary,
+html[data-bootui-theme='win95'] .btn-outline-danger {
+  --bs-btn-bg: var(--w95-face);
+  --bs-btn-hover-bg: var(--w95-face);
+  --bs-btn-active-bg: var(--w95-face);
+  --bs-btn-color: #000000;
+  --bs-btn-hover-color: #000000;
+  --bs-btn-active-color: #000000;
+  --bs-btn-border-color: transparent;
+  --bs-btn-hover-border-color: transparent;
+}
+
+html[data-bootui-theme='win95'] .btn-primary {
+  outline: 1px solid #000000;
+  outline-offset: 0;
+}
+
+/* No `font-family` here on purpose: Bootstrap already inherits it, so a field a
+   panel renders in mono stays mono (the Mono-Means-Machine rule). */
+html[data-bootui-theme='win95'] .form-control,
+html[data-bootui-theme='win95'] .form-select,
+html[data-bootui-theme='win95'] textarea,
+html[data-bootui-theme='win95'] .input-group-text {
+  background: var(--w95-field);
+  border: none;
+  box-shadow: var(--w95-sunken);
+  color: #000000;
+}
+
+html[data-bootui-theme='win95'] .form-control:hover,
+html[data-bootui-theme='win95'] .form-control:focus,
+html[data-bootui-theme='win95'] .form-select:hover,
+html[data-bootui-theme='win95'] .form-select:focus {
+  background: var(--w95-field);
+  border: none;
+  box-shadow: var(--w95-sunken);
+  color: #000000;
+}
+
+html[data-bootui-theme='win95'] .form-check-input:checked {
+  background-color: var(--w95-title);
+  border-color: var(--w95-title);
+}
+
+html[data-bootui-theme='win95'] .badge {
+  border: 1px solid var(--w95-shadow);
+  font-weight: 400;
+}
+
+html[data-bootui-theme='win95'] .alert {
+  background: var(--w95-face);
+  border: none;
+  box-shadow: var(--w95-raised);
+  color: #000000;
+}
+
+html[data-bootui-theme='win95'] .progress {
+  background: var(--w95-face);
+  box-shadow: var(--w95-sunken);
+  padding: 2px;
+}
+
+/* The segmented progress bar is the era's most recognisable widget. */
+html[data-bootui-theme='win95'] .progress-bar {
+  background-color: transparent;
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--w95-title) 0,
+    var(--w95-title) 8px,
+    transparent 8px,
+    transparent 10px
+  );
+}
+
+/* ---------------------------------------------------------------------- tables */
+
+html[data-bootui-theme='win95'] .table {
+  --bs-table-bg: var(--w95-field);
+  --bs-table-color: #000000;
+  --bs-table-border-color: var(--w95-shadow);
+  --bs-table-hover-bg: #d4d4d4;
+  --bs-table-hover-color: #000000;
+  --bs-table-striped-bg: #efefef;
+  --bs-table-striped-color: #000000;
+  background: var(--w95-field);
+}
+
+html[data-bootui-theme='win95'] .table > thead > tr > th {
+  background: var(--w95-face);
+  box-shadow: var(--w95-raised-thin);
+  color: #000000;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+html[data-bootui-theme='win95'] .table-responsive,
+html[data-bootui-theme='win95'] .bootui-table-scroll {
+  box-shadow: var(--w95-sunken);
+}
+
+/* The selected row must keep its own fill: `:not(.active)` stops the sunken white
+   list surface from painting over the Windows selection highlight. */
+html[data-bootui-theme='win95'] .list-group-item:not(.active) {
+  background: var(--w95-field);
+  border-color: var(--w95-shadow);
+  color: #000000;
+}
+
+html[data-bootui-theme='win95'] .list-group-item-action.active {
+  --bs-list-group-active-bg: var(--w95-title);
+  --bs-list-group-active-border-color: var(--w95-title);
+  background: var(--w95-title);
+  border-color: var(--w95-title);
+  color: #ffffff;
+}
+
+/* --------------------------------------------------------------------- dialogs */
+
+html[data-bootui-theme='win95'] .modal-content,
+html[data-bootui-theme='win95'] .cp-dialog,
+html[data-bootui-theme='win95'] .authentication-card {
+  background: var(--w95-face);
+  border: none;
+  box-shadow: var(--w95-raised);
+  color: #000000;
+}
+
+html[data-bootui-theme='win95'] .modal-header {
+  background: linear-gradient(90deg, var(--w95-title), var(--w95-title-end));
+  border-bottom: none;
+  color: #ffffff;
+  margin: 2px;
+}
+
+html[data-bootui-theme='win95'] .cp-section-label {
+  color: #000000;
+  letter-spacing: 0;
+}
+
+/* The palette marks its active row with `.active` plus `aria-selected`. */
+html[data-bootui-theme='win95'] .cp-item.active,
+html[data-bootui-theme='win95'] .cp-item[aria-selected='true'] {
+  background: var(--w95-title);
+  color: #ffffff;
+}
+
+/* Machine output keeps its own identity: here that identity is the DOS prompt. */
+html[data-bootui-theme='win95'] .bootui-code-pane {
+  box-shadow: var(--w95-sunken);
+}

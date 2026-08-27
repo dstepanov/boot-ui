@@ -148,7 +148,9 @@ This system explicitly rejects four things: the **default-Bootstrap admin templa
 - Spring green + signal blue as a paired identity; the green→blue gradient is reserved for the active/selected state.
 - Calm by default, loud only on real risk — status color always paired with a text label.
 - Soft, generous geometry: a documented radius scale (signature 1.1rem), calm low-profile shadows, and a restrained hover lift reserved for genuinely interactive cards.
-- Light **and** dark theme are first-class and both must clear WCAG 2.1 AA.
+- Light **and** dark theme are first-class and both must clear WCAG 2.1 AA. A set of opt-in **skins** — Graphite,
+  Cyberpunk, République Française, Minimal, and Windows 95 — deliberately steps outside this system, under rules of
+  its own; see §6.
 
 ## 2. Colors
 
@@ -193,7 +195,7 @@ The **documentation site** reuses this severity vocabulary for the check-catalog
 
 **The Earned-Red Rule.** Danger/warning color appears only when the runtime is genuinely at risk. A screen at rest is green, blue, and slate. Red is a signal, not decoration.
 
-**The AA-Both-Themes Rule.** Every semantic *text* color must clear WCAG AA for its context — ≥4.5:1 for body-size text, ≥3:1 for large text and icon glyphs — in **both** light and dark themes. Bootstrap's raw contextual colors don't, so BootUI references accessible `--bootui-*-text` companions — see Semantic Status (accessible). Amber is the one hue that can't reach body-size AA on both shells from a single value, so warning text splits: `--bootui-warning-text` for large/icon (3:1) and the per-theme `--bootui-warning-text-strong` for body copy (4.5:1). Never let raw `.text-info` / `.text-warning` / `.text-danger` reach the reader as body text.
+**The AA-Every-Theme Rule.** Every semantic *text* color must clear WCAG AA for its context — ≥4.5:1 for body-size text, ≥3:1 for large text and icon glyphs — in **every** theme: light, dark, and each opt-in skin (§6). Bootstrap's raw contextual colors don't, so BootUI references accessible `--bootui-*-text` companions — see Semantic Status (accessible). Amber is the one hue that can't reach body-size AA on both shells from a single value, so warning text splits: `--bootui-warning-text` for large/icon (3:1) and the per-theme `--bootui-warning-text-strong` for body copy (4.5:1). Never let raw `.text-info` / `.text-warning` / `.text-danger` reach the reader as body text.
 
 ## 3. Typography
 
@@ -270,7 +272,58 @@ BootUI is a **layered** system, not a flat one — but the elevation is calm. Fr
 - **Calm by default:** focus lands on **Cancel** for `danger` prompts (the safe choice), Esc / backdrop-click / Cancel all resolve to "no", and focus returns to the triggering control on close. The entrance is a 160ms scale+fade that collapses to nothing under `prefers-reduced-motion`.
 - **Accessibility:** `aria-labelledby` / `aria-describedby` wire the title and body; the native modal traps focus and exposes a backdrop. Buttons carry the same branded focus ring as the rest of the system.
 
-## 6. Do's and Don'ts
+## 6. Themes
+
+BootUI ships several shells behind one topbar picker. The choice is persisted in `bootui.theme` and applied as
+`data-bootui-theme` on `<html>`; `data-bs-theme` carries the Bootstrap component scheme each shell declares, so a
+light-luminance skin such as Windows 95 runs on `light` even though it looks nothing like the default theme.
+
+`utils/theme.js` holds the registry — id, label, picker hint, icon, and Bootstrap scheme — and is the single source of
+truth for which shells exist. The picker is a `role="menu"` of `menuitemradio` options, so every shell is one click away
+rather than *n* clicks around a cycle; it closes on Esc and hands focus back to its trigger.
+
+**Light and dark** are two lightings of the same Calm Control Room. They share every rule in this document, they are
+the only shells `prefers-color-scheme` can resolve to, and both must clear WCAG 2.1 AA.
+
+### Opt-in skins
+
+Everything beyond light and dark is a **skin**: a deliberate departure, never inferred from the system, only ever
+reached by an explicit choice. The set today is **Graphite** (slick and professional), **Cyberpunk** (neon terminal),
+**République Française** (the French state's Système de design de l'État), **Minimal** (ink on paper), and
+**Windows 95** (a 1995 desktop application).
+
+Every skin obeys the same three rules:
+
+- **Repaint, never redesign.** A skin changes surface, chrome, color, and geometry. Layout, semantics, focus order,
+  panel availability, and the *meaning* of a status color are untouched. No panel gains or loses a capability in a skin.
+- **Accessibility is not part of the aesthetic argument.** Each skin declares opaque `--bootui-surface-solid`,
+  `--bootui-surface-alt`, and `--bootui-nav-hover-bg`, and every text token must clear WCAG AA against all three.
+  `themeContrast.test.js` enforces this per skin, and the Playwright suite re-checks it on real rendered surfaces.
+- **One file, one skin.** Everything lives in `src/assets/theme-<id>.css`, keyed on `html[data-bootui-theme='<id>']`.
+  The `html` type selector is deliberate: `App.vue`'s scoped styles carry a `[data-v-*]` attribute, so a `:root[...]`
+  prefix would tie on specificity and lose at random. Adding a token to the light theme without a skin counterpart is
+  safe — skins inherit it.
+
+#### Windows 95
+
+The most extreme of the skins, and the one that documents how far a skin may go. It exists because a local developer
+console is exactly the kind of tool that earns a joke, and it is honest about being one.
+
+- **Typography changes typeface, not scale.** The sans stack becomes `'MS Sans Serif', Tahoma, Verdana, Geneva` —
+  Tahoma is MS Sans Serif's own successor and is a real, hinted, legible screen face on every platform, so the skin
+  reads period-correct without depending on a font nobody has installed. The §3 type ramp is kept as-is: a literal
+  12px Windows 95 UI scale is unreadable on a modern display, and font smoothing stays on for the same reason. Mono
+  output keeps the mono stack, so Mono-Means-Machine survives the joke.
+- **Palette.** The 16-color VGA family: silver `#c0c0c0` chrome, white `#ffffff` fields, navy `#000080` title bars and
+  selection, teal `#008080` desktop, maroon `#800000` for danger. Machine-output panes become the MS-DOS prompt
+  (`#c0c0c0` on `#000000`). This is the one place BootUI's cool-neutral palette rule does not apply.
+- **Geometry.** Every radius collapses to `0` and every soft shadow is replaced by the era's two-tone 3D bevel
+  (`--w95-raised` for controls, `--w95-sunken` for wells). Frosted glass and the ambient orbs are switched off.
+- **Motion.** Removed, not re-timed. Windows 95 had no easing curves, so hover lifts and route transitions go to zero.
+- **Accessibility is not part of the joke.** Body text still clears 4.5:1 on silver chrome, white fields, and hovered
+  nav rows, and focus stays visible as the era's dotted focus rectangle.
+
+## 7. Do's and Don'ts
 
 ### Do:
 - **Do** confirm every destructive or project-mutating action through the branded `ConfirmDialog` (`useConfirm`), name the affected resource, and mark irreversible actions as such — never fire a one-click restart, delete, file-write, or migration straight from a button.
@@ -287,9 +340,10 @@ BootUI is a **layered** system, not a flat one — but the elevation is calm. Fr
 - **Don't** echo old-school enterprise Java tooling — no JConsole / VisualVM chrome, and never dump raw Actuator JSON on screen as the primary view.
 - **Don't** build APM walls-of-charts: Grafana / Datadog density with no narrative. Density is fine; density *without explanation* is not.
 - **Don't** ship AI-SaaS slop: gradient hero + identical icon-card grids + cream/sand/paper backgrounds + per-section uppercase eyebrows.
-- **Don't** use a warm near-white (cream, sand, parchment) as any background. Backgrounds stay cool, tinted toward the brand green/blue.
+- **Don't** use a warm near-white (cream, sand, parchment) as any background in light or dark. Backgrounds stay cool, tinted toward the brand green/blue. The opt-in skins (§6) are the explicitly scoped exception, and only inside their own `theme-<id>.css`.
 - **Don't** use `background-clip: text` gradient fills, `border-left`/`border-right` color stripes thicker than 1px, or glassmorphism as a default card treatment.
 - **Don't** nest cards, and don't reach for a card when a table, list, or plain section is the better affordance.
 - **Don't** set `outline: none` on any control without an equally visible branded replacement.
+- **Don't** let a skin (§6) leak past surface, chrome, typography, and geometry — no skin may change layout, semantics, focus order, panel availability, or what a status color means, and every skin's palette must stay inside its own `theme-<id>.css`. Adding a shell means adding a registry entry and a file, never editing another skin.
 - **Don't** add page-entrance reveal animations — no `fade-up`/slide-in applied to every panel or section. Navigation carries one gentle ~180ms route transition; panels otherwise appear instantly. Motion is reserved for hover feedback, loading, and live-status indicators, never decorative reveals or perpetual background drift.
 - **Don't** trigger network calls, scans, or mutations from a render — every external or destructive action is explicit, labeled, and reversible-by-default.

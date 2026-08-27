@@ -1,0 +1,621 @@
+/*
+ * BootUI "Cyberpunk" shell.
+ *
+ * The default themes are the Calm Control Room. This opt-in novelty skin turns the
+ * console into a rain-slick terminal district: violet-black panels, cyan scanlines,
+ * hot-magenta edges and acid-yellow warnings. Layout, spacing, semantics and focus
+ * order stay untouched; neon is reserved for chrome and state, not body copy.
+ *
+ * Everything here is keyed on `html[data-bootui-theme='cyberpunk']`. The leading
+ * type selector deliberately outranks scoped `[data-v-*]` component rules without
+ * relying on stylesheet order.
+ */
+
+html[data-bootui-theme='cyberpunk'] {
+  --bootui-bg-body:
+    radial-gradient(circle at 12% 8%, rgba(255, 45, 247, 0.2), transparent 26rem),
+    radial-gradient(circle at 88% 0%, rgba(0, 229, 255, 0.18), transparent 28rem),
+    linear-gradient(135deg, #050711 0%, #090d1e 46%, #16091f 100%);
+  --bootui-bg-body-orb: rgba(0, 229, 255, 0.18);
+  --bootui-blue: #00e5ff;
+  --bootui-border: rgba(0, 229, 255, 0.24);
+  --bootui-border-alt: rgba(255, 45, 247, 0.32);
+  --bootui-border-subtle: rgba(139, 246, 255, 0.15);
+  --bootui-chart-axis: #b7c7df;
+  --bootui-chart-calls: #39ff88;
+  --bootui-chart-grid: #263958;
+  --bootui-chart-input: #00e5ff;
+  --bootui-chart-output: #ff2df7;
+  --bootui-chart-selection: #ffe66d;
+  --bootui-chart-span: #38506f;
+  --bootui-chart-tool: #8b5cf6;
+  --bootui-chart-tooltip-bg: #101326;
+  --bootui-chart-tooltip-border: #00e5ff;
+  --bootui-chart-tooltip-text: #f4f7ff;
+  --bootui-chart-vector: #ff8a3d;
+  --bootui-code-pane-bg: #04110f;
+  --bootui-code-pane-border: rgba(57, 255, 136, 0.34);
+  --bootui-code-pane-text: #8effd2;
+  --bootui-critical: #ff174f;
+  --bootui-danger: #ff2f6d;
+  --bootui-danger-text: #ff8aa3;
+  --bootui-green: #39ff88;
+  --bootui-green-dark: #8effd2;
+  --bootui-heat-low-bg: #30280a;
+  --bootui-heat-low-text: #ffe66d;
+  --bootui-high: #ff8a3d;
+  --bootui-highlight-bg: rgba(255, 230, 109, 0.16);
+  --bootui-info: #00e5ff;
+  --bootui-info-text: #77f7ff;
+  --bootui-nav-active-bg: linear-gradient(135deg, #ff2df7 0%, #00e5ff 100%);
+  --bootui-nav-active-color: #050711;
+  --bootui-nav-group-bg: rgba(10, 17, 34, 0.72);
+  --bootui-nav-group-color: #b7c7df;
+  --bootui-nav-hover-bg: #141f33;
+  --bootui-nav-hover-color: #77f7ff;
+  --bootui-nav-link-color: #dce8ff;
+  --bootui-radius-lg: 1.1rem;
+  --bootui-radius-md: 0.75rem;
+  --bootui-radius-pill: 999px;
+  --bootui-radius-sm: 0.5rem;
+  --bootui-radius-xl: 1.25rem;
+  --bootui-radius-xs: 0.35rem;
+  --bootui-secondary: #8ea3bd;
+  --bootui-shadow-md: 0 1.25rem 3rem rgba(0, 0, 0, 0.55), 0 0 2rem rgba(255, 45, 247, 0.12);
+  --bootui-shadow-sidebar: 0.8rem 0 2rem rgba(0, 0, 0, 0.38), 0 0 2rem rgba(0, 229, 255, 0.08);
+  --bootui-shadow-sm: 0 0.35rem 0.9rem rgba(0, 0, 0, 0.34), 0 0 1.1rem rgba(0, 229, 255, 0.08);
+  --bootui-sidebar-bg: rgba(7, 12, 27, 0.92);
+  --bootui-skeleton-base: #14223a;
+  --bootui-skeleton-shine: #263958;
+  --bootui-surface: rgba(16, 19, 38, 0.88);
+  --bootui-surface-alt: #080d19;
+  --bootui-surface-solid: #101326;
+  --bootui-text: #f4f7ff;
+  --bootui-text-muted: #c9d8ea;
+  --bootui-text-subtle: #b7c7df;
+  --bootui-warning: #ffe66d;
+  --bootui-warning-text: #ffd166;
+  --bootui-warning-text-strong: #ffe66d;
+  --cyber-acid: #d6ff3f;
+  --cyber-cyan: #00e5ff;
+  --cyber-grid: rgba(0, 229, 255, 0.08);
+  --cyber-ink: #050711;
+  --cyber-magenta: #ff2df7;
+  --cyber-panel: #101326;
+}
+
+html[data-bootui-theme='cyberpunk'] body {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.025) 0,
+      rgba(255, 255, 255, 0.025) 1px,
+      transparent 1px,
+      transparent 5px
+    ),
+    repeating-linear-gradient(90deg, var(--cyber-grid) 0, var(--cyber-grid) 1px, transparent 1px, transparent 96px),
+    var(--bootui-bg-body);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .ambient-orb-one {
+  background: rgba(255, 45, 247, 0.28);
+  filter: blur(28px);
+}
+
+html[data-bootui-theme='cyberpunk'] .ambient-orb-two {
+  background: rgba(0, 229, 255, 0.22);
+  filter: blur(30px);
+}
+
+/* ---------------------------------------------------------------- neon shell */
+
+html[data-bootui-theme='cyberpunk'] .bootui-shell {
+  background: transparent;
+}
+
+html[data-bootui-theme='cyberpunk'] .bootui-sidebar {
+  background: linear-gradient(180deg, rgba(7, 12, 27, 0.96), rgba(14, 8, 28, 0.94));
+  border-right: 1px solid rgba(0, 229, 255, 0.36);
+  box-shadow: var(--bootui-shadow-sidebar);
+}
+
+html[data-bootui-theme='cyberpunk'] .brand-card,
+html[data-bootui-theme='cyberpunk'] .contribute-card {
+  background: linear-gradient(135deg, rgba(16, 19, 38, 0.94), rgba(14, 22, 42, 0.9));
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(139, 246, 255, 0.14),
+    var(--bootui-shadow-sm);
+}
+
+html[data-bootui-theme='cyberpunk'] .brand-card:hover,
+html[data-bootui-theme='cyberpunk'] .contribute-card:hover {
+  border-color: rgba(255, 45, 247, 0.58);
+  box-shadow:
+    0 1rem 2rem rgba(0, 0, 0, 0.34),
+    0 0 1.35rem rgba(255, 45, 247, 0.22);
+}
+
+html[data-bootui-theme='cyberpunk'] .brand-mark,
+html[data-bootui-theme='cyberpunk'] .contribute-icon,
+html[data-bootui-theme='cyberpunk'] .authentication-icon {
+  background: linear-gradient(135deg, var(--cyber-magenta), var(--cyber-cyan));
+  box-shadow:
+    0 0.65rem 1.4rem rgba(0, 229, 255, 0.24),
+    0 0 1rem rgba(255, 45, 247, 0.22);
+  color: var(--cyber-ink);
+}
+
+html[data-bootui-theme='cyberpunk'] .brand-name,
+html[data-bootui-theme='cyberpunk'] .topbar-title {
+  color: var(--bootui-text);
+  letter-spacing: 0.01em;
+  text-shadow: 0 0 0.8rem rgba(0, 229, 255, 0.26);
+}
+
+html[data-bootui-theme='cyberpunk'] .brand-subtitle,
+html[data-bootui-theme='cyberpunk'] .topbar-subtitle {
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='cyberpunk'] .topbar {
+  background: linear-gradient(90deg, rgba(7, 12, 27, 0.92), rgba(20, 10, 35, 0.9));
+  border-bottom: 1px solid rgba(255, 45, 247, 0.28);
+  box-shadow:
+    0 0.7rem 1.4rem rgba(0, 0, 0, 0.24),
+    0 0 1.2rem rgba(0, 229, 255, 0.1);
+}
+
+html[data-bootui-theme='cyberpunk'] .bootui-footer {
+  border-top-color: rgba(0, 229, 255, 0.18);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='cyberpunk'] .bootui-footer a,
+html[data-bootui-theme='cyberpunk'] .bootui-footer__context > .bi {
+  color: var(--cyber-cyan);
+}
+
+/* ---------------------------------------------------------------- navigation */
+
+html[data-bootui-theme='cyberpunk'] .bootui-nav-group__toggle {
+  background: rgba(8, 13, 25, 0.72);
+  border-color: rgba(0, 229, 255, 0.16);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='cyberpunk'] .bootui-nav-group__toggle:hover,
+html[data-bootui-theme='cyberpunk'] .bootui-nav-group__toggle.active {
+  background: var(--bootui-nav-hover-bg);
+  border-color: rgba(0, 229, 255, 0.42);
+  box-shadow:
+    inset 3px 0 0 var(--cyber-cyan),
+    0 0 1rem rgba(0, 229, 255, 0.13);
+  color: var(--bootui-nav-hover-color);
+}
+
+html[data-bootui-theme='cyberpunk'] .bootui-nav-group__count,
+html[data-bootui-theme='cyberpunk'] .cp-item-num,
+html[data-bootui-theme='cyberpunk'] .cp-item-shortcut,
+html[data-bootui-theme='cyberpunk'] .cp-trigger-hint {
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='cyberpunk'] .bootui-nav-link {
+  border: 1px solid transparent;
+  color: var(--bootui-nav-link-color);
+}
+
+html[data-bootui-theme='cyberpunk'] .bootui-nav-link:hover {
+  background: var(--bootui-nav-hover-bg);
+  border-color: rgba(0, 229, 255, 0.28);
+  box-shadow:
+    inset 3px 0 0 var(--cyber-cyan),
+    0 0 0.9rem rgba(0, 229, 255, 0.12);
+  color: var(--bootui-nav-hover-color);
+}
+
+html[data-bootui-theme='cyberpunk'] .bootui-nav-link.active,
+html[data-bootui-theme='cyberpunk'] .bootui-nav-group__toggle.active {
+  background: var(--bootui-nav-active-bg);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 0.8rem 1.4rem rgba(255, 45, 247, 0.22),
+    0 0 1rem rgba(0, 229, 255, 0.18);
+  color: var(--bootui-nav-active-color);
+}
+
+html[data-bootui-theme='cyberpunk'] .bootui-nav-link--unavailable {
+  color: var(--bootui-text-subtle);
+}
+
+html[data-bootui-theme='cyberpunk'] .bootui-nav-flyout {
+  background: var(--bootui-surface-solid);
+  border-color: rgba(0, 229, 255, 0.3);
+  box-shadow: var(--bootui-shadow-md);
+}
+
+html[data-bootui-theme='cyberpunk'] .brand-card:focus-visible,
+html[data-bootui-theme='cyberpunk'] .contribute-card:focus-visible,
+html[data-bootui-theme='cyberpunk'] .sidebar-toggle:focus-visible,
+html[data-bootui-theme='cyberpunk'] .bootui-nav-group__toggle:focus-visible,
+html[data-bootui-theme='cyberpunk'] .nav-hamburger:focus-visible,
+html[data-bootui-theme='cyberpunk'] .cp-trigger:focus-visible,
+html[data-bootui-theme='cyberpunk'] .theme-toggle:focus-visible,
+html[data-bootui-theme='cyberpunk'] .bootui-nav-link:focus-visible,
+html[data-bootui-theme='cyberpunk'] .btn:focus-visible,
+html[data-bootui-theme='cyberpunk'] .bootui-keyboard-target:focus-visible {
+  outline: 2px solid var(--cyber-acid);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------ panels & cards */
+
+html[data-bootui-theme='cyberpunk'] .bootui-workspace,
+html[data-bootui-theme='cyberpunk'] .content-stage {
+  background: transparent;
+}
+
+html[data-bootui-theme='cyberpunk'] .card,
+html[data-bootui-theme='cyberpunk'] .authentication-card,
+html[data-bootui-theme='cyberpunk'] .modal-content,
+html[data-bootui-theme='cyberpunk'] .cp-dialog,
+html[data-bootui-theme='cyberpunk'] .cp-panel {
+  background: linear-gradient(180deg, rgba(16, 19, 38, 0.94), rgba(8, 13, 25, 0.94));
+  border: 1px solid rgba(0, 229, 255, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(139, 246, 255, 0.12),
+    var(--bootui-shadow-sm);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .card:hover {
+  border-color: rgba(0, 229, 255, 0.38);
+}
+
+html[data-bootui-theme='cyberpunk'] .card-header,
+html[data-bootui-theme='cyberpunk'] .modal-header,
+html[data-bootui-theme='cyberpunk'] .cp-search-row {
+  background: linear-gradient(90deg, rgba(0, 229, 255, 0.08), rgba(255, 45, 247, 0.07));
+  border-bottom-color: rgba(0, 229, 255, 0.22);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .cp-search-row:focus-within {
+  border-bottom-color: var(--cyber-cyan);
+  box-shadow:
+    inset 0 -2px 0 0 var(--cyber-cyan),
+    0 0 1rem rgba(0, 229, 255, 0.14);
+}
+
+html[data-bootui-theme='cyberpunk'] .cp-input,
+html[data-bootui-theme='cyberpunk'] .cp-input::placeholder,
+html[data-bootui-theme='cyberpunk'] .cp-search-icon,
+html[data-bootui-theme='cyberpunk'] .cp-section-label {
+  color: var(--bootui-text-subtle);
+}
+
+html[data-bootui-theme='cyberpunk'] .cp-item {
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .cp-item.active,
+html[data-bootui-theme='cyberpunk'] .cp-item:hover,
+html[data-bootui-theme='cyberpunk'] .cp-item[aria-selected='true'] {
+  background: var(--bootui-nav-hover-bg);
+  box-shadow: inset 3px 0 0 var(--cyber-magenta);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .cp-item-icon,
+html[data-bootui-theme='cyberpunk'] .cp-item-recent {
+  color: var(--cyber-cyan);
+}
+
+html[data-bootui-theme='cyberpunk'] .cp-item-group,
+html[data-bootui-theme='cyberpunk'] .cp-item-status,
+html[data-bootui-theme='cyberpunk'] .cp-item--unavailable .cp-item-title,
+html[data-bootui-theme='cyberpunk'] .cp-empty {
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='cyberpunk'] .bootui-code-pane {
+  background-image: linear-gradient(rgba(57, 255, 136, 0.04) 50%, transparent 50%);
+  background-size: 100% 0.5rem;
+  border-color: var(--bootui-code-pane-border);
+  box-shadow:
+    inset 0 0 1.6rem rgba(57, 255, 136, 0.08),
+    0 0 1rem rgba(57, 255, 136, 0.08);
+  color: var(--bootui-code-pane-text);
+}
+
+/* ---------------------------------------------------------------- controls */
+
+html[data-bootui-theme='cyberpunk'] .btn,
+html[data-bootui-theme='cyberpunk'] .cp-trigger,
+html[data-bootui-theme='cyberpunk'] .nav-hamburger,
+html[data-bootui-theme='cyberpunk'] .sidebar-toggle,
+html[data-bootui-theme='cyberpunk'] .theme-toggle {
+  background: rgba(8, 13, 25, 0.86);
+  border-color: rgba(0, 229, 255, 0.28);
+  box-shadow: 0 0 0.9rem rgba(0, 229, 255, 0.08);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='cyberpunk'] .btn:hover,
+html[data-bootui-theme='cyberpunk'] .btn:focus,
+html[data-bootui-theme='cyberpunk'] .cp-trigger:hover,
+html[data-bootui-theme='cyberpunk'] .nav-hamburger:hover,
+html[data-bootui-theme='cyberpunk'] .sidebar-toggle:hover,
+html[data-bootui-theme='cyberpunk'] .theme-toggle:hover {
+  background: var(--bootui-nav-hover-bg);
+  border-color: rgba(0, 229, 255, 0.48);
+  box-shadow: 0 0 1.1rem rgba(0, 229, 255, 0.16);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .btn-primary,
+html[data-bootui-theme='cyberpunk'] .btn-success {
+  --bs-btn-active-bg: #23d870;
+  --bs-btn-active-border-color: #23d870;
+  --bs-btn-bg: #39ff88;
+  --bs-btn-border-color: #39ff88;
+  --bs-btn-color: #050711;
+  --bs-btn-disabled-bg: #39ff88;
+  --bs-btn-disabled-border-color: #39ff88;
+  --bs-btn-disabled-color: #050711;
+  --bs-btn-focus-shadow-rgb: 57, 255, 136;
+  --bs-btn-hover-bg: #8effd2;
+  --bs-btn-hover-border-color: #8effd2;
+  --bs-btn-hover-color: #050711;
+  box-shadow: 0 0 1.1rem rgba(57, 255, 136, 0.2);
+}
+
+html[data-bootui-theme='cyberpunk'] .btn-danger {
+  --bs-btn-bg: #ff2f6d;
+  --bs-btn-border-color: #ff2f6d;
+  --bs-btn-color: #050711;
+  --bs-btn-hover-bg: #ff8aa3;
+  --bs-btn-hover-border-color: #ff8aa3;
+  --bs-btn-hover-color: #050711;
+}
+
+html[data-bootui-theme='cyberpunk'] .btn-outline-primary,
+html[data-bootui-theme='cyberpunk'] .btn-outline-secondary,
+html[data-bootui-theme='cyberpunk'] .btn-outline-danger {
+  --bs-btn-active-bg: #141f33;
+  --bs-btn-active-border-color: #00e5ff;
+  --bs-btn-active-color: #f4f7ff;
+  --bs-btn-border-color: rgba(0, 229, 255, 0.48);
+  --bs-btn-color: #77f7ff;
+  --bs-btn-disabled-border-color: rgba(0, 229, 255, 0.24);
+  --bs-btn-disabled-color: #b7c7df;
+  --bs-btn-focus-shadow-rgb: 0, 229, 255;
+  --bs-btn-hover-bg: #141f33;
+  --bs-btn-hover-border-color: #ff2df7;
+  --bs-btn-hover-color: #f4f7ff;
+}
+
+html[data-bootui-theme='cyberpunk'] .form-control,
+html[data-bootui-theme='cyberpunk'] .form-select,
+html[data-bootui-theme='cyberpunk'] textarea,
+html[data-bootui-theme='cyberpunk'] .input-group-text {
+  background-color: var(--bootui-surface-alt);
+  border-color: rgba(0, 229, 255, 0.3);
+  box-shadow: inset 0 0 0.8rem rgba(0, 229, 255, 0.04);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .form-control:hover,
+html[data-bootui-theme='cyberpunk'] .form-select:hover {
+  border-color: rgba(0, 229, 255, 0.48);
+}
+
+html[data-bootui-theme='cyberpunk'] .form-control:focus,
+html[data-bootui-theme='cyberpunk'] .form-select:focus {
+  background-color: var(--bootui-surface-alt);
+  border-color: var(--cyber-cyan);
+  box-shadow:
+    0 0 0 0.2rem rgba(0, 229, 255, 0.16),
+    inset 0 0 0.8rem rgba(0, 229, 255, 0.08);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .form-control::placeholder {
+  color: var(--bootui-text-subtle);
+  opacity: 1;
+}
+
+html[data-bootui-theme='cyberpunk'] .form-check-input:checked {
+  background-color: var(--cyber-magenta);
+  border-color: var(--cyber-magenta);
+}
+
+html[data-bootui-theme='cyberpunk'] .progress {
+  background: var(--bootui-surface-alt);
+  border: 1px solid rgba(0, 229, 255, 0.2);
+}
+
+html[data-bootui-theme='cyberpunk'] .progress-bar {
+  background: linear-gradient(90deg, var(--cyber-magenta), var(--cyber-cyan), var(--cyber-acid));
+  box-shadow: 0 0 0.8rem rgba(0, 229, 255, 0.25);
+}
+
+/* ------------------------------------------------------------ status & data */
+
+html[data-bootui-theme='cyberpunk'] .status-pill,
+html[data-bootui-theme='cyberpunk'] .profile-chip,
+html[data-bootui-theme='cyberpunk'] .profile-chip.muted {
+  background: rgba(8, 13, 25, 0.86);
+  border-color: rgba(0, 229, 255, 0.26);
+  box-shadow: 0 0 0.9rem rgba(0, 229, 255, 0.08);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='cyberpunk'] .status-pill--active,
+html[data-bootui-theme='cyberpunk'] .profile-chip:not(.muted) {
+  background: rgba(57, 255, 136, 0.13);
+  border-color: rgba(57, 255, 136, 0.32);
+  color: var(--bootui-green-dark);
+}
+
+html[data-bootui-theme='cyberpunk'] .status-pill--error,
+html[data-bootui-theme='cyberpunk'] .status-pill--unreachable {
+  background: rgba(255, 47, 109, 0.13);
+  border-color: rgba(255, 47, 109, 0.34);
+  color: var(--bootui-danger-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .alert {
+  background: rgba(16, 19, 38, 0.94);
+  border-color: rgba(0, 229, 255, 0.24);
+  box-shadow: var(--bootui-shadow-sm);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .alert-danger {
+  --bs-alert-bg: rgba(255, 47, 109, 0.14);
+  --bs-alert-border-color: rgba(255, 47, 109, 0.34);
+  --bs-alert-color: #ff8aa3;
+}
+
+html[data-bootui-theme='cyberpunk'] .alert-info {
+  --bs-alert-bg: rgba(0, 229, 255, 0.12);
+  --bs-alert-border-color: rgba(0, 229, 255, 0.32);
+  --bs-alert-color: #77f7ff;
+}
+
+html[data-bootui-theme='cyberpunk'] .alert-warning {
+  --bs-alert-bg: rgba(255, 230, 109, 0.12);
+  --bs-alert-border-color: rgba(255, 230, 109, 0.32);
+  --bs-alert-color: #ffe66d;
+}
+
+html[data-bootui-theme='cyberpunk'] .badge {
+  border: 1px solid rgba(0, 229, 255, 0.24);
+  box-shadow: 0 0 0.75rem rgba(0, 229, 255, 0.08);
+}
+
+html[data-bootui-theme='cyberpunk'] .badge.bg-light,
+html[data-bootui-theme='cyberpunk'] .text-bg-light {
+  background-color: rgba(0, 229, 255, 0.12) !important;
+  color: var(--bootui-text-muted) !important;
+}
+
+html[data-bootui-theme='cyberpunk'] .text-danger {
+  color: rgba(255, 138, 163, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='cyberpunk'] .text-info,
+html[data-bootui-theme='cyberpunk'] .text-primary {
+  color: rgba(119, 247, 255, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='cyberpunk'] .text-muted {
+  color: var(--bootui-text-muted) !important;
+}
+
+html[data-bootui-theme='cyberpunk'] .text-success {
+  color: rgba(142, 255, 210, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='cyberpunk'] .text-warning {
+  color: rgba(255, 230, 109, var(--bs-text-opacity, 1)) !important;
+}
+
+/* ------------------------------------------------------------------ tables */
+
+html[data-bootui-theme='cyberpunk'] .table {
+  --bs-table-active-bg: rgba(0, 229, 255, 0.14);
+  --bs-table-active-color: var(--bootui-text);
+  --bs-table-bg: transparent;
+  --bs-table-border-color: rgba(0, 229, 255, 0.18);
+  --bs-table-color: var(--bootui-text);
+  --bs-table-hover-bg: rgba(0, 229, 255, 0.08);
+  --bs-table-hover-color: var(--bootui-text);
+  --bs-table-striped-bg: rgba(255, 255, 255, 0.025);
+  --bs-table-striped-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .table > thead > tr > th {
+  background: rgba(0, 229, 255, 0.07);
+  border-bottom-color: rgba(0, 229, 255, 0.26);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='cyberpunk'] .table-responsive,
+html[data-bootui-theme='cyberpunk'] .bootui-table-scroll {
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  border-radius: var(--bootui-radius-md);
+  box-shadow: inset 0 0 1.2rem rgba(0, 229, 255, 0.04);
+}
+
+html[data-bootui-theme='cyberpunk'] .table-light {
+  --bs-table-bg: var(--bootui-surface-alt);
+  --bs-table-border-color: rgba(0, 229, 255, 0.2);
+  --bs-table-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .table-warning {
+  --bs-table-bg: rgba(255, 230, 109, 0.14);
+  --bs-table-border-color: rgba(255, 230, 109, 0.26);
+  --bs-table-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .table-danger {
+  --bs-table-bg: rgba(255, 47, 109, 0.16);
+  --bs-table-border-color: rgba(255, 47, 109, 0.28);
+  --bs-table-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .list-group-item:not(.active) {
+  background: rgba(8, 13, 25, 0.86);
+  border-color: rgba(0, 229, 255, 0.2);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .list-group-item-action.active {
+  --bs-list-group-active-bg: #132a44;
+  --bs-list-group-active-border-color: #00e5ff;
+  background: linear-gradient(90deg, #132a44, #251538);
+  border-color: var(--cyber-cyan);
+  box-shadow:
+    inset 3px 0 0 var(--cyber-magenta),
+    0 0 1rem rgba(0, 229, 255, 0.14);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .list-group-item-action.active .text-muted,
+html[data-bootui-theme='cyberpunk'] .list-group-item-action.active code {
+  color: inherit !important;
+}
+
+/* --------------------------------------------------------------- theme menu */
+
+html[data-bootui-theme='cyberpunk'] .theme-menu {
+  background: var(--bootui-surface-solid);
+  border-color: rgba(255, 45, 247, 0.36);
+  box-shadow: var(--bootui-shadow-md);
+}
+
+html[data-bootui-theme='cyberpunk'] .theme-option {
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='cyberpunk'] .theme-option:hover,
+html[data-bootui-theme='cyberpunk'] .theme-option[aria-checked='true'] {
+  background: var(--bootui-nav-hover-bg);
+  box-shadow: inset 3px 0 0 var(--cyber-magenta);
+}
+
+html[data-bootui-theme='cyberpunk'] .theme-option__check,
+html[data-bootui-theme='cyberpunk'] .theme-option__icon {
+  color: var(--cyber-cyan);
+}
+
+html[data-bootui-theme='cyberpunk'] .theme-option__hint {
+  color: var(--bootui-text-muted);
+}

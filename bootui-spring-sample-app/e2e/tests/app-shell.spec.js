@@ -108,6 +108,72 @@ test.describe('BootUI app shell', () => {
     await expect(contributeLink.locator('.bi-github')).toBeVisible()
   })
 
+  test('picks any registered theme from the topbar menu', async ({page}) => {
+    await page.goto('/bootui/')
+    await page.evaluate(() => localStorage.setItem('bootui.theme', 'light'))
+    await page.reload()
+
+    const root = page.locator('html')
+    const themeToggle = page.locator('.theme-toggle')
+    await expect(root).toHaveAttribute('data-bootui-theme', 'light')
+    await expect(themeToggle).toHaveAttribute('aria-expanded', 'false')
+
+    await themeToggle.click()
+    const menu = page.getByRole('menu', {name: 'Theme'})
+    await expect(menu).toBeVisible()
+    await expect(menu.getByRole('menuitemradio')).toHaveText([
+      /Light/,
+      /Dark/,
+      /Graphite/,
+      /Cyberpunk/,
+      /R\u00e9publique Fran\u00e7aise/,
+      /Minimal/,
+      /Windows 95/
+    ])
+    // The active theme is marked for assistive tech, not just visually.
+    await expect(menu.getByRole('menuitemradio', {name: /Light/})).toHaveAttribute('aria-checked', 'true')
+
+    // Every skin is reachable directly rather than by cycling through the others.
+    await menu.getByRole('menuitemradio', {name: /Windows 95/}).click()
+    await expect(root).toHaveAttribute('data-bootui-theme', 'win95')
+    // The retro shell is a light-luminance skin, so Bootstrap stays on its light scheme.
+    await expect(root).toHaveAttribute('data-bs-theme', 'light')
+    await expect(menu).toBeHidden()
+
+    // The skin re-skins chrome without touching structure: silver surfaces, square
+    // corners, and the era's bevel instead of a soft shadow.
+    const chrome = await page.locator('aside.bootui-sidebar').evaluate((sidebar) => {
+      const card = document.querySelector('.card')
+      return {
+        sidebarBackground: getComputedStyle(sidebar).backgroundColor,
+        cardRadius: getComputedStyle(card).borderTopLeftRadius,
+        cardShadow: getComputedStyle(card).boxShadow
+      }
+    })
+    expect(chrome.sidebarBackground).toBe('rgb(192, 192, 192)')
+    expect(chrome.cardRadius).toBe('0px')
+    expect(chrome.cardShadow).toContain('inset')
+
+    await themeToggle.click()
+    await page.getByRole('menuitemradio', {name: /Cyberpunk/}).click()
+    await expect(root).toHaveAttribute('data-bootui-theme', 'cyberpunk')
+    await expect(root).toHaveAttribute('data-bs-theme', 'dark')
+  })
+
+  test('closes the theme menu on Escape and returns focus to its trigger', async ({page}) => {
+    await page.goto('/bootui/')
+    const themeToggle = page.locator('.theme-toggle')
+
+    await themeToggle.click()
+    const menu = page.getByRole('menu', {name: 'Theme'})
+    await expect(menu).toBeVisible()
+
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Escape')
+    await expect(menu).toBeHidden()
+    await expect(themeToggle).toBeFocused()
+  })
+
   test('shell and current-page controls work when browser storage is denied before startup', async ({page}) => {
     await page.addInitScript(() => {
       Object.defineProperty(window, 'localStorage', {
@@ -123,7 +189,9 @@ test.describe('BootUI app shell', () => {
     const root = page.locator('html')
     const themeToggle = page.locator('.theme-toggle')
     const initialTheme = await root.getAttribute('data-bs-theme')
+    // The picker still works when the preference cannot be persisted.
     await themeToggle.click()
+    await page.getByRole('menuitemradio', {name: initialTheme === 'dark' ? /Light/ : /Dark/}).click()
     await expect(root).toHaveAttribute('data-bs-theme', initialTheme === 'dark' ? 'light' : 'dark')
 
     const sidebar = page.locator('aside.bootui-sidebar')
