@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "bootui-ui/src/main/frontend/src/assets/theme-*.css"
+        ],
+        "createdAt": "2026-08-27T13:20:56.531Z",
+        "reason": "Skins intentionally define their own palette; the DESIGN.md ramp describes the default light/dark theme"
+      }
+    ]
+  }
+}

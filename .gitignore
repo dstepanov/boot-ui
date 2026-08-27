@@ -40,8 +40,9 @@ coverage/
 # BootUI runtime persistence (local developer overrides)
 .bootui/
 
-# Impeccable hook local cache
-.impeccable/
+# Impeccable design hook: share the detector config, keep local cache/overrides out
+.impeccable/*
+!.impeccable/config.json
 
 # Local env
 .env

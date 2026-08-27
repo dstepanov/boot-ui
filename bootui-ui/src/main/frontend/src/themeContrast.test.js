@@ -11,8 +11,10 @@ const css = descriptor.styles.map((style) => style.content).join('\n')
 const commandPaletteSource = fs.readFileSync(path.join(sourceRoot, 'views/components/CommandPalette.vue'), 'utf8')
 const {descriptor: commandPaletteDescriptor} = parseSfc(commandPaletteSource, {filename: 'CommandPalette.vue'})
 const commandPaletteCss = commandPaletteDescriptor.styles.map((style) => style.content).join('\n')
+const skinCss = (theme) => fs.readFileSync(path.join(sourceRoot, `assets/theme-${theme}.css`), 'utf8')
 
-function cssBlock(marker) {
+function cssBlock(marker, source = css) {
+  const css = source
   const markerIndex = css.indexOf(marker)
   if (markerIndex < 0) throw new Error(`Missing CSS block: ${marker}`)
   const openingBrace = css.indexOf('{', markerIndex)
@@ -139,4 +141,58 @@ describe.each([
 it('routes standard and command-palette placeholders through the accessible subtle token', () => {
   expect(css).toMatch(/:global\(\.form-control::placeholder\)\s*\{[^}]*color:\s*var\(--bootui-text-subtle\)/s)
   expect(commandPaletteCss).toMatch(/\.cp-input::placeholder\s*\{[^}]*color:\s*var\(--bootui-text-subtle/s)
+})
+
+/* Every opt-in skin repaints the body layer, and several of them make it a bare
+   backdrop that never carries copy. So rather than walking the default theme's
+   gradient stops, each skin is held to the three surfaces that actually carry
+   text: its solid card chrome, its input field, and its hovered nav row. Those
+   three must be declared as opaque colors in the skin's own token block, which
+   is also what makes this check possible without a browser. */
+describe.each(['graphite', 'minimal', 'cyberpunk', 'dsfr', 'win95'])('%s theme text contrast', (theme) => {
+  /* Resolved per test rather than once per file, so a skin that is mid-authoring
+     fails only its own assertions instead of breaking collection for the rest. */
+  function skin() {
+    const tokens = declarations(cssBlock(`html[data-bootui-theme='${theme}'] {`, skinCss(theme)))
+    const literal = (value) => parseColor(value.startsWith('var(') ? tokens[value.slice(4, -1)] : value)
+    return {
+      tokens,
+      literal,
+      surfaces: [
+        ['card chrome', literal(tokens['--bootui-surface-solid'])],
+        ['input field', literal(tokens['--bootui-surface-alt'])],
+        ['hovered nav row', literal(tokens['--bootui-nav-hover-bg'])]
+      ]
+    }
+  }
+
+  it.each([
+    ['--bootui-text', 4.5],
+    ['--bootui-text-muted', 4.5],
+    ['--bootui-text-subtle', 4.5],
+    ['--bootui-danger-text', 4.5],
+    ['--bootui-warning-text-strong', 4.5],
+    ['--bootui-info-text', 4.5],
+    ['--bootui-warning-text', 3]
+  ])('%s clears its WCAG AA floor on every chrome surface', (token, floor) => {
+    const {tokens, literal, surfaces} = skin()
+    const foreground = literal(tokens[token])
+    const failures = surfaces
+      .map(([name, background]) => ({name, ratio: contrastRatio(foreground, background)}))
+      .filter(({ratio}) => ratio < floor)
+
+    expect(failures).toEqual([])
+  })
+
+  it('keeps machine output legible in its code pane', () => {
+    const {tokens, literal} = skin()
+    expect(
+      contrastRatio(literal(tokens['--bootui-code-pane-text']), literal(tokens['--bootui-code-pane-bg']))
+    ).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+it('keeps the Windows 95 title-bar caption legible', () => {
+  const tokens = declarations(cssBlock("html[data-bootui-theme='win95'] {", skinCss('win95')))
+  expect(contrastRatio(parseColor('#ffffff'), parseColor(tokens['--w95-title']))).toBeGreaterThanOrEqual(4.5)
 })

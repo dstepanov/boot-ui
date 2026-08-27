@@ -4,12 +4,13 @@ import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, pr
 import {useRoute, useRouter} from 'vue-router'
 import {
   applyTheme,
-  nextTheme,
   normalizeThemePreference,
   readThemePreference,
   resolveTheme,
   THEME_QUERY,
-  THEME_STORAGE_KEY
+  THEME_REGISTRY,
+  THEME_STORAGE_KEY,
+  themeDefinition
 } from './utils/theme.js'
 import {describeLoadError} from './utils/loadError.js'
 import {
@@ -79,9 +80,13 @@ const themeMediaQuery =
 const themePreference = ref(readThemePreference())
 const systemPrefersDark = ref(themeMediaQuery?.matches === true)
 const resolvedTheme = computed(() => resolveTheme(themePreference.value, systemPrefersDark.value))
-const darkTheme = computed(() => resolvedTheme.value === 'dark')
-const themeToggleLabel = computed(() => `Switch to ${darkTheme.value ? 'light' : 'dark'} mode`)
-const themeToggleText = computed(() => `${darkTheme.value ? 'Light' : 'Dark'} mode`)
+const themeMenuOpen = ref(false)
+const themeMenuRef = ref(null)
+const themeMenuTriggerRef = ref(null)
+const themePickerRef = ref(null)
+const themeOptions = THEME_REGISTRY
+const activeThemeDefinition = computed(() => themeDefinition(resolvedTheme.value))
+const themeToggleLabel = computed(() => `Theme: ${activeThemeDefinition.value.label}. Choose a different theme`)
 
 provide('overview', overview)
 provide('panels', panels)
@@ -217,10 +222,66 @@ function persistThemePreference(theme) {
   return safeLocalStorage.setItem(THEME_STORAGE_KEY, theme)
 }
 
-function toggleTheme() {
-  const theme = nextTheme(resolvedTheme.value)
+function selectTheme(theme) {
   themePreference.value = theme
   persistThemePreference(theme)
+  closeThemeMenu({restoreFocus: true})
+}
+
+async function toggleThemeMenu() {
+  if (themeMenuOpen.value) {
+    closeThemeMenu({restoreFocus: true})
+    return
+  }
+  themeMenuOpen.value = true
+  document.addEventListener('pointerdown', onThemePointerDown, true)
+  document.addEventListener('focusin', onThemeFocusIn, true)
+  await nextTick()
+  themeMenuRef.value?.querySelector('[aria-checked="true"]')?.focus()
+}
+
+function closeThemeMenu({restoreFocus = false} = {}) {
+  if (!themeMenuOpen.value) return
+  themeMenuOpen.value = false
+  document.removeEventListener('pointerdown', onThemePointerDown, true)
+  document.removeEventListener('focusin', onThemeFocusIn, true)
+  if (restoreFocus) themeMenuTriggerRef.value?.focus()
+}
+
+/* Dismissal is driven by pointer and focus events on the document rather than by
+   `focusout` on the picker. Safari does not focus a `<button>` on mousedown, so a
+   `focusout` rule closes the menu before the option's own click can land — the
+   menu looks like it works and silently does nothing. */
+function onThemePointerDown(event) {
+  if (themePickerRef.value?.contains(event.target)) return
+  closeThemeMenu()
+}
+
+function onThemeFocusIn(event) {
+  if (themePickerRef.value?.contains(event.target)) return
+  closeThemeMenu()
+}
+
+/* Roving focus inside the menu, so the picker is usable without a pointer. The
+   menu closes on Esc and on any focus that lands outside it, and always hands
+   focus back to the trigger it came from. */
+function onThemeMenuKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeThemeMenu({restoreFocus: true})
+    return
+  }
+  const isArrow = event.key === 'ArrowDown' || event.key === 'ArrowUp'
+  if (!isArrow && event.key !== 'Home' && event.key !== 'End') return
+  const items = [...(themeMenuRef.value?.querySelectorAll('.theme-option') ?? [])]
+  if (!items.length) return
+  event.preventDefault()
+  const current = items.indexOf(document.activeElement)
+  let nextIndex = 0
+  if (event.key === 'End') nextIndex = items.length - 1
+  else if (event.key === 'ArrowDown') nextIndex = (current + 1) % items.length
+  else if (event.key === 'ArrowUp') nextIndex = (current - 1 + items.length) % items.length
+  items[nextIndex].focus()
 }
 
 function onSystemThemeChange(e) {
@@ -555,6 +616,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  closeThemeMenu()
   window.removeEventListener('keydown', onGlobalKeydown)
   window.removeEventListener('storage', onStorageChange)
   themeMediaQuery?.removeEventListener?.('change', onSystemThemeChange)
@@ -837,16 +899,49 @@ function onGlobalKeydown(e) {
               <span class="cp-trigger-label">Go to panel</span>
               <kbd class="cp-trigger-hint">⌘K</kbd>
             </button>
-            <button
-              class="theme-toggle"
-              type="button"
-              :title="themeToggleLabel"
-              :aria-label="themeToggleLabel"
-              @click="toggleTheme"
-            >
-              <i :class="['bi', darkTheme ? 'bi-sun' : 'bi-moon-stars']"></i>
-              <span class="theme-toggle__label">{{ themeToggleText }}</span>
-            </button>
+            <div ref="themePickerRef" class="theme-picker">
+              <button
+                ref="themeMenuTriggerRef"
+                class="theme-toggle"
+                type="button"
+                aria-haspopup="true"
+                :aria-expanded="themeMenuOpen"
+                :title="themeToggleLabel"
+                :aria-label="themeToggleLabel"
+                @click="toggleThemeMenu"
+                @keydown.escape="closeThemeMenu({restoreFocus: true})"
+              >
+                <i :class="['bi', activeThemeDefinition.icon]"></i>
+                <span class="theme-toggle__label">{{ activeThemeDefinition.label }}</span>
+                <i class="bi bi-chevron-down theme-toggle__caret" aria-hidden="true"></i>
+              </button>
+              <div
+                v-if="themeMenuOpen"
+                ref="themeMenuRef"
+                class="theme-menu"
+                role="menu"
+                aria-label="Theme"
+                @keydown="onThemeMenuKeydown"
+              >
+                <button
+                  v-for="option in themeOptions"
+                  :key="option.id"
+                  class="theme-option"
+                  type="button"
+                  role="menuitemradio"
+                  :aria-checked="option.id === resolvedTheme"
+                  @mousedown.prevent
+                  @click="selectTheme(option.id)"
+                >
+                  <i :class="['bi', option.icon, 'theme-option__icon']" aria-hidden="true"></i>
+                  <span class="theme-option__text">
+                    <span class="theme-option__label">{{ option.label }}</span>
+                    <span class="theme-option__hint">{{ option.hint }}</span>
+                  </span>
+                  <i class="bi bi-check2 theme-option__check" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
             <span :class="['status-pill', statusPillClass]" :title="activationTitle">
               <i :class="['bi', activationIcon]"></i>
               {{ activationLabel }}
@@ -2319,5 +2414,92 @@ function onGlobalKeydown(e) {
   border-radius: var(--bootui-radius-xs);
   font-size: 0.7rem;
   padding: 0.1rem 0.35rem;
+}
+
+.theme-picker {
+  position: relative;
+}
+
+.theme-toggle__caret {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.theme-menu {
+  /* Solid, not the translucent glass surface: this menu floats over dense panel
+     content with no backdrop-filter behind it, so `--bootui-surface` let page text
+     read straight through the options. Every theme guarantees an opaque
+     `--bootui-surface-solid`, which is what a floating menu needs. */
+  background: var(--bootui-surface-solid);
+  border: 1px solid var(--bootui-border);
+  border-radius: var(--bootui-radius-md);
+  box-shadow: var(--bootui-shadow-md);
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.4rem;
+  min-width: 15rem;
+  padding: 0.35rem;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 1080;
+}
+
+.theme-option {
+  align-items: center;
+  background: none;
+  border: none;
+  border-radius: var(--bootui-radius-sm);
+  color: var(--bootui-text);
+  cursor: pointer;
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.45rem 0.55rem;
+  text-align: left;
+  transition: background 150ms ease;
+  width: 100%;
+}
+
+.theme-option:hover {
+  background: var(--bootui-nav-hover-bg);
+}
+
+.theme-option__icon {
+  color: var(--bootui-text-muted);
+  font-size: 1rem;
+}
+
+.theme-option__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.theme-option__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.theme-option__hint {
+  color: var(--bootui-text-muted);
+  font-size: 0.72rem;
+}
+
+/* The check is the only affordance that marks the active theme, so it is
+   reserved for `aria-checked` rather than hover or focus. */
+.theme-option__check {
+  color: var(--bootui-green);
+  opacity: 0;
+}
+
+.theme-option[aria-checked='true'] .theme-option__check {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-option {
+    transition: none;
+  }
 }
 </style>

@@ -2,11 +2,14 @@ import {describe, expect, it} from 'vitest'
 
 import {
   applyTheme,
-  nextTheme,
+  bootstrapThemeFor,
   normalizeThemePreference,
   readThemePreference,
   resolveTheme,
-  THEME_STORAGE_KEY
+  THEME_REGISTRY,
+  THEME_STORAGE_KEY,
+  themeDefinition,
+  THEMES
 } from './theme.js'
 import {createSafeStorage} from './safeStorage.js'
 
@@ -14,6 +17,7 @@ describe('theme utilities', () => {
   it('normalizes persisted theme values', () => {
     expect(normalizeThemePreference('dark')).toBe('dark')
     expect(normalizeThemePreference('light')).toBe('light')
+    expect(normalizeThemePreference('win95')).toBe('win95')
     expect(normalizeThemePreference('system')).toBeNull()
     expect(normalizeThemePreference(null)).toBeNull()
   })
@@ -41,9 +45,36 @@ describe('theme utilities', () => {
     expect(resolveTheme('dark', false)).toBe('dark')
   })
 
-  it('toggles between light and dark mode', () => {
-    expect(nextTheme('light')).toBe('dark')
-    expect(nextTheme('dark')).toBe('light')
+  it('never resolves an opt-in skin from the system preference alone', () => {
+    expect(THEMES).toEqual(['light', 'dark', 'graphite', 'minimal', 'cyberpunk', 'dsfr', 'win95'])
+    for (const theme of THEMES.filter((id) => id !== 'light' && id !== 'dark')) {
+      expect(resolveTheme(null, true)).not.toBe(theme)
+      expect(resolveTheme(null, false)).not.toBe(theme)
+      expect(resolveTheme(theme, true)).toBe(theme)
+    }
+  })
+
+  it('describes every registered theme for the picker', () => {
+    for (const theme of THEME_REGISTRY) {
+      expect(theme.label).toBeTruthy()
+      expect(theme.hint).toBeTruthy()
+      expect(theme.icon).toMatch(/^bi-/)
+      expect(['light', 'dark']).toContain(theme.scheme)
+    }
+    expect(themeDefinition('cyberpunk').label).toBe('Cyberpunk')
+    // An unknown id must not blank the picker: it falls back to the default shell.
+    expect(themeDefinition('unexpected')).toBe(THEME_REGISTRY[0])
+  })
+
+  it('builds each skin on the Bootstrap component scheme it declares', () => {
+    expect(bootstrapThemeFor('light')).toBe('light')
+    expect(bootstrapThemeFor('dark')).toBe('dark')
+    // A light-luminance skin runs on `light` even though it looks nothing like the default.
+    expect(bootstrapThemeFor('win95')).toBe('light')
+    expect(bootstrapThemeFor('dsfr')).toBe('light')
+    expect(bootstrapThemeFor('minimal')).toBe('light')
+    expect(bootstrapThemeFor('graphite')).toBe('dark')
+    expect(bootstrapThemeFor('cyberpunk')).toBe('dark')
   })
 
   it('applies the resolved theme to the document root', () => {
@@ -53,5 +84,10 @@ describe('theme utilities', () => {
     expect(root.dataset.bootuiTheme).toBe('dark')
     expect(root.dataset.bsTheme).toBe('dark')
     expect(root.style.colorScheme).toBe('dark')
+
+    applyTheme(root, 'win95')
+    expect(root.dataset.bootuiTheme).toBe('win95')
+    expect(root.dataset.bsTheme).toBe('light')
+    expect(root.style.colorScheme).toBe('light')
   })
 })

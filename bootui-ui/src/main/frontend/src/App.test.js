@@ -363,6 +363,101 @@ describe('App command palette', () => {
     expect(document.activeElement).toBe(trigger.element)
   })
 
+  /* Themes are addressed by their picker label rather than their index: the registry
+   order is a design decision that changes, and an index-based lookup silently
+   retargets a different theme when it does instead of failing. */
+  function findThemeOption(wrapper, label) {
+    const option = wrapper
+      .findAll('.theme-option')
+      .find((candidate) => candidate.find('.theme-option__label').text() === label)
+    if (!option) {
+      throw new Error(`No theme option labelled "${label}" in the picker`)
+    }
+    return option
+  }
+
+  it('picks any registered theme from the topbar menu', async () => {
+    const {wrapper} = await mountApp('/overview', {stubCommandPalette: false})
+    const toggle = wrapper.find('.theme-toggle')
+
+    expect(toggle.attributes('aria-label')).toContain('Theme: Light')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('.theme-menu').exists()).toBe(false)
+
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    const options = wrapper.findAll('.theme-option')
+    expect(options.map((option) => option.find('.theme-option__label').text())).toEqual([
+      'Light',
+      'Dark',
+      'Graphite',
+      'Minimal',
+      'Cyberpunk',
+      'France',
+      'Windows 95'
+    ])
+    expect(options[0].attributes('aria-checked')).toBe('true')
+
+    // Every skin is reachable directly, without stepping through the others.
+    await findThemeOption(wrapper, 'Windows 95').trigger('click')
+    expect(document.documentElement.dataset.bootuiTheme).toBe('win95')
+    // The retro shell is a light-luminance skin, so Bootstrap stays on `light`.
+    expect(document.documentElement.dataset.bsTheme).toBe('light')
+    expect(wrapper.find('.theme-menu').exists()).toBe(false)
+    expect(toggle.attributes('aria-label')).toContain('Theme: Windows 95')
+
+    await toggle.trigger('click')
+    await findThemeOption(wrapper, 'Cyberpunk').trigger('click')
+    expect(document.documentElement.dataset.bootuiTheme).toBe('cyberpunk')
+    expect(document.documentElement.dataset.bsTheme).toBe('dark')
+  })
+
+  /* Safari does not focus a `<button>` on mousedown, so the click that picks a theme
+     first blurs the menu. A `focusout`-based dismissal closes the menu before the
+     option's own click can land, and the picker silently does nothing. */
+  it('keeps the theme menu open when picking an option blurs it', async () => {
+    const {wrapper} = await mountApp('/overview', {stubCommandPalette: false})
+    await wrapper.find('.theme-toggle').trigger('click')
+    await flushPromises()
+
+    const option = findThemeOption(wrapper, 'Cyberpunk')
+    // Safari's sequence: mousedown is defaulted away, focus drops to the body, then click.
+    const mousedown = new MouseEvent('mousedown', {bubbles: true, cancelable: true})
+    option.element.dispatchEvent(mousedown)
+    expect(mousedown.defaultPrevented).toBe(true)
+    option.element.dispatchEvent(new FocusEvent('focusout', {bubbles: true, relatedTarget: null}))
+    await flushPromises()
+    expect(wrapper.find('.theme-menu').exists()).toBe(true)
+
+    await option.trigger('click')
+    expect(document.documentElement.dataset.bootuiTheme).toBe('cyberpunk')
+  })
+
+  it('closes the theme menu when a pointer lands outside it', async () => {
+    const {wrapper} = await mountApp('/overview', {stubCommandPalette: false})
+    await wrapper.find('.theme-toggle').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.theme-menu').exists()).toBe(true)
+
+    document.dispatchEvent(new MouseEvent('pointerdown', {bubbles: true}))
+    await flushPromises()
+    expect(wrapper.find('.theme-menu').exists()).toBe(false)
+  })
+
+  it('closes the theme menu on Escape and hands focus back to its trigger', async () => {
+    const {wrapper} = await mountApp('/overview', {stubCommandPalette: false})
+    const toggle = wrapper.find('.theme-toggle')
+    toggle.element.focus()
+
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.find('.theme-option[aria-checked="true"]').element)
+
+    await wrapper.find('.theme-menu').trigger('keydown', {key: 'Escape'})
+    expect(wrapper.find('.theme-menu').exists()).toBe(false)
+    expect(document.activeElement).toBe(toggle.element)
+  })
+
   it('restores the invoking control after opening with the keyboard shortcut', async () => {
     const {wrapper} = await mountApp('/overview', {stubCommandPalette: false})
     const themeToggle = wrapper.find('.theme-toggle')
@@ -462,6 +557,7 @@ describe('App optional browser storage', () => {
     expect(wrapper.find('.bootui-shell').exists()).toBe(true)
 
     await wrapper.find('.theme-toggle').trigger('click')
+    await wrapper.findAll('.theme-option')[1].trigger('click')
     expect(document.documentElement.dataset.bsTheme).toBe('dark')
 
     await wrapper.find('.sidebar-toggle').trigger('click')
@@ -489,6 +585,7 @@ describe('App optional browser storage', () => {
 
     const {wrapper} = await mountApp()
     await wrapper.find('.theme-toggle').trigger('click')
+    await wrapper.findAll('.theme-option')[1].trigger('click')
     await wrapper.find('.sidebar-toggle').trigger('click')
 
     expect(document.documentElement.dataset.bsTheme).toBe('dark')

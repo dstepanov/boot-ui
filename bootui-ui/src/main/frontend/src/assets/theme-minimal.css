@@ -1,0 +1,747 @@
+/*
+ * BootUI "Minimal" shell.
+ *
+ * This skin strips the Calm Control Room back to ink, paper, and one active
+ * blue. Shadows, ambient glow, glass blur, gradients, and decorative colour are
+ * deliberately removed; status hues remain because they carry meaning.
+ *
+ * Everything here is keyed on `html[data-bootui-theme='minimal']`. The leading
+ * type selector deliberately outranks scoped `[data-v-*]` rules without relying
+ * on stylesheet order.
+ */
+
+html[data-bootui-theme='minimal'] {
+  --bootui-bg-body: #ffffff;
+  --bootui-bg-body-orb: transparent;
+  --bootui-blue: #0a53be;
+  --bootui-border: #d7dce2;
+  --bootui-border-alt: #c8cfd8;
+  --bootui-border-subtle: #e6e9ed;
+  --bootui-chart-axis: #374151;
+  --bootui-chart-calls: #6b7280;
+  --bootui-chart-grid: #e5e7eb;
+  --bootui-chart-input: #111827;
+  --bootui-chart-output: #4b5563;
+  --bootui-chart-selection: #0a53be;
+  --bootui-chart-span: #d1d5db;
+  --bootui-chart-tool: #374151;
+  --bootui-chart-tooltip-bg: #ffffff;
+  --bootui-chart-tooltip-border: #c8cfd8;
+  --bootui-chart-tooltip-text: #111827;
+  --bootui-chart-vector: #6b7280;
+  --bootui-code-pane-bg: #111827;
+  --bootui-code-pane-border: #111827;
+  --bootui-code-pane-text: #f9fafb;
+  --bootui-critical: #8f001a;
+  --bootui-danger: #dc3545;
+  --bootui-danger-text: #a01122;
+  --bootui-green: #146c43;
+  --bootui-green-dark: #0f5132;
+  --bootui-heat-low-bg: #f5e6b3;
+  --bootui-heat-low-text: #5f4400;
+  --bootui-high: #a04100;
+  --bootui-highlight-bg: #fff8db;
+  --bootui-info: #0dcaf0;
+  --bootui-info-text: #075f73;
+  --bootui-nav-active-bg: #0a53be;
+  --bootui-nav-active-color: #ffffff;
+  --bootui-nav-group-bg: #ffffff;
+  --bootui-nav-group-color: #374151;
+  --bootui-nav-hover-bg: #f1f5f9;
+  --bootui-nav-hover-color: #111827;
+  --bootui-nav-link-color: #374151;
+  --bootui-radius-lg: 0.125rem;
+  --bootui-radius-md: 0.125rem;
+  --bootui-radius-pill: 0.125rem;
+  --bootui-radius-sm: 0.125rem;
+  --bootui-radius-xl: 0.125rem;
+  --bootui-radius-xs: 0.125rem;
+  --bootui-secondary: #4b5563;
+  --bootui-shadow-md: none;
+  --bootui-shadow-sidebar: none;
+  --bootui-shadow-sm: none;
+  --bootui-sidebar-bg: #ffffff;
+  --bootui-skeleton-base: #e5e7eb;
+  --bootui-skeleton-shine: #f9fafb;
+  --bootui-surface: #ffffff;
+  --bootui-surface-alt: #f8fafc;
+  --bootui-surface-solid: #ffffff;
+  --bootui-text: #111827;
+  --bootui-text-muted: #374151;
+  --bootui-text-subtle: #4b5563;
+  --bootui-warning: #ffc107;
+  --bootui-warning-text: #7a5c00;
+  --bootui-warning-text-strong: #5f4400;
+}
+
+html[data-bootui-theme='minimal'] body {
+  background: #ffffff;
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .ambient-orb {
+  display: none;
+}
+
+html[data-bootui-theme='minimal'] *,
+html[data-bootui-theme='minimal'] *::before,
+html[data-bootui-theme='minimal'] *::after {
+  backdrop-filter: none !important;
+  text-shadow: none;
+}
+
+/* --------------------------------------------------------------- application shell */
+
+html[data-bootui-theme='minimal'] .bootui-shell {
+  background: #ffffff;
+}
+
+html[data-bootui-theme='minimal'] .bootui-sidebar {
+  background: #ffffff;
+  border-right: 1px solid var(--bootui-border-subtle);
+  box-shadow: none;
+}
+
+html[data-bootui-theme='minimal'] .bootui-workspace,
+html[data-bootui-theme='minimal'] .content-stage {
+  background: #ffffff;
+}
+
+html[data-bootui-theme='minimal'] .topbar {
+  background: #ffffff;
+  border-bottom: 1px solid var(--bootui-border-subtle);
+  box-shadow: none;
+}
+
+html[data-bootui-theme='minimal'] .topbar-title,
+html[data-bootui-theme='minimal'] .topbar-subtitle {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+html[data-bootui-theme='minimal'] .topbar-title {
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .topbar-subtitle {
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='minimal'] .brand-card,
+html[data-bootui-theme='minimal'] .contribute-card {
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+  color: inherit;
+}
+
+html[data-bootui-theme='minimal'] .brand-card:hover,
+html[data-bootui-theme='minimal'] .contribute-card:hover {
+  background: var(--bootui-nav-hover-bg);
+  border-color: var(--bootui-border-subtle);
+  box-shadow: none;
+  transform: none;
+}
+
+html[data-bootui-theme='minimal'] .brand-mark,
+html[data-bootui-theme='minimal'] .contribute-icon,
+html[data-bootui-theme='minimal'] .authentication-icon {
+  background: var(--bootui-text);
+  box-shadow: none;
+  color: #ffffff;
+}
+
+html[data-bootui-theme='minimal'] .brand-name,
+html[data-bootui-theme='minimal'] .brand-subtitle {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+html[data-bootui-theme='minimal'] .brand-name {
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .brand-subtitle {
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='minimal'] .bootui-footer {
+  background: #ffffff;
+  border-top: 1px solid var(--bootui-border-subtle);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='minimal'] .bootui-footer a:hover,
+html[data-bootui-theme='minimal'] .bootui-footer__context > .bi {
+  color: var(--bootui-text);
+}
+
+/* -------------------------------------------------------------------- navigation */
+
+html[data-bootui-theme='minimal'] .bootui-nav-section:not(.bootui-nav-section--overview) .bootui-nav-group__items {
+  border-left: 1px solid var(--bootui-border-subtle);
+}
+
+html[data-bootui-theme='minimal'] .bootui-nav-group__toggle {
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+  color: var(--bootui-nav-group-color);
+}
+
+html[data-bootui-theme='minimal'] .bootui-nav-group__toggle:hover,
+html[data-bootui-theme='minimal'] .bootui-nav-group__toggle.active {
+  background: var(--bootui-nav-hover-bg);
+  border-color: var(--bootui-border-subtle);
+  color: var(--bootui-nav-hover-color);
+  transform: none;
+}
+
+html[data-bootui-theme='minimal'] .bootui-nav-group__count {
+  background: var(--bootui-surface-alt);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='minimal'] .bootui-nav-link {
+  border: 1px solid transparent;
+  color: var(--bootui-nav-link-color);
+}
+
+html[data-bootui-theme='minimal'] .bootui-nav-link:hover {
+  background: var(--bootui-nav-hover-bg);
+  border-color: var(--bootui-border-subtle);
+  color: var(--bootui-nav-hover-color);
+  transform: none;
+}
+
+html[data-bootui-theme='minimal'] .bootui-nav-link.active,
+html[data-bootui-theme='minimal'] .bootui-nav-group__toggle.active {
+  background: var(--bootui-nav-active-bg);
+  border-color: var(--bootui-nav-active-bg);
+  box-shadow: none;
+  color: var(--bootui-nav-active-color);
+}
+
+html[data-bootui-theme='minimal'] .bootui-nav-link--unavailable,
+html[data-bootui-theme='minimal'] .bootui-nav-section--unavailable .bootui-nav-group__count,
+html[data-bootui-theme='minimal'] .bootui-nav-section--unavailable .bootui-nav-group__toggle {
+  background: transparent;
+  border-color: transparent;
+  color: var(--bootui-text-subtle);
+}
+
+html[data-bootui-theme='minimal'] .bootui-nav-flyout {
+  background: #ffffff;
+  border: 1px solid var(--bootui-border-subtle);
+  box-shadow: none;
+}
+
+html[data-bootui-theme='minimal'] .bootui-nav-flyout__title {
+  color: var(--bootui-text-muted);
+}
+
+/* ---------------------------------------------------------------------- controls */
+
+html[data-bootui-theme='minimal'] .btn {
+  --bs-btn-border-color: var(--bootui-border-alt);
+  --bs-btn-border-radius: var(--bootui-radius-sm);
+  --bs-btn-color: var(--bootui-text);
+  --bs-btn-disabled-opacity: 0.55;
+  --bs-btn-focus-box-shadow: none;
+  --bs-btn-hover-border-color: var(--bootui-text);
+  --bs-btn-hover-color: var(--bootui-text);
+  background-image: none;
+  box-shadow: none;
+  font-weight: 600;
+}
+
+html[data-bootui-theme='minimal'] .btn:hover,
+html[data-bootui-theme='minimal'] .btn:focus {
+  box-shadow: none;
+  transform: none;
+}
+
+html[data-bootui-theme='minimal'] .btn-primary {
+  --bs-btn-active-bg: #111827;
+  --bs-btn-active-border-color: #111827;
+  --bs-btn-bg: #111827;
+  --bs-btn-border-color: #111827;
+  --bs-btn-color: #ffffff;
+  --bs-btn-disabled-bg: #111827;
+  --bs-btn-disabled-border-color: #111827;
+  --bs-btn-hover-bg: #000000;
+  --bs-btn-hover-border-color: #000000;
+  --bs-btn-hover-color: #ffffff;
+}
+
+html[data-bootui-theme='minimal'] .btn-success {
+  --bs-btn-active-bg: #0f5132;
+  --bs-btn-active-border-color: #0f5132;
+  --bs-btn-bg: var(--bootui-green-dark);
+  --bs-btn-border-color: var(--bootui-green-dark);
+  --bs-btn-color: #ffffff;
+  --bs-btn-disabled-bg: var(--bootui-green-dark);
+  --bs-btn-disabled-border-color: var(--bootui-green-dark);
+  --bs-btn-hover-bg: #0f5132;
+  --bs-btn-hover-border-color: #0f5132;
+  --bs-btn-hover-color: #ffffff;
+}
+
+html[data-bootui-theme='minimal'] .btn-outline-primary,
+html[data-bootui-theme='minimal'] .btn-outline-secondary {
+  --bs-btn-active-bg: #111827;
+  --bs-btn-active-border-color: #111827;
+  --bs-btn-active-color: #ffffff;
+  --bs-btn-border-color: var(--bootui-border-alt);
+  --bs-btn-color: var(--bootui-text);
+  --bs-btn-disabled-border-color: var(--bootui-border-alt);
+  --bs-btn-disabled-color: var(--bootui-text-muted);
+  --bs-btn-hover-bg: var(--bootui-nav-hover-bg);
+  --bs-btn-hover-border-color: var(--bootui-text);
+  --bs-btn-hover-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .btn-danger {
+  --bs-btn-active-bg: #8f001a;
+  --bs-btn-active-border-color: #8f001a;
+  --bs-btn-bg: var(--bootui-danger-text);
+  --bs-btn-border-color: var(--bootui-danger-text);
+  --bs-btn-color: #ffffff;
+  --bs-btn-disabled-bg: var(--bootui-danger-text);
+  --bs-btn-disabled-border-color: var(--bootui-danger-text);
+  --bs-btn-hover-bg: #8f001a;
+  --bs-btn-hover-border-color: #8f001a;
+  --bs-btn-hover-color: #ffffff;
+}
+
+html[data-bootui-theme='minimal'] .btn-outline-danger {
+  --bs-btn-active-bg: #8f001a;
+  --bs-btn-active-border-color: #8f001a;
+  --bs-btn-active-color: #ffffff;
+  --bs-btn-border-color: var(--bootui-danger-text);
+  --bs-btn-color: var(--bootui-danger-text);
+  --bs-btn-hover-bg: var(--bootui-danger-text);
+  --bs-btn-hover-border-color: var(--bootui-danger-text);
+  --bs-btn-hover-color: #ffffff;
+}
+
+html[data-bootui-theme='minimal'] .btn-warning,
+html[data-bootui-theme='minimal'] .btn-info,
+html[data-bootui-theme='minimal'] .btn-secondary {
+  --bs-btn-bg: #ffffff;
+  --bs-btn-border-color: var(--bootui-border-alt);
+  --bs-btn-color: var(--bootui-text);
+  --bs-btn-hover-bg: var(--bootui-nav-hover-bg);
+  --bs-btn-hover-border-color: var(--bootui-text);
+  --bs-btn-hover-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .cp-trigger,
+html[data-bootui-theme='minimal'] .theme-toggle,
+html[data-bootui-theme='minimal'] .nav-hamburger,
+html[data-bootui-theme='minimal'] .sidebar-toggle {
+  background: #ffffff;
+  border: 1px solid var(--bootui-border-subtle);
+  box-shadow: none;
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='minimal'] .cp-trigger:hover,
+html[data-bootui-theme='minimal'] .theme-toggle:hover,
+html[data-bootui-theme='minimal'] .nav-hamburger:hover,
+html[data-bootui-theme='minimal'] .sidebar-toggle:hover {
+  background: var(--bootui-nav-hover-bg);
+  border-color: var(--bootui-border-alt);
+  color: var(--bootui-text);
+  transform: none;
+}
+
+html[data-bootui-theme='minimal'] .cp-trigger-hint,
+html[data-bootui-theme='minimal'] kbd {
+  background: var(--bootui-surface-alt);
+  border: 1px solid var(--bootui-border-subtle);
+  box-shadow: none;
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='minimal'] .brand-card:focus-visible,
+html[data-bootui-theme='minimal'] .contribute-card:focus-visible,
+html[data-bootui-theme='minimal'] .sidebar-toggle:focus-visible,
+html[data-bootui-theme='minimal'] .bootui-nav-group__toggle:focus-visible,
+html[data-bootui-theme='minimal'] .nav-hamburger:focus-visible,
+html[data-bootui-theme='minimal'] .cp-trigger:focus-visible,
+html[data-bootui-theme='minimal'] .theme-toggle:focus-visible,
+html[data-bootui-theme='minimal'] .bootui-nav-link:focus-visible,
+html[data-bootui-theme='minimal'] .btn:focus-visible,
+html[data-bootui-theme='minimal'] .bootui-keyboard-target:focus-visible {
+  outline: 2px solid var(--bootui-blue);
+  outline-offset: 2px;
+}
+
+html[data-bootui-theme='minimal'] .form-control,
+html[data-bootui-theme='minimal'] .form-select,
+html[data-bootui-theme='minimal'] textarea,
+html[data-bootui-theme='minimal'] .input-group-text {
+  background-color: var(--bootui-surface-alt);
+  border-color: var(--bootui-border-alt);
+  box-shadow: none;
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .form-control:hover,
+html[data-bootui-theme='minimal'] .form-select:hover {
+  border-color: var(--bootui-text-subtle);
+}
+
+html[data-bootui-theme='minimal'] .form-control:focus,
+html[data-bootui-theme='minimal'] .form-select:focus {
+  background-color: #ffffff;
+  border-color: var(--bootui-blue);
+  box-shadow: none;
+  color: var(--bootui-text);
+  outline: 2px solid var(--bootui-blue);
+  outline-offset: 1px;
+}
+
+html[data-bootui-theme='minimal'] .form-control::placeholder {
+  color: var(--bootui-text-subtle);
+  opacity: 1;
+}
+
+html[data-bootui-theme='minimal'] .form-check-input {
+  border-color: var(--bootui-border-alt);
+}
+
+html[data-bootui-theme='minimal'] .form-check-input:checked {
+  background-color: var(--bootui-blue);
+  border-color: var(--bootui-blue);
+}
+
+/* ----------------------------------------------------------------------- content */
+
+html[data-bootui-theme='minimal'] .card,
+html[data-bootui-theme='minimal'] .modal-content,
+html[data-bootui-theme='minimal'] .authentication-card {
+  background: #ffffff;
+  border: 1px solid var(--bootui-border-subtle);
+  box-shadow: none;
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .card-header,
+html[data-bootui-theme='minimal'] .modal-header {
+  background: #ffffff;
+  border-bottom: 1px solid var(--bootui-border-subtle);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .alert {
+  background: #ffffff;
+  border: 1px solid var(--bootui-border-subtle);
+  box-shadow: none;
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .alert-danger {
+  --bs-alert-bg: #ffffff;
+  --bs-alert-border-color: var(--bootui-danger-text);
+  --bs-alert-color: var(--bootui-danger-text);
+}
+
+html[data-bootui-theme='minimal'] .alert-warning {
+  --bs-alert-bg: #ffffff;
+  --bs-alert-border-color: var(--bootui-warning-text-strong);
+  --bs-alert-color: var(--bootui-warning-text-strong);
+}
+
+html[data-bootui-theme='minimal'] .alert-info {
+  --bs-alert-bg: #ffffff;
+  --bs-alert-border-color: var(--bootui-info-text);
+  --bs-alert-color: var(--bootui-info-text);
+}
+
+html[data-bootui-theme='minimal'] .panel-alert,
+html[data-bootui-theme='minimal'] .panel-availability-alert,
+html[data-bootui-theme='minimal'] .panel-read-only-alert {
+  box-shadow: none;
+}
+
+html[data-bootui-theme='minimal'] .badge,
+html[data-bootui-theme='minimal'] .text-bg-light,
+html[data-bootui-theme='minimal'] .badge.bg-light {
+  background-color: var(--bootui-surface-alt) !important;
+  border: 1px solid var(--bootui-border-subtle);
+  color: var(--bootui-text-muted) !important;
+}
+
+html[data-bootui-theme='minimal'] .text-bg-danger,
+html[data-bootui-theme='minimal'] .badge.bg-danger {
+  background-color: var(--bootui-danger-text) !important;
+  border-color: var(--bootui-danger-text);
+  color: #ffffff !important;
+}
+
+html[data-bootui-theme='minimal'] .text-bg-info,
+html[data-bootui-theme='minimal'] .badge.bg-info {
+  background-color: var(--bootui-info-text) !important;
+  border-color: var(--bootui-info-text);
+  color: #ffffff !important;
+}
+
+html[data-bootui-theme='minimal'] .text-bg-success,
+html[data-bootui-theme='minimal'] .badge.bg-success {
+  background-color: var(--bootui-green-dark) !important;
+  border-color: var(--bootui-green-dark);
+  color: #ffffff !important;
+}
+
+html[data-bootui-theme='minimal'] .text-bg-warning,
+html[data-bootui-theme='minimal'] .badge.bg-warning {
+  background-color: var(--bootui-warning-text-strong) !important;
+  border-color: var(--bootui-warning-text-strong);
+  color: #ffffff !important;
+}
+
+html[data-bootui-theme='minimal'] .progress {
+  background: var(--bootui-surface-alt);
+  border-radius: var(--bootui-radius-sm);
+  box-shadow: none;
+}
+
+html[data-bootui-theme='minimal'] .progress-bar {
+  background-color: var(--bootui-blue);
+  background-image: none;
+}
+
+html[data-bootui-theme='minimal'] .table {
+  --bs-table-active-bg: var(--bootui-nav-hover-bg);
+  --bs-table-active-color: var(--bootui-text);
+  --bs-table-bg: transparent;
+  --bs-table-border-color: var(--bootui-border-subtle);
+  --bs-table-color: var(--bootui-text);
+  --bs-table-hover-bg: var(--bootui-nav-hover-bg);
+  --bs-table-hover-color: var(--bootui-text);
+  --bs-table-striped-bg: #fafafa;
+  --bs-table-striped-color: var(--bootui-text);
+  background: transparent;
+}
+
+html[data-bootui-theme='minimal'] .table > thead > tr > th {
+  background: #ffffff;
+  border-bottom-color: var(--bootui-border-alt);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='minimal'] .table-responsive,
+html[data-bootui-theme='minimal'] .bootui-table-scroll {
+  box-shadow: none;
+}
+
+html[data-bootui-theme='minimal'] .table-light {
+  --bs-table-bg: #ffffff;
+  --bs-table-border-color: var(--bootui-border-subtle);
+  --bs-table-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .table-warning {
+  --bs-table-bg: #fff8db;
+  --bs-table-border-color: #ead58a;
+  --bs-table-color: var(--bootui-text);
+  --bs-table-hover-bg: #fff2bd;
+  --bs-table-hover-color: var(--bootui-text);
+  --bs-table-striped-bg: #fff5ca;
+  --bs-table-striped-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .table-danger {
+  --bs-table-bg: #fff5f6;
+  --bs-table-border-color: #e7b7bf;
+  --bs-table-color: var(--bootui-text);
+  --bs-table-hover-bg: #ffecef;
+  --bs-table-hover-color: var(--bootui-text);
+  --bs-table-striped-bg: #fff0f2;
+  --bs-table-striped-color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .list-group-item:not(.active) {
+  background: #ffffff;
+  border-color: var(--bootui-border-subtle);
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .list-group-item-action.active {
+  --bs-list-group-active-bg: var(--bootui-blue);
+  --bs-list-group-active-border-color: var(--bootui-blue);
+  background: var(--bootui-blue);
+  border-color: var(--bootui-blue);
+  color: #ffffff;
+}
+
+html[data-bootui-theme='minimal'] .list-group-item-action.active .text-muted,
+html[data-bootui-theme='minimal'] .list-group-item-action.active code {
+  color: inherit !important;
+}
+
+html[data-bootui-theme='minimal'] .bootui-code-pane {
+  background: var(--bootui-code-pane-bg);
+  border: 1px solid var(--bootui-code-pane-border);
+  box-shadow: none;
+  color: var(--bootui-code-pane-text);
+}
+
+/* ----------------------------------------------------------- theme picker + dialog */
+
+html[data-bootui-theme='minimal'] .theme-menu {
+  background: #ffffff;
+  border: 1px solid var(--bootui-border-subtle);
+  box-shadow: none;
+}
+
+html[data-bootui-theme='minimal'] .theme-option {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .theme-option:hover {
+  background: var(--bootui-nav-hover-bg);
+  border-color: var(--bootui-border-subtle);
+}
+
+html[data-bootui-theme='minimal'] .theme-option__hint,
+html[data-bootui-theme='minimal'] .theme-option__icon {
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='minimal'] .theme-option__check {
+  color: var(--bootui-blue);
+}
+
+html[data-bootui-theme='minimal'] .theme-option[aria-checked='true'] {
+  background: var(--bootui-nav-active-bg);
+  border-color: var(--bootui-nav-active-bg);
+  color: var(--bootui-nav-active-color);
+}
+
+html[data-bootui-theme='minimal'] .theme-option[aria-checked='true'] .theme-option__check,
+html[data-bootui-theme='minimal'] .theme-option[aria-checked='true'] .theme-option__hint,
+html[data-bootui-theme='minimal'] .theme-option[aria-checked='true'] .theme-option__icon {
+  color: #ffffff;
+}
+
+html[data-bootui-theme='minimal'] .cp-backdrop {
+  background: rgba(17, 24, 39, 0.22);
+}
+
+html[data-bootui-theme='minimal'] .cp-panel {
+  background: #ffffff;
+  border: 1px solid var(--bootui-border-alt);
+  box-shadow: none;
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .cp-search-row {
+  border-bottom: 1px solid var(--bootui-border-subtle);
+}
+
+html[data-bootui-theme='minimal'] .cp-search-row:focus-within {
+  border-bottom-color: var(--bootui-blue);
+  box-shadow: inset 0 -1px 0 0 var(--bootui-blue);
+}
+
+html[data-bootui-theme='minimal'] .cp-input {
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .cp-input::placeholder {
+  color: var(--bootui-text-subtle);
+  opacity: 1;
+}
+
+html[data-bootui-theme='minimal'] .cp-esc-hint,
+html[data-bootui-theme='minimal'] .cp-item-num,
+html[data-bootui-theme='minimal'] .cp-item-shortcut {
+  background: var(--bootui-surface-alt);
+  border: 1px solid var(--bootui-border-subtle);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='minimal'] .cp-item {
+  border: 1px solid transparent;
+}
+
+html[data-bootui-theme='minimal'] .cp-item.active,
+html[data-bootui-theme='minimal'] .cp-item:hover {
+  background: var(--bootui-nav-hover-bg);
+  border-color: var(--bootui-border-subtle);
+}
+
+html[data-bootui-theme='minimal'] .cp-item-icon,
+html[data-bootui-theme='minimal'] .cp-item-recent {
+  color: var(--bootui-text);
+}
+
+html[data-bootui-theme='minimal'] .cp-empty,
+html[data-bootui-theme='minimal'] .cp-item-group,
+html[data-bootui-theme='minimal'] .cp-item-status,
+html[data-bootui-theme='minimal'] .cp-search-icon,
+html[data-bootui-theme='minimal'] .cp-section-label,
+html[data-bootui-theme='minimal'] .cp-item--unavailable .cp-item-title {
+  color: var(--bootui-text-muted);
+}
+
+/* ------------------------------------------------------------ status and utilities */
+
+html[data-bootui-theme='minimal'] .status-pill,
+html[data-bootui-theme='minimal'] .profile-chip,
+html[data-bootui-theme='minimal'] .profile-chip.muted {
+  background: #ffffff;
+  border: 1px solid var(--bootui-border-subtle);
+  box-shadow: none;
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='minimal'] .status-pill--active {
+  background: #ffffff;
+  border-color: var(--bootui-green-dark);
+  color: var(--bootui-green-dark);
+}
+
+html[data-bootui-theme='minimal'] .status-pill--disabled,
+html[data-bootui-theme='minimal'] .status-pill--checking {
+  background: #ffffff;
+  border-color: var(--bootui-border-subtle);
+  color: var(--bootui-text-muted);
+}
+
+html[data-bootui-theme='minimal'] .status-pill--error,
+html[data-bootui-theme='minimal'] .status-pill--unreachable {
+  background: #ffffff;
+  border-color: var(--bootui-danger-text);
+  color: var(--bootui-danger-text);
+}
+
+html[data-bootui-theme='minimal'] .text-primary {
+  color: rgba(10, 83, 190, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='minimal'] .text-success {
+  color: rgba(15, 81, 50, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='minimal'] .text-danger {
+  color: rgba(160, 17, 34, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='minimal'] .text-info {
+  color: rgba(7, 95, 115, var(--bs-text-opacity, 1)) !important;
+}
+
+html[data-bootui-theme='minimal'] .text-muted,
+html[data-bootui-theme='minimal'] .text-secondary {
+  color: var(--bootui-text-muted) !important;
+}
+
+html[data-bootui-theme='minimal'] .text-warning {
+  color: rgba(95, 68, 0, var(--bs-text-opacity, 1)) !important;
+}
