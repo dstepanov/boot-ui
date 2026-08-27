@@ -132,7 +132,7 @@ application developer's world — calm, precise, and quietly authoritative.
 
 Target: **WCAG 2.1 AA across every theme** — the professional bar that matches the "best-in-class" personality, and a
 credibility requirement for a tool that audits other apps. Light and dark are the two defaults; the opt-in skins
-(Graphite, Cyberpunk, République Française, Minimal, Windows 95) are held to exactly the same contrast and
+(Graphite, Minimal, Cyberpunk, France, Windows 95) are held to exactly the same contrast and
 focus-visibility bar. A skin may change how BootUI looks; it may never change how much of it you can read.
 
 - **Contrast:** all meaningful text and state colors meet AA (≥4.5:1 body, ≥3:1 large/UI) in *both* themes. The

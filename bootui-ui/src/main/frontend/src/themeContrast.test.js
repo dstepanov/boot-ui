@@ -149,7 +149,7 @@ it('routes standard and command-palette placeholders through the accessible subt
    text: its solid card chrome, its input field, and its hovered nav row. Those
    three must be declared as opaque colors in the skin's own token block, which
    is also what makes this check possible without a browser. */
-describe.each(['graphite', 'cyberpunk', 'dsfr', 'minimal', 'win95'])('%s theme text contrast', (theme) => {
+describe.each(['graphite', 'minimal', 'cyberpunk', 'dsfr', 'win95'])('%s theme text contrast', (theme) => {
   /* Resolved per test rather than once per file, so a skin that is mid-authoring
      fails only its own assertions instead of breaking collection for the rest. */
   function skin() {

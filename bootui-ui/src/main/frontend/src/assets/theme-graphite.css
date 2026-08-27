@@ -218,7 +218,9 @@ html[data-bootui-theme='graphite'] .bootui-nav-link__status {
 
 html[data-bootui-theme='graphite'] .bootui-nav-flyout,
 html[data-bootui-theme='graphite'] .theme-menu {
-  background: rgba(20, 23, 28, 0.98);
+  /* Fully opaque, not 0.98: these float over dense panel content with no
+     backdrop-filter, so even 2% of translucency lets text ghost through. */
+  background: var(--bootui-surface-solid);
   border: 1px solid var(--bootui-border);
   box-shadow: var(--bootui-shadow-md);
 }

@@ -15,9 +15,9 @@ export const THEME_REGISTRY = [
   {id: 'light', label: 'Light', icon: 'bi-brightness-high', hint: 'The default daylight console', scheme: 'light'},
   {id: 'dark', label: 'Dark', icon: 'bi-moon-stars', hint: 'The same room, after hours', scheme: 'dark'},
   {id: 'graphite', label: 'Graphite', icon: 'bi-gem', hint: 'Slick, professional, high-focus', scheme: 'dark'},
-  {id: 'cyberpunk', label: 'Cyberpunk', icon: 'bi-cpu', hint: 'Neon terminal, night city', scheme: 'dark'},
-  {id: 'dsfr', label: 'République Française', icon: 'bi-bank', hint: "Système de design de l'État", scheme: 'light'},
   {id: 'minimal', label: 'Minimal', icon: 'bi-circle', hint: 'Ink on paper, nothing else', scheme: 'light'},
+  {id: 'cyberpunk', label: 'Cyberpunk', icon: 'bi-cpu', hint: 'Neon terminal, night city', scheme: 'dark'},
+  {id: 'dsfr', label: 'France', icon: 'bi-bank', hint: "Système de design de l'État", scheme: 'light'},
   {id: 'win95', label: 'Windows 95', icon: 'bi-window-stack', hint: 'A 1995 desktop application', scheme: 'light'}
 ]
 

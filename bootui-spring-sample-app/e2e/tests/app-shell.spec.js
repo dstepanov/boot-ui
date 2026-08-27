@@ -125,9 +125,9 @@ test.describe('BootUI app shell', () => {
       /Light/,
       /Dark/,
       /Graphite/,
-      /Cyberpunk/,
-      /R\u00e9publique Fran\u00e7aise/,
       /Minimal/,
+      /Cyberpunk/,
+      /France/,
       /Windows 95/
     ])
     // The active theme is marked for assistive tech, not just visually.

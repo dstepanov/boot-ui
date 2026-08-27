@@ -363,6 +363,19 @@ describe('App command palette', () => {
     expect(document.activeElement).toBe(trigger.element)
   })
 
+  /* Themes are addressed by their picker label rather than their index: the registry
+   order is a design decision that changes, and an index-based lookup silently
+   retargets a different theme when it does instead of failing. */
+  function findThemeOption(wrapper, label) {
+    const option = wrapper
+      .findAll('.theme-option')
+      .find((candidate) => candidate.find('.theme-option__label').text() === label)
+    if (!option) {
+      throw new Error(`No theme option labelled "${label}" in the picker`)
+    }
+    return option
+  }
+
   it('picks any registered theme from the topbar menu', async () => {
     const {wrapper} = await mountApp('/overview', {stubCommandPalette: false})
     const toggle = wrapper.find('.theme-toggle')
@@ -378,15 +391,15 @@ describe('App command palette', () => {
       'Light',
       'Dark',
       'Graphite',
-      'Cyberpunk',
-      'République Française',
       'Minimal',
+      'Cyberpunk',
+      'France',
       'Windows 95'
     ])
     expect(options[0].attributes('aria-checked')).toBe('true')
 
     // Every skin is reachable directly, without stepping through the others.
-    await options[6].trigger('click')
+    await findThemeOption(wrapper, 'Windows 95').trigger('click')
     expect(document.documentElement.dataset.bootuiTheme).toBe('win95')
     // The retro shell is a light-luminance skin, so Bootstrap stays on `light`.
     expect(document.documentElement.dataset.bsTheme).toBe('light')
@@ -394,7 +407,7 @@ describe('App command palette', () => {
     expect(toggle.attributes('aria-label')).toContain('Theme: Windows 95')
 
     await toggle.trigger('click')
-    await wrapper.findAll('.theme-option')[3].trigger('click')
+    await findThemeOption(wrapper, 'Cyberpunk').trigger('click')
     expect(document.documentElement.dataset.bootuiTheme).toBe('cyberpunk')
     expect(document.documentElement.dataset.bsTheme).toBe('dark')
   })
@@ -407,7 +420,7 @@ describe('App command palette', () => {
     await wrapper.find('.theme-toggle').trigger('click')
     await flushPromises()
 
-    const option = wrapper.findAll('.theme-option')[3]
+    const option = findThemeOption(wrapper, 'Cyberpunk')
     // Safari's sequence: mousedown is defaulted away, focus drops to the body, then click.
     const mousedown = new MouseEvent('mousedown', {bubbles: true, cancelable: true})
     option.element.dispatchEvent(mousedown)

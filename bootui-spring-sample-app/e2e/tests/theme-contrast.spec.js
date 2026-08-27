@@ -42,7 +42,7 @@ function contrastRatio(foreground, background) {
 
 test('keeps placeholders, helper text, and selected identifiers readable in every theme', async ({page, openView}) => {
   // Every opt-in skin re-skins these same surfaces, so all of them are held to the same bar.
-  for (const theme of ['light', 'dark', 'graphite', 'cyberpunk', 'dsfr', 'minimal', 'win95']) {
+  for (const theme of ['light', 'dark', 'graphite', 'minimal', 'cyberpunk', 'dsfr', 'win95']) {
     await page.goto('/bootui/')
     await page.evaluate((value) => localStorage.setItem('bootui.theme', value), theme)
     await page.reload()
@@ -106,5 +106,28 @@ test('keeps placeholders, helper text, and selected identifiers readable in ever
     expect(
       contrastRatio(parseColor(selectedIdentifierColors.foreground), parseColor(selectedIdentifierColors.background))
     ).toBeGreaterThanOrEqual(4.5)
+  }
+})
+
+/* The picker floats over dense panel content with no backdrop-filter behind it, so a
+   translucent surface token lets page text read straight through the options. Every
+   skin had independently patched this in its own stylesheet while the shared light and
+   dark defaults stayed see-through, which is exactly the kind of drift a shared
+   assertion catches. */
+test('keeps the theme picker opaque in every theme', async ({page}) => {
+  for (const theme of ['light', 'dark', 'graphite', 'minimal', 'cyberpunk', 'dsfr', 'win95']) {
+    await page.goto('/bootui/')
+    await page.evaluate((value) => localStorage.setItem('bootui.theme', value), theme)
+    await page.reload()
+    await expect(page.locator('html')).toHaveAttribute('data-bootui-theme', theme)
+
+    await page.getByRole('button', {name: /^Theme:/}).click()
+    const menu = page.getByRole('menu', {name: 'Theme'})
+    await expect(menu).toBeVisible()
+
+    const background = await menu.evaluate((element) => getComputedStyle(element).backgroundColor)
+    expect(parseColor(background).alpha, `${theme} theme picker background: ${background}`).toBe(1)
+
+    await page.keyboard.press('Escape')
   }
 })

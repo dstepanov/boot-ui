@@ -46,7 +46,7 @@ describe('theme utilities', () => {
   })
 
   it('never resolves an opt-in skin from the system preference alone', () => {
-    expect(THEMES).toEqual(['light', 'dark', 'graphite', 'cyberpunk', 'dsfr', 'minimal', 'win95'])
+    expect(THEMES).toEqual(['light', 'dark', 'graphite', 'minimal', 'cyberpunk', 'dsfr', 'win95'])
     for (const theme of THEMES.filter((id) => id !== 'light' && id !== 'dark')) {
       expect(resolveTheme(null, true)).not.toBe(theme)
       expect(resolveTheme(null, false)).not.toBe(theme)

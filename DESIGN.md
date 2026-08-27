@@ -149,7 +149,7 @@ This system explicitly rejects four things: the **default-Bootstrap admin templa
 - Calm by default, loud only on real risk — status color always paired with a text label.
 - Soft, generous geometry: a documented radius scale (signature 1.1rem), calm low-profile shadows, and a restrained hover lift reserved for genuinely interactive cards.
 - Light **and** dark theme are first-class and both must clear WCAG 2.1 AA. A set of opt-in **skins** — Graphite,
-  Cyberpunk, République Française, Minimal, and Windows 95 — deliberately steps outside this system, under rules of
+  Minimal, Cyberpunk, France, and Windows 95 — deliberately steps outside this system, under rules of
   its own; see §6.
 
 ## 2. Colors
@@ -288,9 +288,13 @@ the only shells `prefers-color-scheme` can resolve to, and both must clear WCAG 
 ### Opt-in skins
 
 Everything beyond light and dark is a **skin**: a deliberate departure, never inferred from the system, only ever
-reached by an explicit choice. The set today is **Graphite** (slick and professional), **Cyberpunk** (neon terminal),
-**République Française** (the French state's Système de design de l'État), **Minimal** (ink on paper), and
-**Windows 95** (a 1995 desktop application).
+reached by an explicit choice. The picker lists them in order of distance from the default console — **Graphite**
+(slick and professional), **Minimal** (ink on paper), **Cyberpunk** (neon terminal), **France** (the French state's
+Système de design de l'État), and **Windows 95** (a 1995 desktop application) — so the quietest departures sit nearest
+the two defaults and the loudest sit furthest from them.
+
+Labels name the skin, not its provenance: **France** is shorter to scan in a menu than *République Française*, and the
+picker hint carries the precise attribution.
 
 Every skin obeys the same three rules:
 

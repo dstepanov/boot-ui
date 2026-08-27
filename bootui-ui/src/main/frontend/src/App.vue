@@ -2426,7 +2426,11 @@ function onGlobalKeydown(e) {
 }
 
 .theme-menu {
-  background: var(--bootui-surface);
+  /* Solid, not the translucent glass surface: this menu floats over dense panel
+     content with no backdrop-filter behind it, so `--bootui-surface` let page text
+     read straight through the options. Every theme guarantees an opaque
+     `--bootui-surface-solid`, which is what a floating menu needs. */
+  background: var(--bootui-surface-solid);
   border: 1px solid var(--bootui-border);
   border-radius: var(--bootui-radius-md);
   box-shadow: var(--bootui-shadow-md);

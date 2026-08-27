@@ -1,5 +1,9 @@
 /*
- * BootUI "République Française" shell.
+ * BootUI "France" shell.
+ *
+ * Labelled "France" in the picker for scanning speed; the design system it
+ * borrows from is the French state's Système de design de l'État (DSFR), which
+ * is what the `dsfr` id refers to.
  *
  * This theme borrows the DSFR decision-token grammar: neutral page layers,
  * Bleu France as the sole action colour, Rouge Marianne for critical risk, and
