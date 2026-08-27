@@ -9,6 +9,14 @@
 # (to recreate network interfaces) to take and restore the checkpoint - see
 # docker-compose-crac.yml and bootui-spring-sample-app/README.md.
 #
+# Known upstream limitation: every CRaC JDK currently bundles the CRaC project's
+# CRIU fork, 3.17.1-crac, which cannot checkpoint a JVM on an AMX-capable Intel
+# CPU (Sapphire Rapids and newer). The dump aborts with "Can't set FPU registers
+# ...: Bad address"; this is checkpoint-restore/criu#2835, fixed upstream in CRIU
+# 4.x and not something this image can work around. Restoring an *existing*
+# checkpoint is unaffected - only taking one fails - and other CPUs (including
+# every arm64 host and AMD x86_64) are unaffected.
+#
 # The sample app runs with its default "dev" profile, which uses an in-memory H2
 # database (and an in-memory cache) instead of PostgreSQL/Redis, so the checkpoint
 # is taken with no open network sockets and restores cleanly out of the box. See

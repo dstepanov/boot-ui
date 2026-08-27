@@ -309,6 +309,7 @@ jobs:
 
       - name: Smoke-test the loaded image
         env:
+          IMAGE_NAME: ${{ matrix.image }}
           IMAGE_REF: ${{ env.REGISTRY_IMAGE }}:smoke-${{ env.PLATFORM_PAIR }}
           RUN_ARGS: ${{ matrix.run_args }}
           HEALTH_TIMEOUT: ${{ matrix.health_timeout }}
@@ -317,6 +318,37 @@ jobs:
           PORT: ${{ matrix.port }}
         run: |
           set -euo pipefail
+
+          # Recognise the one CRaC failure that is an upstream defect rather than a
+          # regression in this repository, so it can be tolerated *without* tolerating
+          # anything else.
+          #
+          # Every CRaC JDK (BellSoft Liberica and Azul Zulu alike) bundles the CRaC
+          # project's CRIU fork, 3.17.1-crac. CRIU <= 3.17 passes a fixed-size buffer to
+          # PTRACE_SETREGSET(NT_X86_XSTATE), while a kernel running on an AMX-capable
+          # Intel CPU (Sapphire/Emerald Rapids, e.g. Xeon Platinum 8573C) requires
+          # exactly the AMX-inflated xsave size and returns -EFAULT otherwise. The dump
+          # then aborts with "Can't set FPU registers ...: Bad address"; see
+          # https://github.com/checkpoint-restore/criu/issues/2835 (fixed in CRIU 4.x).
+          # GitHub's hosted amd64 fleet mixes AMD EPYC hosts (no AMX, works) with such
+          # Intel hosts (always fails), so the nightly build was red purely by runner
+          # lottery. arm64 is unaffected and still checkpoints on every run.
+          #
+          # Both conditions must hold to tolerate it: the host really is AMX-capable and
+          # the dump really failed on the FPU registers. Any other CRaC failure - and any
+          # failure of any other image - still fails the build. Once the bundled CRIU is
+          # fixed the checkpoint simply succeeds and the normal path below runs again, so
+          # this needs no follow-up removal. The dump log this greps for is surfaced by
+          # checkpoint-and-run.sh, which prints CRIU's own log on a failed dump.
+          crac_criu_amx_defect() {
+            [ "$IMAGE_NAME" = 'bootui-sample-app-crac' ] || return 1
+            grep -qw amx_tile /proc/cpuinfo || return 1
+            # Write the log to a file rather than piping into `grep -q`: grep exits on the
+            # first match, which SIGPIPEs `docker logs`, and `set -o pipefail` would then
+            # report the whole pipeline as failed even though the pattern did match.
+            docker logs bootui-smoke >/tmp/crac-smoke-logs.txt 2>&1 || return 1
+            grep -q "Can't set FPU registers" /tmp/crac-smoke-logs.txt
+          }
 
           # Start the freshly built image. The port is published on loopback only, and
           # BOOTUI_TRUST_CONTAINER_GATEWAY=AUTO lets BootUI trust the Docker bridge
@@ -350,6 +382,17 @@ jobs:
             fi
             # Fail fast if the container has already exited.
             if [ "$(docker inspect -f '{{.State.Running}}' bootui-smoke 2>/dev/null)" != 'true' ]; then
+              if crac_criu_amx_defect; then
+                cpu=$(grep -m1 '^model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//')
+                echo "::warning title=CRaC checkpoint unsupported on this runner::The bundled CRIU 3.17.1-crac cannot checkpoint a JVM on this AMX-capable CPU (${cpu}) - upstream criu#2835. The image was built and started correctly; its checkpoint/restore behaviour is verified on linux/arm64 in this same run and on non-AMX amd64 runners. Publishing it unchanged."
+                # Print the evidence: the "Print container logs on failure" step below does
+                # not run when the job is allowed to continue.
+                echo "----- container log (CPU: ${cpu}) -----"
+                cat /tmp/crac-smoke-logs.txt
+                echo "----- end of container log -----"
+                echo "CRAC_CRIU_AMX_UNSUPPORTED=true" >> "$GITHUB_ENV"
+                exit 0
+              fi
               echo "ERROR: container exited before becoming healthy." >&2
               exit 1
             fi
@@ -380,7 +423,10 @@ jobs:
         # checkpoint present, the entrypoint takes the restore-only path, which must
         # come up - and do so at least twice as fast as the initial
         # boot-and-checkpoint start.
-        if: matrix.image == 'bootui-sample-app-crac'
+        #
+        # Skipped when the smoke test above hit the upstream CRIU/AMX defect: no
+        # checkpoint exists on such a runner, so there is nothing to restore from.
+        if: matrix.image == 'bootui-sample-app-crac' && env.CRAC_CRIU_AMX_UNSUPPORTED != 'true'
         env:
           IMAGE_REF: ${{ env.REGISTRY_IMAGE }}:smoke-${{ env.PLATFORM_PAIR }}
           RUN_ARGS: ${{ matrix.run_args }}
