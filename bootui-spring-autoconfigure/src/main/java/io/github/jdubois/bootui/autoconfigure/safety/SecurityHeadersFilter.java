@@ -65,12 +65,7 @@ public class SecurityHeadersFilter extends AbstractBootUiFilter {
     }
 
     private String contextRelativePath(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        if (contextPath != null && !contextPath.isBlank() && path.startsWith(contextPath)) {
-            path = path.substring(contextPath.length());
-        }
-        return path;
+        return pathWithinApplication(request);
     }
 
     /**

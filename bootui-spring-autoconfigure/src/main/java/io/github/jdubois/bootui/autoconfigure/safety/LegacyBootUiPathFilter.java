@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 /**
  * Prevents Spring Boot's default static-resource handler from exposing the internal classpath mount
@@ -32,11 +33,7 @@ public final class LegacyBootUiPathFilter extends OncePerRequestFilter {
     }
 
     private boolean isConfiguredApiRequest(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        if (contextPath != null && !contextPath.isBlank() && path.startsWith(contextPath)) {
-            path = path.substring(contextPath.length());
-        }
+        String path = UrlPathHelper.defaultInstance.getPathWithinApplication(request);
         String apiPath = properties.getApiPath();
         return path.equals(apiPath) || path.startsWith(apiPath + "/");
     }

@@ -37,13 +37,13 @@ public final class ReactiveLegacyBootUiPathFilter implements WebFilter, Ordered 
     }
 
     private boolean isInternalPath(ServerWebExchange exchange) {
-        String path = exchange.getRequest().getPath().pathWithinApplication().value();
+        String path = BootUiReactivePaths.pathWithinApplication(exchange.getRequest());
         return path.equals(BootUiPathNormalizer.DEFAULT_PATH)
                 || path.startsWith(BootUiPathNormalizer.DEFAULT_PATH + "/");
     }
 
     private boolean isConfiguredApiRequest(ServerWebExchange exchange) {
-        String path = exchange.getRequest().getPath().pathWithinApplication().value();
+        String path = BootUiReactivePaths.pathWithinApplication(exchange.getRequest());
         String apiPath = properties.getApiPath();
         return path.equals(apiPath) || path.startsWith(apiPath + "/");
     }

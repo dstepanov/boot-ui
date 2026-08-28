@@ -67,12 +67,7 @@ public class PanelAccessFilter extends AbstractBootUiFilter {
     }
 
     private String apiRelativePath(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        if (contextPath != null && !contextPath.isBlank() && path.startsWith(contextPath)) {
-            path = path.substring(contextPath.length());
-        }
-
+        String path = pathWithinApplication(request);
         String apiPath = properties.getApiPath();
         if (path.equals(apiPath)) {
             return "/";
