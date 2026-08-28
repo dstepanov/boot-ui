@@ -94,9 +94,7 @@ public final class ReactiveApiAuthenticationFilter extends AbstractReactiveBootU
     private boolean isSessionRequest(ServerHttpRequest request) {
         return request.getMethod() != null
                 && "POST".equals(request.getMethod().name())
-                && request.getPath()
-                        .pathWithinApplication()
-                        .value()
+                && BootUiReactivePaths.pathWithinApplication(request)
                         .equals(withoutTrailingSlash(properties.getApiPath()) + SESSION_PATH);
     }
 

@@ -7,6 +7,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **BootUI's safety filters can no longer be bypassed by a percent-encoded or matrix-parameter spelling of a BootUI URL
+  on Spring MVC or Spring WebFlux.** Each guard decided whether it applied by matching the *raw* request path
+  (`getRequestURI()` on the servlet stack, `pathWithinApplication().value()` on the reactive one) against `bootui.path` /
+  `bootui.api-path`, while the controller behind it was selected by `PathPattern` on the *decoded* path. The two
+  disagreed, so `/%62ootui/api/**` and `/bootui;x=1/api/**` still reached the BootUI handler with the loopback check,
+  Host allow-list and DNS-rebinding defence, cross-site-write protection, bearer-token requirement, per-panel
+  enabled/read-only policy, and security headers all silently disarmed — letting a malicious page in the developer's
+  browser drive state-changing endpoints, and letting a non-loopback caller in an `allow-non-localhost` deployment reach
+  the whole API with no token. All the Spring guards now resolve the path exactly the way the handler mapping does
+  (`UrlPathHelper` on the servlet stack, a new shared `BootUiReactivePaths` built on `PathSegment#valueToMatch()` on the
+  reactive one), which is what the `#856` shell guards already did; the reactive shell guard now shares that one
+  implementation instead of keeping its own copy. Quarkus was never affected — its filters already matched on Vert.x's
+  `normalizedPath()` — so this closes a cross-adapter parity gap. Regression tests cover both encoded and
+  matrix-parameter spellings against the localhost, authentication, and panel-access filters on both Spring stacks.
+
 ## [1.15.0] - 2026-08-27
 
 Feature release that adds two panels — Fault Tolerance and WebSockets — on Spring MVC, Spring WebFlux, and Quarkus,

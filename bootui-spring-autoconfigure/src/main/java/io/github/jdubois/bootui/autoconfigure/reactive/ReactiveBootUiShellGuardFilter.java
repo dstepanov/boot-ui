@@ -4,7 +4,6 @@ import io.github.jdubois.bootui.engine.safety.BootUiInternalMount;
 import java.util.List;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.server.PathContainer;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
@@ -24,9 +23,10 @@ import reactor.core.publisher.Mono;
  * classpath, so touching the servlet filter class from here would raise
  * {@code NoClassDefFoundError: jakarta/servlet/Filter} on every request.</p>
  *
- * <p>The path is rebuilt from {@link PathContainer.PathSegment#valueToMatch()}, which is what
- * {@code PathPattern} matches on: it is percent-decoded and has matrix parameters removed, so
- * {@code /%62ootui/index.html} cannot slip past a guard that the resource handler would then serve.</p>
+ * <p>The path is resolved through {@link BootUiReactivePaths}, which rebuilds it from
+ * {@code PathContainer.PathSegment#valueToMatch()} &mdash; what {@code PathPattern} matches on: it is
+ * percent-decoded and has matrix parameters removed, so {@code /%62ootui/index.html} cannot slip past a
+ * guard that the resource handler would then serve. The BootUI safety filters share that same helper.</p>
  */
 public final class ReactiveBootUiShellGuardFilter implements WebFilter, Ordered {
 
@@ -43,21 +43,11 @@ public final class ReactiveBootUiShellGuardFilter implements WebFilter, Ordered 
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-        String path = decodedPathWithinApplication(exchange);
+        String path = BootUiReactivePaths.pathWithinApplication(exchange.getRequest());
         if (mounts.stream().noneMatch(mount -> BootUiInternalMount.isUnder(path, mount))) {
             return chain.filter(exchange);
         }
         exchange.getResponse().setStatusCode(HttpStatus.NOT_FOUND);
         return exchange.getResponse().setComplete();
-    }
-
-    private static String decodedPathWithinApplication(ServerWebExchange exchange) {
-        StringBuilder path = new StringBuilder();
-        for (PathContainer.Element element :
-                exchange.getRequest().getPath().pathWithinApplication().elements()) {
-            path.append(
-                    element instanceof PathContainer.PathSegment segment ? segment.valueToMatch() : element.value());
-        }
-        return path.toString();
     }
 }

@@ -18,7 +18,9 @@ import reactor.core.publisher.Mono;
  *
  * <p>WebFlux has no servlet context path, so path matching uses {@link ServerHttpRequest#getPath()}'s
  * already-context-relative {@code pathWithinApplication()} rather than manually stripping a context
- * path the way the servlet filters strip {@code HttpServletRequest#getContextPath()}.</p>
+ * path the way the servlet filters strip {@code HttpServletRequest#getContextPath()}. It is resolved
+ * through {@link BootUiReactivePaths} so the guards match the same decoded path the handler mapping
+ * does.</p>
  *
  * <p>There is also no {@code FilterRegistrationBean} equivalent in WebFlux: a {@link WebFilter} bean is
  * picked up and ordered automatically (via {@code @Order}/{@link org.springframework.core.Ordered}), so
@@ -62,7 +64,7 @@ public abstract class AbstractReactiveBootUiFilter implements WebFilter {
     }
 
     protected String pathWithinApplication(ServerHttpRequest request) {
-        return request.getPath().pathWithinApplication().value();
+        return BootUiReactivePaths.pathWithinApplication(request);
     }
 
     protected String escape(String value) {
