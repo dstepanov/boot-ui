@@ -134,9 +134,18 @@ public class DefaultDevToolsBridge implements DevToolsBridge {
         try {
             restarter();
             return Availability.ready();
-        } catch (IllegalStateException ex) {
-            return Availability.unavailable(ex.getMessage());
+        } catch (DevToolsException ex) {
+            return Availability.unavailable(unavailableReason(ex));
         }
+    }
+
+    /**
+     * A status read must always degrade to an honest reason, so fall back to a generic explanation when the
+     * wrapped DevTools failure carries no message of its own.
+     */
+    private String unavailableReason(DevToolsException ex) {
+        String message = ex.getMessage();
+        return message == null || message.isBlank() ? "Spring Boot DevTools Restarter is not available." : message;
     }
 
     private Object restarter() {

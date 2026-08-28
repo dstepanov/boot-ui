@@ -269,22 +269,60 @@ class DefaultDevToolsBridgeTests {
     }
 
     /**
-     * Note the asymmetry this pins down: {@code restartAvailability()} only catches {@link IllegalStateException},
-     * but {@code restarter()} wraps a failing {@code Restarter.getInstance()} in a {@link DevToolsException}, so an
-     * application that has DevTools on the classpath without an initialised Restarter surfaces the failure to the
-     * caller instead of degrading to an "unavailable" status.
+     * DevTools on the classpath without an initialised Restarter is a normal setup (a packaged jar, for
+     * instance). The status read must stay fail-closed and report an honest reason rather than propagating the
+     * failure and taking the whole DevTools panel down with it.
      */
     @Test
-    void anUninitializedRestarterFailsLoudlyRatherThanSilentlyReportingReady() throws Exception {
+    void anUninitializedRestarterDegradesToAnUnavailableStatusInsteadOfFailingTheRead() throws Exception {
         setStatic("org.springframework.boot.devtools.restart.Restarter", "failOnGetInstance", true);
         DefaultDevToolsBridge bridge = bridgeWithDevTools(null, null);
 
-        Assertions.assertThatThrownBy(bridge::status)
-                .isInstanceOf(DevToolsException.class)
-                .hasMessage("Restarter has not been initialized");
-        Assertions.assertThatThrownBy(bridge::scheduleRestart).isInstanceOf(DevToolsException.class);
+        DevToolsStatus status = bridge.status();
+        assertThat(status.restartAvailable()).isFalse();
+        assertThat(status.restartUnavailableReason()).isEqualTo("Restarter has not been initialized");
+
+        DevToolsActionResult restart = bridge.scheduleRestart();
+        assertThat(restart.action()).isEqualTo("restart");
+        assertThat(restart.status()).isEqualTo("unavailable");
+        assertThat(restart.message()).isEqualTo("Restarter has not been initialized");
         assertThat(staticValue("org.springframework.boot.devtools.restart.Restarter", "restartCount"))
                 .isEqualTo(0);
+    }
+
+    /**
+     * The other wrapping branch: the Restarter class is visible but its {@code getInstance()} method is not, so
+     * the reflective lookup fails. That must also read as an unavailable restart with a usable reason.
+     */
+    @Test
+    void aRestarterWithoutAGetInstanceMethodIsReportedAsUnavailable() throws Exception {
+        Path classes = Files.createDirectories(compiledClasses.resolve("broken-classes"));
+        Path sources = Files.createDirectories(compiledClasses.resolve("broken-sources"));
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        String source = """
+                package org.springframework.boot.devtools.restart;
+
+                public class Restarter {
+                }
+                """;
+        int result = compiler.run(
+                null,
+                null,
+                null,
+                "-d",
+                classes.toString(),
+                write(sources, "org/springframework/boot/devtools/restart/Restarter.java", source));
+        Assertions.assertThat(result).as("broken Restarter stub compilation").isZero();
+        ClassLoader brokenLoader = new URLClassLoader(new URL[] {classes.toUri().toURL()}, null);
+        ApplicationContext context = mock(ApplicationContext.class);
+        when(context.getClassLoader()).thenReturn(brokenLoader);
+        when(context.getBeansOfType(any(Class.class), anyBoolean(), anyBoolean()))
+                .thenReturn(Map.of());
+
+        DevToolsStatus status = register(new DefaultDevToolsBridge(context)).status();
+
+        assertThat(status.restartAvailable()).isFalse();
+        assertThat(status.restartUnavailableReason()).isEqualTo("Spring Boot DevTools Restarter is not available.");
     }
 
     @Test
