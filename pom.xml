@@ -98,6 +98,13 @@
         <node.version>v24.18.0</node.version>
         <npm.version>11.17.0</npm.version>
         <frontend.test.command>run test</frontend.test.command>
+        <!--
+            Modules that declare their own Surefire <argLine> must prefix it with the @{argLine} late-replacement
+            token, otherwise the literal value overwrites the JaCoCo agent arguments that the coverage profile's
+            prepare-agent goal publishes through this same property. This empty default keeps @{argLine} resolvable
+            in normal (non-coverage) builds, where prepare-agent never runs.
+        -->
+        <argLine></argLine>
     </properties>
 
     <dependencyManagement>
