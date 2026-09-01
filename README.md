@@ -23,6 +23,7 @@ Read the documentation at <https://www.julien-dubois.com/boot-ui/>.
 | Features | <https://www.julien-dubois.com/boot-ui/features> |
 | Properties | <https://www.julien-dubois.com/boot-ui/properties> |
 | AI agents | <https://www.julien-dubois.com/boot-ui/ai-agents> |
+| Command line | <https://www.julien-dubois.com/boot-ui/cli> |
 | Sample app | <https://www.julien-dubois.com/boot-ui/try-sample-app> |
 | Repository docs | <https://www.julien-dubois.com/boot-ui/repository> |
 
@@ -32,6 +33,19 @@ BootUI exposes a local, opt-in [Model Context Protocol](https://modelcontextprot
 (GitHub Copilot, Claude Code, …) can run its advisors and read runtime diagnostics while fixing your code. It also pairs
 with [Coffilot](https://github.com/jdubois/coffilot), a GitHub Copilot canvas extension that builds, runs, and scans your
 app from the GitHub Copilot App's side panel. See the [AI agents guide](https://www.julien-dubois.com/boot-ui/ai-agents).
+
+## Use from a terminal
+
+The `bootui` CLI asks a running application one question and prints the answer, with one command per BootUI
+diagnostic — the same set the MCP server exposes, projected mechanically from the same registry.
+
+```bash
+jbang bootui@jdubois/boot-ui beans --query dataSource
+jbang bootui@jdubois/boot-ui hibernate scan --json | jq '.findings[]'
+```
+
+It needs no MCP client and no agent, prints exact JSON when piped, and exits `2` when a panel's own policy
+declines the call, so CI can branch on it. See the [command-line guide](https://www.julien-dubois.com/boot-ui/cli).
 
 ## Project resources
 

@@ -9,6 +9,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A `bootui` command-line interface, with one command per BootUI diagnostic.** `bootui beans --query dataSource`,
+  `bootui hibernate scan --json | jq …`, `bootui sql traces --limit 20` — 78 commands covering every tool the MCP
+  server exposes, asked of a running application from a terminal or a CI job with no MCP client, no agent, and no
+  hand-written request. It is published to Maven Central as a runnable uber-jar and reachable through JBang
+  (`jbang bootui@jdubois/boot-ui`). Output is the application's exact JSON when piped or with `--json`, and a rendered
+  table or tree on a terminal. The exit code is what makes it scriptable: `0` answered, `1` usage or transport error,
+  and `2` when BootUI declined because a panel is disabled or read-only — a statement about the target's configuration
+  rather than a failed request, and one CI should not have to detect by parsing stderr. `--url`, `--api-path`,
+  `--token`, and `--timeout` work before or after the command and fall back to `BOOTUI_URL`, `BOOTUI_API_PATH`, and
+  `BOOTUI_TOKEN`. `bootui tools` reports what a *specific* instance advertises, honouring its stack and live panel
+  toggles, and `bootui mcp status|enable|disable` drives the MCP Server panel through its own policy. The command tree
+  is generated from the engine's tool catalog and checked in, with tests that fail when the two drift and that run
+  every command to confirm it reaches the tool it names — so the CLI cannot offer a diagnostic the MCP server lacks, or
+  lack one it has.
+- **`bootui-client`, a dependency-free client library for the command-line endpoint.** URL, token, invocation, and
+  outcome mapping in one small artifact that depends on nothing — not `bootui-core`, not Jackson, not an HTTP library
+  beyond the JDK's — and treats payloads as opaque JSON. That is deliberate: a client built at one BootUI version has
+  to keep working against an application running another. It is published so that build plugins and third-party
+  tooling can reuse the same transport the CLI does.
 - **A command-line endpoint that projects BootUI's diagnostic tools onto plain REST, on Spring MVC, Spring WebFlux, and
   Quarkus.** `GET /bootui/api/cli` describes the tools a running instance advertises — name, description, backing panel,
   argument schema, and live panel enable/read-only state — and `POST /bootui/api/cli/tools/{name}` invokes one and

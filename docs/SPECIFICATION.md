@@ -2054,6 +2054,8 @@ BootUI/
 ├── bootui-engine/
 ├── bootui-conformance/
 ├── bootui-ui/
+├── bootui-client/
+├── bootui-cli/
 ├── bootui-spring-autoconfigure/
 ├── bootui-spring-boot-starter/
 ├── bootui-spring-boot-starter-reactive/
@@ -2076,6 +2078,11 @@ Shared modules:
 - `bootui-conformance`: the shared HTTP contract suite and golden panel manifests run against every adapter.
 - `bootui-ui`: the Vue 3 / Composition API / Vite / Bootstrap 5.3 SPA, built once into
   `META-INF/resources/bootui/` and served unchanged by every adapter.
+- `bootui-client`: the dependency-free client for the command-line endpoint — URL and token handling, tool invocation,
+  outcome mapping, and an opaque JSON tree. Depends on nothing, not even `bootui-core`, so it stays version-compatible
+  with applications it was not built against.
+- `bootui-cli`: the `bootui` command-line interface, a picocli tree generated from the engine's tool catalog and
+  published as a runnable uber-jar.
 
 Spring Boot modules:
 
@@ -2095,6 +2102,8 @@ Quarkus modules:
 - `bootui-quarkus-sample-app`: Quarkus reference app.
 
 Dependency direction is one-way: `bootui-engine` depends on `bootui-core`, and each framework adapter depends on both.
+`bootui-client` sits outside that chain entirely and depends on nothing; `bootui-cli` depends on it and on picocli, and
+on `bootui-engine` only in test scope, to generate its command manifest.
 The shared `core`, `engine`, `conformance`, and UI modules never depend on Spring or Quarkus. JSON parsing and
 serialization stay in the adapters because Spring Boot and Quarkus use incompatible Jackson major versions.
 
@@ -2520,6 +2529,36 @@ Design rules:
   refused by the per-panel check.
 - **Available on all three stacks.** Spring MVC, Spring WebFlux, and Quarkus serve the identical contract, pinned by a
   shared conformance suite.
+
+### 6.9 The `bootui` command-line interface
+
+`bootui-cli` is the terminal front-end over that endpoint: one subcommand per tool, `--json` for the exact payload,
+and an exit code a script can branch on. `bootui-client` is the transport underneath it, kept separate so a future
+Maven plugin or third-party tooling has the same foundation without inheriting a CLI's argument parsing.
+
+Design rules:
+
+- **The command tree is generated, not written.** `bootui-tools.json` is produced at build time from the engine's tool
+  catalog plus a `tool name -> command path` table, checked in, and the picocli tree is built by iterating it. A test
+  regenerates the file and fails when the checked-in copy is stale, and asserts the path table is total and injective
+  over the catalog. Adding an MCP tool without giving it a command therefore fails the build, and a hand-written
+  command for a tool that no longer exists cannot survive either. A second test runs every command against a stub and
+  asserts it reaches the tool it claims to, so a tree that builds but shadows a leaf is caught as well.
+- **No compile-time coupling to BootUI's types.** `bootui-client` depends on nothing — not `bootui-core`, not Jackson,
+  not an HTTP library beyond the JDK's — and treats payloads as opaque JSON re-emitted verbatim. A CLI from one
+  release has to keep working against an application running another, which rules out sharing DTO records with it.
+  The engine is a *test-scoped* dependency of `bootui-cli`, used only to generate the manifest.
+- **Runtime discovery is authoritative.** The bundled manifest exists so `--help` works with nothing running. What a
+  given application actually exposes comes from `GET /bootui/api/cli`, which `bootui tools` prints: stacks advertise
+  different tool sets, some tools appear only when a library is present, and panels can be disabled.
+- **Refusal is not failure.** Exit `0` means the tool answered, `1` a usage or transport error, and `2` that BootUI
+  declined — a disabled panel, or an action on a read-only one. That distinction is the reason the endpoint puts the
+  outcome in the status code, and dropping it would force CI to parse error text.
+- **Exact output when it is being parsed.** Output is the server's bytes verbatim with `--json` or when stdout is not
+  a terminal, and a rendered table or tree otherwise. The rendering infers structure from shape because the payload is
+  opaque, so it is explicitly best-effort; `--json` is the stable form.
+- **Reflection-free.** The command tree is built programmatically and the CLI's only runtime dependency is picocli, so
+  a future native-image build stays a build-file change rather than a rewrite.
 
 ## 7. UX specification
 
