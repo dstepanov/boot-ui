@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.cli;
 
 import io.github.jdubois.bootui.client.JsonValue;
 import io.github.jdubois.bootui.client.JsonWriter;
+import io.github.jdubois.bootui.engine.cli.CliCommandPaths;
 import io.github.jdubois.bootui.engine.mcp.McpToolCatalog;
 import io.github.jdubois.bootui.engine.mcp.McpToolDescriptions;
 import java.util.ArrayList;

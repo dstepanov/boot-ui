@@ -49,6 +49,7 @@ const Traces = () => import('./views/Traces.vue')
 const Ai = () => import('./views/Ai.vue')
 const Copilot = () => import('./views/Copilot.vue')
 const McpServer = () => import('./views/McpServer.vue')
+const Cli = () => import('./views/Cli.vue')
 const LiveActivity = () => import('./views/LiveActivity.vue')
 const Email = () => import('./views/Email.vue')
 const Kafka = () => import('./views/Kafka.vue')
@@ -925,6 +926,18 @@ export const routes = [
       title: 'MCP Server',
       shortcut: 'mc',
       keywords: ['model context protocol', 'mcp', 'ai agent', 'copilot', 'claude', 'tools', 'json-rpc', 'agent']
+    }
+  },
+  {
+    path: '/cli',
+    name: 'cli',
+    component: Cli,
+    meta: {
+      group: groups.developerTools,
+      icon: 'bi-terminal-fill',
+      title: 'Command Line',
+      shortcut: 'cl',
+      keywords: ['cli', 'command line', 'terminal', 'shell', 'bootui cli', 'ci', 'scripting', 'jbang']
     }
   },
   {

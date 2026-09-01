@@ -116,6 +116,60 @@ class CliServiceTests {
     }
 
     @Test
+    void statusReportsTheCommandEachToolIsReachedBySoTheCallerLearnsWhatToType() {
+        CliService service = service(true);
+
+        Map<String, String> commands = service.status().tools().stream()
+                .collect(java.util.stream.Collectors.toMap(CliToolInfo::name, CliToolInfo::command));
+
+        assertThat(commands)
+                .containsEntry("get_overview", "overview")
+                .containsEntry("architecture_scan", "architecture scan")
+                .containsEntry("get_config", "config")
+                .containsEntry("get_exception_detail", "exceptions show");
+    }
+
+    @Test
+    void everyToolTheCatalogRegistersHasACommandSoNoPanelRowRendersBlank() {
+        Set<String> withoutCommand = io.github.jdubois.bootui.engine.mcp.McpToolCatalog.names().stream()
+                .filter(name -> CliCommandPaths.commandFor(name) == null)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+
+        assertThat(withoutCommand)
+                .as("every MCP tool needs a command path in CliCommandPaths")
+                .isEmpty();
+    }
+
+    @Test
+    void statusReportsThisFacadesOwnCallCountersSoThePanelCanShowThem() {
+        CliService service = service(true);
+
+        CliServerStatus before = service.status();
+        assertThat(before.callCount()).isZero();
+        assertThat(before.totalLatencyMillis()).isZero();
+        assertThat(before.capacityRefusals()).isZero();
+        assertThat(before.timeouts()).isZero();
+
+        service.invoke("get_overview", null, null, null);
+        service.invoke("get_overview", null, null, null);
+
+        CliServerStatus after = service.status();
+        assertThat(after.callCount()).isEqualTo(2);
+        assertThat(after.totalLatencyMillis()).isNotNegative();
+        assertThat(after.capacityRefusals()).isZero();
+        assertThat(after.timeouts()).isZero();
+    }
+
+    @Test
+    void countersStayZeroWhileTheFacadeIsDisabledBecauseNothingRuns() {
+        CliService service = service(false);
+
+        service.invoke("get_overview", null, null, null);
+
+        assertThat(service.status().callCount()).isZero();
+    }
+
+    @Test
     void invokeReturnsTheToolPayloadDirectly() {
         CliToolResponse response = service(true).invoke("get_overview", null, null, null);
 

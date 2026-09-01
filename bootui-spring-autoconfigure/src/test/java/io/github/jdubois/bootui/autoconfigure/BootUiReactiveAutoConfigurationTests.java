@@ -132,7 +132,7 @@ class BootUiReactiveAutoConfigurationTests {
                     .map(panel -> panel.id())
                     .collect(Collectors.toSet());
             Set<String> expectedPassivePanels = availablePanels.stream()
-                    .filter(panel -> !Set.of(BootUiPanels.HTTP_PROBE, BootUiPanels.MCP_SERVER)
+                    .filter(panel -> !Set.of(BootUiPanels.HTTP_PROBE, BootUiPanels.MCP_SERVER, BootUiPanels.CLI)
                             .contains(panel))
                     .collect(Collectors.toSet());
             List<McpTool> tools = context.getBean(ReactiveBootUiMcpTools.class).tools();

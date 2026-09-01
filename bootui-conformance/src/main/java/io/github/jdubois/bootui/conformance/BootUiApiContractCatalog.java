@@ -240,6 +240,18 @@ public final class BootUiApiContractCatalog {
                             "toolCount", JsonType.INTEGER,
                             "tools", JsonType.ARRAY)),
             read(
+                    "cli",
+                    "/cli",
+                    fields(
+                            "enabled", JsonType.BOOLEAN,
+                            "serverName", JsonType.STRING,
+                            "serverVersion", JsonType.STRING,
+                            "endpoint", JsonType.STRING,
+                            "maxResults", JsonType.INTEGER,
+                            "callCount", JsonType.INTEGER,
+                            "toolCount", JsonType.INTEGER,
+                            "tools", JsonType.ARRAY)),
+            read(
                     "activity",
                     "/activity",
                     fields(

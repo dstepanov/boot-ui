@@ -68,6 +68,7 @@ public final class BootUiPanels {
     public static final String TRANSACTIONS = "transactions";
     public static final String REST_CLIENT_TRACE = "rest-client-trace";
     public static final String MCP_SERVER = "mcp-server";
+    public static final String CLI = "cli";
     public static final String ACTIVITY = "activity";
     public static final String EMAIL = "email";
     public static final String KAFKA = "kafka";
@@ -132,6 +133,13 @@ public final class BootUiPanels {
             new Panel(REST_CLIENT_TRACE, "REST Client", true, "/rest-client-trace"),
             new Panel(AI, "AI Framework", false, "/ai"),
             new Panel(MCP_SERVER, "MCP Server", true, "/mcp-server"),
+            // Like Overview, the Command Line panel registers no API prefix on purpose. Its data source,
+            // GET /bootui/api/cli, is the command-line client's own transport endpoint, gated by
+            // bootui.cli.enabled so the `bootui` CLI keeps a single honest switch. Letting this panel's
+            // prefix gate it too would mean turning off a UI panel silently breaks CI jobs, and a read-only
+            // toggle here would refuse action tools whose own panel is perfectly writable. The panel id
+            // therefore drives only the sidebar entry and its enable/read-only toggles.
+            new Panel(CLI, "Command Line", false, List.of()),
             new Panel(ACTIVITY, "Live Activity", true, "/activity"),
             new Panel(EMAIL, "Email", true, "/email"),
             new Panel(KAFKA, "Kafka", true, "/kafka"),

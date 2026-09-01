@@ -1,4 +1,4 @@
-package io.github.jdubois.bootui.cli;
+package io.github.jdubois.bootui.engine.cli;
 
 import java.util.Map;
 
@@ -9,17 +9,20 @@ import java.util.Map;
  * from {@code McpToolCatalog}. Only the naming is a judgement call, because {@code get_spring_data_repositories}
  * has to become {@code bootui repositories} somehow, and no rule derives that.
  *
- * <p>Deliberately test-scoped. It feeds the generator that writes the checked-in manifest, and the tests that
- * pin the mapping total and injective over the catalog, so adding an MCP tool without giving it a command
- * fails the build. The CLI itself reads only the generated manifest.
+ * <p>It lives here, in the engine, rather than in {@code bootui-cli}, because two things need it and only one
+ * of them is the CLI. The build-time generator writes the checked-in manifest from it, and {@code CliService}
+ * reports it through {@code GET /bootui/api/cli}, so a running application can say what to <em>type</em> rather
+ * than only which tool exists. That makes the server authoritative for command naming: a CLI built against an
+ * older BootUI still gets the current spelling, and the Command Line panel can list real commands.
  *
  * <p>The mapping is the one published in issue #886, with a single deviation: {@code get_ai_overview} is
  * {@code bootui ai overview} rather than {@code bootui overview --ai}. A flag is not a command, and the whole
  * value of this table is that it stays a mechanical one-to-one projection.
  */
-final class CliCommandPaths {
+public final class CliCommandPaths {
 
-    static final Map<String, String> BY_TOOL = Map.ofEntries(
+    /** Command path by MCP tool name, without the {@code bootui} executable prefix. */
+    public static final Map<String, String> BY_TOOL = Map.ofEntries(
             Map.entry("analyze_heap_dump", "memory heap analyze"),
             Map.entry("architecture_scan", "architecture scan"),
             Map.entry("clear_exceptions", "exceptions clear"),
@@ -98,6 +101,15 @@ final class CliCommandPaths {
             Map.entry("spring_scan", "spring scan"),
             Map.entry("trigger_devtools_livereload", "devtools livereload"),
             Map.entry("vulnerabilities_scan", "vulnerabilities scan"));
+
+    /**
+     * The command path for a tool, or {@code null} when the tool has no command. Every tool in
+     * {@code McpToolCatalog} has one — a build-time test pins the mapping total and injective — so a
+     * {@code null} here means a tool registered outside the catalog.
+     */
+    public static String commandFor(String toolName) {
+        return BY_TOOL.get(toolName);
+    }
 
     private CliCommandPaths() {}
 }

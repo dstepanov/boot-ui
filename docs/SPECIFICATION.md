@@ -2517,9 +2517,11 @@ Design rules:
   argument, `403` for a disabled or read-only panel, `404` for an unknown tool, `409` for an action already running,
   `429` at capacity, `504` on timeout, and `503` when the endpoint is disabled. Policy is unchanged; only the rendering
   differs.
-- **Self-describing.** `GET /bootui/api/cli` reports the tools this instance advertises with their argument schemas and
-  live panel enable/read-only state, so a client built against one BootUI version stays correct against another. It
-  answers while disabled too, with an empty tool list, so a client can explain the refusal instead of failing opaquely.
+- **Self-describing.** `GET /bootui/api/cli` reports the tools this instance advertises, the `bootui` command each is
+  reached by, their argument schemas, and live panel enable/read-only state, so a client built against one BootUI
+  version stays correct against another — including the command spelling, since the command table lives in the engine
+  and is served rather than compiled into the client. It answers while disabled too, with an empty tool list, so a
+  client can explain the refusal instead of failing opaquely.
 - **Separate counters.** The facade dispatches through its own instance, so command-line traffic is never counted as
   agent activity in the MCP Server panel's call, latency, and refusal statistics.
 - **Same safety model as the panels.** The endpoint sits under `bootui.api-path` behind the shared loopback, `Host`
@@ -2632,6 +2634,7 @@ Top-level navigation:
   - HTTP Probe.
 - Developer tools:
   - MCP Server.
+  - Command Line.
   - DevTools.
   - Dev Services.
   - Copilot.

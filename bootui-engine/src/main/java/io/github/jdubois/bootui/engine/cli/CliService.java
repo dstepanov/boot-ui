@@ -93,15 +93,17 @@ public final class CliService {
     }
 
     /**
-     * Describes what this instance exposes: the advertised tools, their argument shapes, and how their panels
-     * are currently gated. Answered even while disabled, so the CLI can explain itself rather than fail
-     * opaquely; the tool list is then empty because nothing is invocable.
+     * Describes what this instance exposes: the advertised tools, the command each is reached by, their
+     * argument shapes, how their panels are currently gated, and this facade's own call counters. Answered
+     * even while disabled, so the CLI can explain itself rather than fail opaquely; the tool list is then
+     * empty because nothing is invocable.
      */
     public CliServerStatus status() {
         List<CliToolInfo> infos = enabled
                 ? tools.get().stream()
                         .map(tool -> new CliToolInfo(
                                 tool.name(),
+                                CliCommandPaths.commandFor(tool.name()),
                                 tool.description(),
                                 tool.panelId(),
                                 tool.action(),
@@ -111,8 +113,19 @@ public final class CliService {
                                 policy.isReadOnly(tool.panelId())))
                         .toList()
                 : List.of();
+        McpRuntimeStats.Snapshot stats = runtimeStats().snapshot();
         return new CliServerStatus(
-                enabled, McpProtocol.SERVER_NAME, serverVersion, endpoint, maxResults, infos.size(), infos);
+                enabled,
+                McpProtocol.SERVER_NAME,
+                serverVersion,
+                endpoint,
+                maxResults,
+                stats.callCount(),
+                stats.totalLatencyMillis(),
+                stats.capacityRefusals(),
+                stats.timeouts(),
+                infos.size(),
+                infos);
     }
 
     /**

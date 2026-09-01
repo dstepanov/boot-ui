@@ -46,6 +46,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the Spring MVC, Spring WebFlux, and Quarkus registries are each pinned to it by test. This is what keeps the
   command-line surface a true projection of the MCP one — a tool cannot be added, renamed, or given a different schema
   on one stack without the build noticing.
+- **A Command Line panel, next to MCP Server under Developer tools.** The console now shows what the command-line
+  endpoint is doing: whether it answers, the JBang install line and an example command ready to copy, how many calls it
+  has served with their mean latency, how many were refused at capacity or timed out, and the full command catalog with
+  the commands this instance's panel settings would currently refuse marked as such. Each row is the command to type,
+  not the MCP tool name, which is possible because the command table moved into the engine and is now served by
+  `GET /bootui/api/cli` — so the panel, and any client, learns the current spelling from the running application rather
+  than from whatever version it was built against. The counters were already being kept by the endpoint's own dispatcher
+  and simply had nowhere to surface; the same response now reports them. The
+  panel is deliberately read-only — `bootui.cli.enabled` governs the endpoint from configuration, because a CI job's
+  access to a build should not be revocable from a browser tab — and it registers no API prefix of its own, so turning
+  the panel off hides the view without silently breaking a running script.
 
 ### Fixed
 

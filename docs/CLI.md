@@ -136,6 +136,15 @@ bootui mcp enable
 bootui mcp disable
 ```
 
+## The Command Line panel
+
+The browser console mirrors this endpoint back at you. **Developer tools → Command Line** shows whether the
+endpoint answers, the install snippet, how many calls it has served and how long they took, and every command
+this instance exposes — the `bootui` command to type, the arguments it accepts, the MCP tool it maps to, and
+which commands the target's panel settings would currently refuse. It is a read-only view: the endpoint is
+governed by `bootui.cli.enabled` in configuration, not by a button, because a CI job's access should not be
+revocable from a browser tab. See [Developer tools](features/developer-tools.md).
+
 ## In CI
 
 The CLI is designed for a job that starts the application, asks it something, and stops it:

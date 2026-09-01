@@ -10,6 +10,9 @@ import java.util.List;
  * correct even when the CLI was built against a different BootUI version.
  *
  * @param name machine name of the tool (e.g. {@code architecture_scan})
+ * @param command the {@code bootui} command path this tool is reached by (e.g. {@code architecture scan}),
+ *     without the executable prefix, so a caller learns what to type from the running instance rather than
+ *     from the version of the CLI it happens to have
  * @param description human-readable description
  * @param panel the {@code BootUiPanels} id backing this tool
  * @param action {@code true} when the tool changes state and is refused on a read-only panel
@@ -20,6 +23,7 @@ import java.util.List;
  */
 public record CliToolInfo(
         String name,
+        String command,
         String description,
         String panel,
         boolean action,

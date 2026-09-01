@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.jdubois.bootui.engine.cli.CliCommandPaths;
 import io.github.jdubois.bootui.engine.mcp.McpToolCatalog;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
