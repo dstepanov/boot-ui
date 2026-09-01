@@ -19,6 +19,7 @@ import io.github.jdubois.bootui.quarkus.QuarkusTelemetrySettings;
 import io.github.jdubois.bootui.quarkus.activity.QuarkusActivityCapture;
 import io.github.jdubois.bootui.quarkus.agent.AgentSessionProducer;
 import io.github.jdubois.bootui.quarkus.beans.QuarkusBeanDependencies;
+import io.github.jdubois.bootui.quarkus.cli.BootUiCliProducer;
 import io.github.jdubois.bootui.quarkus.config.QuarkusConfigProvider;
 import io.github.jdubois.bootui.quarkus.devservices.DevServicesRecorder;
 import io.github.jdubois.bootui.quarkus.devservices.QuarkusDevServices;
@@ -49,6 +50,7 @@ import io.github.jdubois.bootui.quarkus.scheduled.QuarkusScheduledTaskProvider;
 import io.github.jdubois.bootui.quarkus.scheduled.QuarkusScheduledTasks;
 import io.github.jdubois.bootui.quarkus.scheduled.RawScheduledTask;
 import io.github.jdubois.bootui.quarkus.scheduled.ScheduledTasksRecorder;
+import io.github.jdubois.bootui.quarkus.web.BootUiCliResource;
 import io.github.jdubois.bootui.quarkus.web.ClaudeCodeResource;
 import io.github.jdubois.bootui.quarkus.web.CopilotResource;
 import io.github.jdubois.bootui.quarkus.web.DevServicesResource;
@@ -379,6 +381,8 @@ class BootUiQuarkusProcessor {
                         McpServerResource.class,
                         McpBridgeResource.class,
                         BootUiMcpProducer.class,
+                        BootUiCliProducer.class,
+                        BootUiCliResource.class,
                         QuarkusMcpTools.class,
                         QuarkusMcpEnvelope.class,
                         QuarkusMcpFailureReporter.class,

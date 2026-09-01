@@ -2246,6 +2246,8 @@ Initial endpoints:
 | `/bootui/api/mcp-server`                     | GET    | MCP Server panel status (enabled state, configured mode, transport, advertised tools)  |
 | `/bootui/api/mcp-server/toggle`              | POST   | Enable/disable the MCP server at runtime, overriding `bootui.mcp.enabled`               |
 | `/bootui/api/mcp`                            | GET/POST | Local-only MCP JSON-RPC 2.0 endpoint and status (served only while the server is enabled) |
+| `/bootui/api/cli`                            | GET    | Command-line endpoint status and the tool catalog this instance exposes                 |
+| `/bootui/api/cli/tools/{name}`               | POST   | Invoke one tool by name and return its payload directly, with the outcome in the HTTP status |
 | `/bootui/api/rest-client-trace`              | GET    | Latest REST Client report and retained outbound HTTP calls                              |
 | `/bootui/api/rest-client-trace/clear`        | POST   | Clear the retained REST client call buffer                                              |
 | `/bootui/api/rest-client-trace/recording`    | POST   | Pause/resume REST client call capture at runtime                                        |
@@ -2346,6 +2348,10 @@ Initial properties:
 | `bootui.mcp.max-concurrent-calls`            | `20`                                    | Maximum concurrent tool calls; additional calls fail immediately with server-defined error `-32001`. |
 | `bootui.mcp.execution-timeout`               | `30s`                                   | Maximum wall-clock duration of a tool call; timeouts return server-defined error `-32002`. |
 | `bootui.mcp.max-response-bytes`              | `4194304`                               | Maximum rendered JSON-RPC response bytes; oversized responses return server-defined error `-32003`. |
+| `bootui.cli.enabled`                         | `true`                                  | Whether the command-line endpoint answers. When `false`, the catalog reports itself disabled and tool invocation returns `503`. |
+| `bootui.cli.max-results`                     | `200`                                   | Maximum items returned by paginated command-line read tools, tracked separately from the MCP cap. |
+| `bootui.cli.max-concurrent-calls`            | `20`                                    | Maximum concurrent command-line tool calls; additional calls are refused with `429`. |
+| `bootui.cli.execution-timeout`               | `30s`                                   | Maximum wall-clock duration of a command-line tool call; timeouts return `504`. |
 
 Every visible panel must support `bootui.panels.<panel-id>.enabled`; panels with mutating browser actions must also
 support `bootui.panels.<panel-id>.read-only`. These properties are specified panel-by-panel in
@@ -2478,6 +2484,42 @@ Design rules:
   capacity refusals, timeouts, and response-limit refusals. Application-controlled logs, SQL, traces, and exception messages cannot be
   generically guaranteed secret-free, so initialization and tool guidance explicitly keep that data in the local
   diagnostic context.
+
+### 6.8 Command-line endpoint
+
+The same tool registry the MCP server exposes, projected onto plain REST at `GET /bootui/api/cli` and
+`POST /bootui/api/cli/tools/{name}`, so a terminal or a CI job can ask a running application one diagnostic question
+without an MCP client or a hand-rolled request. It is a transport, not a second capability.
+
+Design rules:
+
+- **A projection, not a reimplementation.** Invocation builds the same `tools/call` request the JSON-RPC transport does
+  and hands it to the same dispatcher logic, so unknown tool, unexpected argument, missing `id`, disabled panel, action
+  on a read-only panel, result capping, concurrency, and execution timeout are all the existing code path. A shared
+  catalog in the engine declares every tool's name, argument schema, backing panel, and action flag, and each adapter's
+  registry is pinned to it by test, so the two surfaces cannot drift apart. The request body is passed through
+  verbatim rather than bound to a fixed argument record, so a property no tool declares is refused rather than dropped
+  during decoding: a misspelled filter returns `400`, never a `200` carrying a report that ignored it.
+- **Independent of the MCP toggle.** The endpoint is enabled by `bootui.cli.enabled` (default `true`) and never requires
+  `bootui.mcp.enabled`. It is a new route over data the panel endpoints already serve, not a new capability, so it
+  defaults on; requiring a toggle would simply move the prerequisite it exists to remove.
+- **The outcome is the HTTP status.** MCP reports refused gates in-band (`200` with `isError`), which a shell cannot
+  branch on. The command-line endpoint returns the tool payload directly on success, and otherwise `400` for an invalid
+  argument, `403` for a disabled or read-only panel, `404` for an unknown tool, `409` for an action already running,
+  `429` at capacity, `504` on timeout, and `503` when the endpoint is disabled. Policy is unchanged; only the rendering
+  differs.
+- **Self-describing.** `GET /bootui/api/cli` reports the tools this instance advertises with their argument schemas and
+  live panel enable/read-only state, so a client built against one BootUI version stays correct against another. It
+  answers while disabled too, with an empty tool list, so a client can explain the refusal instead of failing opaquely.
+- **Separate counters.** The facade dispatches through its own instance, so command-line traffic is never counted as
+  agent activity in the MCP Server panel's call, latency, and refusal statistics.
+- **Same safety model as the panels.** The endpoint sits under `bootui.api-path` behind the shared loopback, `Host`
+  allow-list, cross-site-write, and `bootui.authentication.token` protections, and is exempt from SPA CSRF for the same
+  reason the MCP endpoint is: a non-browser client has no session to carry a token. Read tools invoked over `POST`
+  remain available under global read-only, because global read-only governs writes and every action tool is still
+  refused by the per-panel check.
+- **Available on all three stacks.** Spring MVC, Spring WebFlux, and Quarkus serve the identical contract, pinned by a
+  shared conformance suite.
 
 ## 7. UX specification
 

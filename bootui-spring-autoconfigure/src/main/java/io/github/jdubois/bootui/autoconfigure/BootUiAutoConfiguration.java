@@ -6,6 +6,8 @@ import io.github.jdubois.bootui.autoconfigure.activity.RequestCorrelationFilter;
 import io.github.jdubois.bootui.autoconfigure.activity.RequestCorrelationRegistry;
 import io.github.jdubois.bootui.autoconfigure.activity.SecurityEventCorrelationRegistry;
 import io.github.jdubois.bootui.autoconfigure.architecture.ArchitectureController;
+import io.github.jdubois.bootui.autoconfigure.cli.BootUiCliController;
+import io.github.jdubois.bootui.autoconfigure.cli.BootUiCliServiceFactory;
 import io.github.jdubois.bootui.autoconfigure.config.BootUiExposure;
 import io.github.jdubois.bootui.autoconfigure.config.BootUiPathPropertySource;
 import io.github.jdubois.bootui.autoconfigure.config.ConfigOverrideService;
@@ -29,6 +31,7 @@ import io.github.jdubois.bootui.autoconfigure.mcp.BootUiMcpService;
 import io.github.jdubois.bootui.autoconfigure.mcp.BootUiMcpTools;
 import io.github.jdubois.bootui.autoconfigure.mcp.McpServerController;
 import io.github.jdubois.bootui.autoconfigure.mcp.McpServerState;
+import io.github.jdubois.bootui.autoconfigure.mcp.SpringMcpPanelPolicy;
 import io.github.jdubois.bootui.autoconfigure.memory.MemoryController;
 import io.github.jdubois.bootui.autoconfigure.monitoring.BootUiSelfDataFilter;
 import io.github.jdubois.bootui.autoconfigure.otlp.OtlpSpanDecoder;
@@ -56,6 +59,7 @@ import io.github.jdubois.bootui.autoconfigure.websocket.BootUiWebSocketSessionRe
 import io.github.jdubois.bootui.autoconfigure.websocket.SpringWebSocketMetadataProvider;
 import io.github.jdubois.bootui.autoconfigure.websocket.WebSocketController;
 import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
+import io.github.jdubois.bootui.engine.cli.CliService;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.safety.ApiTokenAuthenticator;
@@ -555,6 +559,25 @@ public class BootUiAutoConfiguration {
         BootUiMcpController bootUiMcpController(
                 BootUiMcpService service, McpServerState state, BootUiProperties properties) {
             return new BootUiMcpController(service, state, properties);
+        }
+
+        /**
+         * The command-line facade over the same tool registry. It gets its own dispatcher, and therefore its
+         * own call counters and concurrency budget, so terminal traffic never shows up as MCP agent activity
+         * in the MCP Server panel.
+         */
+        @Bean
+        @Lazy
+        CliService bootUiCliService(BootUiMcpTools tools, BootUiProperties properties) {
+            String version = BootUiAutoConfiguration.class.getPackage().getImplementationVersion();
+            return BootUiCliServiceFactory.create(
+                    tools::tools, new SpringMcpPanelPolicy(properties), properties, version);
+        }
+
+        @Bean
+        @Lazy
+        BootUiCliController bootUiCliController(CliService service) {
+            return new BootUiCliController(service);
         }
     }
 

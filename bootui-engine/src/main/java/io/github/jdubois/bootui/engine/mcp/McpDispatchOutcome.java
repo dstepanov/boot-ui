@@ -67,12 +67,35 @@ public sealed interface McpDispatchOutcome
     record ToolCallResult(Object payload) implements McpDispatchOutcome {}
 
     /**
+     * Why a {@code tools/call} failed in-band. MCP renders every variant identically ({@code isError:true}
+     * plus the message), but the {@code /bootui/api/cli} facade maps them to distinct HTTP statuses, so the
+     * distinction is carried as data rather than recovered by matching on message text.
+     */
+    enum ToolErrorReason {
+        /** The tool's backing panel is disabled. */
+        PANEL_DISABLED,
+        /** The tool is an action and its backing panel is read-only. */
+        PANEL_READ_ONLY,
+        /** Another invocation of the same action is already running. */
+        ACTION_BUSY,
+        /** The tool ran and reported a failure. */
+        TOOL_FAILED
+    }
+
+    /**
      * A failed {@code tools/call} reported in-band ({@code isError:true}): a refused gate, a missing or
      * unknown tool, etc. The agent reads {@code message} as text content.
      *
      * @param message the human-readable failure reason
+     * @param reason the machine-readable cause, used by non-MCP transports to choose a status
      */
-    record ToolCallError(String message) implements McpDispatchOutcome {}
+    record ToolCallError(String message, ToolErrorReason reason) implements McpDispatchOutcome {
+
+        /** A generic tool failure. */
+        public ToolCallError(String message) {
+            this(message, ToolErrorReason.TOOL_FAILED);
+        }
+    }
 
     /**
      * A JSON-RPC protocol error (an {@code error} envelope).

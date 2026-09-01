@@ -7,6 +7,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A command-line endpoint that projects BootUI's diagnostic tools onto plain REST, on Spring MVC, Spring WebFlux, and
+  Quarkus.** `GET /bootui/api/cli` describes the tools a running instance advertises — name, description, backing panel,
+  argument schema, and live panel enable/read-only state — and `POST /bootui/api/cli/tools/{name}` invokes one and
+  returns its payload directly, with the outcome in the HTTP status (`400` invalid argument, `403` disabled or read-only
+  panel, `404` unknown tool, `409` action already running, `429` at capacity, `504` timeout) so a shell or CI job can
+  branch on it. Until now those diagnostics were reachable only from the browser console or an MCP client, which ruled
+  out scripting them. The endpoint is a transport, not a second capability: it builds the same `tools/call` request the
+  MCP transport does and runs it through the same dispatcher, so panel policy, argument validation, result caps,
+  concurrency, and timeouts are inherited rather than reimplemented. It is enabled by default (`bootui.cli.enabled`,
+  with `max-results`, `max-concurrent-calls`, and `execution-timeout` alongside it) and never requires
+  `bootui.mcp.enabled`; it keeps its own counters so command-line traffic is not reported as agent activity in the MCP
+  Server panel; and it stays behind the same loopback, `Host` allow-list, cross-site-write, and authentication-token
+  protections as every other BootUI route. A shared conformance suite pins all three stacks to one contract.
+- **A declarative MCP tool catalog in the engine.** The canonical list of every tool's name, argument schema, backing
+  panel, action flag, and supporting stacks moves out of a test file and into `McpToolCatalog` in `bootui-engine`, and
+  the Spring MVC, Spring WebFlux, and Quarkus registries are each pinned to it by test. This is what keeps the
+  command-line surface a true projection of the MCP one — a tool cannot be added, renamed, or given a different schema
+  on one stack without the build noticing.
+
 ### Fixed
 
 - **BootUI's safety filters can no longer be bypassed by a percent-encoded or matrix-parameter spelling of a BootUI URL

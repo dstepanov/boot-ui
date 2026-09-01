@@ -243,7 +243,8 @@ class McpDispatcherTests {
 
         McpDispatchOutcome outcome = dispatcher().dispatch(call("get_overview"));
 
-        assertThat(outcome).isEqualTo(new ToolCallError("disabled:overview"));
+        assertThat(outcome)
+                .isEqualTo(new ToolCallError("disabled:overview", McpDispatchOutcome.ToolErrorReason.PANEL_DISABLED));
     }
 
     @Test
@@ -252,7 +253,9 @@ class McpDispatcherTests {
 
         McpDispatchOutcome outcome = dispatcher().dispatch(call("architecture_scan"));
 
-        assertThat(outcome).isEqualTo(new ToolCallError("read-only:architecture"));
+        assertThat(outcome)
+                .isEqualTo(new ToolCallError(
+                        "read-only:architecture", McpDispatchOutcome.ToolErrorReason.PANEL_READ_ONLY));
     }
 
     @Test
@@ -279,7 +282,8 @@ class McpDispatcherTests {
 
         assertThat(dispatcher.dispatch(call("architecture_scan")))
                 .isEqualTo(new ToolCallError(
-                        "Operation 'architecture.scan' cannot start while 'architecture.scan' is in progress."));
+                        "Operation 'architecture.scan' cannot start while 'architecture.scan' is in progress.",
+                        McpDispatchOutcome.ToolErrorReason.ACTION_BUSY));
         assertThat(diagnostics.count()).isZero();
 
         release.countDown();

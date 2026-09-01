@@ -370,6 +370,7 @@ public final class BootUiApiContractCatalog {
         infrastructure(actions, "dismissed-rules.dismiss", "POST", "/dismissed-rules/conformance-rule", ALL, true);
         infrastructure(actions, "dismissed-rules.restore", "DELETE", "/dismissed-rules/conformance-rule", ALL, true);
         infrastructure(actions, "mcp.bridge", "POST", "/mcp", ALL, false);
+        infrastructure(actions, "cli.tool", "POST", "/cli/tools/get_overview", ALL, false);
         infrastructure(actions, "otlp.ingest", "POST", "/otlp/v1/traces", SPRING, false);
         return List.copyOf(actions);
     }

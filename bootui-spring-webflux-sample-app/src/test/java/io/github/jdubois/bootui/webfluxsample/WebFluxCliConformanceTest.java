@@ -1,0 +1,29 @@
+package io.github.jdubois.bootui.webfluxsample;
+
+import io.github.jdubois.bootui.conformance.AbstractCliConformanceTest;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
+import org.springframework.boot.test.web.server.LocalServerPort;
+
+@SpringBootTest(
+        classes = BootUiWebfluxSampleApplication.class,
+        webEnvironment = WebEnvironment.RANDOM_PORT,
+        properties = {
+            "spring.profiles.active=dev",
+            "bootui.show-banner=false",
+            "bootui.overrides-file=target/bootui-cli-conformance-overrides.properties",
+            "bootui.panels.copilot.enabled=false",
+            "bootui.panels.heap-dump.read-only=true",
+            "bootui.heap-dump.capture-enabled=false",
+            "bootui.claude-code.enabled=OFF"
+        })
+class WebFluxCliConformanceTest extends AbstractCliConformanceTest {
+
+    @LocalServerPort
+    int port;
+
+    @Override
+    protected String baseUrl() {
+        return "http://localhost:" + port;
+    }
+}

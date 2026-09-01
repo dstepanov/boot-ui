@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.autoconfigure;
 
 import io.github.jdubois.bootui.core.BootUiPathNormalizer;
 import io.github.jdubois.bootui.core.ValueExposure;
+import io.github.jdubois.bootui.engine.mcp.McpProtocol;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -194,6 +195,10 @@ public class BootUiProperties {
      * Local MCP (Model Context Protocol) server settings.
      */
     private Mcp mcp = new Mcp();
+    /**
+     * Command-line client endpoint settings ({@code /bootui/api/cli}).
+     */
+    private Cli cli = new Cli();
     /**
      * Live Activity panel settings (merged activity stream and per-request profiler).
      */
@@ -558,6 +563,14 @@ public class BootUiProperties {
 
     public void setMcp(Mcp mcp) {
         this.mcp = mcp == null ? new Mcp() : mcp;
+    }
+
+    public Cli getCli() {
+        return cli;
+    }
+
+    public void setCli(Cli cli) {
+        this.cli = cli == null ? new Cli() : cli;
     }
 
     public Activity getActivity() {
@@ -2254,6 +2267,70 @@ public class BootUiProperties {
 
         public void setMaxResponseBytes(int maxResponseBytes) {
             this.maxResponseBytes = maxResponseBytes;
+        }
+    }
+
+    /**
+     * Settings for the command-line client endpoint at {@code /bootui/api/cli}, which projects the same tool
+     * registry the MCP server exposes onto plain REST so the {@code bootui} CLI and CI jobs can ask a running
+     * application one question without running an MCP client.
+     *
+     * <p>Enabled by default, unlike {@code bootui.mcp.enabled}. The endpoint is a different spelling of data
+     * the {@code /bootui/api/**} panel endpoints already return, not a new capability: it stays behind the
+     * same loopback / Host allow-list / cross-site-write / authentication-token defenses, and every tool
+     * still honors its panel's {@code bootui.panels.*} enable and read-only toggles. Set
+     * {@code bootui.cli.enabled=false} to refuse command-line access outright.
+     */
+    public static class Cli {
+
+        /** Whether {@code /bootui/api/cli} answers. {@code true} by default; {@code false} returns 503. */
+        private boolean enabled = true;
+
+        /**
+         * Maximum number of items returned by paginated read tools in a single call. Mirrors
+         * {@code bootui.mcp.max-results} but is tracked separately so command-line traffic can be tuned
+         * without changing what agents see.
+         */
+        private int maxResults = 200;
+
+        /** Maximum number of concurrent command-line tool invocations; default 20. Excess calls get a 429. */
+        private int maxConcurrentCalls = McpProtocol.DEFAULT_MAX_CONCURRENT_CALLS;
+
+        /** Maximum wall-clock duration of one command-line tool invocation; default 30 seconds (504 on expiry). */
+        private Duration executionTimeout = Duration.ofMillis(McpProtocol.DEFAULT_EXECUTION_TIMEOUT_MILLIS);
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public int getMaxResults() {
+            return maxResults;
+        }
+
+        public void setMaxResults(int maxResults) {
+            this.maxResults = maxResults;
+        }
+
+        public int getMaxConcurrentCalls() {
+            return maxConcurrentCalls;
+        }
+
+        public void setMaxConcurrentCalls(int maxConcurrentCalls) {
+            this.maxConcurrentCalls = maxConcurrentCalls;
+        }
+
+        public Duration getExecutionTimeout() {
+            return executionTimeout;
+        }
+
+        public void setExecutionTimeout(Duration executionTimeout) {
+            this.executionTimeout = executionTimeout == null
+                    ? Duration.ofMillis(McpProtocol.DEFAULT_EXECUTION_TIMEOUT_MILLIS)
+                    : executionTimeout;
         }
     }
 

@@ -97,9 +97,16 @@ public class BootUiReactiveSpringSecurityAutoConfiguration {
         String otlpPattern = childSecurityPattern(properties.getApiPath(), "otlp");
         String mcpEndpoint = childSecurityEndpoint(properties.getApiPath(), "mcp");
         String mcpDescendantsPattern = childSecurityPattern(properties.getApiPath(), "mcp");
+        String cliEndpoint = childSecurityEndpoint(properties.getApiPath(), "cli");
+        String cliDescendantsPattern = childSecurityPattern(properties.getApiPath(), "cli");
         String authSessionEndpoint = childSecurityEndpoint(properties.getApiPath(), "auth/session");
         var programmaticClientsMatcher = ServerWebExchangeMatchers.pathMatchers(
-                otlpPattern, mcpEndpoint, mcpDescendantsPattern, authSessionEndpoint);
+                otlpPattern,
+                mcpEndpoint,
+                mcpDescendantsPattern,
+                cliEndpoint,
+                cliDescendantsPattern,
+                authSessionEndpoint);
         // Preserve Spring Security's own safe-method definition and exempt only the bounded
         // programmatic-client paths. LocalhostGuard still runs outside Spring Security and rejects
         // cross-site writes on every BootUI route.

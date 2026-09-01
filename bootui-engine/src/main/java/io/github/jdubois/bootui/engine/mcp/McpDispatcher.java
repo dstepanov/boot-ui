@@ -248,7 +248,7 @@ public final class McpDispatcher {
 
         McpTool tool = findTool(name);
         if (tool == null) {
-            return new ProtocolError(McpProtocol.INVALID_PARAMS, "Unknown tool: " + name);
+            return new ProtocolError(McpProtocol.INVALID_PARAMS, McpProtocol.unknownToolMessage(name));
         }
         if (request.argumentsError() != null) {
             return new ProtocolError(McpProtocol.INVALID_PARAMS, request.argumentsError());
@@ -262,10 +262,12 @@ public final class McpDispatcher {
                             + String.join(", ", unexpectedArguments));
         }
         if (!policy.isEnabled(tool.panelId())) {
-            return new ToolCallError(policy.disabledReason(tool.panelId()));
+            return new ToolCallError(
+                    policy.disabledReason(tool.panelId()), McpDispatchOutcome.ToolErrorReason.PANEL_DISABLED);
         }
         if (tool.action() && policy.isReadOnly(tool.panelId())) {
-            return new ToolCallError(policy.readOnlyReason(tool.panelId()));
+            return new ToolCallError(
+                    policy.readOnlyReason(tool.panelId()), McpDispatchOutcome.ToolErrorReason.PANEL_READ_ONLY);
         }
         McpArguments arguments =
                 McpArguments.normalize(request.rawQuery(), request.rawLimit(), request.rawId(), maxResults);
@@ -326,7 +328,7 @@ public final class McpDispatcher {
         } catch (ExecutionException ex) {
             Throwable cause = ex.getCause();
             if (cause instanceof ActionBusyException busy) {
-                return new ToolCallError(busy.result().message());
+                return new ToolCallError(busy.result().message(), McpDispatchOutcome.ToolErrorReason.ACTION_BUSY);
             }
             if (cause instanceof RuntimeException runtime) {
                 throw runtime;

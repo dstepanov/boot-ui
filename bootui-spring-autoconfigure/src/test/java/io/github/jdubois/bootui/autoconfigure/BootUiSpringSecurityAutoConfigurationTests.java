@@ -68,6 +68,19 @@ class BootUiSpringSecurityAutoConfigurationTests {
     }
 
     @Test
+    void permitsCliToolPostWithoutCsrfToken() {
+        // The bootui CLI is a non-browser programmatic client for the same reason MCP clients are: it has no
+        // SPA session to carry a CSRF token, so a 403 here would make the whole endpoint unreachable.
+        ResponseEntity<String> cli = client().post()
+                .uri("/bootui/api/cli/tools/get_overview")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("{}")
+                .retrieve()
+                .toEntity(String.class);
+        assertThat(cli.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
     void permitsAuthenticationSessionPostWithoutCsrfToken() {
         ResponseEntity<Void> session =
                 client().post().uri("/bootui/api/auth/session").retrieve().toBodilessEntity();

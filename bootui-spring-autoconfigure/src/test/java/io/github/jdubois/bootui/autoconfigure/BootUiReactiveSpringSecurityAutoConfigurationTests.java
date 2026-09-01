@@ -241,9 +241,18 @@ class BootUiReactiveSpringSecurityAutoConfigurationTests {
     }
 
     @Test
-    void leavesProgrammaticMcpAndSessionPostsOutsideCsrfProtection() {
+    void leavesProgrammaticMcpCliAndSessionPostsOutsideCsrfProtection() {
         runner.run(context -> {
             WebTestClient client = client(context.getSourceApplicationContext());
+
+            client.post()
+                    .uri("/bootui/api/cli/tools/get_overview")
+                    .header(HttpHeaders.ORIGIN, "http://localhost")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{}")
+                    .exchange()
+                    .expectStatus()
+                    .isOk();
 
             client.post()
                     .uri("/bootui/api/mcp")

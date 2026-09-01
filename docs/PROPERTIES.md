@@ -70,7 +70,7 @@ default — on both adapters. This includes the safety keys (`bootui.allow-non-l
 `bootui.vulnerabilities.*` (including `osv-base-uri`, default `https://api.osv.dev`),
 `bootui.sql-trace.*`, `bootui.transactions.*`, `bootui.telemetry.*` (except `max-request-bytes`), `bootui.heap-dump.*`,
 `bootui.exceptions.*`, `bootui.security-logs.*`, `bootui.cache.*` (except `.activity-capture-enabled` and
-`.activity-max-events`, Spring only — see above), `bootui.mcp.*`, `bootui.ai.*`,
+`.activity-max-events`, Spring only — see above), `bootui.mcp.*`, `bootui.cli.*`, `bootui.ai.*`,
 `bootui.copilot.*`, and `bootui.claude-code.*` families. It also includes the per-panel access keys —
 `bootui.panels.<id>.enabled` / `.read-only` and the global `bootui.read-only` — which are enforced on
 Quarkus by `QuarkusPanelAccessFilter` at full behavioral parity with Spring's `PanelAccessFilter` (same
@@ -753,6 +753,27 @@ read-only, and all values flow through the same secret masking as the REST API.
 | `bootui.mcp.max-concurrent-calls` | `20`   | Maximum number of `tools/call` invocations the server executes concurrently; excess calls are refused with a rate-limited error. |
 | `bootui.mcp.execution-timeout` | `30s`     | Maximum wall-clock duration of one tool invocation; timed-out calls are interrupted and return JSON-RPC `-32002`. |
 | `bootui.mcp.max-response-bytes` | `4194304` | Maximum size of a rendered JSON-RPC response; oversized results are replaced by JSON-RPC `-32003`. |
+
+### Command-line endpoint
+
+The command-line endpoint projects the same tool registry the MCP server exposes onto plain REST, so a terminal or a CI
+job can ask a running application one diagnostic question without an MCP client. `GET <bootui.api-path>/cli` (default
+`GET /bootui/api/cli`) describes the tools this instance advertises, and `POST <bootui.api-path>/cli/tools/{name}`
+invokes one, returning its payload directly with the outcome in the HTTP status (`403` panel disabled or read-only,
+`404` unknown tool, `400` bad argument, `409` action already running, `429` at capacity, `504` timeout).
+
+It is **on by default**, because it is a different spelling of data the panel endpoints already serve rather than a new
+capability: every tool remains gated by its panel's enable/read-only settings, and the endpoint sits under
+`bootui.api-path`, so the loopback, Host allow-list, cross-site-write, and `bootui.authentication.token` protections
+apply unchanged. It does **not** require `bootui.mcp.enabled`, and its calls are counted separately so the MCP Server
+panel keeps reporting only what agents did.
+
+| Property                          | Default | Description                                                                                                            |
+| --------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `bootui.cli.enabled`              | `true`  | Whether the command-line endpoint answers. When `false`, the catalog still reports itself as disabled and tool invocation returns `503`. |
+| `bootui.cli.max-results`          | `200`   | Maximum number of items returned by paginated read tools per call, tracked separately from `bootui.mcp.max-results`.     |
+| `bootui.cli.max-concurrent-calls` | `20`    | Maximum number of concurrent tool invocations; excess calls are refused with `429`.                                      |
+| `bootui.cli.execution-timeout`    | `30s`   | Maximum wall-clock duration of one tool invocation; timed-out calls are interrupted and return `504`.                    |
 
 
 
