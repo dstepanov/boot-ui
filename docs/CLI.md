@@ -6,7 +6,7 @@ application one question and prints the answer — no browser, no MCP client, no
 ```console
 $ bootui beans --query dataSource
 $ bootui hibernate scan --json | jq '.findings[] | select(.severity == "HIGH")'
-$ bootui sql traces --limit 20
+$ bootui http exchanges --limit 20
 ```
 
 Every command is one BootUI [MCP](AI-AGENTS.md) tool, projected mechanically from the same registry. The CLI
@@ -52,8 +52,8 @@ To turn it off:
 bootui.cli.enabled=false
 ```
 
-See [Properties](PROPERTIES.md) for `bootui.cli.max-results`, `bootui.cli.execution-timeout`,
-`bootui.cli.max-concurrent-calls`, and `bootui.cli.max-response-bytes`.
+See [Properties](PROPERTIES.md) for `bootui.cli.max-results`, `bootui.cli.execution-timeout`, and
+`bootui.cli.max-concurrent-calls`.
 
 ## Global options
 
@@ -90,7 +90,7 @@ report a console. Pass `--json` explicitly in scripts.
 | Code | Meaning |
 | --- | --- |
 | `0` | The tool ran and answered. |
-| `1` | Usage error, or the application could not be reached or did not answer. |
+| `1` | Usage error, authentication was rejected, or the application could not be reached or did not answer. |
 | `2` | BootUI declined to run the tool: its panel is disabled, or read-only and the tool is an action. |
 | `3` | Reserved for a future severity threshold. |
 
@@ -116,8 +116,8 @@ $ bootui tools
 command                tool                   panel        arguments      status
 ---------------------  ---------------------  -----------  -------------  --------------
 beans                  get_beans              beans        query, limit   ready
-memory gc              trigger_gc             memory       -              read-only
-sql traces             get_sql_traces         sql          query, limit   ready
+sql clear              clear_sql_traces       sql-trace    -              read-only
+sql traces             get_sql_traces         sql-trace    -              ready
 ```
 
 `status` is `ready` for a readable tool, `action` for one that changes state, `read-only` when the panel would

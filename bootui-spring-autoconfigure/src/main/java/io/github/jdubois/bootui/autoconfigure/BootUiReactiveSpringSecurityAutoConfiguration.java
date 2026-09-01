@@ -45,7 +45,8 @@ import reactor.core.publisher.Mono;
  * high-precedence {@link SecurityWebFilterChain} that permits all requests to the BootUI UI and
  * API paths, configures SPA-compatible CSRF (cookie-based, readable by the Vue SPA), and exempts
  * the MCP JSON-RPC and OTLP ingest endpoints from CSRF protection — those are called by
- * programmatic clients (AI agents, OpenTelemetry exporters) that cannot present a CSRF token.
+ * programmatic clients (AI agents, OpenTelemetry exporters, the bootui CLI) that cannot present a
+ * CSRF token.
  * The exempted endpoints remain protected by BootUI's localhost-only reactive safety filter's
  * loopback, Host allow-list, and Origin/Sec-Fetch-Site checks.</p>
  *
@@ -100,12 +101,16 @@ public class BootUiReactiveSpringSecurityAutoConfiguration {
         String cliEndpoint = childSecurityEndpoint(properties.getApiPath(), "cli");
         String cliDescendantsPattern = childSecurityPattern(properties.getApiPath(), "cli");
         String authSessionEndpoint = childSecurityEndpoint(properties.getApiPath(), "auth/session");
+        // The bootui CLI drives the MCP server on and off through this one panel action, so the exact path
+        // is exempt while the rest of the mcp-server panel keeps SPA CSRF protection.
+        String mcpToggleEndpoint = childSecurityEndpoint(properties.getApiPath(), "mcp-server/toggle");
         var programmaticClientsMatcher = ServerWebExchangeMatchers.pathMatchers(
                 otlpPattern,
                 mcpEndpoint,
                 mcpDescendantsPattern,
                 cliEndpoint,
                 cliDescendantsPattern,
+                mcpToggleEndpoint,
                 authSessionEndpoint);
         // Preserve Spring Security's own safe-method definition and exempt only the bounded
         // programmatic-client paths. LocalhostGuard still runs outside Spring Security and rejects

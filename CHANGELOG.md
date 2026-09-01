@@ -10,7 +10,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - **A `bootui` command-line interface, with one command per BootUI diagnostic.** `bootui beans --query dataSource`,
-  `bootui hibernate scan --json | jq …`, `bootui sql traces --limit 20` — 78 commands covering every tool the MCP
+  `bootui hibernate scan --json | jq …`, `bootui http exchanges --limit 20` — 78 commands covering every tool the MCP
   server exposes, asked of a running application from a terminal or a CI job with no MCP client, no agent, and no
   hand-written request. It is published to Maven Central as a runnable uber-jar and reachable through JBang
   (`jbang bootui@jdubois/boot-ui`). Output is the application's exact JSON when piped or with `--json`, and a rendered

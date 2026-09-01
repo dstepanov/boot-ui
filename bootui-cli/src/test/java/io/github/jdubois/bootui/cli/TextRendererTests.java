@@ -113,4 +113,21 @@ class TextRendererTests {
     private String render(String json) {
         return renderer.render(JsonValue.parse(json));
     }
+
+    @Test
+    void controlCharactersInValuesCannotReachTheTerminal() {
+        // A payload carries application-controlled text. Left alone, this would retitle the window, colour
+        // the output despite --no-color, and use backspaces to hide what it actually contains.
+        String text = render("{\"note\":\"\\u001b]0;pwned\\u0007\\u001b[31mred\\u001b[0m a\\b\\b\\bzap\"}");
+
+        assertThat(text).doesNotContain("\u001B").doesNotContain("\u0007").doesNotContain("\b");
+        assertThat(text).isEqualTo("note:  ]0;pwned  [31mred [0m a   zap");
+    }
+
+    @Test
+    void controlCharactersInKeysCannotReachTheTerminalEither() {
+        String text = render("{\"a\\u001b[2Jb\":\"1\"}");
+
+        assertThat(text).doesNotContain("\u001B").isEqualTo("a [2Jb: 1");
+    }
 }

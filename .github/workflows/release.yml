@@ -146,6 +146,9 @@ jobs:
           perl -0pi -e 's{(<artifactId>bootui-quarkus</artifactId>\s*<version>)[^<]*(</version>)}{$1$ENV{VERSION}$2}g' README.md docs/setup/quarkus.md
           perl -0pi -e 's{(com\.julien-dubois\.bootui:bootui-quarkus:)[0-9][0-9A-Za-z.\-]*}{$1$ENV{VERSION}}g' docs/setup/quarkus.md
           perl -0pi -e 's{(com\.julien-dubois\.bootui:bootui-cli:)[0-9][0-9A-Za-z.\-]*}{$1$ENV{VERSION}}g' jbang-catalog.json README.md docs/CLI.md
+          # The download snippet pins the jar through a shell variable rather than a coordinate, so the
+          # substitution above does not reach it.
+          perl -0pi -e 's{^VERSION=[0-9][0-9A-Za-z.\-]*$}{VERSION=$ENV{VERSION}}mg' docs/CLI.md
 
           if ! grep -q "<version>$VERSION</version>" docs/SETUP.md; then
             echo "::error::Failed to update the bootui-spring-boot-starter version in docs/SETUP.md to $VERSION"
@@ -171,6 +174,12 @@ jobs:
           # `jbang bootui@jdubois/boot-ui` installing the previous release after a successful one.
           if ! grep -q "com.julien-dubois.bootui:bootui-cli:$VERSION:all" jbang-catalog.json; then
             echo "::error::Failed to update the bootui-cli version in jbang-catalog.json to $VERSION"
+            exit 1
+          fi
+
+          # A stale VERSION here would document downloading the previous release's jar.
+          if ! grep -q "^VERSION=$VERSION$" docs/CLI.md; then
+            echo "::error::Failed to update the CLI download version in docs/CLI.md to $VERSION"
             exit 1
           fi
 

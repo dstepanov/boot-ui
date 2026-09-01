@@ -117,6 +117,22 @@ class BootUiCliTests {
     }
 
     @Test
+    void aRejectedTokenIsAFailedRequestRatherThanAPolicyRefusal() {
+        // 401 means the caller was not accepted, which says nothing about how the target's panels are
+        // configured. Reporting it as a refusal would make a CI job that forgot --token skip silently.
+        status = 401;
+        responseBody = "{\"error\":\"Authentication required\"}";
+
+        Result result = run("beans");
+
+        assertThat(result.exitCode).isEqualTo(ExitCodes.ERROR);
+        assertThat(result.err)
+                .contains("Authentication required")
+                .contains("--token")
+                .doesNotContain("panel '");
+    }
+
+    @Test
     void aDisabledEndpointSaysWhichPropertyTurnsItOn() {
         status = 503;
         responseBody = "{\"error\":\"disabled\"}";

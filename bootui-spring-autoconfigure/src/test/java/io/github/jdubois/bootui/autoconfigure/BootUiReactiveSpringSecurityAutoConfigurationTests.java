@@ -216,13 +216,23 @@ class BootUiReactiveSpringSecurityAutoConfigurationTests {
             assertThat(csrfCookie.isHttpOnly()).isFalse();
 
             client.post()
+                    .uri("/bootui/api/not-a-real-endpoint")
+                    .header(HttpHeaders.ORIGIN, "http://localhost")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{}")
+                    .exchange()
+                    .expectStatus()
+                    .isForbidden();
+
+            // The bootui CLI cannot hold a SPA CSRF token, so the MCP server toggle it drives is exempt.
+            client.post()
                     .uri("/bootui/api/mcp-server/toggle")
                     .header(HttpHeaders.ORIGIN, "http://localhost")
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue("{\"enabled\":true}")
                     .exchange()
                     .expectStatus()
-                    .isForbidden();
+                    .isOk();
 
             client.post()
                     .uri("/bootui/api/mcp-server/toggle")

@@ -50,4 +50,18 @@ class BootUiClientOptionsTests {
         assertThat(new BootUiClientOptions(null, null, null, Duration.ofSeconds(-1)).timeout())
                 .isEqualTo(BootUiClientOptions.DEFAULT_TIMEOUT);
     }
+
+    @Test
+    void theTokenIsRedactedFromToStringSoLoggingTheOptionsCannotLeakIt() {
+        BootUiClientOptions options =
+                new BootUiClientOptions("http://localhost:8080", "/bootui/api", "a-real-token", null);
+
+        assertThat(options.toString()).doesNotContain("a-real-token").contains("******");
+    }
+
+    @Test
+    void aBarePortIsReadAsLocalhostSoTheDocumentedShorthandProducesAUsableUrl() {
+        assertThat(new BootUiClientOptions(":9000", null, null, null).cliEndpoint())
+                .isEqualTo("http://localhost:9000/bootui/api/cli");
+    }
 }

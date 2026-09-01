@@ -31,6 +31,9 @@ public enum ToolOutcome {
     /** The command-line endpoint is disabled on this instance. */
     ENDPOINT_DISABLED,
 
+    /** BootUI rejected the caller: no token, a wrong token, or a non-local caller. */
+    UNAUTHENTICATED,
+
     /** The tool failed inside the application, or the server answered something unexpected. */
     SERVER_ERROR;
 
@@ -43,9 +46,10 @@ public enum ToolOutcome {
             case 400:
                 return INVALID_REQUEST;
             case 401:
+                // Authentication is about the caller, not about how the target's panels are configured, so
+                // it must not be reported as a policy refusal a CI job would treat as "skip".
+                return UNAUTHENTICATED;
             case 403:
-                // 401 arrives when bootui.authentication.token is required and absent or wrong; 403 is
-                // either that same rejection at the filter, or the per-panel enable/read-only refusal.
                 return REFUSED_BY_POLICY;
             case 404:
                 return UNKNOWN_TOOL;

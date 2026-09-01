@@ -40,8 +40,9 @@ final class TextRenderer {
     }
 
     private void renderObject(JsonValue object, StringBuilder out, int depth) {
-        for (String name : object.names()) {
-            JsonValue member = object.get(name);
+        for (String rawName : object.names()) {
+            String name = safe(rawName);
+            JsonValue member = object.get(rawName);
             String indent = "  ".repeat(depth);
             if (member.isObject() && member.size() > 0) {
                 out.append(indent).append(bold(name)).append('\n');
@@ -128,7 +129,7 @@ final class TextRenderer {
         }
         out.append(indent);
         for (int i = 0; i < columns.size(); i++) {
-            out.append(bold(pad(columns.get(i), i == columns.size() - 1 ? 0 : widths[i])));
+            out.append(bold(pad(safe(columns.get(i)), i == columns.size() - 1 ? 0 : widths[i])));
             if (i < columns.size() - 1) {
                 out.append("  ");
             }
@@ -165,8 +166,31 @@ final class TextRenderer {
     }
 
     private static String truncate(String text) {
-        String single = text.replace("\n", " ").replace("\r", " ").replace("\t", " ");
+        String single = safe(text);
         return single.length() <= MAX_CELL_WIDTH ? single : single.substring(0, MAX_CELL_WIDTH - 1) + "\u2026";
+    }
+
+    /**
+     * Neutralises control characters before anything reaches the terminal.
+     *
+     * <p>Tool payloads carry application-controlled text — log lines, exception messages, header values, SQL,
+     * bean names. Left alone, an ESC sequence in any of those could retitle the window or repaint the screen,
+     * and a backspace could erase what was already printed so the value shown is not the value received.
+     * {@code --json} still emits the server's bytes verbatim, which is the machine-readable contract.
+     */
+    private static String safe(String text) {
+        StringBuilder clean = null;
+        for (int index = 0; index < text.length(); index++) {
+            char current = text.charAt(index);
+            boolean control = current < 0x20 || current == 0x7F || (current >= 0x80 && current <= 0x9F);
+            if (control && clean == null) {
+                clean = new StringBuilder(text.length()).append(text, 0, index);
+            }
+            if (clean != null) {
+                clean.append(control ? ' ' : current);
+            }
+        }
+        return clean == null ? text : clean.toString();
     }
 
     private static String pad(String text, int width) {

@@ -2551,12 +2551,16 @@ Design rules:
 - **Runtime discovery is authoritative.** The bundled manifest exists so `--help` works with nothing running. What a
   given application actually exposes comes from `GET /bootui/api/cli`, which `bootui tools` prints: stacks advertise
   different tool sets, some tools appear only when a library is present, and panels can be disabled.
-- **Refusal is not failure.** Exit `0` means the tool answered, `1` a usage or transport error, and `2` that BootUI
-  declined — a disabled panel, or an action on a read-only one. That distinction is the reason the endpoint puts the
-  outcome in the status code, and dropping it would force CI to parse error text.
+- **Refusal is not failure.** Exit `0` means the tool answered, `1` a usage, authentication, or transport error, and
+  `2` that BootUI declined — a disabled panel, or an action on a read-only one. That distinction is the reason the
+  endpoint puts the outcome in the status code, and dropping it would force CI to parse error text. A rejected token
+  is deliberately `1` and not `2`: it says nothing about how the target's panels are configured, so a job that treats
+  `2` as "skip this check" must not swallow it.
 - **Exact output when it is being parsed.** Output is the server's bytes verbatim with `--json` or when stdout is not
   a terminal, and a rendered table or tree otherwise. The rendering infers structure from shape because the payload is
-  opaque, so it is explicitly best-effort; `--json` is the stable form.
+  opaque, so it is explicitly best-effort; `--json` is the stable form. Rendered output replaces control characters,
+  because payloads carry application-controlled text and a terminal would otherwise act on an escape sequence found in
+  a log line, an exception message, or a header value.
 - **Reflection-free.** The command tree is built programmatically and the CLI's only runtime dependency is picocli, so
   a future native-image build stays a build-file change rather than a rewrite.
 

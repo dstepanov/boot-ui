@@ -195,6 +195,10 @@ final class CliContext {
                 return "This application does not expose '" + tool.name() + "'." + hint;
             case REFUSED_BY_POLICY:
                 return message + " (panel '" + tool.panel() + "')";
+            case UNAUTHENTICATED:
+                return message
+                        + ". A non-loopback --url needs --token, and BootUI only answers requests it "
+                        + "considers local.";
             case ENDPOINT_DISABLED:
                 return "The BootUI command-line endpoint is disabled on this application. "
                         + "Set bootui.cli.enabled=true to allow it.";

@@ -137,4 +137,18 @@ class JsonValueTests {
 
         assertThat(json.get("a").size()).isEqualTo(2);
     }
+
+    @Test
+    void leadingZerosAreRejectedBecauseTheReaderPromisesRfc8259AndNothingElse() {
+        assertThatThrownBy(() -> JsonValue.parse("{\"a\":01}")).isInstanceOf(JsonParseException.class);
+        assertThatThrownBy(() -> JsonValue.parse("007")).isInstanceOf(JsonParseException.class);
+        assertThatThrownBy(() -> JsonValue.parse("-01")).isInstanceOf(JsonParseException.class);
+
+        // The forms RFC 8259 does allow must keep parsing.
+        assertThat(JsonValue.parse("0").toJson()).isEqualTo("0");
+        assertThat(JsonValue.parse("-0").toJson()).isEqualTo("-0");
+        assertThat(JsonValue.parse("0.5").toJson()).isEqualTo("0.5");
+        assertThat(JsonValue.parse("-0.5e-3").toJson()).isEqualTo("-0.5e-3");
+        assertThat(JsonValue.parse("10").toJson()).isEqualTo("10");
+    }
 }

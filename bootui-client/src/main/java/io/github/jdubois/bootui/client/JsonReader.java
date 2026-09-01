@@ -198,6 +198,13 @@ final class JsonReader {
             position++;
         }
         readDigits();
+        // RFC 8259 allows a single leading zero only as the whole integer part, so '01' is not a number.
+        if (source.charAt(start) == '0' && position - start > 1) {
+            throw new JsonParseException("Leading zeros are not allowed in a number", start);
+        }
+        if (source.charAt(start) == '-' && position - start > 2 && source.charAt(start + 1) == '0') {
+            throw new JsonParseException("Leading zeros are not allowed in a number", start + 1);
+        }
         if (position < source.length() && source.charAt(position) == '.') {
             position++;
             readDigits();

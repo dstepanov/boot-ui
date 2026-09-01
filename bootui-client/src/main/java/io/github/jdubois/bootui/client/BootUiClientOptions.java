@@ -51,6 +51,11 @@ public record BootUiClientOptions(String baseUrl, String apiPath, String token, 
 
     private static String normalizeBaseUrl(String baseUrl) {
         String value = baseUrl == null || baseUrl.isBlank() ? DEFAULT_BASE_URL : baseUrl.trim();
+        if (value.startsWith(":")) {
+            // ':9000' is how people write "same host, other port"; without a host the URI has no authority
+            // and the request would fail deep in the HTTP client.
+            value = "localhost" + value;
+        }
         if (!value.startsWith("http://") && !value.startsWith("https://")) {
             // A bare host:port is what people actually type; guessing http is friendlier than a usage error.
             value = "http://" + value;
@@ -70,5 +75,12 @@ public record BootUiClientOptions(String baseUrl, String apiPath, String token, 
             value = value.substring(0, value.length() - 1);
         }
         return Objects.requireNonNullElse(value.isEmpty() ? DEFAULT_API_PATH : value, DEFAULT_API_PATH);
+    }
+
+    /** Redacts the token, so logging these options cannot leak a credential. */
+    @Override
+    public String toString() {
+        return "BootUiClientOptions[baseUrl=" + baseUrl + ", apiPath=" + apiPath + ", token="
+                + (token == null ? "none" : "******") + ", timeout=" + timeout + "]";
     }
 }
