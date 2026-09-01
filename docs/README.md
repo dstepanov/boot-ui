@@ -68,4 +68,4 @@ is unavailable, BootUI returns stable empty responses or shows an actionable emp
   services.
 - Diagnostics and security panels for traces, logs, HTTP exchanges, local probes, architecture checks, GraalVM readiness,
   dependency vulnerabilities, Spring Security, and security advisors.
-- Developer tooling dashboards for DevTools, GitHub, Copilot, and Claude Code local activity.
+- Developer tooling dashboards for Spring DevTools, GitHub, Copilot, and Claude Code local activity.

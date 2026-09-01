@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The `DevTools` panel is now called `Spring DevTools`.** The old name sat inside the *Developer tools* navigation
+  group and read like a generic developer-tooling panel or the browser's own DevTools, while it has always been
+  specifically about Spring Boot DevTools — classpath presence, the LiveReload server, and the restart bridge (it is
+  reported *not applicable* on Quarkus). Only the display title changes: the `devtools` panel id, the `/devtools`
+  route, the `bootui.panels.devtools.*` properties, and the `/bootui/api/devtools` contract are untouched.
+
 ### Fixed
 
 - **BootUI's safety filters can no longer be bypassed by a percent-encoded or matrix-parameter spelling of a BootUI URL

@@ -582,7 +582,7 @@ Acceptance criteria:
 - Runtime level changes work when Actuator supports them.
 - UI clearly states changes are runtime-only and not persisted.
 
-### 5.7.1 DevTools Controls
+### 5.7.1 Spring DevTools Controls
 
 Purpose: answer "Can I trigger local LiveReload or restart this app from the console?"
 
@@ -2547,7 +2547,7 @@ Top-level navigation:
   - HTTP Probe.
 - Developer tools:
   - MCP Server.
-  - DevTools.
+  - Spring DevTools.
   - Dev Services.
   - Copilot.
   - Claude Code.

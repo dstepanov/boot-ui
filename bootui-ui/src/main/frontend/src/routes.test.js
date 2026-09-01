@@ -310,7 +310,7 @@ describe('routes', () => {
       'HTTP Exchanges',
       'HTTP Probe',
       'MCP Server',
-      'DevTools',
+      'Spring DevTools',
       'Dev Services',
       'Copilot',
       'Claude Code'

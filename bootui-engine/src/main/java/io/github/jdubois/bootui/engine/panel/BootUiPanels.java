@@ -118,7 +118,7 @@ public final class BootUiPanels {
             new Panel(HTTP_PROBE, "HTTP Probe", true, "/http-probe"),
             new Panel(ARCHITECTURE, "Architecture", true, "/architecture"),
             new Panel(VULNERABILITIES, "Vulnerabilities", true, "/vulnerabilities"),
-            new Panel(DEVTOOLS, "DevTools", true, "/devtools"),
+            new Panel(DEVTOOLS, "Spring DevTools", true, "/devtools"),
             new Panel(DEV_SERVICES, "Dev Services", true, "/dev-services"),
             new Panel(COPILOT, "Copilot", false, "/copilot"),
             new Panel(CLAUDE_CODE, "Claude Code", false, "/claude-code"),

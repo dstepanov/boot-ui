@@ -105,11 +105,11 @@ surface, including `security_scan` through the shared reactive advisor service. 
 panel/read-only gating, payload/concurrency limits, and response envelopes are otherwise identical across all three
 adapters.
 
-## DevTools
+## Spring DevTools
 
-![BootUI DevTools panel](../images/bootui-devtools.webp)
+![BootUI Spring DevTools panel](../images/bootui-devtools.webp)
 
-The DevTools panel reports Spring Boot DevTools availability, LiveReload status, and restart support. Restart actions
+The Spring DevTools panel reports Spring Boot DevTools availability, LiveReload status, and restart support. Restart actions
 are shown only when available and require explicit confirmation before execution. When DevTools is on the classpath but
 the LiveReload server is not running, the panel shows a tip to set `spring.devtools.livereload.enabled=true` (Spring
 Boot 4 disables LiveReload by default).

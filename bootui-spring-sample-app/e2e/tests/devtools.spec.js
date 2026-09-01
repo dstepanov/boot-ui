@@ -1,9 +1,9 @@
 // @ts-check
 import {expect, test} from './fixtures.js'
 
-test.describe('DevTools view', () => {
+test.describe('Spring DevTools view', () => {
   test('renders LiveReload and restart status cards without triggering restart', async ({openView, page}) => {
-    await openView('devtools', 'DevTools')
+    await openView('devtools', 'Spring DevTools')
 
     const liveReloadCard = page.locator('.card', {hasText: 'Trigger LiveReload'})
     const restartCard = page.locator('.card', {hasText: 'Restart application'})

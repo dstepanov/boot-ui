@@ -107,7 +107,7 @@ const panelOrder = [
   ['rest-api', 'REST API'],
   ['database-advisor', 'Database'],
   ['mcp-server', 'MCP Server'],
-  ['devtools', 'DevTools'],
+  ['devtools', 'Spring DevTools'],
   ['dev-services', 'Dev Services'],
   ['copilot', 'Copilot'],
   ['claude-code', 'Claude Code']
@@ -5525,7 +5525,7 @@ const screenshots = [
   ['spring', 'Spring', 'bootui-spring.webp', waitForText('Prefer RestClient over RestTemplate')],
   ['memory', 'Memory', 'bootui-memory.webp', waitForText('Old generation is near its maximum')],
   ['mcp-server', 'MCP Server', 'bootui-mcp-server.webp', waitForText('Client configuration')],
-  ['devtools', 'DevTools', 'bootui-devtools.webp', waitForText('Trigger LiveReload')],
+  ['devtools', 'Spring DevTools', 'bootui-devtools.webp', waitForText('Trigger LiveReload')],
   ['dev-services', 'Dev Services', 'bootui-dev-services.webp', waitForText('postgres')],
   [
     'copilot',
