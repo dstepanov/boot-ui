@@ -13,7 +13,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
             "spring.docker.compose.enabled=false",
             "bootui.show-banner=false",
             "bootui.overrides-file=target/bootui-cli-conformance-overrides.properties",
-            "bootui.panels.copilot.enabled=false",
+            "bootui.panels.memory.enabled=false",
             "bootui.panels.heap-dump.read-only=true",
             "bootui.heap-dump.capture-enabled=false",
             "bootui.claude-code.enabled=OFF"

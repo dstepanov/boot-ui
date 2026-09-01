@@ -33,6 +33,15 @@ public abstract class AbstractCliConformanceTest {
         return probe().request("POST", CLI + "/tools/" + tool, Map.of("Content-Type", "application/json"), body);
     }
 
+    private JsonNode catalogEntry(String tool) {
+        for (JsonNode entry : probe().get(CLI).json().path("tools")) {
+            if (tool.equals(entry.path("name").asText())) {
+                return entry;
+            }
+        }
+        throw new AssertionError("Tool " + tool + " is not advertised by this instance");
+    }
+
     @Test
     void testCliCatalogDescribesTheToolsThisInstanceExposes() {
         Response response = probe().get(CLI);
@@ -144,8 +153,14 @@ public abstract class AbstractCliConformanceTest {
 
     @Test
     void testCliDisabledPanelRefusesItsTools() {
-        // Every conformance profile disables the Copilot panel.
-        Response response = invoke("get_copilot_sessions", "{}");
+        // Every conformance profile disables the Memory panel. It is deliberately a panel every stack
+        // reports as available on any machine: a panel that is *unavailable* drops its tools from the
+        // registry entirely, so the refusal under test would be indistinguishable from an unknown tool.
+        assertThat(catalogEntry("get_memory_report").path("panelEnabled").asBoolean())
+                .as("the profile must disable a panel this instance actually advertises")
+                .isFalse();
+
+        Response response = invoke("get_memory_report", "{}");
 
         assertThat(response.status()).isEqualTo(403);
         assertThat(response.json().path("error").asText()).isNotBlank();
