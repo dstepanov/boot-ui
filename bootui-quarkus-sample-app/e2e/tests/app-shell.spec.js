@@ -62,6 +62,7 @@ const PANEL_HEADINGS = {
   'rest-api': /^REST API/,
   spring: /^Quarkus/,
   'mcp-server': /^MCP Server/,
+  cli: /^Command Line/,
   devtools: /^DevTools/,
   'dev-services': /^Dev Services/,
   copilot: /^Copilot/,

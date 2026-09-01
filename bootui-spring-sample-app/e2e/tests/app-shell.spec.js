@@ -53,6 +53,7 @@ const allPanelLinks = [
   {id: 'architecture', title: 'Architecture', heading: /^Architecture/},
   {id: 'rest-api', title: 'REST API', heading: /^REST API/},
   {id: 'mcp-server', title: 'MCP Server', heading: /^MCP Server/},
+  {id: 'cli', title: 'Command Line', heading: /^Command Line/},
   {id: 'devtools', title: 'DevTools', heading: /^DevTools/},
   {id: 'dev-services', title: 'Dev Services', heading: /^Dev Services/},
   {id: 'copilot', title: 'Copilot', heading: /^Copilot/},
@@ -421,7 +422,7 @@ test.describe('BootUI app shell', () => {
       {title: 'Security', count: 2},
       {title: 'Services', count: 10},
       {title: 'Diagnostics', count: 5},
-      {title: 'Developer tools', count: 5}
+      {title: 'Developer tools', count: 6}
     ]
 
     for (const group of groups) {

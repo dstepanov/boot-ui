@@ -44,6 +44,24 @@ const installCommand = computed(() => `jbang app install bootui@jdubois/boot-ui`
 
 const exampleCommand = computed(() => `bootui ${commandOptions.value} tools`)
 
+const jbangSnippet = computed(() => `${installCommand.value}\n${exampleCommand.value}`)
+
+// Only a released version resolves on Maven Central; a development build has no published jar to name.
+const releaseVersion = computed(() => {
+  const version = status.value?.serverVersion ?? ''
+  return /^\d+\.\d+\.\d+([.-][0-9A-Za-z.-]+)?$/.test(version) && !version.endsWith('-SNAPSHOT') ? version : null
+})
+
+const jarVersion = computed(() => releaseVersion.value ?? '<version>')
+
+const javaSnippet = computed(
+  () =>
+    `VERSION=${jarVersion.value}\n` +
+    'BASE=https://repo1.maven.org/maven2/com/julien-dubois/bootui/bootui-cli\n' +
+    'curl -fLO "${BASE}/${VERSION}/bootui-cli-${VERSION}-all.jar"\n' +
+    `java -jar "bootui-cli-\${VERSION}-all.jar" ${commandOptions.value} tools`
+)
+
 const callCount = computed(() => status.value?.callCount ?? 0)
 
 // The CLI's own projection rule: an `id` is a required positional, everything else is a flag.
@@ -170,26 +188,52 @@ const {autoRefresh, loading, load} = useAutoRefresh(fetchStatus, {enabled: manif
       <!-- Getting started -->
       <div class="card mb-4">
         <div class="card-body p-4">
+          <h3 class="h6 fw-bold mb-2"><i class="bi bi-download me-2"></i>Talk to this application</h3>
+          <p class="text-muted small mb-3">
+            The CLI is one runnable jar that needs a JDK 17 or later. Piped output is this application's JSON verbatim,
+            so it parses with <code>jq</code>.
+          </p>
+
           <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-            <h3 class="h6 fw-bold mb-0"><i class="bi bi-download me-2"></i>Talk to this application</h3>
+            <h4 class="small fw-semibold mb-0">
+              With <a href="https://www.jbang.dev" target="_blank" rel="noopener">JBang</a>, which downloads it for you
+            </h4>
             <button
               type="button"
               class="btn btn-sm"
               :class="copiedKey === 'cli-command' ? 'btn-success' : 'btn-outline-secondary'"
               :title="copiedKey === 'cli-command' ? 'Copied!' : 'Copy command'"
-              @click="copyToClipboard(exampleCommand, 'cli-command')"
+              @click="copyToClipboard(jbangSnippet, 'cli-command')"
             >
               <i :class="['bi', copiedKey === 'cli-command' ? 'bi-check-lg' : 'bi-clipboard', 'me-1']"></i>
               {{ copiedKey === 'cli-command' ? 'Copied!' : 'Copy' }}
             </button>
           </div>
-          <p class="text-muted small mb-2">
-            Install the CLI once with <a href="https://www.jbang.dev" target="_blank" rel="noopener">JBang</a>, then
-            point it at this instance. Piped output is the application's JSON verbatim, so it parses with
-            <code>jq</code>.
-          </p>
-          <pre class="config-block bg-light border rounded p-3 mb-0 small"><code>{{ installCommand }}
+          <pre class="config-block bg-light border rounded p-3 mb-4 small"><code>{{ installCommand }}
 {{ exampleCommand }}</code></pre>
+
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+            <h4 class="small fw-semibold mb-0">Or with plain Java, no JBang</h4>
+            <button
+              type="button"
+              class="btn btn-sm"
+              :class="copiedKey === 'cli-java' ? 'btn-success' : 'btn-outline-secondary'"
+              :title="copiedKey === 'cli-java' ? 'Copied!' : 'Copy command'"
+              @click="copyToClipboard(javaSnippet, 'cli-java')"
+            >
+              <i :class="['bi', copiedKey === 'cli-java' ? 'bi-check-lg' : 'bi-clipboard', 'me-1']"></i>
+              {{ copiedKey === 'cli-java' ? 'Copied!' : 'Copy' }}
+            </button>
+          </div>
+          <pre class="config-block bg-light border rounded p-3 mb-2 small"><code>{{ javaSnippet }}</code></pre>
+          <p v-if="!releaseVersion" class="text-muted small mb-0">
+            This application reports a development build, so replace <code>&lt;version&gt;</code> with the released
+            BootUI version you want.
+          </p>
+          <p v-else class="text-muted small mb-0">
+            That is the {{ releaseVersion }} jar, matching this application. An alias keeps it short:
+            <code>alias bootui='java -jar ~/tools/bootui-cli-all.jar'</code>.
+          </p>
         </div>
       </div>
 

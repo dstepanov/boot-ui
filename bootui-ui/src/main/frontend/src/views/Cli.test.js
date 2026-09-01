@@ -198,4 +198,41 @@ describe('Cli', () => {
 
     expect(wrapper.get('.config-block').text()).toContain('--api-path /admin/api')
   })
+
+  it('offers a plain-Java install next to the JBang one', async () => {
+    const writeText = vi.fn().mockResolvedValue()
+    vi.stubGlobal('navigator', {clipboard: {writeText}})
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(cliStatus({serverVersion: '1.15.0'}))))
+
+    wrapper = mount(Cli, {global})
+    await flushPromises()
+
+    const blocks = wrapper.findAll('.config-block')
+    expect(blocks).toHaveLength(2)
+
+    const java = blocks[1].text()
+    expect(java).toContain('VERSION=1.15.0')
+    expect(java).toContain('BASE=https://repo1.maven.org/maven2/com/julien-dubois/bootui/bootui-cli')
+    expect(java).toContain('curl -fLO "${BASE}/${VERSION}/bootui-cli-${VERSION}-all.jar"')
+    expect(java).toContain('java -jar "bootui-cli-${VERSION}-all.jar" --url ' + window.location.origin + ' tools')
+    expect(java).not.toContain('jbang')
+
+    const copyButtons = wrapper.findAll('button').filter((button) => button.text().includes('Copy'))
+    expect(copyButtons).toHaveLength(2)
+    await copyButtons[1].trigger('click')
+    await flushPromises()
+
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(writeText.mock.calls[0][0]).toContain('java -jar')
+  })
+
+  it('asks for a released version when the application reports a development build', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(cliStatus({serverVersion: 'dev'}))))
+
+    wrapper = mount(Cli, {global})
+    await flushPromises()
+
+    expect(wrapper.findAll('.config-block')[1].text()).toContain('VERSION=<version>')
+    expect(wrapper.text()).toContain('development build')
+  })
 })
