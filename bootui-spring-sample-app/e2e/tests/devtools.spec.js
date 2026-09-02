@@ -48,7 +48,7 @@ test.describe('Spring DevTools view', () => {
       }
     )
 
-    await openView('devtools', /^DevTools/)
+    await openView('devtools', /^Spring DevTools/)
 
     await expect(page.getByText('LiveReload port:')).toBeVisible()
     await expect(page.getByText('Connected clients:')).toBeVisible()
@@ -90,7 +90,7 @@ test.describe('Spring DevTools view', () => {
       }
     )
 
-    await openView('devtools', /^DevTools/)
+    await openView('devtools', /^Spring DevTools/)
 
     const liveReloadCard = page.locator('.card', {hasText: 'Trigger LiveReload'})
     await expect(liveReloadCard).toContainText('No browsers are connected to the LiveReload server')
