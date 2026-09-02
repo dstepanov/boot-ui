@@ -80,8 +80,12 @@ When output is piped, or with `--json`, the CLI prints exactly the bytes the app
 the MCP tool returns, unmodified. That is the form to parse:
 
 ```bash
-bootui security scan --json | jq -r '.findings[] | "\(.severity)\t\(.title)"'
+bootui security scan --json | jq -r '.results[] | "\(.severity)\t\(.name)"'
 ```
+
+Advisor scans differ in how they name that array — `pentest scan` reports `findings`, the rule-based
+advisors report `results` — so check the shape with `bootui <command> --json | jq keys` before writing a
+filter. What every scan does share is `severityCounts`, which is what the [CI](#in-ci) gate below uses.
 
 Auto-detection is a convenience, not a contract: on a JDK 22 or later runtime a redirected stream can still
 report a console. Pass `--json` explicitly in scripts.
@@ -151,18 +155,47 @@ revocable from a browser tab. See [Developer tools](features/developer-tools.md)
 The CLI is designed for a job that starts the application, asks it something, and stops it:
 
 ```yaml
-- name: Check for high-severity Hibernate findings
+- name: Fail on high-severity Hibernate findings
   run: |
     ./mvnw -B spring-boot:start
-    bootui hibernate scan --json > hibernate.json
+
+    status=0
+    bootui hibernate scan --json > hibernate.json || status=$?
+
+    # Stop the application whether or not the scan answered, so a failure never leaks a JVM.
     ./mvnw -B spring-boot:stop
-    jq -e '[.findings[] | select(.severity == "HIGH")] | length == 0' hibernate.json
+
+    case $status in
+      0) ;;
+      2) echo "the Hibernate panel is off or read-only on this application; skipping"; exit 0 ;;
+      *) exit 1 ;;
+    esac
+
+    jq -e '[.severityCounts[]
+           | select(.severity == "CRITICAL" or .severity == "HIGH")
+           | .count] | add == 0' hibernate.json
 ```
+
+Three details make that work as a gate rather than as a job that merely looks green.
+
+**Gate on `severityCounts`, not on the finding array.** Every scan command reports `severityCounts` as
+`[{"severity": …, "count": …}]`, so one expression works for all of them. The array of findings themselves is
+*not* uniform — `pentest scan` calls it `findings`, the rule-based advisors call it `results` — so a filter
+written against the wrong name does not report zero findings, it aborts with `Cannot iterate over null` and
+fails the build for a reason that has nothing to do with the application.
+
+**Capture the exit code instead of letting it abort the step.** A step runs under `bash -e`, so a bare
+`bootui …` that exits non-zero skips the rest of the script, including the shutdown. The `|| status=$?` form
+keeps the failure from aborting the step so the application still gets stopped.
+
+**Treat `2` as a skip.** A read-only or disabled panel exits `2` with nothing on stdout. That is a statement
+about how the target is configured, not a finding and not a failure — see [Exit codes](#exit-codes).
 
 Two things make this safe rather than a new exposure. BootUI is still local-only: the endpoint stays behind the
 loopback, `Host` allow-list, cross-site-write, and authentication-token protections that guard every other
-route. And no tool becomes reachable that was not already reachable — the CLI is a second spelling of the same
-panel data, gated by the same per-panel policy.
+route — so the application has to be running on the same runner as the job, not in a deployed environment. And
+no tool becomes reachable that was not already reachable — the CLI is a second spelling of the same panel data,
+gated by the same per-panel policy.
 
 ## Every command
 
