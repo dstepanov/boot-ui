@@ -83,17 +83,37 @@ public sealed interface McpDispatchOutcome
     }
 
     /**
-     * A failed {@code tools/call} reported in-band ({@code isError:true}): a refused gate, a missing or
-     * unknown tool, etc. The agent reads {@code message} as text content.
+     * A failed {@code tools/call} reported in-band ({@code isError:true}): a refused gate, a busy
+     * single-flight action, or a client error the tool itself raised. The agent reads {@code message} as
+     * text content.
+     *
+     * <p>{@code reason} and {@code status} answer two different questions, and a non-MCP transport needs
+     * both. {@code reason} says why the <em>dispatcher</em> refused before the tool ran, over a closed
+     * vocabulary the engine owns. {@code status} says which client error the <em>tool itself</em> asked
+     * for once it was running, over the open 4xx range (see {@link McpToolClientException}); it is
+     * {@code null} for every failure that is not a tool-raised client error. Both MCP codecs ignore both
+     * fields, so the JSON-RPC wire shape is identical whether or not they are present.
      *
      * @param message the human-readable failure reason
      * @param reason the machine-readable cause, used by non-MCP transports to choose a status
+     * @param status the canonical client-error status the tool asked for (e.g. {@code 404}), or {@code
+     *     null} when the failure has no such status
      */
-    record ToolCallError(String message, ToolErrorReason reason) implements McpDispatchOutcome {
+    record ToolCallError(String message, ToolErrorReason reason, Integer status) implements McpDispatchOutcome {
 
-        /** A generic tool failure. */
+        /** A generic tool failure with no canonical client-error status. */
         public ToolCallError(String message) {
-            this(message, ToolErrorReason.TOOL_FAILED);
+            this(message, ToolErrorReason.TOOL_FAILED, null);
+        }
+
+        /** A dispatcher-refused call: the tool never ran, so no tool-supplied status exists. */
+        public ToolCallError(String message, ToolErrorReason reason) {
+            this(message, reason, null);
+        }
+
+        /** A client error the tool raised while running. */
+        public ToolCallError(String message, Integer status) {
+            this(message, ToolErrorReason.TOOL_FAILED, status);
         }
     }
 

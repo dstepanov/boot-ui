@@ -36,4 +36,35 @@ public enum CliStatus {
     public int code() {
         return code;
     }
+
+    /**
+     * The constant for a client-error status an MCP tool raised while it was running.
+     *
+     * <p>{@code 404} is deliberately <em>not</em> passed through. On this facade a {@code 404} means "this
+     * instance does not advertise a tool under that name", and the CLI renders it exactly that way — it
+     * would tell the reader the command does not exist, and drop the tool's message, when in truth only an
+     * argument was wrong. A tool that ran and could not find what the caller named is reporting a bad
+     * argument, so it is answered as {@link #BAD_REQUEST} with its own message intact.
+     *
+     * <p>Any other 4xx this facade does not model falls back to {@link #BAD_REQUEST} too. {@code
+     * McpToolClientException} already guarantees the status is in {@code [400, 500)}, so the fallback stays
+     * inside the client-error class: a tool answering, say, {@code 422} is reported as the caller's fault,
+     * never as a server fault.
+     *
+     * @throws IllegalArgumentException if {@code code} is not a 4xx status
+     */
+    public static CliStatus forClientError(int code) {
+        if (code < 400 || code >= 500) {
+            throw new IllegalArgumentException("CLI client-error status must be 4xx, but was: " + code);
+        }
+        if (code == NOT_FOUND.code) {
+            return BAD_REQUEST;
+        }
+        for (CliStatus status : values()) {
+            if (status.code == code) {
+                return status;
+            }
+        }
+        return BAD_REQUEST;
+    }
 }

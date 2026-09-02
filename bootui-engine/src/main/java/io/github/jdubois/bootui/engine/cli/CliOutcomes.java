@@ -46,6 +46,12 @@ public final class CliOutcomes {
     }
 
     private static CliStatus statusOf(McpDispatchOutcome.ToolCallError error) {
+        if (error.status() != null) {
+            // The tool ran and refused the request itself — an unknown id, an unsupported argument value.
+            // Reporting the status it asked for is the whole point of McpToolClientException; collapsing
+            // it into a 500 would tell the shell a server fault happened when the call was simply wrong.
+            return CliStatus.forClientError(error.status());
+        }
         return switch (error.reason()) {
             case PANEL_DISABLED, PANEL_READ_ONLY -> CliStatus.FORBIDDEN;
             case ACTION_BUSY -> CliStatus.CONFLICT;

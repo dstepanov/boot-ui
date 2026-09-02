@@ -38,7 +38,7 @@
     { "id": "http-probe", "title": "HTTP Probe", "actionCapable": true },
     { "id": "architecture", "title": "Architecture", "actionCapable": true },
     { "id": "vulnerabilities", "title": "Vulnerabilities", "actionCapable": true },
-    { "id": "devtools", "title": "DevTools", "actionCapable": true },
+    { "id": "devtools", "title": "Spring DevTools", "actionCapable": true },
     { "id": "dev-services", "title": "Dev Services", "actionCapable": true },
     { "id": "copilot", "title": "Copilot", "actionCapable": false },
     { "id": "claude-code", "title": "Claude Code", "actionCapable": false },

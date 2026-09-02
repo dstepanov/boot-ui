@@ -54,6 +54,41 @@ class CliOutcomesTests {
     }
 
     @Test
+    void aClientErrorTheToolRaisedKeepsTheToolsOwnMessage() {
+        // get_exception_detail on an unknown id is the caller's mistake, not a server fault. Reporting it as
+        // 500 would tell a script to retry something that can never succeed. It is not reported as 404
+        // either: on this facade that means "no such command", and the CLI would answer a wrong argument by
+        // claiming the command does not exist.
+        CliToolResponse response =
+                CliOutcomes.toResponse(new McpDispatchOutcome.ToolCallError("exception unknown not found", 404));
+
+        assertThat(response.status()).isEqualTo(CliStatus.BAD_REQUEST);
+        assertThat(response.error()).isEqualTo("exception unknown not found");
+    }
+
+    @Test
+    void aClientErrorStatusThisFacadeDoesNotModelStaysTheCallersFault() {
+        assertThat(CliOutcomes.toResponse(new McpDispatchOutcome.ToolCallError("unprocessable", 422))
+                        .status())
+                .isEqualTo(CliStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void aToolSuppliedStatusOutranksTheGenericFailureReason() {
+        assertThat(CliOutcomes.toResponse(
+                                new McpDispatchOutcome.ToolCallError("conflict", ToolErrorReason.TOOL_FAILED, 409))
+                        .status())
+                .isEqualTo(CliStatus.CONFLICT);
+    }
+
+    @Test
+    void onlyAClientErrorStatusIsRepresentable() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> CliStatus.forClientError(500))
+                .withMessageContaining("500");
+    }
+
+    @Test
     void anUnknownToolIsNotFoundRatherThanABadRequest() {
         CliToolResponse response = CliOutcomes.toResponse(new McpDispatchOutcome.ProtocolError(
                 McpProtocol.INVALID_PARAMS, McpProtocol.unknownToolMessage("no_such_tool")));

@@ -153,7 +153,7 @@ were already framework-neutral in practice, not just in the engine underneath th
 | Overview, GitHub, Beans, Conditions, Configuration, Mappings, Health, Loggers, Startup Timeline, Spring Data |
 | Database, Hibernate, Hibernate Statistics, Flyway, Liquibase, Database Connection Pools, Cache, Dev Services |
 | Vulnerabilities, Scheduled Tasks, Fault Tolerance, HTTP Probe, Pentesting, Heap Dump, Architecture, REST API advisor |
-| Profile Diff, Spring advisor[^spring-advisor-reactive], Live Memory, JVM Tuning, Metrics, DevTools, Traces, AI Framework |
+| Profile Diff, Spring advisor[^spring-advisor-reactive], Live Memory, JVM Tuning, Metrics, Spring DevTools, Traces, AI Framework |
 | GraalVM, CRaC, Threads, Memory, Email, Kafka, RabbitMQ, JMS |
 
 These controllers keep their synchronous servlet-facing signatures. On WebFlux, the centralized

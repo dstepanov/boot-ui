@@ -37,7 +37,9 @@ import org.slf4j.LoggerFactory;
  * calls {@link #dispatch(McpRequest)}, and renders the outcome back to JSON with its own
  * {@code ObjectMapper} (Jackson 3 on Spring Boot, Jackson 2 on Quarkus). The control flow here is a
  * one-to-one translation of the original Spring {@code BootUiMcpService} so both adapters answer
- * byte-identically: a refused panel gate is an in-band {@link ToolCallError} ({@code isError:true});
+ * byte-identically: a refused panel gate is an in-band {@link ToolCallError} ({@code isError:true}), as
+ * is a client error a tool raises about the request itself (an unknown resource id, a conflicting
+ * state) once the adapter has translated its framework exception into an {@link McpToolClientException};
  * malformed tool calls are JSON-RPC {@link ProtocolError}s; an unexpected failure becomes the standard,
  * detail-free JSON-RPC internal error ({@code -32603}) and is sent to the server-side diagnostic
  * reporter. Serialization of a successful payload (the only remaining Jackson step) is performed and
@@ -329,6 +331,9 @@ public final class McpDispatcher {
             Throwable cause = ex.getCause();
             if (cause instanceof ActionBusyException busy) {
                 return new ToolCallError(busy.result().message(), McpDispatchOutcome.ToolErrorReason.ACTION_BUSY);
+            }
+            if (cause instanceof McpToolClientException clientError) {
+                return new ToolCallError(clientError.getMessage(), clientError.status());
             }
             if (cause instanceof RuntimeException runtime) {
                 throw runtime;

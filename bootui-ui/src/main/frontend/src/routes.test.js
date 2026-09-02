@@ -311,7 +311,7 @@ describe('routes', () => {
       'HTTP Probe',
       'MCP Server',
       'Command Line',
-      'DevTools',
+      'Spring DevTools',
       'Dev Services',
       'Copilot',
       'Claude Code'

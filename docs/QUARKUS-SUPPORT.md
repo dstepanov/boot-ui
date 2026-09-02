@@ -165,7 +165,7 @@ those fields so the same UI build renders the correct sidebar and status on each
 > (capture/analyze/delete/download), Threads (download), the advisor scans, Loggers (set level), HTTP Probe, Cache
 > (clear), Flyway (migrate/clean), Liquibase (update), Traces (clear), Email (clear), Kafka (clear), RabbitMQ (clear),
 > REST Client Reactive (clear + recording toggle), and the MCP Server toggle. Eight panels — **GraalVM**, **CRaC**,
-> **Conditions**, **Startup Timeline**, **HTTP Sessions**, **Spring Data**, **Spring Security**, and **DevTools** — are
+> **Conditions**, **Startup Timeline**, **HTTP Sessions**, **Spring Data**, **Spring Security**, and **Spring DevTools** — are
 > intentionally unavailable with a panel-specific not-applicable reason (§5.5). **JMS** is the sole panel that is not yet
 > available on Quarkus (§5.6). The per-panel `**Implemented**` markers below and `docs/features/` carry the authoritative,
 > current per-platform detail.
@@ -489,7 +489,7 @@ No equivalent, low value, or superseded by Quarkus's own tooling:
   - `GraalVM` readiness — Quarkus is native-first with its own build.
   - `CRaC` — BootUI's advisor and generated assets depend on Spring `LifecycleProcessor`, Spring scheduling, Spring Boot
     Hikari integration, and `spring.context.checkpoint=onRefresh`, so partial reuse would be misleading.
-  - `DevTools` (**Implemented as `NOT_APPLICABLE`**) — Quarkus has built-in dev-mode live reload, so there is no
+  - `Spring DevTools` (**Implemented as `NOT_APPLICABLE`**) — Quarkus has built-in dev-mode live reload, so there is no
     Spring-style DevTools restart/LiveReload to expose; the panel reports *not applicable* rather than *not yet*.
 - **No comparable capture hook:** `Transactions` — capture relies on Spring Framework's `TransactionExecutionListener`,
   registered against `ConfigurableTransactionManager` beans. Quarkus's transaction management goes through Narayana's
@@ -505,7 +505,7 @@ No equivalent, low value, or superseded by Quarkus's own tooling:
 
 **Result:** 48 of the 58 panels ship on Quarkus: 27 are statically available and 21 are capability/detector-gated. The
 remaining 10 panels do not ship: 9 are intentionally not applicable (GraalVM, CRaC, Conditions, Startup Timeline, HTTP
-Sessions, Spring Data, Spring Security, DevTools, Transactions), and 1 (`JMS`) is not yet available. By portability
+Sessions, Spring Data, Spring Security, Spring DevTools, Transactions), and 1 (`JMS`) is not yet available. By portability
 strategy, the 48 shipped panels comprise 20 ported as-is, 12 source-swapped, 13 capture-rebuilt, and 3 replaced with a
 Quarkus-native panel. The Overview dashboard panel is available (its scoring dashboard renders client-side from the
 advisor endpoints, and the shell-chrome `GET /bootui/api/overview` endpoint is served on both adapters).
@@ -754,7 +754,7 @@ Pentesting, HTTP Probe, MCP Server) need no special ingredients — they work ag
 | Security            | **done**    | Replace | Quarkus security ruleset         | Quarkus-native checks (OIDC/auth/TLS/CORS/annotations); see QUARKUS-CHECKS.md |
 | GraalVM             | **done**    | Drop    | —                                | Quarkus native-first; `NOT_APPLICABLE`      |
 | CRaC                | **done**    | Drop    | —                                | Spring lifecycle-specific; `NOT_APPLICABLE` |
-| DevTools            | **done**    | Drop    | —                                | Quarkus live reload built in; `NOT_APPLICABLE` |
+| Spring DevTools     | **done**    | Drop    | —                                | Quarkus live reload built in; `NOT_APPLICABLE` |
 | Conditions          | spring-only | Drop    | —                                | no runtime conditions report                |
 | Startup Timeline    | spring-only | Drop    | —                                | not applicable: build-time augmentation, no runtime per-step buffer |
 | Spring Security     | spring-only | Drop    | —                                | Elytron/OIDC, different model               |

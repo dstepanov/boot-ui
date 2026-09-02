@@ -54,7 +54,7 @@ const allPanelLinks = [
   {id: 'rest-api', title: 'REST API', heading: /^REST API/},
   {id: 'mcp-server', title: 'MCP Server', heading: /^MCP Server/},
   {id: 'cli', title: 'Command Line', heading: /^Command Line/},
-  {id: 'devtools', title: 'DevTools', heading: /^DevTools/},
+  {id: 'devtools', title: 'Spring DevTools', heading: /^Spring DevTools/},
   {id: 'dev-services', title: 'Dev Services', heading: /^Dev Services/},
   {id: 'copilot', title: 'Copilot', heading: /^Copilot/},
   {id: 'claude-code', title: 'Claude Code', heading: /^Claude Code/}

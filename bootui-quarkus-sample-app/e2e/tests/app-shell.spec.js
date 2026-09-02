@@ -7,7 +7,7 @@ import {expect, test} from './fixtures.js'
  *
  * The navigation test below only consults an entry when the Quarkus adapter actually reports that
  * panel available, so Spring-only panels that are unavailable on Quarkus (Spring Data, Spring
- * Security, GraalVM, CRaC, Conditions, Startup Timeline, HTTP Sessions, DevTools) are simply
+ * Security, GraalVM, CRaC, Conditions, Startup Timeline, HTTP Sessions, Spring DevTools) are simply
  * skipped — they are covered by not-applicable.spec.js instead.
  */
 const PANEL_HEADINGS = {
@@ -63,7 +63,7 @@ const PANEL_HEADINGS = {
   spring: /^Quarkus/,
   'mcp-server': /^MCP Server/,
   cli: /^Command Line/,
-  devtools: /^DevTools/,
+  devtools: /^Spring DevTools/,
   'dev-services': /^Dev Services/,
   copilot: /^Copilot/,
   'claude-code': /^Claude Code/

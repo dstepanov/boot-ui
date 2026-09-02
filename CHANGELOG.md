@@ -58,7 +58,29 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   access to a build should not be revocable from a browser tab — and it registers no API prefix of its own, so turning
   the panel off hides the view without silently breaking a running script.
 
+### Changed
+
+- **The `DevTools` panel is now called `Spring DevTools`.** The old name sat inside the *Developer tools* navigation
+  group and read like a generic developer-tooling panel or the browser's own DevTools, while it has always been
+  specifically about Spring Boot DevTools — classpath presence, the LiveReload server, and the restart bridge (it is
+  reported *not applicable* on Quarkus). Only the display title changes: the `devtools` panel id, the `/devtools`
+  route, the `bootui.panels.devtools.*` properties, and the `/bootui/api/devtools` contract are untouched.
+
 ### Fixed
+
+- **An MCP tool that refuses a request now reports the status it asked for instead of `Internal error`.** MCP tools
+  delegate to the same handlers the REST API uses, and those handlers signal a client error by throwing their
+  framework's own exception — `ResponseStatusException` on Spring, `WebApplicationException` on Quarkus. The
+  framework-free `McpDispatcher` had no case for either, so they fell into its catch-all: asking for an unknown
+  exception group with `get_exception_detail` answered the agent with the detail-free JSON-RPC `-32603 Internal error`
+  and logged an internal-failure line, while the same lookup over REST correctly returned `404`. This affected every
+  tool wired to a handler that signals 4xx, on all three stacks, not just the one that surfaced it. Each adapter now
+  translates a 4xx failure into the new framework-neutral `McpToolClientException` at its tool-registration boundary,
+  and the dispatcher reports it in-band (`isError: true`) with the same reason REST returns, without reporting it as a
+  server fault. The outcome also carries the canonical status so non-MCP consumers of the same dispatch result can map
+  it. 5xx and every other failure keep their original throwable and remain a detail-free `-32603`. Covered by
+  dispatcher, per-adapter translator, and codec tests plus an MCP conformance case that pins Spring MVC, Spring WebFlux,
+  and Quarkus to identical behaviour.
 
 - **BootUI's safety filters can no longer be bypassed by a percent-encoded or matrix-parameter spelling of a BootUI URL
   on Spring MVC or Spring WebFlux.** Each guard decided whether it applied by matching the *raw* request path

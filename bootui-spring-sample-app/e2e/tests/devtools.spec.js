@@ -1,9 +1,9 @@
 // @ts-check
 import {expect, test} from './fixtures.js'
 
-test.describe('DevTools view', () => {
+test.describe('Spring DevTools view', () => {
   test('renders LiveReload and restart status cards without triggering restart', async ({openView, page}) => {
-    await openView('devtools', 'DevTools')
+    await openView('devtools', 'Spring DevTools')
 
     const liveReloadCard = page.locator('.card', {hasText: 'Trigger LiveReload'})
     const restartCard = page.locator('.card', {hasText: 'Restart application'})
@@ -48,7 +48,7 @@ test.describe('DevTools view', () => {
       }
     )
 
-    await openView('devtools', /^DevTools/)
+    await openView('devtools', /^Spring DevTools/)
 
     await expect(page.getByText('LiveReload port:')).toBeVisible()
     await expect(page.getByText('Connected clients:')).toBeVisible()
@@ -90,7 +90,7 @@ test.describe('DevTools view', () => {
       }
     )
 
-    await openView('devtools', /^DevTools/)
+    await openView('devtools', /^Spring DevTools/)
 
     const liveReloadCard = page.locator('.card', {hasText: 'Trigger LiveReload'})
     await expect(liveReloadCard).toContainText('No browsers are connected to the LiveReload server')

@@ -68,6 +68,9 @@ The server inherits BootUI's full safety model:
 - Unexpected server failures return only JSON-RPC `-32603` with the message `Internal error`; exception messages, stack
   traces, paths, queries, and credentials are never included. BootUI logs the original throwable once on the server,
   while expected protocol, disabled-server, and panel-policy errors keep their actionable messages.
+- A tool that refuses a request because of the request itself — an unknown resource id, an unsupported value, a
+  conflicting state — reports that in-band (`isError: true`) with the same reason the REST API returns, and is not
+  logged as a server failure. Only genuine server faults become `-32603`.
 
 :::
 
@@ -132,11 +135,11 @@ Call counters — calls, mean latency, capacity refusals, and timeouts — are k
 panel reports what terminals and CI jobs did rather than what agents did. There is no response-limit counter because the
 command-line facade applies no response byte budget.
 
-## DevTools
+## Spring DevTools
 
-![BootUI DevTools panel](../images/bootui-devtools.webp)
+![BootUI Spring DevTools panel](../images/bootui-devtools.webp)
 
-The DevTools panel reports Spring Boot DevTools availability, LiveReload status, and restart support. Restart actions
+The Spring DevTools panel reports Spring Boot DevTools availability, LiveReload status, and restart support. Restart actions
 are shown only when available and require explicit confirmation before execution. When DevTools is on the classpath but
 the LiveReload server is not running, the panel shows a tip to set `spring.devtools.livereload.enabled=true` (Spring
 Boot 4 disables LiveReload by default).

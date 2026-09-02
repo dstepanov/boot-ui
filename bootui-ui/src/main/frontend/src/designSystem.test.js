@@ -173,4 +173,26 @@ describe('BootUI design system contracts', () => {
 
     expect(offenders.map(relative)).toEqual([])
   })
+
+  // DESIGN.md typography `icon`: 1.5rem is the glyph size of the 3rem round action
+  // badge, and every Developer Tools panel renders the same badge. Each panel that
+  // copies the literal instead of the token is a panel that can silently drift away
+  // from its neighbours, and it re-opens the design finding on every edit.
+  it('routes glyph badges through the shared icon-size token', () => {
+    expect(appSource).toContain('--bootui-icon-size: 1.5rem')
+
+    const offenders = []
+
+    for (const file of [path.join(sourceRoot, 'App.vue'), ...vueFiles(viewsRoot)]) {
+      for (const style of descriptorFor(file).styles) {
+        style.content.split('\n').forEach((text, index) => {
+          if (/font-size:\s*1\.5rem/.test(text)) {
+            offenders.push(`${relative(file)}:${style.loc.start.line + index}`)
+          }
+        })
+      }
+    }
+
+    expect(offenders).toEqual([])
+  })
 })

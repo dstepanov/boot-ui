@@ -95,9 +95,14 @@ report a console. Pass `--json` explicitly in scripts.
 | Code | Meaning |
 | --- | --- |
 | `0` | The tool ran and answered. |
-| `1` | Usage error, authentication was rejected, or the application could not be reached or did not answer. |
+| `1` | Usage error, a rejected argument, authentication was rejected, or the application could not be reached or did not answer. |
 | `2` | BootUI declined to run the tool: its panel is disabled, or read-only and the tool is an action. |
 | `3` | Reserved for a future severity threshold. |
+
+A tool that runs and rejects what you asked for — `bootui exceptions show` on an id that is not in the
+buffer, say — exits `1` and prints the application's own message. That is the same code as a usage error
+because it is the same kind of mistake: the command exists and BootUI was willing to run it, but the
+request was wrong, so retrying it unchanged cannot help.
 
 `2` is deliberately distinct. A read-only panel refusing a scan is a statement about how the target is
 configured, not a broken request, and a CI job should be able to tell those apart without reading stderr:

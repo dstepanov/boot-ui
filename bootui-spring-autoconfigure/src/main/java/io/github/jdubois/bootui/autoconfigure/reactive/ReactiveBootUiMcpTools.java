@@ -8,6 +8,7 @@ import io.github.jdubois.bootui.autoconfigure.hibernate.HibernateController;
 import io.github.jdubois.bootui.autoconfigure.jms.JmsController;
 import io.github.jdubois.bootui.autoconfigure.kafka.KafkaController;
 import io.github.jdubois.bootui.autoconfigure.mail.EmailController;
+import io.github.jdubois.bootui.autoconfigure.mcp.SpringMcpToolFailures;
 import io.github.jdubois.bootui.autoconfigure.memory.MemoryController;
 import io.github.jdubois.bootui.autoconfigure.pentesting.PentestingController;
 import io.github.jdubois.bootui.autoconfigure.rabbit.RabbitController;
@@ -587,9 +588,19 @@ public class ReactiveBootUiMcpTools {
      * <p>Only the name, description, and handler are adapter-specific. The argument schema, backing panel,
      * and action flag are read back from the catalog, so they cannot be spelled differently here than in the
      * other stacks, and a name this stack is not supposed to advertise fails fast at startup.
+     *
+     * <p>Every handler is wrapped by {@link SpringMcpToolFailures} at this single point, so a tool that
+     * delegates to a controller method cannot report its client error as a server fault by being registered
+     * through a path that forgot to translate.
      */
     private static McpTool tool(String name, String description, Function<McpArguments, Object> handler) {
         McpToolCatalog.Entry entry = McpToolCatalog.require(name, McpToolCatalog.Stack.SPRING_WEBFLUX);
-        return new McpTool(name, description, entry.schema(), entry.panelId(), entry.action(), handler);
+        return new McpTool(
+                name,
+                description,
+                entry.schema(),
+                entry.panelId(),
+                entry.action(),
+                SpringMcpToolFailures.translating(handler));
     }
 }
