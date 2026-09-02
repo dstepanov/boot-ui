@@ -67,12 +67,25 @@ public sealed interface McpDispatchOutcome
     record ToolCallResult(Object payload) implements McpDispatchOutcome {}
 
     /**
-     * A failed {@code tools/call} reported in-band ({@code isError:true}): a refused gate, a missing or
-     * unknown tool, etc. The agent reads {@code message} as text content.
+     * A failed {@code tools/call} reported in-band ({@code isError:true}): a refused gate, a busy
+     * single-flight action, or a client error the tool itself raised. The agent reads {@code message} as
+     * text content.
+     *
+     * <p>{@code status} is metadata for non-MCP consumers of the same dispatch outcome (the BootUI CLI
+     * maps it to its own exit status). Both MCP codecs ignore it, so the JSON-RPC wire shape is
+     * identical whether or not it is present.
      *
      * @param message the human-readable failure reason
+     * @param status the canonical client-error status the tool asked for (e.g. {@code 404}), or {@code
+     *     null} when the failure has no such status
      */
-    record ToolCallError(String message) implements McpDispatchOutcome {}
+    record ToolCallError(String message, Integer status) implements McpDispatchOutcome {
+
+        /** A failure with no canonical client-error status. */
+        public ToolCallError(String message) {
+            this(message, null);
+        }
+    }
 
     /**
      * A JSON-RPC protocol error (an {@code error} envelope).

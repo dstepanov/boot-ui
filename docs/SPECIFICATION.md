@@ -2424,6 +2424,14 @@ Design rules:
   JSON-RPC internal error (`-32603`, message `Internal error`) without exception text or debug fields. The original
   throwable and stack trace are logged once on the server; expected validation, disabled-server, panel-policy, and
   unknown-method/tool errors retain their specific safe messages.
+- **Client errors are the request's fault, not the server's.** Tools delegate to the same handlers the REST API uses, and
+  those handlers signal a client error by throwing their framework's own exception (`ResponseStatusException` on Spring,
+  `WebApplicationException` on Quarkus). Each adapter translates a 4xx failure into the framework-neutral
+  `McpToolClientException` at its tool-registration boundary, and the dispatcher reports it in-band (`isError: true`)
+  with the same reason the REST API returns, carrying the canonical status for non-MCP consumers of the same outcome.
+  Such a refusal is never logged as a server failure. A 5xx failure keeps its original throwable and remains a
+  detail-free `-32603`. The translation is framework-specific but the resulting behaviour is identical on Spring MVC,
+  Spring WebFlux, and Quarkus.
 - **Reuse, don't reimplement.** Each tool delegates to the same controller/service the REST API and panels use and
   returns the existing DTO records, so contracts stay stable and masked.
 - **Single-flight parity.** Advisor action tools share the same per-scanner admission as REST. A duplicate
