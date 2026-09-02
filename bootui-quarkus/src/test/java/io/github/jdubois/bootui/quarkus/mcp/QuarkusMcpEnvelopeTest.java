@@ -12,6 +12,7 @@ import io.github.jdubois.bootui.engine.mcp.McpTool;
 import io.github.jdubois.bootui.engine.mcp.McpToolSchema;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.spi.McpPanelPolicy;
+import jakarta.ws.rs.NotFoundException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -95,6 +96,25 @@ class QuarkusMcpEnvelopeTest {
         assertThat(response.path("error").path("code").asInt()).isEqualTo(McpProtocol.INVALID_PARAMS);
         assertThat(response.path("error").path("message").asText()).isEqualTo("Unknown tool: does_not_exist");
         assertThat(diagnostics.count()).isZero();
+    }
+
+    @Test
+    void toolClientErrorIsRenderedInBandInsteadOfAnInternalError() {
+        RecordingFailureReporter diagnostics = new RecordingFailureReporter();
+        McpTool tool = tool(QuarkusMcpToolFailures.translating(args -> {
+            throw new NotFoundException("exception does-not-exist not found");
+        }));
+        QuarkusMcpEnvelope envelope = envelope(tool, diagnostics);
+
+        JsonNode response = envelope.handle(callRequest(50));
+
+        assertThat(response.path("error").isMissingNode()).isTrue();
+        JsonNode result = response.path("result");
+        assertThat(result.path("isError").asBoolean()).isTrue();
+        assertThat(result.path("content").get(0).path("text").asText()).isEqualTo("exception does-not-exist not found");
+        assertThat(diagnostics.count())
+                .as("a client error is not a server fault and must not be reported as one")
+                .isZero();
     }
 
     @Test

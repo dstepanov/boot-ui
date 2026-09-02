@@ -13,6 +13,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
@@ -143,6 +145,34 @@ class BootUiMcpServiceTests {
         JsonNode response = service.handle(callRequest("get_overview", 6));
 
         assertThat(response.path("result").path("isError").asBoolean()).isFalse();
+    }
+
+    @Test
+    void toolClientErrorIsRenderedInBandInsteadOfAnInternalError() {
+        BootUiMcpService failing = new BootUiMcpService(
+                new BootUiMcpTools(List.of(new McpTool(
+                        "get_exception_detail",
+                        "Read one exception group's detail.",
+                        McpToolSchema.ID,
+                        BootUiPanels.EXCEPTIONS,
+                        false,
+                        SpringMcpToolFailures.translating(args -> {
+                            throw new ResponseStatusException(
+                                    HttpStatus.NOT_FOUND, "exception " + args.id() + " not found");
+                        })))),
+                properties,
+                objectMapper,
+                "1.2.3");
+        ObjectNode request = callRequest("get_exception_detail", 8);
+        ((ObjectNode) request.path("params").path("arguments")).put("id", "does-not-exist");
+
+        JsonNode response = failing.handle(request);
+
+        assertThat(response.path("error").isMissingNode()).isTrue();
+        JsonNode result = response.path("result");
+        assertThat(result.path("isError").asBoolean()).isTrue();
+        assertThat(result.path("content").get(0).path("text").asString())
+                .isEqualTo("exception does-not-exist not found");
     }
 
     @Test

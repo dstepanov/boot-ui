@@ -68,6 +68,9 @@ The server inherits BootUI's full safety model:
 - Unexpected server failures return only JSON-RPC `-32603` with the message `Internal error`; exception messages, stack
   traces, paths, queries, and credentials are never included. BootUI logs the original throwable once on the server,
   while expected protocol, disabled-server, and panel-policy errors keep their actionable messages.
+- A tool that refuses a request because of the request itself — an unknown resource id, an unsupported value, a
+  conflicting state — reports that in-band (`isError: true`) with the same reason the REST API returns, and is not
+  logged as a server failure. Only genuine server faults become `-32603`.
 
 :::
 

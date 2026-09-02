@@ -8,6 +8,7 @@ import io.github.jdubois.bootui.autoconfigure.hibernate.HibernateController;
 import io.github.jdubois.bootui.autoconfigure.jms.JmsController;
 import io.github.jdubois.bootui.autoconfigure.kafka.KafkaController;
 import io.github.jdubois.bootui.autoconfigure.mail.EmailController;
+import io.github.jdubois.bootui.autoconfigure.mcp.SpringMcpToolFailures;
 import io.github.jdubois.bootui.autoconfigure.memory.MemoryController;
 import io.github.jdubois.bootui.autoconfigure.pentesting.PentestingController;
 import io.github.jdubois.bootui.autoconfigure.rabbit.RabbitController;
@@ -710,26 +711,36 @@ public class ReactiveBootUiMcpTools {
 
     private static McpTool action(
             String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(name, description, McpToolSchema.NONE, panelId, true, handler);
+        return new McpTool(
+                name, description, McpToolSchema.NONE, panelId, true, SpringMcpToolFailures.translating(handler));
     }
 
     private static McpTool read(
             String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(name, description, McpToolSchema.NONE, panelId, false, handler);
+        return new McpTool(
+                name, description, McpToolSchema.NONE, panelId, false, SpringMcpToolFailures.translating(handler));
     }
 
     private static McpTool limitRead(
             String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(name, description, McpToolSchema.LIMIT, panelId, false, handler);
+        return new McpTool(
+                name, description, McpToolSchema.LIMIT, panelId, false, SpringMcpToolFailures.translating(handler));
     }
 
     private static McpTool searchRead(
             String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(name, description, McpToolSchema.QUERY_LIMIT, panelId, false, handler);
+        return new McpTool(
+                name,
+                description,
+                McpToolSchema.QUERY_LIMIT,
+                panelId,
+                false,
+                SpringMcpToolFailures.translating(handler));
     }
 
     private static McpTool idRead(
             String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(name, description, McpToolSchema.ID, panelId, false, handler);
+        return new McpTool(
+                name, description, McpToolSchema.ID, panelId, false, SpringMcpToolFailures.translating(handler));
     }
 }

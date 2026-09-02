@@ -745,26 +745,36 @@ public class BootUiMcpTools {
 
     private static McpTool action(
             String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(name, description, McpToolSchema.NONE, panelId, true, handler);
+        return new McpTool(
+                name, description, McpToolSchema.NONE, panelId, true, SpringMcpToolFailures.translating(handler));
     }
 
     private static McpTool read(
             String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(name, description, McpToolSchema.NONE, panelId, false, handler);
+        return new McpTool(
+                name, description, McpToolSchema.NONE, panelId, false, SpringMcpToolFailures.translating(handler));
     }
 
     private static McpTool limitRead(
             String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(name, description, McpToolSchema.LIMIT, panelId, false, handler);
+        return new McpTool(
+                name, description, McpToolSchema.LIMIT, panelId, false, SpringMcpToolFailures.translating(handler));
     }
 
     private static McpTool searchRead(
             String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(name, description, McpToolSchema.QUERY_LIMIT, panelId, false, handler);
+        return new McpTool(
+                name,
+                description,
+                McpToolSchema.QUERY_LIMIT,
+                panelId,
+                false,
+                SpringMcpToolFailures.translating(handler));
     }
 
     private static McpTool idRead(
             String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(name, description, McpToolSchema.ID, panelId, false, handler);
+        return new McpTool(
+                name, description, McpToolSchema.ID, panelId, false, SpringMcpToolFailures.translating(handler));
     }
 }

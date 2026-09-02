@@ -1,6 +1,7 @@
 package io.github.jdubois.bootui.engine.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.mcp.McpDispatchOutcome.InitializeResult;
@@ -284,6 +285,55 @@ class McpDispatcherTests {
 
         release.countDown();
         winner.join(5000);
+    }
+
+    @Test
+    void toolClientErrorIsInBandErrorCarryingItsStatusAndIsNotReported() {
+        McpTool missing =
+                new McpTool("get_exception_detail", "Detail.", McpToolSchema.ID, "exceptions", false, args -> {
+                    throw new McpToolClientException(404, "exception " + args.id() + " not found");
+                });
+        McpDispatcher dispatcher =
+                new McpDispatcher(List.of(missing), List.of(), policy, "1.0", "x", 50, 20, diagnostics);
+
+        McpDispatchOutcome outcome = dispatcher.dispatch(
+                new McpRequest(JSONRPC, "tools/call", false, null, "get_exception_detail", null, null, "unknown"));
+
+        assertThat(outcome).isEqualTo(new ToolCallError("exception unknown not found", 404));
+        assertThat(diagnostics.count()).isZero();
+    }
+
+    @Test
+    void toolClientErrorWithoutMessageFallsBackToCanonicalToolFailure() {
+        McpTool refusing = new McpTool("get_overview", "Overview.", McpToolSchema.NONE, "overview", false, args -> {
+            throw new McpToolClientException(409, "  ");
+        });
+        McpDispatcher dispatcher =
+                new McpDispatcher(List.of(refusing), List.of(), policy, "1.0", "x", 50, 20, diagnostics);
+
+        assertThat(dispatcher.dispatch(call("get_overview")))
+                .isEqualTo(new ToolCallError(McpProtocol.TOOL_CALL_FAILED_MESSAGE, 409));
+        assertThat(diagnostics.count()).isZero();
+    }
+
+    @Test
+    void toolClientErrorRejectsNonClientStatus() {
+        assertThatThrownBy(() -> new McpToolClientException(500, "boom"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("500");
+        assertThat(McpToolClientExceptions.isClientError(399)).isFalse();
+        assertThat(McpToolClientExceptions.isClientError(400)).isTrue();
+        assertThat(McpToolClientExceptions.isClientError(499)).isTrue();
+        assertThat(McpToolClientExceptions.isClientError(500)).isFalse();
+    }
+
+    @Test
+    void gateRefusalCarriesNoCanonicalStatus() {
+        policy.disabled.add("overview");
+
+        assertThat(dispatcher().dispatch(call("get_overview")))
+                .isEqualTo(new ToolCallError("disabled:overview", null))
+                .isEqualTo(new ToolCallError("disabled:overview"));
     }
 
     @Test

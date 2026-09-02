@@ -275,6 +275,49 @@ public abstract class AbstractMcpConformanceTest {
     }
 
     @Test
+    void testMcpToolClientErrorIsReportedInBandInsteadOfInternalError() {
+        assertThat(enableMcp()).as("this adapter claims MCP support").isTrue();
+        try {
+            Response listResponse = probe().request(
+                            "POST",
+                            "/bootui/api/mcp",
+                            Map.of("Content-Type", "application/json"),
+                            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}");
+            boolean advertised = false;
+            for (JsonNode tool : listResponse.json().path("result").path("tools")) {
+                if ("get_exception_detail".equals(tool.path("name").asText())) {
+                    advertised = true;
+                    break;
+                }
+            }
+            if (!advertised) {
+                return;
+            }
+
+            Response response = probe().request(
+                            "POST",
+                            "/bootui/api/mcp",
+                            Map.of("Content-Type", "application/json"),
+                            "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\","
+                                    + "\"params\":{\"name\":\"get_exception_detail\","
+                                    + "\"arguments\":{\"id\":\"does-not-exist\"}}}");
+
+            assertThat(response.status()).isEqualTo(200);
+            JsonNode body = response.json();
+            assertThat(body.path("error").isMissingNode())
+                    .as("an unknown id is a statement about the request, not a server fault")
+                    .isTrue();
+            JsonNode result = body.path("result");
+            assertThat(result.path("isError").asBoolean()).isTrue();
+            assertThat(result.path("content").get(0).path("text").asText())
+                    .contains("does-not-exist")
+                    .doesNotContain("Internal error");
+        } finally {
+            disableMcp();
+        }
+    }
+
+    @Test
     void testMcpPromptsWhenEnabled() {
         assertThat(enableMcp()).as("this adapter claims MCP support").isTrue();
         try {
