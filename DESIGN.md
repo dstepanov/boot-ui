@@ -90,6 +90,11 @@ typography:
     fontSize: "0.85rem"
     fontWeight: 400
     lineHeight: 1.5
+  icon:
+    fontFamily: "bootstrap-icons"
+    fontSize: "1.5rem"
+    fontWeight: 400
+    lineHeight: 1
 rounded:
   xs: "0.35rem"
   sm: "0.5rem"
@@ -210,6 +215,7 @@ The **documentation site** reuses this severity vocabulary for the check-catalog
 - **Body** (400, 1rem, line-height 1.5): explanatory prose and table cells. Cap measure at 65–75ch for prose blocks.
 - **Label / Eyebrow** (800, 0.72rem, letter-spacing 0.06em, uppercase): reserved for **sidebar nav-group headers** ("RUNTIME", "CONFIGURATION") — a scoped navigational system, not a per-section content kicker.
 - **Mono** (400, ~0.85rem): all identifiers, keys, values, code, and log output.
+- **Icon** (400, 1.5rem, line-height 1): the glyph inside the 3rem round action/status badge, and the only step that sizes an icon font rather than text. It is a fixed step, not a scale — consume it as `--bootui-icon-size` so every badge stays the same size as its neighbours.
 
 ### Named Rules
 **The Mono-Means-Machine Rule.** Anything the machine produced — a bean name, a property key, a class, a header value, a log line — is monospace. Anything BootUI wrote to *explain* it is sans. The reader can tell data from narrative without reading a word.

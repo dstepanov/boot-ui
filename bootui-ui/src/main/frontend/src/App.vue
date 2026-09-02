@@ -1064,6 +1064,9 @@ function onGlobalKeydown(e) {
   --bootui-radius-xl: 1.25rem;
   --bootui-radius-pill: 999px;
 
+  /* Icon scale (mirrors DESIGN.md typography.icon) */
+  --bootui-icon-size: 1.5rem;
+
   /* Nav link state */
   --bootui-nav-hover-bg: rgba(25, 135, 84, 0.08);
   --bootui-nav-hover-color: #146c43;
@@ -1141,7 +1144,7 @@ function onGlobalKeydown(e) {
   border-radius: 0.85rem;
   color: var(--bootui-green);
   display: inline-flex;
-  font-size: 1.5rem;
+  font-size: var(--bootui-icon-size);
   height: 3rem;
   justify-content: center;
   width: 3rem;
