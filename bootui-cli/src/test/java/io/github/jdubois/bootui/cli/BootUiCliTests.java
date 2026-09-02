@@ -28,6 +28,8 @@ class BootUiCliTests {
     private final List<Recorded> requests = new ArrayList<>();
     private int status = 200;
     private String responseBody = "{}";
+    private String catalogOverride;
+    private String panelsOverride;
 
     @BeforeEach
     void startServer() throws IOException {
@@ -38,9 +40,22 @@ class BootUiCliTests {
                     exchange.getRequestURI().getPath(),
                     new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8),
                     header(exchange, "Authorization")));
-            byte[] body = responseBody.getBytes(StandardCharsets.UTF_8);
+            // A failed tool call makes the CLI ask the same instance two further questions: whether there is
+            // a command-line endpoint at all, and why a panel is missing. Only a test that cares about those
+            // answers sets them, so every other test keeps the single-answer stub it was written against.
+            String path = exchange.getRequestURI().getPath();
+            int answerStatus = status;
+            String answerBody = responseBody;
+            if (catalogOverride != null && path.endsWith("/cli")) {
+                answerStatus = 200;
+                answerBody = catalogOverride;
+            } else if (panelsOverride != null && path.endsWith("/panels")) {
+                answerStatus = 200;
+                answerBody = panelsOverride;
+            }
+            byte[] body = answerBody.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
-            exchange.sendResponseHeaders(status, body.length);
+            exchange.sendResponseHeaders(answerStatus, body.length);
             exchange.getResponseBody().write(body);
             exchange.close();
         });
@@ -108,12 +123,38 @@ class BootUiCliTests {
     void aRefusedToolExitsDistinctlyFromAFailedRequest() {
         status = 403;
         responseBody = "{\"error\":\"Panel 'beans' is disabled\"}";
+        catalogOverride = "{\"enabled\":true,\"tools\":[]}";
 
         Result result = run("beans");
 
         assertThat(result.exitCode).isEqualTo(ExitCodes.REFUSED);
         assertThat(result.err).contains("Panel 'beans' is disabled").contains("beans");
         assertThat(result.out).isEmpty();
+    }
+
+    @Test
+    void aNonPositiveTimeoutIsRejectedRatherThanInterpreted() {
+        // A zero timeout is accepted by Duration, so without this guard the call either fails instantly or
+        // waits forever depending on the transport, and the caller is told neither.
+        Result result = run("--timeout", "0", "beans");
+
+        assertThat(result.exitCode).isEqualTo(ExitCodes.ERROR);
+        assertThat(result.err).contains("--timeout").contains("positive");
+    }
+
+    @Test
+    void aForbiddenAnswerFromSomethingOtherThanBootUiIsNotAPolicyRefusal() {
+        // Spring Security answers 403 to a POST at an unknown path, so a typo in --api-path, or a --url
+        // aimed at another application, reaches here looking exactly like a disabled panel. Exit 2 would
+        // tell a CI gate to skip, so a misconfigured target would pass instead of failing. No catalog
+        // override: the follow-up question gets the same 403, which is how the CLI can tell.
+        status = 403;
+        responseBody = "{\"timestamp\":\"now\",\"status\":403,\"error\":\"Forbidden\",\"path\":\"/nope\"}";
+
+        Result result = run("beans");
+
+        assertThat(result.exitCode).isEqualTo(ExitCodes.ERROR);
+        assertThat(result.err).contains("not a BootUI policy refusal").doesNotContain("panel 'beans'");
     }
 
     @Test
@@ -147,11 +188,45 @@ class BootUiCliTests {
     void aToolMissingFromThisApplicationSaysWhichStacksHaveIt() {
         status = 404;
         responseBody = "{\"error\":\"Unknown tool\"}";
+        catalogOverride = "{\"enabled\":true,\"tools\":[]}";
 
         Result result = run("http", "sessions");
 
         assertThat(result.exitCode).isEqualTo(ExitCodes.ERROR);
         assertThat(result.err).contains("get_http_sessions").contains("spring mvc");
+    }
+
+    @Test
+    void aToolMissingBecauseItsPanelIsUnavailableSaysWhyRatherThanGuessing() {
+        // get_kafka_activity is advertised on every stack, so the version guess would fire — and be wrong.
+        // The application already knows the real reason, so it is asked instead of guessed at.
+        status = 404;
+        responseBody = "{\"error\":\"Unknown tool\"}";
+        catalogOverride = "{\"enabled\":true,\"tools\":[]}";
+        panelsOverride = "{\"platform\":\"spring-boot\",\"panels\":[{\"id\":\"kafka\",\"available\":false,"
+                + "\"unavailableReason\":\"No KafkaTemplate bean is available\"}]}";
+
+        Result result = run("kafka");
+
+        assertThat(result.exitCode).isEqualTo(ExitCodes.ERROR);
+        assertThat(result.err)
+                .contains("get_kafka_activity")
+                .contains("No KafkaTemplate bean is available")
+                .doesNotContain("older BootUI version");
+    }
+
+    @Test
+    void aPanelLookupThatFailsStillLeavesTheRealFailureReported() {
+        // The hint is a courtesy on a path that has already failed. Losing it must not cost the reader the
+        // failure itself, so /panels answering 404 here falls back rather than throwing.
+        status = 404;
+        responseBody = "{\"error\":\"Unknown tool\"}";
+        catalogOverride = "{\"enabled\":true,\"tools\":[]}";
+
+        Result result = run("kafka");
+
+        assertThat(result.exitCode).isEqualTo(ExitCodes.ERROR);
+        assertThat(result.err).contains("get_kafka_activity").contains("older BootUI version");
     }
 
     @Test

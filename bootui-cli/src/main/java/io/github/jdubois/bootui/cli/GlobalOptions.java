@@ -37,6 +37,11 @@ final class GlobalOptions {
     }
 
     void setTimeoutSeconds(Integer timeoutSeconds) {
+        // A zero or negative timeout would silently make every call fail, or hang forever, depending on the
+        // transport. Neither is what the caller meant, so it is rejected rather than interpreted.
+        if (timeoutSeconds != null && timeoutSeconds <= 0) {
+            throw new IllegalArgumentException("--timeout must be a positive number of seconds, not " + timeoutSeconds);
+        }
         this.timeoutSeconds = timeoutSeconds;
     }
 

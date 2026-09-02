@@ -76,11 +76,37 @@ final class CliContext {
                 emit(result.payload(), result.rawBody());
                 return ExitCodes.SUCCESS;
             }
-            err.println(describe(tool, result.outcome(), result.errorMessage()));
+            confirmBootUiAnswered(client, result.outcome());
+            err.println(describe(client, tool, result.outcome(), result.errorMessage()));
             err.flush();
             return exitCodeFor(result.outcome());
         } catch (BootUiClientException failure) {
             return fail(failure);
+        }
+    }
+
+    /**
+     * Checks that BootUI really is what refused, before we report a refusal.
+     *
+     * <p>{@code 403} and {@code 404} are the two statuses whose meaning here presupposes BootUI answered:
+     * one becomes "the panel is disabled" and the other "no such command". But anything can return them —
+     * Spring Security answers {@code 403} to a POST at an unknown path, so a typo in {@code --api-path},
+     * or a {@code --url} pointing at some other application, would otherwise be reported as BootUI
+     * declining by policy, and exit {@code 2}. A CI gate reads that as "skip", so a misconfigured target
+     * would quietly pass instead of failing.
+     *
+     * <p>Asking for the catalog settles it: if there is no command-line endpoint there, that throws, and
+     * its message already names the likely causes. This costs a request only on a path that has failed.
+     */
+    private void confirmBootUiAnswered(BootUiClient client, ToolOutcome outcome) {
+        if (outcome != ToolOutcome.REFUSED_BY_POLICY && outcome != ToolOutcome.UNKNOWN_TOOL) {
+            return;
+        }
+        try {
+            client.catalog();
+        } catch (BootUiClientException noEndpoint) {
+            throw new BootUiClientException(
+                    "This is not a BootUI policy refusal. " + noEndpoint.getMessage(), noEndpoint);
         }
     }
 
@@ -183,16 +209,10 @@ final class CliContext {
      * <p>A tool missing from one stack is the failure most likely to look like a bug, so it says which stacks
      * do advertise it rather than leaving the reader to guess.
      */
-    private String describe(ToolManifest.Tool tool, ToolOutcome outcome, String message) {
+    private String describe(BootUiClient client, ToolManifest.Tool tool, ToolOutcome outcome, String message) {
         switch (outcome) {
             case UNKNOWN_TOOL:
-                String hint = tool.onEveryStack()
-                        ? " The application may be running an older BootUI version."
-                        : " Only "
-                                + String.join(", ", tool.stacks())
-                                        .toLowerCase(Locale.ROOT)
-                                        .replace('_', ' ') + " advertise it.";
-                return "This application does not expose '" + tool.name() + "'." + hint;
+                return "This application does not expose '" + tool.name() + "'." + unknownToolHint(client, tool);
             case REFUSED_BY_POLICY:
                 return message + " (panel '" + tool.panel() + "')";
             case UNAUTHENTICATED:
@@ -219,12 +239,52 @@ final class CliContext {
         }
     }
 
+    /**
+     * Why the target does not advertise a tool the CLI knows about.
+     *
+     * <p>The honest answer is usually the panel's own: BootUI does not advertise a tool whose panel is
+     * unavailable, and the panel already says why — "No KafkaTemplate bean is available" is the answer, and
+     * blaming the BootUI version instead would send the reader to check something that is not wrong. So the
+     * running application is asked first, and the two guesses are the fallback rather than the answer.
+     *
+     * <p>A hint is a courtesy on a path that has already failed, so a panel lookup that does not work is
+     * simply skipped: it must never replace the real failure with one about fetching the hint.
+     */
+    private String unknownToolHint(BootUiClient client, ToolManifest.Tool tool) {
+        try {
+            JsonValue document = client.get(CliPaths.PANELS);
+            JsonValue panels = document.get("panels");
+            for (JsonValue panel : panels.size() > 0 ? panels.values() : document.values()) {
+                if (!tool.panel().equals(panel.get("id").asString(null))) {
+                    continue;
+                }
+                if (panel.get("available").asBoolean(true)) {
+                    break;
+                }
+                String reason = panel.get("unavailableReason").asString("");
+                return reason.isBlank()
+                        ? " Its '" + tool.panel() + "' panel is not available in this application."
+                        : " Its '" + tool.panel() + "' panel is not available in this application: " + reason;
+            }
+        } catch (RuntimeException ignored) {
+            // Fall through to the static hints below.
+        }
+        return tool.onEveryStack()
+                ? " The application may be running an older BootUI version."
+                : " Only "
+                        + String.join(", ", tool.stacks())
+                                .toLowerCase(Locale.ROOT)
+                                .replace('_', ' ')
+                        + " advertise it.";
+    }
+
     /** The BootUI API paths the CLI talks to that are not tool calls. */
     static final class CliPaths {
 
         static final String CLI = "/cli";
         static final String MCP_SERVER = "/mcp-server";
         static final String MCP_TOGGLE = "/mcp-server/toggle";
+        static final String PANELS = "/panels";
 
         private CliPaths() {}
     }

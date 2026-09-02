@@ -219,6 +219,7 @@ final class CommandTree {
                         .paramLabel("<seconds>")
                         .type(Integer.class)
                         .description("How long to wait for an answer. Default 60.")
+                        .converters(CommandTree::positiveSeconds)
                         .setter(setter(options::setTimeoutSeconds))
                         .build());
         globals.put(
@@ -246,6 +247,23 @@ final class CommandTree {
         for (OptionSpec option : globals.values()) {
             spec.addOption(option);
         }
+    }
+
+    /**
+     * Reads {@code --timeout}, rejecting values a {@code Duration} would accept but the caller cannot have
+     * meant: zero or negative seconds either fails every call instantly or waits forever.
+     */
+    private static Integer positiveSeconds(String value) {
+        int seconds;
+        try {
+            seconds = Integer.parseInt(value.trim());
+        } catch (NumberFormatException notANumber) {
+            throw new CommandLine.TypeConversionException("'" + value + "' is not a number of seconds");
+        }
+        if (seconds <= 0) {
+            throw new CommandLine.TypeConversionException("must be a positive number of seconds, not " + seconds);
+        }
+        return seconds;
     }
 
     private static <T> CommandLine.Model.ISetter setter(Consumer<T> consumer) {
