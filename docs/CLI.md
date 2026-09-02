@@ -148,6 +148,8 @@ bootui mcp disable
 
 ## The Command Line panel
 
+![BootUI Command Line panel](./images/bootui-cli.webp)
+
 The browser console mirrors this endpoint back at you. **Developer tools → Command Line** shows whether the
 endpoint answers, the install snippet, how many calls it has served and how long they took, and every command
 this instance exposes — the `bootui` command to type, the arguments it accepts, the MCP tool it maps to, and

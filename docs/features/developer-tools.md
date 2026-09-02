@@ -110,6 +110,8 @@ adapters.
 
 ## Command Line
 
+![BootUI Command Line panel](../images/bootui-cli.webp)
+
 The Command Line panel reports the `/bootui/api/cli` endpoint that backs the [`bootui` CLI](../CLI.md) — the same tool
 registry the MCP server exposes to agents, projected onto terminal subcommands so a developer or a CI job can ask one
 diagnostic question without an MCP client or a hand-written `curl`. The command table is generated from that registry at

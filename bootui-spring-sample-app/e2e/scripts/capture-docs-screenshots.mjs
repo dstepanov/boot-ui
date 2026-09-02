@@ -107,6 +107,7 @@ const panelOrder = [
   ['rest-api', 'REST API'],
   ['database-advisor', 'Database'],
   ['mcp-server', 'MCP Server'],
+  ['cli', 'Command Line'],
   ['devtools', 'Spring DevTools'],
   ['dev-services', 'Dev Services'],
   ['copilot', 'Copilot'],
@@ -1090,6 +1091,50 @@ const mcpServer = {
   maxResults: 200,
   toolCount: mcpServerTools.length,
   tools: mcpServerTools
+}
+
+// The CLI facade is the same registry projected onto subcommands, so the mock derives every command
+// spelling from the manifest the CLI and the engine actually share. A screenshot cannot then show a
+// command the product does not have, and a renamed command fails this capture instead of going stale.
+const cliManifestPath = path.join(repoRoot, 'bootui-cli', 'src', 'main', 'resources', 'bootui-tools.json')
+const cliManifest = JSON.parse(await fs.readFile(cliManifestPath, 'utf8'))
+const cliManifestTools = new Map(cliManifest.tools.map((tool) => [tool.name, tool]))
+const cliSchemaArguments = {NONE: [], ID: ['id'], LIMIT: ['limit'], QUERY_LIMIT: ['query', 'limit']}
+
+const cliTools = mcpServerTools.map((tool) => {
+  const entry = cliManifestTools.get(tool.name)
+  if (!entry) {
+    throw new Error(`Could not resolve the CLI command for ${tool.name} from ${cliManifestPath}`)
+  }
+  const args = cliSchemaArguments[entry.schema]
+  if (!args) {
+    throw new Error(`Unknown CLI argument schema ${entry.schema} for ${tool.name} in ${cliManifestPath}`)
+  }
+  return {
+    name: tool.name,
+    command: requiredValue(entry.command, `${tool.name} command`, cliManifestPath),
+    description: tool.description,
+    panel: tool.panel,
+    action: tool.action,
+    schema: entry.schema,
+    arguments: args,
+    panelEnabled: tool.panelEnabled,
+    panelReadOnly: tool.panelReadOnly
+  }
+})
+
+const cli = {
+  enabled: true,
+  serverName: 'bootui',
+  serverVersion: bootUiVersion,
+  endpoint: '/bootui/api/cli',
+  maxResults: 200,
+  callCount: 128,
+  totalLatencyMillis: 3968,
+  capacityRefusals: 0,
+  timeouts: 0,
+  toolCount: cliTools.length,
+  tools: cliTools
 }
 
 const devServices = {
@@ -5525,6 +5570,7 @@ const screenshots = [
   ['spring', 'Spring', 'bootui-spring.webp', waitForText('Prefer RestClient over RestTemplate')],
   ['memory', 'Memory', 'bootui-memory.webp', waitForText('Old generation is near its maximum')],
   ['mcp-server', 'MCP Server', 'bootui-mcp-server.webp', waitForText('Client configuration')],
+  ['cli', 'Command Line', 'bootui-cli.webp', waitForText('Commands available')],
   ['devtools', 'Spring DevTools', 'bootui-devtools.webp', waitForText('Trigger LiveReload')],
   ['dev-services', 'Dev Services', 'bootui-dev-services.webp', waitForText('postgres')],
   [
@@ -6065,6 +6111,7 @@ async function handleApiRoute(route) {
     })
   if (endpoint === 'devtools') return fulfillJson(route, devTools)
   if (endpoint === 'mcp-server' || endpoint === 'mcp-server/toggle') return fulfillJson(route, mcpServer)
+  if (endpoint === 'cli') return fulfillJson(route, cli)
   if (endpoint === 'dev-services') return fulfillJson(route, devServices)
   if (endpoint === 'dev-services/compose:redis/logs') {
     return fulfillJson(route, {
