@@ -292,7 +292,7 @@ onUnmounted(clearReconnectTimer)
   align-items: center;
   border-radius: var(--bootui-radius-lg);
   display: inline-flex;
-  font-size: 1.5rem;
+  font-size: var(--bootui-icon-size);
   height: 3rem;
   justify-content: center;
   width: 3rem;
