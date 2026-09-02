@@ -8,7 +8,7 @@ import {expect, test} from './fixtures.js'
  * breaks on Quarkus.
  */
 const NOT_APPLICABLE = [
-  {id: 'devtools', label: 'DevTools'},
+  {id: 'devtools', label: 'Spring DevTools'},
   {id: 'conditions', label: 'Conditions'},
   {id: 'http-sessions', label: 'HTTP Sessions'},
   {id: 'graalvm', label: 'GraalVM'},
@@ -36,10 +36,10 @@ test.describe('Spring-only panels degrade honestly on Quarkus', () => {
     await expect(toggle).toBeVisible()
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
-    // DevTools is Spring-only, so it must not be visible until the disabled group is expanded.
-    await expect(page.locator('aside .nav-link', {hasText: 'DevTools'})).not.toBeVisible()
+    // Spring DevTools is Spring-only, so it must not be visible until the disabled group is expanded.
+    await expect(page.locator('aside .nav-link', {hasText: 'Spring DevTools'})).not.toBeVisible()
 
     await toggle.click()
-    await expect(page.locator('aside .nav-link', {hasText: 'DevTools'})).toBeVisible()
+    await expect(page.locator('aside .nav-link', {hasText: 'Spring DevTools'})).toBeVisible()
   })
 })

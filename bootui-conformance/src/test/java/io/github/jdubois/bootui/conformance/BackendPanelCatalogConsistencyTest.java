@@ -145,7 +145,10 @@ class BackendPanelCatalogConsistencyTest {
                         section(readDocumentation("AI-AGENTS.md"), "### Tools the agent can call", "### Safety model")),
                 new DocumentationSection(
                         "docs/features/developer-tools.md",
-                        section(readDocumentation("features/developer-tools.md"), "## MCP Server", "## DevTools")),
+                        section(
+                                readDocumentation("features/developer-tools.md"),
+                                "## MCP Server",
+                                "## Spring DevTools")),
                 new DocumentationSection(
                         "docs/SPECIFICATION.md",
                         section(

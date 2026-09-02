@@ -934,9 +934,17 @@ export const routes = [
     meta: {
       group: groups.developerTools,
       icon: 'bi-lightning-charge',
-      title: 'DevTools',
+      title: 'Spring DevTools',
       shortcut: 'dt',
-      keywords: ['devtools', 'livereload', 'restart', 'hot reload', 'auto restart']
+      keywords: [
+        'devtools',
+        'spring devtools',
+        'spring-boot-devtools',
+        'livereload',
+        'restart',
+        'hot reload',
+        'auto restart'
+      ]
     }
   },
   {

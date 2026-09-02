@@ -39,7 +39,7 @@ async function fetchStatus() {
     status.value = await getJson('api/devtools')
     lastFetched.value = Date.now()
   } catch (e) {
-    flash(formatLoadError(e, 'Could not load DevTools status'), 'danger')
+    flash(formatLoadError(e, 'Could not load Spring DevTools status'), 'danger')
   }
 }
 
@@ -144,7 +144,7 @@ onUnmounted(clearReconnectTimer)
   <div>
     <PanelHeader
       icon="bi-lightning-charge"
-      title="DevTools"
+      title="Spring DevTools"
       subtitle="Trigger Spring Boot DevTools LiveReload notifications or restart the local application."
       :loading="loading || restarting"
       :last-fetched="lastFetched"
@@ -154,7 +154,7 @@ onUnmounted(clearReconnectTimer)
 
     <FlashBanner :message="banner" with-icon @dismiss="clear" />
 
-    <ReadOnlyNotice v-if="readOnly" :reason="readOnlyReason">DevTools actions are read-only.</ReadOnlyNotice>
+    <ReadOnlyNotice v-if="readOnly" :reason="readOnlyReason">Spring DevTools actions are read-only.</ReadOnlyNotice>
 
     <div v-if="restarting" class="alert alert-primary d-flex align-items-start gap-3">
       <div class="spinner-border spinner-border-sm mt-1" role="status"></div>
@@ -278,7 +278,7 @@ onUnmounted(clearReconnectTimer)
 
     <UnavailableState
       v-else
-      message="DevTools status is unavailable. The app may be restarting or unreachable — retry or refresh this panel."
+      message="Spring DevTools status is unavailable. The app may be restarting or unreachable — retry or refresh this panel."
     />
   </div>
 </template>
