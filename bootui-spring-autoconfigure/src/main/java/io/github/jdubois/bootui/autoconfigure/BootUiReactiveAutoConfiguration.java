@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.autoconfigure;
 
 import io.github.jdubois.bootui.autoconfigure.activity.LiveServiceMapController;
 import io.github.jdubois.bootui.autoconfigure.architecture.ArchitectureController;
+import io.github.jdubois.bootui.autoconfigure.cli.BootUiCliServiceFactory;
 import io.github.jdubois.bootui.autoconfigure.config.BootUiExposure;
 import io.github.jdubois.bootui.autoconfigure.config.BootUiPathPropertySource;
 import io.github.jdubois.bootui.autoconfigure.config.ConfigOverrideService;
@@ -17,6 +18,7 @@ import io.github.jdubois.bootui.autoconfigure.mail.BootUiMailSenderBeanPostProce
 import io.github.jdubois.bootui.autoconfigure.mail.EmailController;
 import io.github.jdubois.bootui.autoconfigure.mcp.BootUiMcpService;
 import io.github.jdubois.bootui.autoconfigure.mcp.McpServerState;
+import io.github.jdubois.bootui.autoconfigure.mcp.SpringMcpPanelPolicy;
 import io.github.jdubois.bootui.autoconfigure.memory.MemoryController;
 import io.github.jdubois.bootui.autoconfigure.monitoring.BootUiSelfDataFilter;
 import io.github.jdubois.bootui.autoconfigure.otlp.OtlpSpanDecoder;
@@ -27,6 +29,7 @@ import io.github.jdubois.bootui.autoconfigure.reactive.BootUiJsonWebFluxConfigur
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveActivitySignalFilter;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveAgentSessionController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveApiAuthenticationFilter;
+import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveBootUiCliController;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveBootUiExceptionHandler;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveBootUiHandlerAdapter;
 import io.github.jdubois.bootui.autoconfigure.reactive.ReactiveBootUiIndexController;
@@ -60,6 +63,7 @@ import io.github.jdubois.bootui.autoconfigure.transactions.BootUiTransactionMana
 import io.github.jdubois.bootui.autoconfigure.web.*;
 import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
 import io.github.jdubois.bootui.engine.cache.CacheActivityRecorder;
+import io.github.jdubois.bootui.engine.cli.CliService;
 import io.github.jdubois.bootui.engine.exceptions.ExceptionStore;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.reactivesecurity.ReactiveSecurityAdvisorService;
@@ -458,6 +462,24 @@ public class BootUiReactiveAutoConfiguration {
         ReactiveBootUiMcpController bootUiReactiveMcpController(
                 BootUiMcpService service, McpServerState state, BootUiProperties properties) {
             return new ReactiveBootUiMcpController(service, state, properties);
+        }
+
+        /**
+         * The command-line facade over the same tool registry, with its own dispatcher so terminal traffic
+         * stays out of the MCP Server panel's counters.
+         */
+        @Bean
+        @Lazy
+        CliService bootUiReactiveCliService(ReactiveBootUiMcpTools tools, BootUiProperties properties) {
+            String version = BootUiReactiveAutoConfiguration.class.getPackage().getImplementationVersion();
+            return BootUiCliServiceFactory.create(
+                    tools::tools, new SpringMcpPanelPolicy(properties), properties, version);
+        }
+
+        @Bean
+        @Lazy
+        ReactiveBootUiCliController bootUiReactiveCliController(CliService service) {
+            return new ReactiveBootUiCliController(service);
         }
 
         @Bean

@@ -52,6 +52,7 @@
     { "id": "rest-client-trace", "title": "REST Client", "actionCapable": true },
     { "id": "ai", "title": "AI Framework", "actionCapable": false },
     { "id": "mcp-server", "title": "MCP Server", "actionCapable": true },
+    { "id": "cli", "title": "Command Line", "actionCapable": false },
     { "id": "activity", "title": "Live Activity", "actionCapable": true },
     { "id": "email", "title": "Email", "actionCapable": true },
     { "id": "kafka", "title": "Kafka", "actionCapable": true },

@@ -244,7 +244,8 @@ class McpDispatcherTests {
 
         McpDispatchOutcome outcome = dispatcher().dispatch(call("get_overview"));
 
-        assertThat(outcome).isEqualTo(new ToolCallError("disabled:overview"));
+        assertThat(outcome)
+                .isEqualTo(new ToolCallError("disabled:overview", McpDispatchOutcome.ToolErrorReason.PANEL_DISABLED));
     }
 
     @Test
@@ -253,7 +254,9 @@ class McpDispatcherTests {
 
         McpDispatchOutcome outcome = dispatcher().dispatch(call("architecture_scan"));
 
-        assertThat(outcome).isEqualTo(new ToolCallError("read-only:architecture"));
+        assertThat(outcome)
+                .isEqualTo(new ToolCallError(
+                        "read-only:architecture", McpDispatchOutcome.ToolErrorReason.PANEL_READ_ONLY));
     }
 
     @Test
@@ -280,7 +283,8 @@ class McpDispatcherTests {
 
         assertThat(dispatcher.dispatch(call("architecture_scan")))
                 .isEqualTo(new ToolCallError(
-                        "Operation 'architecture.scan' cannot start while 'architecture.scan' is in progress."));
+                        "Operation 'architecture.scan' cannot start while 'architecture.scan' is in progress.",
+                        McpDispatchOutcome.ToolErrorReason.ACTION_BUSY));
         assertThat(diagnostics.count()).isZero();
 
         release.countDown();
@@ -328,12 +332,17 @@ class McpDispatcherTests {
     }
 
     @Test
-    void gateRefusalCarriesNoCanonicalStatus() {
+    void gateRefusalCarriesItsReasonButNoCanonicalStatus() {
         policy.disabled.add("overview");
 
-        assertThat(dispatcher().dispatch(call("get_overview")))
-                .isEqualTo(new ToolCallError("disabled:overview", null))
-                .isEqualTo(new ToolCallError("disabled:overview"));
+        McpDispatchOutcome outcome = dispatcher().dispatch(call("get_overview"));
+
+        // A gate refusal happens before the tool runs, so no tool ever asked for a status. The reason is
+        // what a non-MCP transport reads; leaving the status null keeps "the tool refused with 404" and
+        // "the dispatcher refused for you" distinguishable.
+        assertThat(outcome)
+                .isEqualTo(new ToolCallError("disabled:overview", McpDispatchOutcome.ToolErrorReason.PANEL_DISABLED));
+        assertThat(((ToolCallError) outcome).status()).isNull();
     }
 
     @Test

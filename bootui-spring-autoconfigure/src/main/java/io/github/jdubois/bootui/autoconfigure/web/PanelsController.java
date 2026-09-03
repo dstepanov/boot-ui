@@ -111,6 +111,7 @@ public class PanelsController {
                     BootUiPanels.SPRING,
                     BootUiPanels.VULNERABILITIES,
                     BootUiPanels.ACTIVITY,
+                    BootUiPanels.CLI,
                     BootUiPanels.DATABASE_ADVISOR -> available();
             case BootUiPanels.MCP_SERVER -> availability(mcpServerAvailable(), mcpServerUnavailableReason());
             case BootUiPanels.JVM_TUNING ->

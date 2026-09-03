@@ -21,7 +21,8 @@ const sidebarLabels = {
   'PLAN.md': 'Implementation plan',
   'PROPERTIES.md': 'Properties',
   'REPOSITORY.md': 'Repository',
-  'WORKS-WITH.md': 'BootUI family'
+  'WORKS-WITH.md': 'BootUI family',
+  'CLI.md': 'Command line'
 }
 
 const featureDocs = [
@@ -56,7 +57,7 @@ const groups = [
   },
   {
     text: 'Reference',
-    docs: ['PROPERTIES.md', 'FRAMEWORK-SUPPORT.md', 'AI-AGENTS.md', 'WORKS-WITH.md']
+    docs: ['PROPERTIES.md', 'FRAMEWORK-SUPPORT.md', 'AI-AGENTS.md', 'CLI.md', 'WORKS-WITH.md']
   },
   {
     text: 'Diagnostic checks',

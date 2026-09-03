@@ -108,6 +108,35 @@ surface, including `security_scan` through the shared reactive advisor service. 
 panel/read-only gating, payload/concurrency limits, and response envelopes are otherwise identical across all three
 adapters.
 
+## Command Line
+
+![BootUI Command Line panel](../images/bootui-cli.webp)
+
+The Command Line panel reports the `/bootui/api/cli` endpoint that backs the [`bootui` CLI](../CLI.md) — the same tool
+registry the MCP server exposes to agents, projected onto terminal subcommands so a developer or a CI job can ask one
+diagnostic question without an MCP client or a hand-written `curl`. The command table is generated from that registry at
+build time, so the CLI cannot offer a diagnostic the MCP server does not, nor lack one it does.
+
+Unlike the MCP server, the endpoint is enabled by default and the panel is deliberately read-only: it reports state
+rather than switching it, so a CI job never depends on someone having left a browser in the right state. Turn it off
+with `bootui.cli.enabled=false`, which the panel then reports along with the `503` the endpoint answers.
+
+The panel shows the endpoint URL for this instance, three ready-to-paste installs — the one-command installer the
+documentation site publishes, a JBang one, and a plain `curl` + `java -jar` one versioned to match this application —
+with an example command already pointed at it (including `--api-path` when `bootui.api-path` is customised), and every
+command the running instance advertises, split into action and read commands. Each row is the command to type —
+`bootui architecture scan`, not `architecture_scan` — with the arguments it accepts, the MCP tool it maps to, its
+backing panel, and whether that panel is currently disabled or read-only. That last part is what explains a `2` exit
+code: BootUI declining to run a tool is a statement about how the target is configured, not a failed request.
+
+The command spelling comes from the running application rather than from the CLI's own build, because the command table
+lives in the engine and is served by `GET /bootui/api/cli`. So the panel shows what *this* instance answers to, even
+when the CLI on your path was built against a different BootUI version.
+
+Call counters — calls, mean latency, capacity refusals, and timeouts — are kept separate from the MCP server's, so this
+panel reports what terminals and CI jobs did rather than what agents did. There is no response-limit counter because the
+command-line facade applies no response byte budget.
+
 ## Spring DevTools
 
 ![BootUI Spring DevTools panel](../images/bootui-devtools.webp)

@@ -422,8 +422,8 @@ Platform-aware fidelity notes:
 - **`BootUiReactiveSpringSecurityAutoConfiguration`** is auto-configured (alongside the servlet
   `BootUiSpringSecurityAutoConfiguration`) and permits BootUI routes at highest precedence when reactive Spring Security
   is configured, preventing the application's login wall from blocking the `/bootui` root and its descendants. It keeps
-  the MCP bridge, OTLP ingestion, and API-unlock session endpoints outside browser CSRF while requiring a cookie/header
-  token pair for other state-changing BootUI requests. The configuration is isolated behind string-based class and bean
+  the MCP bridge, the command-line endpoint (`/bootui/api/cli`), OTLP ingestion, and API-unlock session endpoints
+  outside browser CSRF while requiring a cookie/header token pair for other state-changing BootUI requests. The configuration is isolated behind string-based class and bean
   conditions, so a WebFlux application without Spring Security starts without linking any reactive security type.
 - The WebFlux sample app (`bootui-spring-webflux-sample-app`) includes `spring-boot-starter-security` to demonstrate the
   integration end to end.

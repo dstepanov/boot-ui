@@ -2054,6 +2054,8 @@ BootUI/
 ├── bootui-engine/
 ├── bootui-conformance/
 ├── bootui-ui/
+├── bootui-client/
+├── bootui-cli/
 ├── bootui-spring-autoconfigure/
 ├── bootui-spring-boot-starter/
 ├── bootui-spring-boot-starter-reactive/
@@ -2076,6 +2078,11 @@ Shared modules:
 - `bootui-conformance`: the shared HTTP contract suite and golden panel manifests run against every adapter.
 - `bootui-ui`: the Vue 3 / Composition API / Vite / Bootstrap 5.3 SPA, built once into
   `META-INF/resources/bootui/` and served unchanged by every adapter.
+- `bootui-client`: the dependency-free client for the command-line endpoint — URL and token handling, tool invocation,
+  outcome mapping, and an opaque JSON tree. Depends on nothing, not even `bootui-core`, so it stays version-compatible
+  with applications it was not built against.
+- `bootui-cli`: the `bootui` command-line interface, a picocli tree generated from the engine's tool catalog and
+  published as a runnable uber-jar.
 
 Spring Boot modules:
 
@@ -2095,6 +2102,8 @@ Quarkus modules:
 - `bootui-quarkus-sample-app`: Quarkus reference app.
 
 Dependency direction is one-way: `bootui-engine` depends on `bootui-core`, and each framework adapter depends on both.
+`bootui-client` sits outside that chain entirely and depends on nothing; `bootui-cli` depends on it and on picocli, and
+on `bootui-engine` only in test scope, to generate its command manifest.
 The shared `core`, `engine`, `conformance`, and UI modules never depend on Spring or Quarkus. JSON parsing and
 serialization stay in the adapters because Spring Boot and Quarkus use incompatible Jackson major versions.
 
@@ -2246,6 +2255,8 @@ Initial endpoints:
 | `/bootui/api/mcp-server`                     | GET    | MCP Server panel status (enabled state, configured mode, transport, advertised tools)  |
 | `/bootui/api/mcp-server/toggle`              | POST   | Enable/disable the MCP server at runtime, overriding `bootui.mcp.enabled`               |
 | `/bootui/api/mcp`                            | GET/POST | Local-only MCP JSON-RPC 2.0 endpoint and status (served only while the server is enabled) |
+| `/bootui/api/cli`                            | GET    | Command-line endpoint status and the tool catalog this instance exposes                 |
+| `/bootui/api/cli/tools/{name}`               | POST   | Invoke one tool by name and return its payload directly, with the outcome in the HTTP status |
 | `/bootui/api/rest-client-trace`              | GET    | Latest REST Client report and retained outbound HTTP calls                              |
 | `/bootui/api/rest-client-trace/clear`        | POST   | Clear the retained REST client call buffer                                              |
 | `/bootui/api/rest-client-trace/recording`    | POST   | Pause/resume REST client call capture at runtime                                        |
@@ -2346,6 +2357,10 @@ Initial properties:
 | `bootui.mcp.max-concurrent-calls`            | `20`                                    | Maximum concurrent tool calls; additional calls fail immediately with server-defined error `-32001`. |
 | `bootui.mcp.execution-timeout`               | `30s`                                   | Maximum wall-clock duration of a tool call; timeouts return server-defined error `-32002`. |
 | `bootui.mcp.max-response-bytes`              | `4194304`                               | Maximum rendered JSON-RPC response bytes; oversized responses return server-defined error `-32003`. |
+| `bootui.cli.enabled`                         | `true`                                  | Whether the command-line endpoint answers. When `false`, the catalog reports itself disabled and tool invocation returns `503`. |
+| `bootui.cli.max-results`                     | `200`                                   | Maximum items returned by paginated command-line read tools, tracked separately from the MCP cap. |
+| `bootui.cli.max-concurrent-calls`            | `20`                                    | Maximum concurrent command-line tool calls; additional calls are refused with `429`. |
+| `bootui.cli.execution-timeout`               | `30s`                                   | Maximum wall-clock duration of a command-line tool call; timeouts return `504`. |
 
 Every visible panel must support `bootui.panels.<panel-id>.enabled`; panels with mutating browser actions must also
 support `bootui.panels.<panel-id>.read-only`. These properties are specified panel-by-panel in
@@ -2487,6 +2502,78 @@ Design rules:
   generically guaranteed secret-free, so initialization and tool guidance explicitly keep that data in the local
   diagnostic context.
 
+### 6.8 Command-line endpoint
+
+The same tool registry the MCP server exposes, projected onto plain REST at `GET /bootui/api/cli` and
+`POST /bootui/api/cli/tools/{name}`, so a terminal or a CI job can ask a running application one diagnostic question
+without an MCP client or a hand-rolled request. It is a transport, not a second capability.
+
+Design rules:
+
+- **A projection, not a reimplementation.** Invocation builds the same `tools/call` request the JSON-RPC transport does
+  and hands it to the same dispatcher logic, so unknown tool, unexpected argument, missing `id`, disabled panel, action
+  on a read-only panel, result capping, concurrency, and execution timeout are all the existing code path. A shared
+  catalog in the engine declares every tool's name, argument schema, backing panel, and action flag, and each adapter's
+  registry is pinned to it by test, so the two surfaces cannot drift apart. The request body is passed through
+  verbatim rather than bound to a fixed argument record, so a property no tool declares is refused rather than dropped
+  during decoding: a misspelled filter returns `400`, never a `200` carrying a report that ignored it.
+- **Independent of the MCP toggle.** The endpoint is enabled by `bootui.cli.enabled` (default `true`) and never requires
+  `bootui.mcp.enabled`. It is a new route over data the panel endpoints already serve, not a new capability, so it
+  defaults on; requiring a toggle would simply move the prerequisite it exists to remove.
+- **The outcome is the HTTP status.** MCP reports refused gates in-band (`200` with `isError`), which a shell cannot
+  branch on. The command-line endpoint returns the tool payload directly on success, and otherwise `400` for an invalid
+  argument, `403` for a disabled or read-only panel, `404` for an unknown tool, `409` for an action already running,
+  `429` at capacity, `504` on timeout, and `503` when the endpoint is disabled. Policy is unchanged; only the rendering
+  differs.
+- **Self-describing.** `GET /bootui/api/cli` reports the tools this instance advertises, the `bootui` command each is
+  reached by, their argument schemas, and live panel enable/read-only state, so a client built against one BootUI
+  version stays correct against another — including the command spelling, since the command table lives in the engine
+  and is served rather than compiled into the client. It answers while disabled too, with an empty tool list, so a
+  client can explain the refusal instead of failing opaquely.
+- **Separate counters.** The facade dispatches through its own instance, so command-line traffic is never counted as
+  agent activity in the MCP Server panel's call, latency, and refusal statistics.
+- **Same safety model as the panels.** The endpoint sits under `bootui.api-path` behind the shared loopback, `Host`
+  allow-list, cross-site-write, and `bootui.authentication.token` protections, and is exempt from SPA CSRF for the same
+  reason the MCP endpoint is: a non-browser client has no session to carry a token. Read tools invoked over `POST`
+  remain available under global read-only, because global read-only governs writes and every action tool is still
+  refused by the per-panel check.
+- **Available on all three stacks.** Spring MVC, Spring WebFlux, and Quarkus serve the identical contract, pinned by a
+  shared conformance suite.
+
+### 6.9 The `bootui` command-line interface
+
+`bootui-cli` is the terminal front-end over that endpoint: one subcommand per tool, `--json` for the exact payload,
+and an exit code a script can branch on. `bootui-client` is the transport underneath it, kept separate so a future
+Maven plugin or third-party tooling has the same foundation without inheriting a CLI's argument parsing.
+
+Design rules:
+
+- **The command tree is generated, not written.** `bootui-tools.json` is produced at build time from the engine's tool
+  catalog plus a `tool name -> command path` table, checked in, and the picocli tree is built by iterating it. A test
+  regenerates the file and fails when the checked-in copy is stale, and asserts the path table is total and injective
+  over the catalog. Adding an MCP tool without giving it a command therefore fails the build, and a hand-written
+  command for a tool that no longer exists cannot survive either. A second test runs every command against a stub and
+  asserts it reaches the tool it claims to, so a tree that builds but shadows a leaf is caught as well.
+- **No compile-time coupling to BootUI's types.** `bootui-client` depends on nothing — not `bootui-core`, not Jackson,
+  not an HTTP library beyond the JDK's — and treats payloads as opaque JSON re-emitted verbatim. A CLI from one
+  release has to keep working against an application running another, which rules out sharing DTO records with it.
+  The engine is a *test-scoped* dependency of `bootui-cli`, used only to generate the manifest.
+- **Runtime discovery is authoritative.** The bundled manifest exists so `--help` works with nothing running. What a
+  given application actually exposes comes from `GET /bootui/api/cli`, which `bootui tools` prints: stacks advertise
+  different tool sets, some tools appear only when a library is present, and panels can be disabled.
+- **Refusal is not failure.** Exit `0` means the tool answered, `1` a usage, authentication, or transport error, and
+  `2` that BootUI declined — a disabled panel, or an action on a read-only one. That distinction is the reason the
+  endpoint puts the outcome in the status code, and dropping it would force CI to parse error text. A rejected token
+  is deliberately `1` and not `2`: it says nothing about how the target's panels are configured, so a job that treats
+  `2` as "skip this check" must not swallow it.
+- **Exact output when it is being parsed.** Output is the server's bytes verbatim with `--json` or when stdout is not
+  a terminal, and a rendered table or tree otherwise. The rendering infers structure from shape because the payload is
+  opaque, so it is explicitly best-effort; `--json` is the stable form. Rendered output replaces control characters,
+  because payloads carry application-controlled text and a terminal would otherwise act on an escape sequence found in
+  a log line, an exception message, or a header value.
+- **Reflection-free.** The command tree is built programmatically and the CLI's only runtime dependency is picocli, so
+  a future native-image build stays a build-file change rather than a rewrite.
+
 ## 7. UX specification
 
 ### 7.1 Navigation
@@ -2555,6 +2642,7 @@ Top-level navigation:
   - HTTP Probe.
 - Developer tools:
   - MCP Server.
+  - Command Line.
   - Spring DevTools.
   - Dev Services.
   - Copilot.

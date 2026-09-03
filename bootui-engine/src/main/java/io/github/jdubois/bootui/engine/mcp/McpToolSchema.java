@@ -1,5 +1,8 @@
 package io.github.jdubois.bootui.engine.mcp;
 
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -13,21 +16,27 @@ import java.util.Set;
  */
 public enum McpToolSchema {
     /** No arguments: an empty object schema. */
-    NONE(Set.of()),
+    NONE(List.of()),
     /** An optional positive integer {@code limit}, capped by {@code bootui.mcp.max-results}. */
-    LIMIT(Set.of("limit")),
+    LIMIT(List.of("limit")),
     /** An optional {@code query} string plus the optional {@code limit}. */
-    QUERY_LIMIT(Set.of("query", "limit")),
+    QUERY_LIMIT(List.of("query", "limit")),
     /** A required string {@code id} identifying one specific resource (e.g. an exception group id). */
-    ID(Set.of("id"));
+    ID(List.of("id"));
 
     private final Set<String> argumentNames;
 
-    McpToolSchema(Set<String> argumentNames) {
-        this.argumentNames = argumentNames;
+    McpToolSchema(List<String> argumentNames) {
+        this.argumentNames = Collections.unmodifiableSet(new LinkedHashSet<>(argumentNames));
     }
 
-    /** Argument names accepted by this schema. */
+    /**
+     * Argument names accepted by this schema, in declaration order.
+     *
+     * <p>Iteration order is stable across JVM runs. {@code Set.of(...)} would not be: its iteration order is
+     * salted per JVM, and the command-line facade publishes this list as the argument order a generated CLI
+     * binds flags and positionals from, so a shuffled order would move arguments between runs.
+     */
     public Set<String> argumentNames() {
         return argumentNames;
     }

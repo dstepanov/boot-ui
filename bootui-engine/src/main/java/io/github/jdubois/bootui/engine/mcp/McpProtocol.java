@@ -94,6 +94,14 @@ public final class McpProtocol {
     public static final String SERVER_DISABLED_MESSAGE =
             "BootUI MCP server is disabled. Enable it from the MCP Server panel or set bootui.mcp.enabled=ON.";
 
+    /** Prefix of the in-band message reported when a {@code tools/call} names a tool this server has not registered. */
+    public static final String UNKNOWN_TOOL_PREFIX = "Unknown tool: ";
+
+    /** Canonical message reported when a {@code tools/call} names a tool this server has not registered. */
+    public static String unknownToolMessage(String name) {
+        return UNKNOWN_TOOL_PREFIX + name;
+    }
+
     /** Canonical invalid-type message used by both adapter codecs. */
     public static String invalidArgumentTypeMessage(String name, String expectedType) {
         return "Argument '" + name + "' must be " + expectedType;

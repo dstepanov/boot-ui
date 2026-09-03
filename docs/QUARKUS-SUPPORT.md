@@ -175,7 +175,7 @@ those fields so the same UI build renders the correct sidebar and status on each
 > the canonical JSON `409` response, while Heap Dump capture/analyze/delete share one mutation-domain admission. MCP
 > returns the same busy message in-band, and passive reads continue serving the last completed report.
 
-### 5.1 Ported as-is — framework-agnostic or same library (19)
+### 5.1 Ported as-is — framework-agnostic or same library (20)
 
 Logic lives entirely in `bootui-core` + `bootui-engine`; the Quarkus adapter adds at most a trivial supplier.
 
@@ -193,6 +193,7 @@ Logic lives entirely in `bootui-core` + `bootui-engine`; the Quarkus adapter add
 | `Copilot`, `Claude Code`                              | Read `~/.copilot` / `~/.claude`                                                   |
 | `Pentesting`                                          | Shared 80-check engine (see below)                                                |
 | `MCP Server`                                          | **Implemented** — full JSON-RPC bridge (see below)                                |
+| `Command Line`                                        | Shared `CliService`; the Quarkus resource only routes                             |
 | `Dev Services`                                        | **Implemented** — Quarkus-native concept (see below)                             |
 
 Pentesting uses the shared 80-check engine and report contract. Its thin Quarkus collector supplies the live port,
@@ -208,6 +209,12 @@ host access. See [PENTEST-CHECKS.md](PENTEST-CHECKS.md) for the exact evidence l
 a thin Jackson-2 `QuarkusMcpEnvelope` codec + `QuarkusMcpTools` catalog + working enable toggle sit behind the
 `LocalhostGuard` write floor. JVM-mode integration is covered end to end; native-image availability follows each backing
 panel and is not claimed beyond the native-image tests that exercise that capability.
+
+**Command-line endpoint** (`/bootui/api/cli`) is served at full parity with Spring MVC and Spring WebFlux: a CDI
+producer builds the shared engine `CliService` over the same `QuarkusMcpTools` registry and `QuarkusMcpPanelPolicy`, and
+a thin JAX-RS resource maps the outcome onto HTTP status codes. It is enabled by default (`bootui.cli.enabled`), needs
+no MCP toggle, and is pinned to the Spring stacks by the shared CLI conformance suite. The 62 tools Quarkus advertises
+are a subset of the 78 Spring MVC exposes, so the catalog a client reads at runtime is authoritative.
 
 **Dev Services** is a Quarkus-native concept: a build-time `DevServicesResultBuildItem` snapshot captured via recorder +
 synthetic bean, with masked config and logs/restart unavailable. Service `type` is classified via the shared
@@ -496,10 +503,10 @@ No equivalent, low value, or superseded by Quarkus's own tooling:
 - `JMS` uses Spring JMS (`JmsTemplate` and `@JmsListener`) today. Quarkus users can use the implemented Kafka and RabbitMQ
   panels while a Quarkus-native JMS capture layer remains unimplemented.
 
-**Result:** 47 of the 57 panels ship on Quarkus: 26 are statically available and 21 are capability/detector-gated. The
+**Result:** 48 of the 58 panels ship on Quarkus: 27 are statically available and 21 are capability/detector-gated. The
 remaining 10 panels do not ship: 9 are intentionally not applicable (GraalVM, CRaC, Conditions, Startup Timeline, HTTP
 Sessions, Spring Data, Spring Security, Spring DevTools, Transactions), and 1 (`JMS`) is not yet available. By portability
-strategy, the 47 shipped panels comprise 19 ported as-is, 12 source-swapped, 13 capture-rebuilt, and 3 replaced with a
+strategy, the 48 shipped panels comprise 20 ported as-is, 12 source-swapped, 13 capture-rebuilt, and 3 replaced with a
 Quarkus-native panel. The Overview dashboard panel is available (its scoring dashboard renders client-side from the
 advisor endpoints, and the shell-chrome `GET /bootui/api/overview` endpoint is served on both adapters).
 
@@ -714,6 +721,7 @@ Pentesting, HTTP Probe, MCP Server) need no special ingredients — they work ag
 | Copilot             | as-is       | Port    | CLI log reader                   | —                                           |
 | Claude Code         | as-is       | Port    | CLI log reader                   | —                                           |
 | MCP Server          | as-is       | Port    | BootUI MCP server                | —                                           |
+| Command Line        | as-is       | Port    | BootUI CLI endpoint              | —                                           |
 | Dev Services        | as-is       | Port    | Dev Services model               | Quarkus Dev Services source                 |
 | Overview            | equiv       | Adapt   | Client-side dashboard + `OverviewDto` | `QuarkusApplicationInfo` (chrome; scoring is client-side) |
 | Health              | equiv       | Adapt   | Health mapper                    | `HealthProvider` → SmallRye Health          |

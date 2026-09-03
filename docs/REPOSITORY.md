@@ -9,6 +9,8 @@
 - `bootui-spring-boot-starter-reactive`: Spring WebFlux starter dependency.
 - `bootui-ui`: Vue 3 frontend packaged into `META-INF/resources/bootui/`.
 - `bootui-conformance`: shared HTTP contract suite and golden panel manifests for all adapters.
+- `bootui-client`: dependency-free client for the command-line endpoint; depends on nothing, not even `bootui-core`.
+- `bootui-cli`: the `bootui` command-line interface, generated from the engine's MCP tool catalog.
 - `bootui-spring-sample-app`: Spring MVC sample app + Playwright e2e coverage.
 - `bootui-spring-webflux-sample-app`: Spring WebFlux sample app.
 - `bootui-quarkus-parent`: shared Quarkus LTS BOM and plugin management.

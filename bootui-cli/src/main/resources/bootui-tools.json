@@ -1,0 +1,1001 @@
+{
+  "tools": [
+    {
+      "name": "get_live_activity",
+      "command": "activity",
+      "schema": "LIMIT",
+      "panel": "activity",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return a bounded, newest-first correlated activity snapshot across HTTP, SQL, exceptions, security, and other runtime signals."
+    },
+    {
+      "name": "get_ai_overview",
+      "command": "ai overview",
+      "schema": "NONE",
+      "panel": "ai",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the local AI-framework telemetry overview derived from already-captured OTLP spans."
+    },
+    {
+      "name": "get_architecture_report",
+      "command": "architecture report",
+      "schema": "NONE",
+      "panel": "architecture",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the last completed Architecture advisor report without starting a new classpath scan."
+    },
+    {
+      "name": "architecture_scan",
+      "command": "architecture scan",
+      "schema": "NONE",
+      "panel": "architecture",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Actively scan application classes for architecture and dependency violations."
+    },
+    {
+      "name": "get_beans",
+      "command": "beans",
+      "schema": "QUERY_LIMIT",
+      "panel": "beans",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Search Spring beans by name or type and return a bounded result."
+    },
+    {
+      "name": "get_cache_stats",
+      "command": "cache",
+      "schema": "NONE",
+      "panel": "cache",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return current cache manager and cache statistics (hits, misses, size) for each configured cache."
+    },
+    {
+      "name": "get_conditions",
+      "command": "conditions",
+      "schema": "QUERY_LIMIT",
+      "panel": "conditions",
+      "action": false,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Search Spring auto-configuration condition evaluation outcomes by case-insensitive name and return matched, unmatched, and unconditional entries."
+    },
+    {
+      "name": "get_config",
+      "command": "config",
+      "schema": "QUERY_LIMIT",
+      "panel": "config",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Search effective configuration by case-insensitive name or displayed value and return a bounded result."
+    },
+    {
+      "name": "get_crac_report",
+      "command": "crac report",
+      "schema": "NONE",
+      "panel": "crac",
+      "action": false,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the last completed CRaC readiness report without starting a new resource-lifecycle scan."
+    },
+    {
+      "name": "crac_scan",
+      "command": "crac scan",
+      "schema": "NONE",
+      "panel": "crac",
+      "action": true,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Actively assess Spring checkpoint/restore readiness."
+    },
+    {
+      "name": "get_flyway_migrations",
+      "command": "db flyway",
+      "schema": "NONE",
+      "panel": "flyway",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the current Flyway migration history and status without running migrate or clean."
+    },
+    {
+      "name": "get_liquibase_changesets",
+      "command": "db liquibase",
+      "schema": "NONE",
+      "panel": "liquibase",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the current Liquibase change-set history and status without running update."
+    },
+    {
+      "name": "get_database_connection_pools",
+      "command": "db pools",
+      "schema": "NONE",
+      "panel": "database-connection-pools",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return current connection pool configuration and live metrics (active, idle, pending connections) for each configured datasource."
+    },
+    {
+      "name": "get_database_advisor_report",
+      "command": "db report",
+      "schema": "NONE",
+      "panel": "database-advisor",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the last completed Database advisor report without querying schema metadata again."
+    },
+    {
+      "name": "database_advisor_scan",
+      "command": "db scan",
+      "schema": "NONE",
+      "panel": "database-advisor",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Actively introspect the physical database schema (tables, columns, keys, indexes) via read-only JDBC metadata, plus PostgreSQL/MySQL/MariaDB catalog checks and Hibernate mapping cross-reference when available."
+    },
+    {
+      "name": "get_dev_services",
+      "command": "dev-services",
+      "schema": "NONE",
+      "panel": "dev-services",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the current local Dev Services or development-service inventory and masked connection metadata."
+    },
+    {
+      "name": "trigger_devtools_livereload",
+      "command": "devtools livereload",
+      "schema": "NONE",
+      "panel": "devtools",
+      "action": true,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Trigger the existing local Spring Boot DevTools LiveReload notification and return its action result."
+    },
+    {
+      "name": "get_devtools_status",
+      "command": "devtools status",
+      "schema": "NONE",
+      "panel": "devtools",
+      "action": false,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the current Spring Boot DevTools restart and LiveReload status."
+    },
+    {
+      "name": "clear_exceptions",
+      "command": "exceptions clear",
+      "schema": "NONE",
+      "panel": "exceptions",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Clear BootUI's bounded in-memory exception groups and occurrences."
+    },
+    {
+      "name": "get_exceptions",
+      "command": "exceptions list",
+      "schema": "NONE",
+      "panel": "exceptions",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "List recent exception groups, newest first."
+    },
+    {
+      "name": "get_exception_detail",
+      "command": "exceptions show",
+      "schema": "ID",
+      "panel": "exceptions",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return stack frames, causes, and occurrences for one exact exception-group id obtained from get_exceptions or get_live_activity."
+    },
+    {
+      "name": "get_fault_tolerance",
+      "command": "fault-tolerance",
+      "schema": "NONE",
+      "panel": "fault-tolerance",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the configured Resilience4j and Spring Retry policy inventory with live counters and circuit breaker state, plus a bounded metadata-only event history."
+    },
+    {
+      "name": "get_github_dashboard",
+      "command": "github",
+      "schema": "NONE",
+      "panel": "github",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return local repository identity plus the last cached GitHub dashboard report."
+    },
+    {
+      "name": "get_graalvm_report",
+      "command": "graalvm report",
+      "schema": "NONE",
+      "panel": "graalvm",
+      "action": false,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the last completed GraalVM readiness report without starting a new classpath or dependency scan."
+    },
+    {
+      "name": "graalvm_scan",
+      "command": "graalvm scan",
+      "schema": "NONE",
+      "panel": "graalvm",
+      "action": true,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Actively assess Spring native-image readiness without the longer dependency metadata scan."
+    },
+    {
+      "name": "get_health",
+      "command": "health",
+      "schema": "NONE",
+      "panel": "health",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the current aggregated Actuator health tree."
+    },
+    {
+      "name": "get_hibernate_report",
+      "command": "hibernate report",
+      "schema": "NONE",
+      "panel": "hibernate",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the last completed Hibernate advisor report without starting a new mapping scan."
+    },
+    {
+      "name": "hibernate_scan",
+      "command": "hibernate scan",
+      "schema": "NONE",
+      "panel": "hibernate",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Actively inspect JPA/Hibernate mappings and persistence configuration for correctness and performance risks."
+    },
+    {
+      "name": "get_http_exchanges",
+      "command": "http exchanges",
+      "schema": "LIMIT",
+      "panel": "http-exchanges",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return a bounded, newest-first snapshot of application HTTP request/response metadata."
+    },
+    {
+      "name": "get_http_sessions",
+      "command": "http sessions",
+      "schema": "NONE",
+      "panel": "http-sessions",
+      "action": false,
+      "stacks": [
+        "SPRING_MVC"
+      ],
+      "summary": "Return the bounded active embedded-Tomcat HTTP-session inventory without creating, clearing, or invalidating a session."
+    },
+    {
+      "name": "get_jms_activity",
+      "command": "jms",
+      "schema": "NONE",
+      "panel": "jms",
+      "action": false,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the bounded local JMS activity snapshot captured from application templates and listeners."
+    },
+    {
+      "name": "get_jvm_tuning",
+      "command": "jvm tuning",
+      "schema": "NONE",
+      "panel": "jvm-tuning",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the current JVM sizing facts and generated tuning recommendations using detected defaults."
+    },
+    {
+      "name": "get_kafka_activity",
+      "command": "kafka",
+      "schema": "NONE",
+      "panel": "kafka",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the bounded local Kafka activity snapshot captured from application producers and consumers."
+    },
+    {
+      "name": "get_loggers",
+      "command": "loggers",
+      "schema": "QUERY_LIMIT",
+      "panel": "loggers",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Search configured loggers by case-insensitive name and return their configured and effective levels, bounded by limit."
+    },
+    {
+      "name": "get_log_tail",
+      "command": "logs tail",
+      "schema": "NONE",
+      "panel": "log-tail",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the latest buffered application log snapshot."
+    },
+    {
+      "name": "get_emails",
+      "command": "mail",
+      "schema": "NONE",
+      "panel": "email",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the bounded local email-capture inventory with content governed by BootUI exposure policy."
+    },
+    {
+      "name": "get_mappings",
+      "command": "mappings",
+      "schema": "QUERY_LIMIT",
+      "panel": "mappings",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Search request routes and handlers and return a bounded result."
+    },
+    {
+      "name": "analyze_heap_dump",
+      "command": "memory heap analyze",
+      "schema": "NONE",
+      "panel": "heap-dump",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Analyze the existing BootUI heap dump and return the resulting report."
+    },
+    {
+      "name": "get_heap_dump_report",
+      "command": "memory heap report",
+      "schema": "NONE",
+      "panel": "heap-dump",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return passive heap-dump status, file metadata, and any already-cached analysis."
+    },
+    {
+      "name": "get_live_memory",
+      "command": "memory live",
+      "schema": "NONE",
+      "panel": "live-memory",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return a passive snapshot of current JVM heap, non-heap, garbage collection, class-loading, and thread measurements without requesting GC or a class histogram."
+    },
+    {
+      "name": "get_memory_report",
+      "command": "memory report",
+      "schema": "NONE",
+      "panel": "memory",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the last completed Memory advisor report without triggering a class histogram or full GC."
+    },
+    {
+      "name": "memory_scan",
+      "command": "memory scan",
+      "schema": "NONE",
+      "panel": "memory",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Actively analyze JVM memory and return prioritized findings."
+    },
+    {
+      "name": "get_metrics",
+      "command": "metrics",
+      "schema": "QUERY_LIMIT",
+      "panel": "metrics",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Search the current application metrics inventory and return a bounded page of local meter values."
+    },
+    {
+      "name": "get_overview",
+      "command": "overview",
+      "schema": "NONE",
+      "panel": "overview",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return stable application identity and runtime context, including versions, active profiles, and BootUI status."
+    },
+    {
+      "name": "get_pentest_report",
+      "command": "pentest report",
+      "schema": "NONE",
+      "panel": "pentesting",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the last completed Pentesting advisor report without sending any HTTP probes."
+    },
+    {
+      "name": "pentest_scan",
+      "command": "pentest scan",
+      "schema": "NONE",
+      "panel": "pentesting",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Actively send bounded synthetic probes to this application's loopback endpoint and return security findings."
+    },
+    {
+      "name": "get_profile_diff",
+      "command": "profile diff",
+      "schema": "NONE",
+      "panel": "profile-diff",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the current active-profile configuration comparison using masked local configuration data."
+    },
+    {
+      "name": "get_rabbitmq_activity",
+      "command": "rabbitmq",
+      "schema": "NONE",
+      "panel": "rabbitmq",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the bounded local RabbitMQ activity snapshot captured from application publishers and listeners."
+    },
+    {
+      "name": "get_spring_data_repositories",
+      "command": "repositories",
+      "schema": "NONE",
+      "panel": "data",
+      "action": false,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return Spring Data repository metadata already computed by the application context."
+    },
+    {
+      "name": "get_rest_api_report",
+      "command": "rest-api report",
+      "schema": "NONE",
+      "panel": "rest-api",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the last completed REST API advisor report without starting a new endpoint scan."
+    },
+    {
+      "name": "rest_api_scan",
+      "command": "rest-api scan",
+      "schema": "NONE",
+      "panel": "rest-api",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Actively inspect Spring REST controllers and API design for correctness and maintainability risks."
+    },
+    {
+      "name": "clear_rest_client_traces",
+      "command": "rest-client clear",
+      "schema": "NONE",
+      "panel": "rest-client-trace",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Clear the bounded in-memory REST-client trace buffer and return the resulting report."
+    },
+    {
+      "name": "pause_rest_client_recording",
+      "command": "rest-client pause",
+      "schema": "NONE",
+      "panel": "rest-client-trace",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Pause REST-client trace recording and return the resulting report."
+    },
+    {
+      "name": "resume_rest_client_recording",
+      "command": "rest-client resume",
+      "schema": "NONE",
+      "panel": "rest-client-trace",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Resume REST-client trace recording and return the resulting report."
+    },
+    {
+      "name": "get_rest_client_traces",
+      "command": "rest-client traces",
+      "schema": "NONE",
+      "panel": "rest-client-trace",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the current bounded REST-client trace snapshot with masked headers and bodies according to BootUI exposure policy."
+    },
+    {
+      "name": "get_scheduled_tasks",
+      "command": "scheduled",
+      "schema": "NONE",
+      "panel": "scheduled",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the current scheduled task inventory and recent run history, including timing and outcome."
+    },
+    {
+      "name": "get_spring_security",
+      "command": "security config",
+      "schema": "NONE",
+      "panel": "spring-security",
+      "action": false,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the current Spring Security filter-chain and authentication configuration report."
+    },
+    {
+      "name": "get_security_logs",
+      "command": "security logs",
+      "schema": "LIMIT",
+      "panel": "security-logs",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return a bounded, newest-first snapshot of authentication and authorization audit events."
+    },
+    {
+      "name": "get_security_report",
+      "command": "security report",
+      "schema": "NONE",
+      "panel": "security",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the last completed Security advisor report without starting a new configuration scan."
+    },
+    {
+      "name": "security_scan",
+      "command": "security scan",
+      "schema": "NONE",
+      "panel": "security",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Actively review application security configuration and return prioritized findings."
+    },
+    {
+      "name": "get_claude_code_sessions",
+      "command": "sessions claude",
+      "schema": "NONE",
+      "panel": "claude-code",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the bounded, sanitized Claude Code session inventory already parsed from local session files."
+    },
+    {
+      "name": "get_copilot_sessions",
+      "command": "sessions copilot",
+      "schema": "NONE",
+      "panel": "copilot",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the bounded, sanitized Copilot CLI session inventory already parsed from local session files."
+    },
+    {
+      "name": "get_spring_report",
+      "command": "spring report",
+      "schema": "NONE",
+      "panel": "spring",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the last completed Spring advisor report without starting a new application scan."
+    },
+    {
+      "name": "spring_scan",
+      "command": "spring scan",
+      "schema": "NONE",
+      "panel": "spring",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Actively inspect Spring configuration and bean usage for correctness and maintainability risks."
+    },
+    {
+      "name": "clear_sql_traces",
+      "command": "sql clear",
+      "schema": "NONE",
+      "panel": "sql-trace",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Clear the bounded in-memory SQL trace buffer and return the resulting report."
+    },
+    {
+      "name": "pause_sql_trace_recording",
+      "command": "sql pause",
+      "schema": "NONE",
+      "panel": "sql-trace",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Pause SQL trace recording and return the resulting report."
+    },
+    {
+      "name": "resume_sql_trace_recording",
+      "command": "sql resume",
+      "schema": "NONE",
+      "panel": "sql-trace",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Resume SQL trace recording and return the resulting report."
+    },
+    {
+      "name": "get_sql_traces",
+      "command": "sql traces",
+      "schema": "NONE",
+      "panel": "sql-trace",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the current bounded SQL trace snapshot with statements and timings."
+    },
+    {
+      "name": "get_startup_timeline",
+      "command": "startup",
+      "schema": "NONE",
+      "panel": "startup",
+      "action": false,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the captured Spring startup-step timeline after filtering BootUI's own steps."
+    },
+    {
+      "name": "get_threads",
+      "command": "threads",
+      "schema": "QUERY_LIMIT",
+      "panel": "threads",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Search the current JVM thread snapshot and return a bounded page of thread states and stack summaries."
+    },
+    {
+      "name": "clear_traces",
+      "command": "traces clear",
+      "schema": "NONE",
+      "panel": "traces",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Clear BootUI's bounded in-memory trace buffer."
+    },
+    {
+      "name": "get_traces",
+      "command": "traces list",
+      "schema": "LIMIT",
+      "panel": "traces",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return a bounded, newest-first snapshot of distributed and local traces captured by BootUI."
+    },
+    {
+      "name": "clear_transactions",
+      "command": "tx clear",
+      "schema": "NONE",
+      "panel": "transactions",
+      "action": true,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Clear the bounded in-memory Spring transaction trace buffer and return the resulting report."
+    },
+    {
+      "name": "get_transactions",
+      "command": "tx list",
+      "schema": "NONE",
+      "panel": "transactions",
+      "action": false,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the current bounded transaction-boundary snapshot with outcomes, timings, nesting, and correlated SQL counts."
+    },
+    {
+      "name": "pause_transaction_recording",
+      "command": "tx pause",
+      "schema": "NONE",
+      "panel": "transactions",
+      "action": true,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Pause Spring transaction-boundary recording and return the resulting report."
+    },
+    {
+      "name": "resume_transaction_recording",
+      "command": "tx resume",
+      "schema": "NONE",
+      "panel": "transactions",
+      "action": true,
+      "stacks": [
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Resume Spring transaction-boundary recording and return the resulting report."
+    },
+    {
+      "name": "get_vulnerabilities_report",
+      "command": "vulnerabilities report",
+      "schema": "NONE",
+      "panel": "vulnerabilities",
+      "action": false,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Return the cached vulnerability report, or the local dependency inventory before the first scan, without contacting OSV.dev or any other network service."
+    },
+    {
+      "name": "vulnerabilities_scan",
+      "command": "vulnerabilities scan",
+      "schema": "NONE",
+      "panel": "vulnerabilities",
+      "action": true,
+      "stacks": [
+        "QUARKUS",
+        "SPRING_MVC",
+        "SPRING_WEBFLUX"
+      ],
+      "summary": "Actively query OSV.dev for known vulnerabilities in this application's dependencies and return severity-ranked findings."
+    }
+  ]
+}

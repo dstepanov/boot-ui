@@ -56,6 +56,9 @@ jobs:
         env:
           VUEPRESS_BASE: /boot-ui/
 
+      - name: Check published install scripts
+        run: bash .github/scripts/check-docs-downloads.sh docs/.vuepress/dist
+
       - name: Upload Pages artifact
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5

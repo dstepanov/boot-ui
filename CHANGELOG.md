@@ -7,6 +7,57 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A `bootui` command-line interface, with one command per BootUI diagnostic.** `bootui beans --query dataSource`,
+  `bootui hibernate scan --json | jq …`, `bootui http exchanges --limit 20` — 78 commands covering every tool the MCP
+  server exposes, asked of a running application from a terminal or a CI job with no MCP client, no agent, and no
+  hand-written request. It is published to Maven Central as a runnable uber-jar and reachable through JBang
+  (`jbang bootui@jdubois/boot-ui`). Output is the application's exact JSON when piped or with `--json`, and a rendered
+  table or tree on a terminal. The exit code is what makes it scriptable: `0` answered, `1` usage or transport error,
+  and `2` when BootUI declined because a panel is disabled or read-only — a statement about the target's configuration
+  rather than a failed request, and one CI should not have to detect by parsing stderr. `--url`, `--api-path`,
+  `--token`, and `--timeout` work before or after the command and fall back to `BOOTUI_URL`, `BOOTUI_API_PATH`, and
+  `BOOTUI_TOKEN`. `bootui tools` reports what a *specific* instance advertises, honouring its stack and live panel
+  toggles, and `bootui mcp status|enable|disable` drives the MCP Server panel through its own policy. The command tree
+  is generated from the engine's tool catalog and checked in, with tests that fail when the two drift and that run
+  every command to confirm it reaches the tool it names — so the CLI cannot offer a diagnostic the MCP server lacks, or
+  lack one it has.
+- **`bootui-client`, a dependency-free client library for the command-line endpoint.** URL, token, invocation, and
+  outcome mapping in one small artifact that depends on nothing — not `bootui-core`, not Jackson, not an HTTP library
+  beyond the JDK's — and treats payloads as opaque JSON. That is deliberate: a client built at one BootUI version has
+  to keep working against an application running another. It is published so that build plugins and third-party
+  tooling can reuse the same transport the CLI does.
+- **A command-line endpoint that projects BootUI's diagnostic tools onto plain REST, on Spring MVC, Spring WebFlux, and
+  Quarkus.** `GET /bootui/api/cli` describes the tools a running instance advertises — name, description, backing panel,
+  argument schema, and live panel enable/read-only state — and `POST /bootui/api/cli/tools/{name}` invokes one and
+  returns its payload directly, with the outcome in the HTTP status (`400` invalid argument, `403` disabled or read-only
+  panel, `404` unknown tool, `409` action already running, `429` at capacity, `504` timeout) so a shell or CI job can
+  branch on it. Until now those diagnostics were reachable only from the browser console or an MCP client, which ruled
+  out scripting them. The endpoint is a transport, not a second capability: it builds the same `tools/call` request the
+  MCP transport does and runs it through the same dispatcher, so panel policy, argument validation, result caps,
+  concurrency, and timeouts are inherited rather than reimplemented. It is enabled by default (`bootui.cli.enabled`,
+  with `max-results`, `max-concurrent-calls`, and `execution-timeout` alongside it) and never requires
+  `bootui.mcp.enabled`; it keeps its own counters so command-line traffic is not reported as agent activity in the MCP
+  Server panel; and it stays behind the same loopback, `Host` allow-list, cross-site-write, and authentication-token
+  protections as every other BootUI route. A shared conformance suite pins all three stacks to one contract.
+- **A declarative MCP tool catalog in the engine.** The canonical list of every tool's name, argument schema, backing
+  panel, action flag, and supporting stacks moves out of a test file and into `McpToolCatalog` in `bootui-engine`, and
+  the Spring MVC, Spring WebFlux, and Quarkus registries are each pinned to it by test. This is what keeps the
+  command-line surface a true projection of the MCP one — a tool cannot be added, renamed, or given a different schema
+  on one stack without the build noticing.
+- **A Command Line panel, next to MCP Server under Developer tools.** The console now shows what the command-line
+  endpoint is doing: whether it answers, the JBang install line and an example command ready to copy, how many calls it
+  has served with their mean latency, how many were refused at capacity or timed out, and the full command catalog with
+  the commands this instance's panel settings would currently refuse marked as such. Each row is the command to type,
+  not the MCP tool name, which is possible because the command table moved into the engine and is now served by
+  `GET /bootui/api/cli` — so the panel, and any client, learns the current spelling from the running application rather
+  than from whatever version it was built against. The counters were already being kept by the endpoint's own dispatcher
+  and simply had nowhere to surface; the same response now reports them. The
+  panel is deliberately read-only — `bootui.cli.enabled` governs the endpoint from configuration, because a CI job's
+  access to a build should not be revocable from a browser tab — and it registers no API prefix of its own, so turning
+  the panel off hides the view without silently breaking a running script.
+
 ### Changed
 
 - **The `DevTools` panel is now called `Spring DevTools`.** The old name sat inside the *Developer tools* navigation

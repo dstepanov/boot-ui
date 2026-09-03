@@ -51,6 +51,9 @@ public class BootUiSpringSecurityAutoConfiguration {
         String otlpPattern = childSecurityPattern(properties.getApiPath(), "otlp");
         String mcpPattern = childSecurityEndpoint(properties.getApiPath(), "mcp");
         String mcpDescendantsPattern = childSecurityPattern(properties.getApiPath(), "mcp");
+        String cliPattern = childSecurityEndpoint(properties.getApiPath(), "cli");
+        String cliDescendantsPattern = childSecurityPattern(properties.getApiPath(), "cli");
+        String mcpTogglePattern = childSecurityEndpoint(properties.getApiPath(), "mcp-server/toggle");
         String authSessionPattern = childSecurityEndpoint(properties.getApiPath(), "auth/session");
         log.warn(
                 "BootUI detected Spring Security and is permitting unauthenticated access to {}; "
@@ -59,12 +62,21 @@ public class BootUiSpringSecurityAutoConfiguration {
                 String.join(", ", bootUiPatterns));
         return http.securityMatcher(bootUiPatterns)
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll())
-                // OTLP ingest and the MCP JSON-RPC endpoint are called by non-browser programmatic
-                // clients (OpenTelemetry exporters, local AI agents) that cannot present BootUI's SPA
-                // CSRF token, so they are exempted here. They remain protected from cross-site writes by
-                // LocalhostOnlyFilter's loopback, Host allow-list, and Origin/Sec-Fetch-Site checks.
+                // OTLP ingest, the MCP JSON-RPC endpoint, the CLI endpoint, and the MCP server toggle the CLI
+                // drives are called by non-browser programmatic clients (OpenTelemetry exporters, local AI
+                // agents, the bootui CLI) that cannot present BootUI's SPA CSRF token, so they are exempted
+                // here. Only the exact toggle path is exempt, not the rest of the mcp-server panel. They
+                // remain protected from cross-site writes by LocalhostOnlyFilter's loopback, Host allow-list,
+                // and Origin/Sec-Fetch-Site checks.
                 .csrf(csrf -> csrf.spa()
-                        .ignoringRequestMatchers(otlpPattern, mcpPattern, mcpDescendantsPattern, authSessionPattern))
+                        .ignoringRequestMatchers(
+                                otlpPattern,
+                                mcpPattern,
+                                mcpDescendantsPattern,
+                                cliPattern,
+                                cliDescendantsPattern,
+                                mcpTogglePattern,
+                                authSessionPattern))
                 .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
                 .build();
     }

@@ -240,6 +240,18 @@ public final class BootUiApiContractCatalog {
                             "toolCount", JsonType.INTEGER,
                             "tools", JsonType.ARRAY)),
             read(
+                    "cli",
+                    "/cli",
+                    fields(
+                            "enabled", JsonType.BOOLEAN,
+                            "serverName", JsonType.STRING,
+                            "serverVersion", JsonType.STRING,
+                            "endpoint", JsonType.STRING,
+                            "maxResults", JsonType.INTEGER,
+                            "callCount", JsonType.INTEGER,
+                            "toolCount", JsonType.INTEGER,
+                            "tools", JsonType.ARRAY)),
+            read(
                     "activity",
                     "/activity",
                     fields(
@@ -370,6 +382,7 @@ public final class BootUiApiContractCatalog {
         infrastructure(actions, "dismissed-rules.dismiss", "POST", "/dismissed-rules/conformance-rule", ALL, true);
         infrastructure(actions, "dismissed-rules.restore", "DELETE", "/dismissed-rules/conformance-rule", ALL, true);
         infrastructure(actions, "mcp.bridge", "POST", "/mcp", ALL, false);
+        infrastructure(actions, "cli.tool", "POST", "/cli/tools/get_overview", ALL, false);
         infrastructure(actions, "otlp.ingest", "POST", "/otlp/v1/traces", SPRING, false);
         return List.copyOf(actions);
     }

@@ -67,23 +67,53 @@ public sealed interface McpDispatchOutcome
     record ToolCallResult(Object payload) implements McpDispatchOutcome {}
 
     /**
+     * Why a {@code tools/call} failed in-band. MCP renders every variant identically ({@code isError:true}
+     * plus the message), but the {@code /bootui/api/cli} facade maps them to distinct HTTP statuses, so the
+     * distinction is carried as data rather than recovered by matching on message text.
+     */
+    enum ToolErrorReason {
+        /** The tool's backing panel is disabled. */
+        PANEL_DISABLED,
+        /** The tool is an action and its backing panel is read-only. */
+        PANEL_READ_ONLY,
+        /** Another invocation of the same action is already running. */
+        ACTION_BUSY,
+        /** The tool ran and reported a failure. */
+        TOOL_FAILED
+    }
+
+    /**
      * A failed {@code tools/call} reported in-band ({@code isError:true}): a refused gate, a busy
      * single-flight action, or a client error the tool itself raised. The agent reads {@code message} as
      * text content.
      *
-     * <p>{@code status} is metadata for non-MCP consumers of the same dispatch outcome (the BootUI CLI
-     * maps it to its own exit status). Both MCP codecs ignore it, so the JSON-RPC wire shape is
-     * identical whether or not it is present.
+     * <p>{@code reason} and {@code status} answer two different questions, and a non-MCP transport needs
+     * both. {@code reason} says why the <em>dispatcher</em> refused before the tool ran, over a closed
+     * vocabulary the engine owns. {@code status} says which client error the <em>tool itself</em> asked
+     * for once it was running, over the open 4xx range (see {@link McpToolClientException}); it is
+     * {@code null} for every failure that is not a tool-raised client error. Both MCP codecs ignore both
+     * fields, so the JSON-RPC wire shape is identical whether or not they are present.
      *
      * @param message the human-readable failure reason
+     * @param reason the machine-readable cause, used by non-MCP transports to choose a status
      * @param status the canonical client-error status the tool asked for (e.g. {@code 404}), or {@code
      *     null} when the failure has no such status
      */
-    record ToolCallError(String message, Integer status) implements McpDispatchOutcome {
+    record ToolCallError(String message, ToolErrorReason reason, Integer status) implements McpDispatchOutcome {
 
-        /** A failure with no canonical client-error status. */
+        /** A generic tool failure with no canonical client-error status. */
         public ToolCallError(String message) {
-            this(message, null);
+            this(message, ToolErrorReason.TOOL_FAILED, null);
+        }
+
+        /** A dispatcher-refused call: the tool never ran, so no tool-supplied status exists. */
+        public ToolCallError(String message, ToolErrorReason reason) {
+            this(message, reason, null);
+        }
+
+        /** A client error the tool raised while running. */
+        public ToolCallError(String message, Integer status) {
+            this(message, ToolErrorReason.TOOL_FAILED, status);
         }
     }
 

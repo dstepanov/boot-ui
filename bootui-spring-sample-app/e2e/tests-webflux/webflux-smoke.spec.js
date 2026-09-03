@@ -91,6 +91,7 @@ test.describe('BootUI on Spring WebFlux', () => {
       {id: 'security', heading: /^Security/},
       {id: 'activity', heading: /Live Activity/},
       {id: 'mcp-server', heading: /^MCP Server/},
+      {id: 'cli', heading: /^Command Line/},
       {id: 'rest-client-trace', heading: /REST Client/}
     ]
 

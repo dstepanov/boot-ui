@@ -1,0 +1,23 @@
+package io.github.jdubois.bootui.engine.mcp;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
+
+class McpToolSchemaTests {
+
+    @Test
+    void argumentNamesAreIteratedInDeclarationOrder() {
+        // Set.of() salts its iteration order per JVM. The command-line facade publishes this order as the
+        // argument order a generated CLI binds flags and positionals from, so it has to be stable.
+        assertThat(McpToolSchema.QUERY_LIMIT.argumentNames()).containsExactly("query", "limit");
+        assertThat(McpToolSchema.LIMIT.argumentNames()).containsExactly("limit");
+        assertThat(McpToolSchema.ID.argumentNames()).containsExactly("id");
+        assertThat(McpToolSchema.NONE.argumentNames()).isEmpty();
+    }
+
+    @Test
+    void argumentNamesAreUnmodifiable() {
+        assertThat(McpToolSchema.LIMIT.argumentNames()).isUnmodifiable();
+    }
+}

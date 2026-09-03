@@ -48,9 +48,8 @@ import io.github.jdubois.bootui.core.dto.SqlTraceRecordingRequest;
 import io.github.jdubois.bootui.core.dto.TransactionRecordingRequest;
 import io.github.jdubois.bootui.engine.mcp.McpArguments;
 import io.github.jdubois.bootui.engine.mcp.McpTool;
+import io.github.jdubois.bootui.engine.mcp.McpToolCatalog;
 import io.github.jdubois.bootui.engine.mcp.McpToolDescriptions;
-import io.github.jdubois.bootui.engine.mcp.McpToolSchema;
-import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.engine.reactivesecurity.ReactiveSecurityAdvisorService;
 import java.util.ArrayList;
 import java.util.List;
@@ -134,315 +133,225 @@ public class ReactiveBootUiMcpTools {
         List<McpTool> registry = new ArrayList<>();
 
         if (architectureBean != null) {
-            registry.add(action(
+            registry.add(tool(
                     "architecture_scan",
                     McpToolDescriptions.spring("architecture_scan"),
-                    BootUiPanels.ARCHITECTURE,
                     args -> architectureBean.scan()));
-            registry.add(read(
+            registry.add(tool(
                     "get_architecture_report",
                     McpToolDescriptions.spring("get_architecture_report"),
-                    BootUiPanels.ARCHITECTURE,
                     args -> architectureBean.architecture()));
         }
         if (springBean != null) {
-            registry.add(action(
-                    "spring_scan",
-                    McpToolDescriptions.spring("spring_scan"),
-                    BootUiPanels.SPRING,
-                    args -> springBean.scan()));
-            registry.add(read(
-                    "get_spring_report",
-                    McpToolDescriptions.spring("get_spring_report"),
-                    BootUiPanels.SPRING,
-                    args -> springBean.spring()));
+            registry.add(tool("spring_scan", McpToolDescriptions.spring("spring_scan"), args -> springBean.scan()));
+            registry.add(tool(
+                    "get_spring_report", McpToolDescriptions.spring("get_spring_report"), args -> springBean.spring()));
         }
         if (hibernateBean != null) {
-            registry.add(action(
-                    "hibernate_scan",
-                    McpToolDescriptions.spring("hibernate_scan"),
-                    BootUiPanels.HIBERNATE,
-                    args -> hibernateBean.scan()));
-            registry.add(read(
+            registry.add(
+                    tool("hibernate_scan", McpToolDescriptions.spring("hibernate_scan"), args -> hibernateBean.scan()));
+            registry.add(tool(
                     "get_hibernate_report",
                     McpToolDescriptions.spring("get_hibernate_report"),
-                    BootUiPanels.HIBERNATE,
                     args -> hibernateBean.hibernate()));
         }
         if (memoryBean != null) {
-            registry.add(action(
-                    "memory_scan",
-                    McpToolDescriptions.spring("memory_scan"),
-                    BootUiPanels.MEMORY,
-                    args -> memoryBean.scan()));
-            registry.add(read(
-                    "get_memory_report",
-                    McpToolDescriptions.spring("get_memory_report"),
-                    BootUiPanels.MEMORY,
-                    args -> memoryBean.memory()));
+            registry.add(tool("memory_scan", McpToolDescriptions.spring("memory_scan"), args -> memoryBean.scan()));
+            registry.add(tool(
+                    "get_memory_report", McpToolDescriptions.spring("get_memory_report"), args -> memoryBean.memory()));
         }
         if (securityBean != null) {
-            registry.add(action(
-                    "security_scan",
-                    McpToolDescriptions.spring("security_scan"),
-                    BootUiPanels.SECURITY,
-                    args -> securityBean.scan()));
-            registry.add(read(
+            registry.add(
+                    tool("security_scan", McpToolDescriptions.spring("security_scan"), args -> securityBean.scan()));
+            registry.add(tool(
                     "get_security_report",
                     McpToolDescriptions.spring("get_security_report"),
-                    BootUiPanels.SECURITY,
                     args -> securityBean.report()));
         }
         if (pentestingBean != null) {
-            registry.add(action(
-                    "pentest_scan",
-                    McpToolDescriptions.spring("pentest_scan"),
-                    BootUiPanels.PENTESTING,
-                    args -> pentestingBean.scan()));
-            registry.add(read(
+            registry.add(
+                    tool("pentest_scan", McpToolDescriptions.spring("pentest_scan"), args -> pentestingBean.scan()));
+            registry.add(tool(
                     "get_pentest_report",
                     McpToolDescriptions.spring("get_pentest_report"),
-                    BootUiPanels.PENTESTING,
                     args -> pentestingBean.pentesting()));
         }
         if (restApiBean != null) {
-            registry.add(action(
-                    "rest_api_scan",
-                    McpToolDescriptions.spring("rest_api_scan"),
-                    BootUiPanels.REST_API,
-                    args -> restApiBean.scan()));
-            registry.add(read(
+            registry.add(
+                    tool("rest_api_scan", McpToolDescriptions.spring("rest_api_scan"), args -> restApiBean.scan()));
+            registry.add(tool(
                     "get_rest_api_report",
                     McpToolDescriptions.spring("get_rest_api_report"),
-                    BootUiPanels.REST_API,
                     args -> restApiBean.restApi()));
         }
         if (graalvmBean != null) {
-            registry.add(action(
-                    "graalvm_scan",
-                    McpToolDescriptions.spring("graalvm_scan"),
-                    BootUiPanels.GRAALVM,
-                    args -> graalvmBean.scan(false)));
-            registry.add(read(
+            registry.add(
+                    tool("graalvm_scan", McpToolDescriptions.spring("graalvm_scan"), args -> graalvmBean.scan(false)));
+            registry.add(tool(
                     "get_graalvm_report",
                     McpToolDescriptions.spring("get_graalvm_report"),
-                    BootUiPanels.GRAALVM,
                     args -> graalvmBean.graalvm()));
         }
         if (cracBean != null) {
-            registry.add(action(
-                    "crac_scan", McpToolDescriptions.spring("crac_scan"), BootUiPanels.CRAC, args -> cracBean.scan()));
-            registry.add(read(
-                    "get_crac_report",
-                    McpToolDescriptions.spring("get_crac_report"),
-                    BootUiPanels.CRAC,
-                    args -> cracBean.crac()));
+            registry.add(tool("crac_scan", McpToolDescriptions.spring("crac_scan"), args -> cracBean.scan()));
+            registry.add(
+                    tool("get_crac_report", McpToolDescriptions.spring("get_crac_report"), args -> cracBean.crac()));
         }
         if (databaseAdvisorBean != null) {
-            registry.add(action(
+            registry.add(tool(
                     "database_advisor_scan",
                     McpToolDescriptions.spring("database_advisor_scan"),
-                    BootUiPanels.DATABASE_ADVISOR,
                     args -> databaseAdvisorBean.scan()));
-            registry.add(read(
+            registry.add(tool(
                     "get_database_advisor_report",
                     McpToolDescriptions.spring("get_database_advisor_report"),
-                    BootUiPanels.DATABASE_ADVISOR,
                     args -> databaseAdvisorBean.databaseAdvisor()));
         }
         if (vulnerabilitiesBean != null) {
-            registry.add(action(
+            registry.add(tool(
                     "vulnerabilities_scan",
                     McpToolDescriptions.spring("vulnerabilities_scan"),
-                    BootUiPanels.VULNERABILITIES,
                     args -> vulnerabilitiesBean.scan()));
-            registry.add(read(
+            registry.add(tool(
                     "get_vulnerabilities_report",
                     McpToolDescriptions.spring("get_vulnerabilities_report"),
-                    BootUiPanels.VULNERABILITIES,
                     args -> vulnerabilitiesBean.dependencies()));
         }
 
         if (liveActivityBean != null) {
-            registry.add(limitRead(
+            registry.add(tool(
                     "get_live_activity",
                     McpToolDescriptions.spring("get_live_activity"),
-                    BootUiPanels.ACTIVITY,
                     args -> liveActivityBean.activity(null, null, 0, args.limit(), null, null, null, 0)));
         }
         if (exceptionsBean != null) {
-            registry.add(read(
-                    "get_exceptions",
-                    McpToolDescriptions.spring("get_exceptions"),
-                    BootUiPanels.EXCEPTIONS,
-                    args -> exceptionsBean.list()));
-            registry.add(idRead(
+            registry.add(tool(
+                    "get_exceptions", McpToolDescriptions.spring("get_exceptions"), args -> exceptionsBean.list()));
+            registry.add(tool(
                     "get_exception_detail",
                     McpToolDescriptions.spring("get_exception_detail"),
-                    BootUiPanels.EXCEPTIONS,
                     args -> exceptionsBean.detail(args.id())));
-            registry.add(action(
-                    "clear_exceptions",
-                    McpToolDescriptions.spring("clear_exceptions"),
-                    BootUiPanels.EXCEPTIONS,
-                    args -> {
-                        exceptionsBean.clear();
-                        return Map.of("cleared", true);
-                    }));
+            registry.add(tool("clear_exceptions", McpToolDescriptions.spring("clear_exceptions"), args -> {
+                exceptionsBean.clear();
+                return Map.of("cleared", true);
+            }));
         }
         if (securityLogsBean != null) {
-            registry.add(limitRead(
+            registry.add(tool(
                     "get_security_logs",
                     McpToolDescriptions.spring("get_security_logs"),
-                    BootUiPanels.SECURITY_LOGS,
                     args -> securityLogsBean.logs(null, null, null, null, args.limit())));
         }
         if (sqlTraceBean != null) {
-            registry.add(read(
-                    "get_sql_traces",
-                    McpToolDescriptions.spring("get_sql_traces"),
-                    BootUiPanels.SQL_TRACE,
-                    args -> sqlTraceBean.trace()));
-            registry.add(action(
-                    "clear_sql_traces",
-                    McpToolDescriptions.spring("clear_sql_traces"),
-                    BootUiPanels.SQL_TRACE,
-                    args -> sqlTraceBean.clear()));
-            registry.add(action(
+            registry.add(
+                    tool("get_sql_traces", McpToolDescriptions.spring("get_sql_traces"), args -> sqlTraceBean.trace()));
+            registry.add(tool(
+                    "clear_sql_traces", McpToolDescriptions.spring("clear_sql_traces"), args -> sqlTraceBean.clear()));
+            registry.add(tool(
                     "pause_sql_trace_recording",
                     McpToolDescriptions.spring("pause_sql_trace_recording"),
-                    BootUiPanels.SQL_TRACE,
                     args -> sqlTraceBean.recording(new SqlTraceRecordingRequest(false))));
-            registry.add(action(
+            registry.add(tool(
                     "resume_sql_trace_recording",
                     McpToolDescriptions.spring("resume_sql_trace_recording"),
-                    BootUiPanels.SQL_TRACE,
                     args -> sqlTraceBean.recording(new SqlTraceRecordingRequest(true))));
         }
         if (transactionsBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_transactions",
                     McpToolDescriptions.spring("get_transactions"),
-                    BootUiPanels.TRANSACTIONS,
                     args -> transactionsBean.trace()));
-            registry.add(action(
+            registry.add(tool(
                     "clear_transactions",
                     McpToolDescriptions.spring("clear_transactions"),
-                    BootUiPanels.TRANSACTIONS,
                     args -> transactionsBean.clear()));
-            registry.add(action(
+            registry.add(tool(
                     "pause_transaction_recording",
                     McpToolDescriptions.spring("pause_transaction_recording"),
-                    BootUiPanels.TRANSACTIONS,
                     args -> transactionsBean.recording(new TransactionRecordingRequest(false))));
-            registry.add(action(
+            registry.add(tool(
                     "resume_transaction_recording",
                     McpToolDescriptions.spring("resume_transaction_recording"),
-                    BootUiPanels.TRANSACTIONS,
                     args -> transactionsBean.recording(new TransactionRecordingRequest(true))));
         }
         if (tracesBean != null) {
-            registry.add(limitRead(
-                    "get_traces",
-                    McpToolDescriptions.spring("get_traces"),
-                    BootUiPanels.TRACES,
-                    args -> tracesBean.list(args.limit())));
-            registry.add(
-                    action("clear_traces", McpToolDescriptions.spring("clear_traces"), BootUiPanels.TRACES, args -> {
-                        tracesBean.clear();
-                        return Map.of("cleared", true);
-                    }));
+            registry.add(tool(
+                    "get_traces", McpToolDescriptions.spring("get_traces"), args -> tracesBean.list(args.limit())));
+            registry.add(tool("clear_traces", McpToolDescriptions.spring("clear_traces"), args -> {
+                tracesBean.clear();
+                return Map.of("cleared", true);
+            }));
         }
         if (logTailBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_log_tail",
                     McpToolDescriptions.spring("get_log_tail"),
-                    BootUiPanels.LOG_TAIL,
                     args -> Map.of("entries", logTailBean.recent())));
         }
         if (httpExchangesBean != null) {
-            registry.add(limitRead(
+            registry.add(tool(
                     "get_http_exchanges",
                     McpToolDescriptions.spring("get_http_exchanges"),
-                    BootUiPanels.HTTP_EXCHANGES,
                     args -> httpExchangesBean.exchanges(null, null, null, null, args.limit())));
         }
 
         if (overviewBean != null) {
-            registry.add(read(
-                    "get_overview",
-                    McpToolDescriptions.spring("get_overview"),
-                    BootUiPanels.OVERVIEW,
-                    args -> overviewBean.overview()));
+            registry.add(
+                    tool("get_overview", McpToolDescriptions.spring("get_overview"), args -> overviewBean.overview()));
         }
         if (healthBean != null) {
-            registry.add(read(
-                    "get_health",
-                    McpToolDescriptions.spring("get_health"),
-                    BootUiPanels.HEALTH,
-                    args -> healthBean.health()));
+            registry.add(tool("get_health", McpToolDescriptions.spring("get_health"), args -> healthBean.health()));
         }
         if (configBean != null) {
-            registry.add(searchRead(
+            registry.add(tool(
                     "get_config",
                     McpToolDescriptions.spring("get_config"),
-                    BootUiPanels.CONFIG,
                     args -> configBean.list(args.query(), null, false, null, args.limit())));
         }
         if (beansBean != null) {
-            registry.add(searchRead(
+            registry.add(tool(
                     "get_beans",
                     McpToolDescriptions.spring("get_beans"),
-                    BootUiPanels.BEANS,
                     args -> beansBean.beans(args.query(), null, null, args.limit())));
         }
         if (mappingsBean != null) {
-            registry.add(searchRead(
+            registry.add(tool(
                     "get_mappings",
                     McpToolDescriptions.spring("get_mappings"),
-                    BootUiPanels.MAPPINGS,
                     args -> mappingsBean.flatMappings(args.query(), null, args.limit())));
         }
         if (loggersBean != null) {
-            registry.add(searchRead(
+            registry.add(tool(
                     "get_loggers",
                     McpToolDescriptions.spring("get_loggers"),
-                    BootUiPanels.LOGGERS,
                     args -> loggersBean.loggers(args.query(), null, args.limit())));
         }
         if (conditionsBean != null) {
-            registry.add(searchRead(
+            registry.add(tool(
                     "get_conditions",
                     McpToolDescriptions.spring("get_conditions"),
-                    BootUiPanels.CONDITIONS,
                     args -> conditionsBean.conditions(args.query(), null, null, args.limit())));
         }
         if (scheduledBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_scheduled_tasks",
                     McpToolDescriptions.spring("get_scheduled_tasks"),
-                    BootUiPanels.SCHEDULED,
                     args -> scheduledBean.scheduled()));
         }
         if (faultToleranceBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_fault_tolerance",
                     McpToolDescriptions.spring("get_fault_tolerance"),
-                    BootUiPanels.FAULT_TOLERANCE,
                     args -> faultToleranceBean.faultTolerance()));
         }
         if (cacheBean != null) {
-            registry.add(read(
-                    "get_cache_stats",
-                    McpToolDescriptions.spring("get_cache_stats"),
-                    BootUiPanels.CACHE,
-                    args -> cacheBean.springCache()));
+            registry.add(tool(
+                    "get_cache_stats", McpToolDescriptions.spring("get_cache_stats"), args -> cacheBean.springCache()));
         }
         if (connectionPoolsBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_database_connection_pools",
                     McpToolDescriptions.spring("get_database_connection_pools"),
-                    BootUiPanels.DATABASE_CONNECTION_POOLS,
                     args -> connectionPoolsBean.pools()));
         }
 
@@ -486,204 +395,168 @@ public class ReactiveBootUiMcpTools {
 
         MetricsController metricsBean = metrics.getIfAvailable();
         if (metricsBean != null) {
-            registry.add(searchRead(
+            registry.add(tool(
                     "get_metrics",
                     McpToolDescriptions.spring("get_metrics"),
-                    BootUiPanels.METRICS,
                     args -> metricsBean.metrics(
                             args.query(), null, null, null, null, "0", String.valueOf(args.limit()))));
         }
         LiveMemoryController liveMemoryBean = liveMemory.getIfAvailable();
         if (liveMemoryBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_live_memory",
                     McpToolDescriptions.spring("get_live_memory"),
-                    BootUiPanels.LIVE_MEMORY,
                     args -> liveMemoryBean.memory(null, null, null, null, null)));
         }
         JvmTuningController jvmTuningBean = jvmTuning.getIfAvailable();
         if (jvmTuningBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_jvm_tuning",
                     McpToolDescriptions.spring("get_jvm_tuning"),
-                    BootUiPanels.JVM_TUNING,
                     args -> jvmTuningBean.jvmTuning(null, null, null, null, null)));
         }
         HeapDumpController heapDumpBean = heapDump.getIfAvailable();
         if (heapDumpBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_heap_dump_report",
                     McpToolDescriptions.spring("get_heap_dump_report"),
-                    BootUiPanels.HEAP_DUMP,
                     args -> heapDumpBean.report("", "")));
-            registry.add(action(
+            registry.add(tool(
                     "analyze_heap_dump",
                     McpToolDescriptions.spring("analyze_heap_dump"),
-                    BootUiPanels.HEAP_DUMP,
                     args -> heapDumpBean.analyze()));
         }
         ThreadDumpController threadsBean = threads.getIfAvailable();
         if (threadsBean != null) {
-            registry.add(searchRead(
+            registry.add(tool(
                     "get_threads",
                     McpToolDescriptions.spring("get_threads"),
-                    BootUiPanels.THREADS,
                     args -> threadsBean.threads(args.query(), null, 0, args.limit())));
         }
         StartupController startupBean = startup.getIfAvailable();
         if (startupBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_startup_timeline",
                     McpToolDescriptions.spring("get_startup_timeline"),
-                    BootUiPanels.STARTUP,
                     args -> startupBean.startup()));
         }
         ProfileDiffController profileDiffBean = profileDiff.getIfAvailable();
         if (profileDiffBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_profile_diff",
                     McpToolDescriptions.spring("get_profile_diff"),
-                    BootUiPanels.PROFILE_DIFF,
                     args -> profileDiffBean.profiles()));
         }
         DataController dataBean = data.getIfAvailable();
         if (dataBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_spring_data_repositories",
                     McpToolDescriptions.spring("get_spring_data_repositories"),
-                    BootUiPanels.DATA,
                     args -> dataBean.repositories()));
         }
         FlywayController flywayBean = flyway.getIfAvailable();
         if (flywayBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_flyway_migrations",
                     McpToolDescriptions.spring("get_flyway_migrations"),
-                    BootUiPanels.FLYWAY,
                     args -> flywayBean.migrations()));
         }
         LiquibaseController liquibaseBean = liquibase.getIfAvailable();
         if (liquibaseBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_liquibase_changesets",
                     McpToolDescriptions.spring("get_liquibase_changesets"),
-                    BootUiPanels.LIQUIBASE,
                     args -> liquibaseBean.changeSets()));
         }
         ReactiveSpringSecurityController springSecurityBean = springSecurity.getIfAvailable();
         if (springSecurityBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_spring_security",
                     McpToolDescriptions.spring("get_spring_security"),
-                    BootUiPanels.SPRING_SECURITY,
                     args -> springSecurityBean.security().block()));
         }
         ReactiveRestClientTraceController restClientTraceBean = restClientTrace.getIfAvailable();
         if (restClientTraceBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_rest_client_traces",
                     McpToolDescriptions.spring("get_rest_client_traces"),
-                    BootUiPanels.REST_CLIENT_TRACE,
                     args -> restClientTraceBean.trace()));
-            registry.add(action(
+            registry.add(tool(
                     "clear_rest_client_traces",
                     McpToolDescriptions.spring("clear_rest_client_traces"),
-                    BootUiPanels.REST_CLIENT_TRACE,
                     args -> restClientTraceBean.clear()));
-            registry.add(action(
+            registry.add(tool(
                     "pause_rest_client_recording",
                     McpToolDescriptions.spring("pause_rest_client_recording"),
-                    BootUiPanels.REST_CLIENT_TRACE,
                     args -> restClientTraceBean.recording(new RestClientTraceRecordingRequest(false))));
-            registry.add(action(
+            registry.add(tool(
                     "resume_rest_client_recording",
                     McpToolDescriptions.spring("resume_rest_client_recording"),
-                    BootUiPanels.REST_CLIENT_TRACE,
                     args -> restClientTraceBean.recording(new RestClientTraceRecordingRequest(true))));
         }
         AiController aiBean = ai.getIfAvailable();
         if (aiBean != null) {
-            registry.add(read(
-                    "get_ai_overview",
-                    McpToolDescriptions.spring("get_ai_overview"),
-                    BootUiPanels.AI,
-                    args -> aiBean.overview()));
+            registry.add(
+                    tool("get_ai_overview", McpToolDescriptions.spring("get_ai_overview"), args -> aiBean.overview()));
         }
         EmailController emailBean = email.getIfAvailable();
         if (emailBean != null) {
-            registry.add(read(
-                    "get_emails",
-                    McpToolDescriptions.spring("get_emails"),
-                    BootUiPanels.EMAIL,
-                    args -> emailBean.list()));
+            registry.add(tool("get_emails", McpToolDescriptions.spring("get_emails"), args -> emailBean.list()));
         }
         KafkaController kafkaBean = kafka.getIfAvailable();
         if (kafkaBean != null) {
-            registry.add(read(
-                    "get_kafka_activity",
-                    McpToolDescriptions.spring("get_kafka_activity"),
-                    BootUiPanels.KAFKA,
-                    args -> kafkaBean.list()));
+            registry.add(tool(
+                    "get_kafka_activity", McpToolDescriptions.spring("get_kafka_activity"), args -> kafkaBean.list()));
         }
         RabbitController rabbitBean = rabbit.getIfAvailable();
         if (rabbitBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_rabbitmq_activity",
                     McpToolDescriptions.spring("get_rabbitmq_activity"),
-                    BootUiPanels.RABBITMQ,
                     args -> rabbitBean.list()));
         }
         JmsController jmsBean = jms.getIfAvailable();
         if (jmsBean != null) {
-            registry.add(read(
-                    "get_jms_activity",
-                    McpToolDescriptions.spring("get_jms_activity"),
-                    BootUiPanels.JMS,
-                    args -> jmsBean.list()));
+            registry.add(
+                    tool("get_jms_activity", McpToolDescriptions.spring("get_jms_activity"), args -> jmsBean.list()));
         }
         DevToolsController devToolsBean = devTools.getIfAvailable();
         if (devToolsBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_devtools_status",
                     McpToolDescriptions.spring("get_devtools_status"),
-                    BootUiPanels.DEVTOOLS,
                     args -> devToolsBean.status()));
-            registry.add(action(
+            registry.add(tool(
                     "trigger_devtools_livereload",
                     McpToolDescriptions.spring("trigger_devtools_livereload"),
-                    BootUiPanels.DEVTOOLS,
                     args -> devToolsBean.triggerLiveReload().getBody()));
         }
         DevServicesController devServicesBean = devServices.getIfAvailable();
         if (devServicesBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_dev_services",
                     McpToolDescriptions.spring("get_dev_services"),
-                    BootUiPanels.DEV_SERVICES,
                     args -> devServicesBean.list()));
         }
         GitHubController githubBean = github.getIfAvailable();
         if (githubBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_github_dashboard",
                     McpToolDescriptions.spring("get_github_dashboard"),
-                    BootUiPanels.GITHUB,
                     args -> githubBean.dashboard()));
         }
         ReactiveCopilotController copilotBean = copilot.getIfAvailable();
         if (copilotBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_copilot_sessions",
                     McpToolDescriptions.spring("get_copilot_sessions"),
-                    BootUiPanels.COPILOT,
                     args -> copilotBean.sessions(null, null)));
         }
         ReactiveClaudeCodeController claudeCodeBean = claudeCode.getIfAvailable();
         if (claudeCodeBean != null) {
-            registry.add(read(
+            registry.add(tool(
                     "get_claude_code_sessions",
                     McpToolDescriptions.spring("get_claude_code_sessions"),
-                    BootUiPanels.CLAUDE_CODE,
                     args -> claudeCodeBean.sessions(null, null)));
         }
 
@@ -709,38 +582,25 @@ public class ReactiveBootUiMcpTools {
                 .toList();
     }
 
-    private static McpTool action(
-            String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(
-                name, description, McpToolSchema.NONE, panelId, true, SpringMcpToolFailures.translating(handler));
-    }
-
-    private static McpTool read(
-            String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(
-                name, description, McpToolSchema.NONE, panelId, false, SpringMcpToolFailures.translating(handler));
-    }
-
-    private static McpTool limitRead(
-            String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(
-                name, description, McpToolSchema.LIMIT, panelId, false, SpringMcpToolFailures.translating(handler));
-    }
-
-    private static McpTool searchRead(
-            String name, String description, String panelId, Function<McpArguments, Object> handler) {
+    /**
+     * Builds one advertised tool from the shared {@link McpToolCatalog}.
+     *
+     * <p>Only the name, description, and handler are adapter-specific. The argument schema, backing panel,
+     * and action flag are read back from the catalog, so they cannot be spelled differently here than in the
+     * other stacks, and a name this stack is not supposed to advertise fails fast at startup.
+     *
+     * <p>Every handler is wrapped by {@link SpringMcpToolFailures} at this single point, so a tool that
+     * delegates to a controller method cannot report its client error as a server fault by being registered
+     * through a path that forgot to translate.
+     */
+    private static McpTool tool(String name, String description, Function<McpArguments, Object> handler) {
+        McpToolCatalog.Entry entry = McpToolCatalog.require(name, McpToolCatalog.Stack.SPRING_WEBFLUX);
         return new McpTool(
                 name,
                 description,
-                McpToolSchema.QUERY_LIMIT,
-                panelId,
-                false,
+                entry.schema(),
+                entry.panelId(),
+                entry.action(),
                 SpringMcpToolFailures.translating(handler));
-    }
-
-    private static McpTool idRead(
-            String name, String description, String panelId, Function<McpArguments, Object> handler) {
-        return new McpTool(
-                name, description, McpToolSchema.ID, panelId, false, SpringMcpToolFailures.translating(handler));
     }
 }

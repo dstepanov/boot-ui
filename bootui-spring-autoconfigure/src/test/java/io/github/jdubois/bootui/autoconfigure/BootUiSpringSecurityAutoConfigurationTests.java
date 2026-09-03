@@ -68,6 +68,46 @@ class BootUiSpringSecurityAutoConfigurationTests {
     }
 
     @Test
+    void permitsCliToolPostWithoutCsrfToken() {
+        // The bootui CLI is a non-browser programmatic client for the same reason MCP clients are: it has no
+        // SPA session to carry a CSRF token, so a 403 here would make the whole endpoint unreachable.
+        ResponseEntity<String> cli = client().post()
+                .uri("/bootui/api/cli/tools/get_overview")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("{}")
+                .retrieve()
+                .toEntity(String.class);
+        assertThat(cli.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void permitsMcpServerTogglePostWithoutCsrfToken() {
+        // 'bootui mcp enable|disable' drives this panel action, and the CLI has no SPA session to carry a
+        // CSRF token. Only the exact toggle path is exempt; the rest of the panel still requires one.
+        ResponseEntity<String> toggle = client().post()
+                .uri("/bootui/api/mcp-server/toggle")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("{\"enabled\":false}")
+                .retrieve()
+                .toEntity(String.class);
+        assertThat(toggle.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void stillRequiresACsrfTokenForOtherBootUiWrites() {
+        // The exemption above must not become a blanket hole: a write BootUI does not exempt is still
+        // rejected before it reaches a handler.
+        ResponseEntity<String> denied = client().post()
+                .uri("/bootui/api/not-a-real-endpoint")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("{}")
+                .retrieve()
+                .onStatus(status -> true, (request, response) -> {})
+                .toEntity(String.class);
+        assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
     void permitsAuthenticationSessionPostWithoutCsrfToken() {
         ResponseEntity<Void> session =
                 client().post().uri("/bootui/api/auth/session").retrieve().toBodilessEntity();

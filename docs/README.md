@@ -48,6 +48,7 @@ footer: Apache-2.0 Licensed | BootUI
 | Explore every panel | [Features](features/README.md) |
 | Configure activation, safety, panels, and actions | [Properties](PROPERTIES.md) |
 | Drive BootUI from an AI coding agent | [AI agents](AI-AGENTS.md) |
+| Ask a running application from a terminal or CI | [Command line](CLI.md) |
 
 ## How BootUI works
 
