@@ -4,7 +4,7 @@
 
 BootUI adds a safe, local-only developer console to a running application, shipping on **Spring Boot 4 (servlet and
 WebFlux starters) and Quarkus (an extension)** from one shared, framework-neutral engine that serves the same Vue UI and
-the same `/bootui/api/**` contract on every runtime. The released surface covers 57 panels across runtime introspection,
+the same `/bootui/api/**` contract on every runtime. The released surface covers 58 panels across runtime introspection,
 configuration, database migrations, services, diagnostics, project health, and developer tooling. The next planned panel
 is a read-only **MongoDB** operational view, scoped in §3.5.
 
@@ -46,6 +46,7 @@ will therefore be additive rather than an extension of the SQL-specific panels.
 | Delivered | Slow-SQL ranking and URI attribution | Database | Existing SQL Trace and HTTP exchange evidence | No | Delivered |
 | Delivered | Meter provenance and explanation | Diagnostics | Existing meter registry and curated catalogue | No | Delivered |
 | Delivered | Cache tiering and hit ratios | Services | Existing cache managers and native statistics | No | Delivered |
+| Delivered | Command-line endpoint, `bootui` CLI and Command Line panel | Developer tools | Existing MCP tool catalog and dispatcher | No (same policy as MCP) | Delivered |
 
 ## 3. Feature specifications
 
