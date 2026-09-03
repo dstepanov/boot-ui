@@ -78,6 +78,26 @@ An alias keeps that readable:
 alias bootui='java -jar ~/tools/bootui-cli-all.jar'
 ```
 
+### Staying up to date
+
+Once a newer release reaches Maven Central, the CLI says so — on a terminal, after the answer, on standard
+error:
+
+```console
+bootui: version 1.17.0 is available; you have 1.16.0.
+        Update with: curl -fsSL https://www.julien-dubois.com/boot-ui/install.sh | sh
+        Silence this with BOOTUI_NO_UPDATE_CHECK=1.
+```
+
+The run that prints it makes no network call of its own: it reports what a previous check left in
+`~/.bootui` — `%LOCALAPPDATA%\BootUI` on Windows, or `BOOTUI_INSTALL_DIR` wherever you pointed it. That check
+reads the same `maven-metadata.xml` the installer does, at most once a day, on a background thread that the
+command never waits for and that is abandoned rather than delayed. Nothing is written to standard output and
+the exit code is untouched, so a pipeline sees exactly what it saw before.
+
+A piped run says nothing and asks nothing, so CI does no unexpected network traffic. `BOOTUI_NO_UPDATE_CHECK=1`
+turns it off everywhere, and `BOOTUI_MAVEN_REPO` points it at a mirror.
+
 ## Turn it on
 
 The CLI talks to `GET /bootui/api/cli` and `POST /bootui/api/cli/tools/{name}`, which are enabled by default.

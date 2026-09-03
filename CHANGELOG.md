@@ -7,6 +7,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The CLI says when a newer release is out.** A `bootui` installed by the install script had no way to
+  learn it was out of date. It now reports one, on a terminal and after the answer, on standard error:
+  `bootui: version 1.17.0 is available; you have 1.16.0.` The run that prints it makes no network call — it
+  reports what a previous check left in `~/.bootui`, `%LOCALAPPDATA%\BootUI`, or wherever
+  `BOOTUI_INSTALL_DIR` points. That check reads the same `maven-metadata.xml` the installer does, at most
+  once a day, on a background daemon thread the command never waits for and abandons rather than delays. A
+  piped run — every CI job — says nothing and asks nothing, standard output and the exit code are untouched,
+  and `BOOTUI_NO_UPDATE_CHECK=1` switches the whole thing off.
+
 ## [1.16.0] - 2026-09-03
 
 Feature release that takes BootUI's diagnostics out of the browser and the agent: a `bootui` command-line interface with
