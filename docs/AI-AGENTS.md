@@ -30,7 +30,8 @@ bounded shape a human would — never raw, unfiltered internals.
 ## Install the BootUI agent skill
 
 BootUI ships an agent skill that teaches GitHub Copilot how to install and configure BootUI, inspect a running
-application, turn advisor findings into focused fixes, verify those fixes, and connect to the MCP server.
+application from the [command line](CLI.md) or the MCP server, turn advisor findings into focused fixes, and verify
+those fixes.
 
 With GitHub CLI 2.90 or later, inspect the skill before installing it:
 
