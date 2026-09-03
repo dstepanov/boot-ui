@@ -40,12 +40,17 @@ The `bootui` CLI asks a running application one question and prints the answer, 
 diagnostic — the same set the MCP server exposes, projected mechanically from the same registry.
 
 ```bash
-jbang bootui@jdubois/boot-ui beans --query dataSource
-jbang bootui@jdubois/boot-ui hibernate scan --json | jq '.findings[]'
+curl -fsSL https://www.julien-dubois.com/boot-ui/install.sh | sh
+```
+
+```bash
+bootui beans --query dataSource
+bootui hibernate scan --json | jq '.findings[]'
 ```
 
 It needs no MCP client and no agent, prints exact JSON when piped, and exits `2` when a panel's own policy
-declines the call, so CI can branch on it. See the [command-line guide](https://www.julien-dubois.com/boot-ui/cli).
+declines the call, so CI can branch on it. Windows has a PowerShell installer, and JBang works too — see the
+[command-line guide](https://www.julien-dubois.com/boot-ui/cli).
 
 ## Project resources
 

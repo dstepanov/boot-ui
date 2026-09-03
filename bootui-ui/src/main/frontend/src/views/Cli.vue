@@ -46,6 +46,13 @@ const exampleCommand = computed(() => `bootui ${commandOptions.value} tools`)
 
 const jbangSnippet = computed(() => `${installCommand.value}\n${exampleCommand.value}`)
 
+// The documentation site publishes the installers, so the version they fetch follows
+// releases without this panel having to know anything about it.
+const INSTALL_SCRIPT_URL = 'https://www.julien-dubois.com/boot-ui/install.sh'
+const INSTALL_POWERSHELL_URL = 'https://www.julien-dubois.com/boot-ui/install.ps1'
+
+const scriptSnippet = computed(() => `curl -fsSL ${INSTALL_SCRIPT_URL} | sh\n${exampleCommand.value}`)
+
 // Only a released version resolves on Maven Central; a development build has no published jar to name.
 const releaseVersion = computed(() => {
   const version = status.value?.serverVersion ?? ''
@@ -192,6 +199,25 @@ const {autoRefresh, loading, load} = useAutoRefresh(fetchStatus, {enabled: manif
           <p class="text-muted small mb-3">
             The CLI is one runnable jar that needs a JDK 17 or later. Piped output is this application's JSON verbatim,
             so it parses with <code>jq</code>.
+          </p>
+
+          <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+            <h4 class="small fw-semibold mb-0">Install it in one command, on Linux and macOS</h4>
+            <button
+              type="button"
+              class="btn btn-sm"
+              :class="copiedKey === 'cli-script' ? 'btn-success' : 'btn-outline-secondary'"
+              :title="copiedKey === 'cli-script' ? 'Copied!' : 'Copy command'"
+              @click="copyToClipboard(scriptSnippet, 'cli-script')"
+            >
+              <i :class="['bi', copiedKey === 'cli-script' ? 'bi-check-lg' : 'bi-clipboard', 'me-1']"></i>
+              {{ copiedKey === 'cli-script' ? 'Copied!' : 'Copy' }}
+            </button>
+          </div>
+          <pre class="config-block bg-light border rounded p-3 mb-2 small"><code>{{ scriptSnippet }}</code></pre>
+          <p class="text-muted small mb-4">
+            It checks the download against the checksum published beside it and needs no administrator rights. On
+            Windows, run <code>irm {{ INSTALL_POWERSHELL_URL }} | iex</code> in PowerShell.
           </p>
 
           <div class="d-flex align-items-center justify-content-between gap-2 mb-2">

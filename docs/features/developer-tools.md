@@ -121,13 +121,13 @@ Unlike the MCP server, the endpoint is enabled by default and the panel is delib
 rather than switching it, so a CI job never depends on someone having left a browser in the right state. Turn it off
 with `bootui.cli.enabled=false`, which the panel then reports along with the `503` the endpoint answers.
 
-The panel shows the endpoint URL for this instance, two ready-to-paste installs — a JBang one, and a plain
-`curl` + `java -jar` one for machines without JBang, versioned to match this application — with an example command
-already pointed at it (including `--api-path` when `bootui.api-path` is customised), and every command the running
-instance advertises, split into action and read commands. Each row is the command to type — `bootui architecture scan`,
-not `architecture_scan` — with the arguments it accepts, the MCP tool it maps to, its backing panel, and whether that
-panel is currently disabled or read-only. That last part is what explains a `2` exit code: BootUI declining to run a
-tool is a statement about how the target is configured, not a failed request.
+The panel shows the endpoint URL for this instance, three ready-to-paste installs — the one-command installer the
+documentation site publishes, a JBang one, and a plain `curl` + `java -jar` one versioned to match this application —
+with an example command already pointed at it (including `--api-path` when `bootui.api-path` is customised), and every
+command the running instance advertises, split into action and read commands. Each row is the command to type —
+`bootui architecture scan`, not `architecture_scan` — with the arguments it accepts, the MCP tool it maps to, its
+backing panel, and whether that panel is currently disabled or read-only. That last part is what explains a `2` exit
+code: BootUI declining to run a tool is a statement about how the target is configured, not a failed request.
 
 The command spelling comes from the running application rather than from the CLI's own build, because the command table
 lives in the engine and is served by `GET /bootui/api/cli`. So the panel shows what *this* instance answers to, even

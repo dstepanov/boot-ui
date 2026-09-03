@@ -15,8 +15,45 @@ from the registry at build time and a test fails when the two disagree.
 
 ## Install
 
-The CLI is a single runnable jar on Maven Central. It needs a JDK 17 or later — the machine that builds your
-application already has one.
+The CLI is a single runnable jar. It needs a JDK 17 or later — the machine that builds your application
+already has one.
+
+**On Linux and macOS:**
+
+```bash
+curl -fsSL https://www.julien-dubois.com/boot-ui/install.sh | sh
+```
+
+**On Windows, in PowerShell:**
+
+```powershell
+irm https://www.julien-dubois.com/boot-ui/install.ps1 | iex
+```
+
+That asks Maven Central for the newest release, checks the download against the checksum published beside
+it, and leaves a `bootui` command in `~/.local/bin` — `%LOCALAPPDATA%\BootUI\bin` on Windows, which it adds
+to your user `PATH`. It needs no administrator rights, does not edit your shell profile, and contacts
+nothing but the Maven repository. Running it again upgrades in place, and `--uninstall` — `-Uninstall` in
+PowerShell — reverses it.
+
+To pin a version or install somewhere else, pass options after `sh -s --`:
+
+```bash
+curl -fsSL https://www.julien-dubois.com/boot-ui/install.sh | sh -s -- --version <version> --bin-dir ~/bin
+```
+
+The PowerShell script takes `-Version` and `-BinDir`, but has to be run rather than piped to read them:
+
+```powershell
+& ([scriptblock]::Create((irm https://www.julien-dubois.com/boot-ui/install.ps1))) -Version <version>
+```
+
+The shell script explains itself with `--help`. Both read `BOOTUI_VERSION`, `BOOTUI_INSTALL_DIR`,
+`BOOTUI_BIN_DIR` and `BOOTUI_MAVEN_REPO`, so a build agent behind a mirror can be pointed at its own
+repository.
+
+If you would rather not pipe a script into a shell — a fair position, and both are short enough to read
+first — there are two other ways in.
 
 **With [JBang](https://www.jbang.dev), which downloads and runs it for you:**
 

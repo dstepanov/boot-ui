@@ -9,6 +9,17 @@ function jsonResponse(body, ok = true, status = 200) {
   return {ok, status, json: () => Promise.resolve(body)}
 }
 
+// Address the install snippets by what they say rather than by their position, so
+// adding one does not silently repoint every assertion at a different block.
+function blockContaining(wrapper, needle) {
+  const text = wrapper.findAll('.config-block').map((block) => block.text())
+  const match = text.find((candidate) => candidate.includes(needle))
+  if (match === undefined) {
+    throw new Error(`No .config-block contains '${needle}'. Blocks: ${JSON.stringify(text)}`)
+  }
+  return match
+}
+
 function cliStatus(overrides = {}) {
   return {
     enabled: true,
@@ -173,7 +184,7 @@ describe('Cli', () => {
     wrapper = mount(Cli, {global})
     await flushPromises()
 
-    const block = wrapper.get('.config-block').text()
+    const block = blockContaining(wrapper, 'jbang app install')
     expect(block).toContain('jbang app install bootui@jdubois/boot-ui')
     expect(block).toContain('bootui --url ' + window.location.origin + ' tools')
     expect(block).not.toContain('--api-path')
@@ -207,10 +218,7 @@ describe('Cli', () => {
     wrapper = mount(Cli, {global})
     await flushPromises()
 
-    const blocks = wrapper.findAll('.config-block')
-    expect(blocks).toHaveLength(2)
-
-    const java = blocks[1].text()
+    const java = blockContaining(wrapper, 'VERSION=')
     expect(java).toContain('VERSION=1.15.0')
     expect(java).toContain('BASE=https://repo1.maven.org/maven2/com/julien-dubois/bootui/bootui-cli')
     expect(java).toContain('curl -fLO "${BASE}/${VERSION}/bootui-cli-${VERSION}-all.jar"')
@@ -218,12 +226,35 @@ describe('Cli', () => {
     expect(java).not.toContain('jbang')
 
     const copyButtons = wrapper.findAll('button').filter((button) => button.text().includes('Copy'))
-    expect(copyButtons).toHaveLength(2)
-    await copyButtons[1].trigger('click')
+    expect(copyButtons).toHaveLength(3)
+    await copyButtons[2].trigger('click')
     await flushPromises()
 
     expect(writeText).toHaveBeenCalledTimes(1)
     expect(writeText.mock.calls[0][0]).toContain('java -jar')
+  })
+
+  // The installer the documentation site publishes resolves the version itself, so this
+  // snippet must stay free of one however the application reports its own.
+  it('offers the one-command install and never pins a version into it', async () => {
+    const writeText = vi.fn().mockResolvedValue()
+    vi.stubGlobal('navigator', {clipboard: {writeText}})
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(cliStatus({serverVersion: '1.15.0'}))))
+
+    wrapper = mount(Cli, {global})
+    await flushPromises()
+
+    const script = blockContaining(wrapper, 'install.sh')
+    expect(script).toContain('curl -fsSL https://www.julien-dubois.com/boot-ui/install.sh | sh')
+    expect(script).toContain('bootui --url ' + window.location.origin + ' tools')
+    expect(script).not.toContain('1.15.0')
+    expect(wrapper.text()).toContain('irm https://www.julien-dubois.com/boot-ui/install.ps1 | iex')
+
+    const copyButtons = wrapper.findAll('button').filter((button) => button.text().includes('Copy'))
+    await copyButtons[0].trigger('click')
+    await flushPromises()
+
+    expect(writeText.mock.calls[0][0]).toContain('install.sh')
   })
 
   it('asks for a released version when the application reports a development build', async () => {
@@ -232,7 +263,7 @@ describe('Cli', () => {
     wrapper = mount(Cli, {global})
     await flushPromises()
 
-    expect(wrapper.findAll('.config-block')[1].text()).toContain('VERSION=<version>')
+    expect(blockContaining(wrapper, 'VERSION=')).toContain('VERSION=<version>')
     expect(wrapper.text()).toContain('development build')
   })
 })
