@@ -49,6 +49,10 @@ public final class BootUiCli {
         CommandSpec root = CommandTree.build(context);
         root.version("bootui " + version());
 
+        // Started before the command so it overlaps the work rather than following it, and never waited for.
+        UpdateCheck updateCheck = UpdateCheck.create(version(), environment, terminal);
+        updateCheck.startRefreshIfDue();
+
         CommandLine commandLine = new CommandLine(root)
                 .setOut(out)
                 .setErr(err)
@@ -67,7 +71,11 @@ public final class BootUiCli {
                     err.flush();
                     return ExitCodes.ERROR;
                 });
-        return commandLine.execute(args);
+        int exitCode = commandLine.execute(args);
+        // After the answer, so it never comes between the reader and what they asked for.
+        updateCheck.report(err);
+        updateCheck.awaitRefresh();
+        return exitCode;
     }
 
     private static String version() {
