@@ -203,7 +203,8 @@ load; use their explicit action only when requested.
 ## Connect an agent to the MCP server
 
 Set this up only when the user asks to connect an agent or MCP client to BootUI. If BootUI MCP tools are already in
-your tool list, just call them — there is nothing to configure. For a one-off diagnostic, use the CLI instead.
+your tool list, just call them — there is nothing to configure. For a one-off diagnostic, use the CLI instead. The full
+guide is at `https://github.com/jdubois/boot-ui/blob/main/docs/AI-AGENTS.md`.
 
 The MCP server is opt-in. Enable it with `bootui.mcp.enabled=ON` or the MCP Server panel toggle, then configure the agent
 with the application's actual port:
