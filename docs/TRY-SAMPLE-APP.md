@@ -148,8 +148,8 @@ docker run --rm -p 8082:8082 \
 ```
 
 Most panels light up on Quarkus; a handful stay Spring- or framework-specific (for example GraalVM, CRaC, Conditions,
-Startup Timeline, HTTP Sessions, Spring Data, Spring Security, DevTools) and are clearly marked *not applicable*. See
-[Features](features/README.md) for the full per-platform availability.
+Startup Timeline, HTTP Sessions, Spring Data, Spring Security, Spring DevTools) and are clearly marked *not applicable*.
+See [Features](features/README.md) for the full per-platform availability.
 
 ## Want the full experience?
 

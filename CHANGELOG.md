@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-09-03
+
+Feature release that takes BootUI's diagnostics out of the browser and the agent: a `bootui` command-line interface with
+one command per diagnostic, the plain-REST endpoint it talks to on Spring MVC, Spring WebFlux, and Quarkus, a
+dependency-free client library, and a Command Line panel that reports what a running instance would answer. It also
+renames the DevTools panel to Spring DevTools, reports a refused MCP tool call in-band instead of as an internal error,
+and closes a path-matching gap that let an encoded URL spelling bypass BootUI's safety filters on both Spring stacks.
+
 ### Added
 
 - **A `bootui` command-line interface, with one command per BootUI diagnostic.** `bootui beans --query dataSource`,
@@ -81,6 +89,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it. 5xx and every other failure keep their original throwable and remain a detail-free `-32603`. Covered by
   dispatcher, per-adapter translator, and codec tests plus an MCP conformance case that pins Spring MVC, Spring WebFlux,
   and Quarkus to identical behaviour.
+
+- **Spring DevTools status no longer fails when the `Restarter` is present but uninitialised.** The bridge caught
+  `IllegalStateException`, while Spring Boot wraps every `Restarter` failure in `DevToolsException`, so the recovery path
+  was dead code: an application with `spring-boot-devtools` on the classpath but no initialised restarter made the panel's
+  status read and its restart action throw instead of reporting `restartAvailable=false` with a reason. The bridge now
+  catches the wrapping exception and reports a generic reason when the wrapped failure carries no message, so the status
+  read always degrades instead of erroring, and never returns a blank reason.
+
+### Security
 
 - **BootUI's safety filters can no longer be bypassed by a percent-encoded or matrix-parameter spelling of a BootUI URL
   on Spring MVC or Spring WebFlux.** Each guard decided whether it applied by matching the *raw* request path
@@ -1759,7 +1776,8 @@ First tagged BootUI alpha. Highlights of the harden-all-visible-panels scope:
   request history, distributed tracing, multi-service orchestration, and live
   Docker Compose lifecycle control are intentionally out of scope for the alpha.
 
-[Unreleased]: https://github.com/jdubois/boot-ui/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/jdubois/boot-ui/compare/v1.16.0...HEAD
+[1.16.0]: https://github.com/jdubois/boot-ui/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/jdubois/boot-ui/compare/v1.14.1...v1.15.0
 [1.14.1]: https://github.com/jdubois/boot-ui/compare/v1.14.0...v1.14.1
 [1.14.0]: https://github.com/jdubois/boot-ui/compare/v1.13.1...v1.14.0
