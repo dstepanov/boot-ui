@@ -7,6 +7,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Spring advisor and the pentest panel no longer report BootUI's own actuator default as a host
+  misconfiguration.** BootUI contributes `management.endpoint.health.show-details=always` as a lowest-priority default
+  so its Health panel works, and `SPRING-MGMT-003` (MEDIUM) and `PT-A05-050` (LOW) then reported that value against the
+  application — a "security finding" BootUI had created itself, in an application whose configuration never mentions
+  the property. `SPRING-MGMT-003` now reads the property the same host-aware way `SEC-ACT-004` already did, and the
+  pentest collector's host lookup no longer misses the filter: it skips Spring Boot's attached
+  `configurationProperties` property source, which sits in front of every other source and resolves through them, so
+  BootUI's contribution was returned under the wrong source name and slipped past the check the panel documented. All
+  four call sites now share one implementation, so the two cannot drift apart again. What BootUI injects, and its
+  lowest-priority precedence, are unchanged (#923).
+
 ## [1.16.0] - 2026-09-03
 
 Feature release that takes BootUI's diagnostics out of the browser and the agent: a `bootui` command-line interface with
