@@ -27,12 +27,12 @@ import java.util.Set;
  * localhost/Host/CSRF checks always evaluate first: a request that fails both the safety guard and panel
  * gating is rejected by the safety filter, which short-circuits before this filter runs.
  *
- * <p>Only requests under {@code /bootui/api/**} are considered (mirroring the Spring filter's
- * {@code shouldNotFilter}); the static UI shell under {@code /bootui/**} is never gated by a panel toggle.
- * A request path that does not resolve to a registered {@link Panel} — notably {@code GET
- * /bootui/api/overview} (the Overview panel registers no API prefix on purpose), the
- * {@code /bootui/api/panels} manifest endpoint itself, and any future non-panel endpoint — passes through
- * untouched, exactly like the Spring and Quarkus filters.
+ * <p>Only requests under the configured API mount are considered (mirroring the Spring filter's
+ * {@code shouldNotFilter}); the SPA shell and its bundle, served from the UI mount, are never gated by a
+ * panel toggle. A request path that does not resolve to a registered {@link Panel} — notably {@code GET
+ * /api/overview} (the Overview panel registers no API prefix on purpose), the {@code /api/panels} manifest
+ * endpoint itself, and any future non-panel endpoint — passes through untouched, exactly like the Spring
+ * and Quarkus filters.
  */
 @RequiresBootUi
 @Singleton
@@ -90,7 +90,7 @@ public class MicronautPanelAccessFilter {
      * {@code micronaut.server.context-path} prefix (shared with {@link BootUiMicronautSafetyFilter} via
      * {@link MicronautContextPath}). Returns {@code null} when the request is not under the API mount at
      * all, including requests to the static UI shell — which is never gated by a panel toggle. The mount is
-     * read live and fails closed to the reserved internal {@code /bootui/api}.
+     * read live and fails closed to the default {@code /bootui/api}.
      */
     @Nullable
     private String apiRelativePath(HttpRequest<?> request) {

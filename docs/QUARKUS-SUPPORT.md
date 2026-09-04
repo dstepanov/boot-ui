@@ -137,6 +137,14 @@ Small interfaces the shared engine calls; each framework implements them. Names 
 | `RabbitActivityRecorder`       | RabbitMQ messaging capture (Live Activity + the RabbitMQ panel)     | `RabbitTemplate` / `AbstractRabbitListenerContainerFactory` wrap | SmallRye `Outgoing`/`IncomingInterceptor` |
 | `LogCaptureSource`             | Tailed log lines (Log Tail)                                          | logback appender                                            | JBoss LogManager handler                     |
 | `LocalhostGuardBinding`        | Feeds request metadata to the shared guard                           | servlet `Filter`                                            | Vert.x handler                               |
+| `JsonCodec` / `JsonTree`       | Reads third-party JSON for the shared GitHub and OSV clients         | Jackson 3 `SpringJsonCodec`                                 | Jackson 2 `QuarkusJsonCodec`                 |
+
+`JsonCodec` is the port that lets the GitHub dashboard client and the OSV vulnerability scanner live in
+`bootui-engine` at all. Both talk to a third-party HTTP API, so both must parse JSON — and Spring Boot 4's Jackson 3
+(`tools.jackson`) and Quarkus'/Micronaut's Jackson 2 (`com.fasterxml.jackson`) are an incompatible artifact *and*
+package, which is why each adapter used to carry its own near-verbatim copy of both classes. Navigating responses
+through a neutral `JsonTree` leaves one implementation of the endpoints, bounds, shaping and error taxonomy, and
+roughly a hundred lines of Jackson delegation per adapter.
 
 The framework-neutral safety **decision** (loopback check, `Host`/allowed-hosts validation, `Origin`/`Sec-Fetch-Site`
 CSRF defense) is extracted into a shared `LocalhostGuard` in `bootui-engine`, reusing the existing `CidrRange` /

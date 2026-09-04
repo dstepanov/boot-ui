@@ -3,13 +3,13 @@
 Ready-to-file issues for the gaps in `bootui-micronaut`. Each entry states the blocker as it actually is, not as it
 looked from the outside: several were investigated against the real Micronaut APIs and the conclusions changed.
 
-Order below is the suggested order of work. **MN-1 is a correctness bug that makes the adapter unusable on a
-default-configured Micronaut 4 application; everything else is coverage.**
+Order below is the suggested order of work. Numbering is stable: an entry keeps its identifier once it has been
+filed, so a closed item is struck from the table rather than renumbering the rest.
 
 | # | Title | Kind | Where | Size |
 | --- | --- | --- | --- | --- |
-| MN-1 | Serialization fails under `micronaut-serde` | Bug | adapter | M |
-| MN-2 | Conformance runner for the Micronaut stack | Test | conformance + sample | M |
+| ~~MN-1~~ | ~~Serialization fails under `micronaut-serde`~~ | Bug | adapter | **done** |
+| ~~MN-2~~ | ~~Conformance runner for the Micronaut stack~~ | Test | conformance + sample | **done** |
 | MN-3 | Kafka capture | Panel | adapter | M |
 | MN-4 | Micronaut application advisor ruleset | Panel | engine | L |
 | MN-5 | Caffeine cache statistics | Enhancement | adapter | S |
@@ -17,7 +17,7 @@ default-configured Micronaut 4 application; everything else is coverage.**
 | MN-7 | Dev Services over Micronaut Test Resources | Panel | adapter | M |
 | MN-8 | Micronaut security advisor ruleset | Panel | engine | XL |
 | MN-9 | Runtime configuration overrides | Enhancement | adapter | M |
-| MN-10 | Derive `bootui.api-path` from `bootui.path` | Enhancement | adapter | M |
+| ~~MN-10~~ | ~~Derive `bootui.api-path` from `bootui.path`~~ — **done** | Enhancement | adapter | M |
 | MN-11 | GraalVM native-image support | Enhancement | adapter | M |
 | MN-12 | Sample-app Playwright coverage | Test | sample | M |
 | MN-13 | WebSocket frame capture | Blocked | upstream | — |
@@ -25,56 +25,76 @@ default-configured Micronaut 4 application; everything else is coverage.**
 
 ---
 
-## MN-1 — Serialization fails under `micronaut-serde`
+## MN-1 — Serialization fails under `micronaut-serde` — **done**
 
-**Kind:** bug · **Priority:** highest
+Every `/bootui/api/**` endpoint returned 500 when the application used `micronaut-serde-jackson` rather than
+`micronaut-jackson-databind`, which is the JSON stack a new Micronaut 4 application gets by default.
 
-Every `/bootui/api/**` endpoint returns 500 when the application uses `micronaut-serde-jackson` instead of
-`micronaut-jackson-databind`. Serde is the default for new Micronaut 4 applications, so BootUI is unusable on a large
-share of them.
+Resolved along option 1: `BootUiSerdeImports` in `bootui-micronaut` declares a `@SerdeImport` for every record the
+API can put on the wire, and `micronaut-serde-processor` on the compiler's `annotationProcessorPaths` generates the
+introspections into BootUI's own jar. The core DTOs stay annotation-free, and `micronaut-serde-api` is `provided`, so
+an application on databind is not dragged onto Serde. Option 2 stayed rejected.
 
-Reproduced by swapping the dependency in the sample app:
+An introspection makes a DTO writable but does not decide which of its fields get written, and Serde's own
+`serde.serialization.inclusion` defaults to `NON_EMPTY` — the same trap MN-2 found on databind. So every
+`@SerdeImport` also carries `mixin = AlwaysInclude.class`, a mix-in annotated `@JsonInclude(ALWAYS, content = ALWAYS)`
+that `micronaut-serde-processor` translates into `@SerdeConfig(include = ALWAYS, includeContent = ALWAYS)` at compile
+time. It is scoped to the imported types, so the host application's inclusion setting still governs its own
+responses, and it covers nulls as well as empty containers.
 
-```
-Internal Server Error: Error encoding object [PanelsReport[platform=micronaut, panels=[...]]]
-No serializable introspection present for type ...  Consider adding @Serdeable
-```
+Three related fixes were needed for the same reason — a type Serde cannot write: the MCP transport now serializes its
+own JSON-RPC envelope instead of answering a Jackson `JsonNode`; `MicronautMcpEnvelope` owns a private `ObjectMapper`
+instead of injecting a bean that does not exist under Serde; and `MicronautConfigProvider` reduces resolved property
+values (which can be any object, a `Class` among them) to the types the JSON contract is defined in.
 
-The cause is architectural, not accidental: core DTOs are annotation-free immutable records by design
-(`java-architecture.instructions.md`), and Serde requires a compile-time introspection for every type it writes.
+`micronaut-jackson-databind` is no longer a compile dependency of `bootui-micronaut` at all — only plain
+`com.fasterxml.jackson.core:jackson-databind`, for BootUI's own internal JSON work, which registers nothing with the
+host.
 
-**Options**
-
-1. Declare `@SerdeImport` for the DTOs from the adapter, which is exactly what that annotation exists for — external
-   types made serializable without annotating them. ~150 records in `io.github.jdubois.bootui.core.dto`, so generate
-   the import class rather than hand-writing it, and add a test asserting every DTO the API returns is covered.
-2. Force `micronaut-jackson-databind`. Rejected: it conflicts with an application that deliberately chose Serde, and
-   BootUI must not dictate the host's JSON stack.
-
-**Acceptance:** the sample app builds and passes its smoke test under both `micronaut-serde-jackson` and
-`micronaut-jackson-databind`; a test fails if a DTO reachable from the API has no introspection.
+Guarded by `BootUiSerdeImportsTest` (package coverage, a reachability closure over record components, and the mix-in
+on every import, so a new DTO without an import — or with an import missing the mix-in — fails the build) and by
+running both the smoke suite and the shared API conformance suite on both stacks: `bootui-micronaut`'s own tests
+under `micronaut-serde-jackson` (`MicronautSerdeApiConformanceTest`), `bootui-micronaut-sample-app`'s under
+`micronaut-jackson-databind` (`MicronautApiConformanceTest`). `BootUiJsonInclusionContractTest` exists in both
+modules and asserts on the raw response bytes, since deserializing would silently fill a dropped field back in. See
+[Micronaut support](./MICRONAUT-SUPPORT.md) for the full rationale.
 
 ---
 
-## MN-2 — Conformance runner for the Micronaut stack
+## MN-2 — Conformance runner for the Micronaut stack — **done**
 
-**Kind:** test · **Priority:** high — this is the gate for everything after it
+**Kind:** test · **Priority:** was high — this was the gate for everything after it
 
-`bootui-conformance` has no Micronaut runner, so the adapter's 35 live panels are verified by a hand-written smoke
-test rather than the shared contract suite.
+`bootui-conformance` now has `Runtime.MICRONAUT`, an `expected-panels-micronaut.json` manifest, and three runners in
+`bootui-micronaut-sample-app` (`MicronautApiConformanceTest`, `MicronautCliConformanceTest`,
+`MicronautMcpConformanceTest`), each `@MicronautTest` on a random port. The API suite also runs a fourth time, in
+`bootui-micronaut` itself (`MicronautSerdeApiConformanceTest`), so the whole contract is exercised on
+`micronaut-serde-jackson` as well as on `micronaut-jackson-databind`; the two stacks share no serialization code, so
+every wire-shape guarantee has to be earned twice.
 
-**Work**
+`ALL` gained `MICRONAUT`; the four action contracts Micronaut cannot satisfy (`security.scan`, `spring.scan`,
+`kafka.clear`, `rabbitmq.clear`) moved to a new `NON_MICRONAUT` set, mirroring `McpToolCatalog.NON_MICRONAUT_STACKS`.
+The read contracts needed no triage: the suite only exercises a panel the live manifest reports available, and the
+unported panels report themselves unavailable. `config` is declared `actionlessPanels()` for the same reason Quarkus
+does (no runtime override write path — MN-9).
 
-- Add `BootUiApiContractCatalog.Runtime.MICRONAUT`.
-- Decide what `ALL` means now: it is `Set.of(SPRING_MVC, SPRING_WEBFLUX, QUARKUS)`, and adding Micronaut to it asserts
-  every contract — including the five unported panels. Each `ALL` contract needs the same triage
-  `McpToolCatalog.NON_MICRONAUT_STACKS` just received.
-- Add `expected-panels-micronaut.json` (58 panels, registry order).
-- Add the runner to `bootui-micronaut-sample-app` with `@MicronautTest` on a random port, plus the
-  `AbstractCliConformanceTest` and `AbstractMcpConformanceTest` runners.
+**The risk was real: the suite found three adapter bugs, all now fixed.**
 
-**Risk:** the suite checks more than a 200 — canonical rejection bodies, action contracts, expected error-contract
-components. Expect real failures here; that is the point of doing it before adding more panels.
+1. **Empty collections and nulls were omitted from every response.** Micronaut defaults
+   `jackson.serialization-inclusion` to `NON_EMPTY`, so an empty list or map property was dropped instead of written
+   as `[]` / `{}` — breaking the wire contract on exactly the panels with nothing to report. Fixed by
+   `BootUiJsonInclusionCustomizer`, a Jackson mix-in resolver scoped to `io.github.jdubois.bootui.*` classes, so the
+   host application's own inclusion policy is untouched. Serde defaults `serde.serialization.inclusion` to the same
+   `NON_EMPTY` and needed its own equivalent, since the mix-in resolver is a Jackson-databind mechanism and Serde
+   publishes no `ObjectMapper` bean for it to attach to: every `@SerdeImport` in `BootUiSerdeImports` now carries
+   `mixin = AlwaysInclude.class`, applied at compile time (MN-1). Both halves are pinned on the raw response bytes by
+   a `BootUiJsonInclusionContractTest` in each module.
+2. **`ActionBusyException` had no handler**, so a second concurrent scan got the framework's generic 500 instead of
+   the canonical 409 + `ActionBusyResult`. Fixed by `ActionBusyExceptionHandler`, the analogue of the Spring and
+   Quarkus mappers.
+3. **`GET /exceptions/{id}` returned a bodyless 404**, so the `get_exception_detail` MCP/CLI tool told an agent only
+   "Not Found" and never which id. It now throws `HttpStatusException` with the same message the Quarkus adapter uses,
+   which `MicronautMcpToolFailures` already knows how to translate in-band.
 
 ---
 
@@ -187,18 +207,22 @@ affect.
 
 ---
 
-## MN-10 — Derive `bootui.api-path` from `bootui.path`
+## MN-10 — Derive `bootui.api-path` from `bootui.path` — **done**
 
-**Kind:** enhancement
+**Kind:** enhancement · **Status:** done
 
 On Spring and Quarkus the API mount derives from the UI mount. On Micronaut a `@Controller` placeholder default cannot
-reference another property, so `BootUiPathsValidator` fails fast when only `bootui.path` is set — honest, but an
-adapter-specific rule users have to learn.
+reference another property — the resolver does not evaluate a nested `${...}` inside a default, so
+`${bootui.api-path:${bootui.path:/bootui}/api}` resolves to the literal `/bootui/api}` — and `BootUiPathsValidator`
+used to fail fast when only `bootui.path` was set: honest, but an adapter-specific rule users had to learn.
 
-A `DefaultRouteBuilder` that mirrors the console's routes at the configured mount would remove the difference:
-`RouteBuilder` exposes `GET(String, BeanDefinition, ExecutableMethod)`, so the routes can be re-registered at startup
-from the existing controller definitions. Verify it composes with `micronaut.server.context-path` and that the
-mirrored routes still go through the filter chain in the same order.
+Solved without re-registering any route. `BootUiApiPathConfigurer` is an `ApplicationContextConfigurer`, which
+Micronaut invokes after the environment has started and before any bean definition is loaded — so it can read
+`bootui.path` from every property source and contribute `bootui.api-path` = `<bootui.path>/api` in time for the
+controllers' own placeholders to resolve to it. The contribution is skipped when the key is set, sits below every
+application property source, and stays silent on an invalid `bootui.path` so `BootUiPathsValidator` still reports that
+with the normalizer's message. `BootUiApiPathDerivationTest` boots a real server to pin that `bootui.path=/console`
+alone serves `/console/api/panels` (404 at `/bootui/api/panels`) and composes with `micronaut.server.context-path`.
 
 ---
 
@@ -206,9 +230,11 @@ mirrored routes still go through the filter chain in the same order.
 
 **Kind:** enhancement
 
-Micronaut is native-image-first and BootUI serializes with reflective Jackson databind, so the adapter is unlikely to
-work in a native image today. This overlaps with MN-1: moving to compile-time introspections would fix reflection at
-the same time.
+Micronaut is native-image-first. MN-1 removed part of the obstacle: an application on `micronaut-serde-jackson` now
+serializes every BootUI response through compile-time introspections, with no reflection at all. An application on
+`micronaut-jackson-databind` still serializes reflectively, and BootUI's own internal Jackson use (the MCP envelope,
+the GitHub and OSV clients) is reflective on both stacks, so this is not closed — but the console's response path is
+no longer the blocker it was.
 
 Also needs checking: the SPA assets served from the classpath by `BootUiAssetsController`, and the reflective Caffeine
 `estimatedSize()` / Hibernate unwrap paths.
@@ -221,7 +247,7 @@ Also needs checking: the SPA assets served from the classpath by `BootUiAssetsCo
 
 `bootui-spring-sample-app/e2e` and `bootui-quarkus-sample-app/e2e` have browser suites; the Micronaut sample has none.
 The console has been driven by hand against it, which is not a regression gate. Mirror the Quarkus suite's smoke spec
-once MN-2 lands.
+now that MN-2 has landed.
 
 ---
 

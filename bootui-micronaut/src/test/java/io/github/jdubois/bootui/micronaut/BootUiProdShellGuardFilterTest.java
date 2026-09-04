@@ -5,18 +5,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
 /**
- * Pins the surface the always-registered production guard suppresses. It must cover both the configured
- * mount and the reserved internal one (where the packaged SPA assets live), and nothing else.
+ * Pins the surface the always-registered production guard suppresses: the console's own dormant mounts,
+ * and nothing else. Blanking out more than that would 404 an application's own routes in production.
  */
 class BootUiProdShellGuardFilterTest {
 
     @Test
-    void coversTheConfiguredMountAndTheReservedInternalMount() {
+    void coversTheConfiguredUiAndApiMounts() {
         assertThat(BootUiProdShellGuardFilter.isBootUiPath("/console", "/console", "/console/api"))
                 .isTrue();
-        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/console/api/beans", "/console", "/console/api"))
+        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/console/assets/app.js", "/console", "/console/api"))
                 .isTrue();
-        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui/assets/app.js", "/console", "/console/api"))
+        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/console/api/beans", "/console", "/console/api"))
                 .isTrue();
     }
 
@@ -27,5 +27,17 @@ class BootUiProdShellGuardFilterTest {
         assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui-other", "/bootui"))
                 .isFalse();
         assertThat(BootUiProdShellGuardFilter.isBootUiPath(null, "/bootui")).isFalse();
+    }
+
+    /**
+     * A console mounted elsewhere does not occupy the default mount, so a route the application serves
+     * there must not be turned into a 404.
+     */
+    @Test
+    void leavesTheDefaultMountToTheApplicationWhenTheConsoleIsMountedElsewhere() {
+        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui", "/console", "/console/api"))
+                .isFalse();
+        assertThat(BootUiProdShellGuardFilter.isBootUiPath("/bootui/whatever", "/console", "/console/api"))
+                .isFalse();
     }
 }

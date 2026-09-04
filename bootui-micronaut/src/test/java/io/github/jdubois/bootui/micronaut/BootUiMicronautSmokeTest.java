@@ -18,6 +18,13 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Micronaut deduces the {@code test} environment when running under JUnit, which is one of BootUI's
  * default enabled environments, so the console is active here exactly as it is in development.
+ *
+ * <p>The JSON stack under these assertions is <strong>micronaut-serde-jackson</strong> (see this module's
+ * POM), the default for a new Micronaut 4 application and the stricter of the two: Serde refuses any type
+ * with no compile-time introspection. Walking every live panel therefore doubles as the end-to-end proof
+ * that {@code BootUiSerdeImports} covers the whole API surface. The same assertions run against
+ * micronaut-jackson-databind in {@code bootui-micronaut-sample-app}, since the two stacks cannot share a
+ * classpath.
  */
 @MicronautTest
 class BootUiMicronautSmokeTest {
@@ -102,6 +109,43 @@ class BootUiMicronautSmokeTest {
             var response = client.toBlocking().exchange(HttpRequest.GET(path), Object.class);
             assertThat((Object) response.getStatus()).as("GET %s", path).isEqualTo(HttpStatus.OK);
         }
+    }
+
+    /**
+     * A write endpoint, which exercises the JSON stack in the other direction: the request body has to be
+     * <em>de</em>serialized into a record the controller declares for itself, and the answer serialized back.
+     * Under Serde both halves need the introspections {@code BootUiSerdeImports} declares.
+     */
+    @Test
+    void readsAWriteRequestBodyAndAnswersWithTheUpdatedResource() {
+        Map<?, ?> updated = client.toBlocking()
+                .retrieve(
+                        HttpRequest.POST(
+                                "/bootui/api/loggers/io.github.jdubois.bootui.micronautsample",
+                                Map.of("level", "DEBUG")),
+                        Map.class);
+
+        assertThat(updated.get("name")).isEqualTo("io.github.jdubois.bootui.micronautsample");
+        assertThat(updated.get("configuredLevel")).isEqualTo("DEBUG");
+    }
+
+    /**
+     * The MCP transport writes its JSON-RPC envelope itself rather than handing a Jackson tree to the
+     * server's JSON stack — a Jackson {@code JsonNode} is unwritable under Serde. The server is off by
+     * default, so the expected answer is the canonical "disabled" error at HTTP 200, which is exactly the
+     * response shape this asserts.
+     */
+    @Test
+    void answersTheMcpTransportWithAJsonRpcEnvelope() {
+        Map<?, ?> response = client.toBlocking()
+                .retrieve(
+                        HttpRequest.POST("/bootui/api/mcp", Map.of("jsonrpc", "2.0", "id", 1, "method", "tools/list"))
+                                .contentType(io.micronaut.http.MediaType.APPLICATION_JSON_TYPE),
+                        Map.class);
+
+        assertThat(response.get("jsonrpc")).isEqualTo("2.0");
+        assertThat(response.get("id")).isEqualTo(1);
+        assertThat(response.get("error")).isNotNull();
     }
 
     /**

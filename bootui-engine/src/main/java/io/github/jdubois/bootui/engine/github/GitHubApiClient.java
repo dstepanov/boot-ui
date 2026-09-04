@@ -1,11 +1,9 @@
-package io.github.jdubois.bootui.autoconfigure.web;
+package io.github.jdubois.bootui.engine.github;
 
-import io.github.jdubois.bootui.autoconfigure.BootUiProperties;
 import io.github.jdubois.bootui.core.dto.*;
-import io.github.jdubois.bootui.engine.github.GitHubClient;
-import io.github.jdubois.bootui.engine.github.GitHubRepositoryDetector;
-import io.github.jdubois.bootui.engine.github.GitHubTokenProvider;
 import io.github.jdubois.bootui.engine.web.BoundedBodyReader;
+import io.github.jdubois.bootui.spi.json.JsonCodec;
+import io.github.jdubois.bootui.spi.json.JsonTree;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -18,10 +16,28 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.*;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
-final class GitHubApiClient implements GitHubClient {
+/**
+ * The one GitHub REST client every adapter uses: bounded, on-demand GitHub API GETs over the JDK
+ * {@link HttpClient}, shaped into the framework-neutral {@link GitHubDashboardReport} the engine and the Vue
+ * UI consume.
+ *
+ * <p>This lives in the engine rather than once per adapter because nothing about it is framework-specific.
+ * The only thing that used to force a copy per stack was JSON: Spring Boot 4 ships Jackson 3 and Quarkus and
+ * Micronaut ship Jackson 2, so the parsing calls could not be shared. That is now expressed as the neutral
+ * {@link JsonCodec} / {@link JsonTree} SPI, which each adapter implements over its own Jackson — leaving the
+ * endpoints, the bounds, the shaping and the error taxonomy defined exactly once.</p>
+ *
+ * <p>Safety properties this client owns, unchanged from the per-adapter copies it replaces: it refuses any
+ * repository whose API host is not in {@link GitHubApiSettings#allowedApiHosts()} before issuing a request, so
+ * a redirected or misconfigured base URL can never receive the token; every refresh runs against a fixed
+ * {@code RequestBudget} of API calls; each response body is capped by
+ * {@link BoundedBodyReader#strictBodyHandler}; optional calls are skipped entirely once the account's core
+ * quota falls to the safety threshold; and a failed section degrades the report to {@code PARTIAL} with a
+ * status-code-only message rather than surfacing a third-party error body. It is driven only by the explicit
+ * refresh action ({@code POST /bootui/api/github/refresh}); nothing here runs on render.</p>
+ */
+public final class GitHubApiClient implements GitHubClient {
 
     private static final String USER_AGENT = "BootUI";
 
@@ -31,22 +47,19 @@ final class GitHubApiClient implements GitHubClient {
 
     private static final String COPILOT_DOCS = "https://docs.github.com/en/rest/copilot/copilot-usage-metrics";
 
-    private final BootUiProperties.GitHub properties;
+    private final GitHubApiSettings settings;
 
     private final HttpClient httpClient;
 
-    private final ObjectMapper objectMapper;
+    private final JsonCodec json;
 
     private final GitHubTokenProvider tokenProvider;
 
-    GitHubApiClient(
-            BootUiProperties.GitHub properties,
-            HttpClient httpClient,
-            ObjectMapper objectMapper,
-            GitHubTokenProvider tokenProvider) {
-        this.properties = properties;
+    public GitHubApiClient(
+            GitHubApiSettings settings, HttpClient httpClient, JsonCodec json, GitHubTokenProvider tokenProvider) {
+        this.settings = settings;
         this.httpClient = httpClient;
-        this.objectMapper = objectMapper;
+        this.json = json;
         this.tokenProvider = tokenProvider;
     }
 
@@ -76,8 +89,8 @@ final class GitHubApiClient implements GitHubClient {
                     List.of());
         }
 
-        GitHubTokenProvider.Token token = tokenProvider.token(properties.getRequestTimeout());
-        RequestBudget budget = new RequestBudget(Math.max(1, properties.getMaxApiCalls()));
+        GitHubTokenProvider.Token token = tokenProvider.token(settings.requestTimeout());
+        RequestBudget budget = new RequestBudget(Math.max(1, settings.maxApiCalls()));
         List<String> warnings = new ArrayList<>();
         List<GitHubQuotaDto> quotas = new ArrayList<>();
         List<GitHubPullRequestDto> pullRequests = new ArrayList<>();
@@ -114,7 +127,7 @@ final class GitHubApiClient implements GitHubClient {
             GitHubCopilotUsageDto copilotUsage =
                     unavailableCopilotUsage("Live repository calls were skipped to preserve remaining quota.");
             boolean quotaProtected =
-                    coreRemaining != null && coreRemaining <= Math.max(0, properties.getQuotaSafetyThreshold());
+                    coreRemaining != null && coreRemaining <= Math.max(0, settings.quotaSafetyThreshold());
             if (quotaProtected) {
                 warnings.add(
                         "Optional GitHub calls were skipped because the core API quota is near its safety threshold.");
@@ -140,14 +153,14 @@ final class GitHubApiClient implements GitHubClient {
 
             String repoPath = "repos/" + path(repository.owner()) + "/" + path(repository.name());
             ApiResponse repoResponse = get(repository, repoPath, token, budget, "repository metadata");
-            JsonNode repoNode = repoResponse.success() ? repoResponse.json() : null;
+            JsonTree repoNode = repoResponse.success() ? repoResponse.json() : null;
             if (!repoResponse.success()) {
                 warnings.add(repoResponse.safeMessage());
             }
 
             ApiResponse pullsResponse = get(
                     repository,
-                    repoPath + "/pulls?state=open&per_page=" + positive(properties.getMaxPullRequests(), 10),
+                    repoPath + "/pulls?state=open&per_page=" + positive(settings.maxPullRequests(), 10),
                     token,
                     budget,
                     "pull requests");
@@ -159,7 +172,7 @@ final class GitHubApiClient implements GitHubClient {
 
             ApiResponse issuesResponse = get(
                     repository,
-                    repoPath + "/issues?state=open&per_page=" + positive(properties.getMaxIssues(), 25),
+                    repoPath + "/issues?state=open&per_page=" + positive(settings.maxIssues(), 25),
                     token,
                     budget,
                     "issues");
@@ -172,7 +185,7 @@ final class GitHubApiClient implements GitHubClient {
 
             ApiResponse runsResponse = get(
                     repository,
-                    repoPath + "/actions/runs?per_page=" + positive(properties.getMaxWorkflowRuns(), 20),
+                    repoPath + "/actions/runs?per_page=" + positive(settings.maxWorkflowRuns(), 20),
                     token,
                     budget,
                     "workflow runs");
@@ -303,7 +316,7 @@ final class GitHubApiClient implements GitHubClient {
         }
         HttpResponse<String> response = httpClient.send(
                 builder.build(), BoundedBodyReader.strictBodyHandler(BoundedBodyReader.GITHUB_MAX_BYTES));
-        JsonNode json = parseJson(response.body());
+        JsonTree json = parseJson(response.body());
         if (response.statusCode() >= 200 && response.statusCode() < 300) {
             return new ApiResponse(response.statusCode(), json, response.headers(), null);
         }
@@ -311,22 +324,28 @@ final class GitHubApiClient implements GitHubClient {
                 response.statusCode(), json, response.headers(), safeMessage(label, response.statusCode()));
     }
 
-    private JsonNode parseJson(String body) throws IOException {
+    /**
+     * Parses a response body, treating an empty body as an empty object so a 204/empty 200 flows through the
+     * same shaping path as any other success. A malformed body surfaces as an {@link IOException} on every
+     * stack (see {@link JsonCodec}), so {@link #refresh} reports it as a bounded error rather than letting an
+     * unchecked parser exception escape on the Jackson 3 stack only.
+     */
+    private JsonTree parseJson(String body) throws IOException {
         if (body == null || body.isBlank()) {
-            return objectMapper.readTree("{}");
+            return json.read("{}");
         }
-        return objectMapper.readTree(body);
+        return json.read(body);
     }
 
-    private List<GitHubQuotaDto> rateLimitQuotas(JsonNode root) {
-        JsonNode resources = root.path("resources");
+    private List<GitHubQuotaDto> rateLimitQuotas(JsonTree root) {
+        JsonTree resources = root.path("resources");
         if (!resources.isObject()) {
             return List.of();
         }
         List<GitHubQuotaDto> quotas = new ArrayList<>();
-        for (Map.Entry<String, JsonNode> entry : resources.properties()) {
+        for (Map.Entry<String, JsonTree> entry : resources.properties()) {
             String key = entry.getKey();
-            JsonNode value = entry.getValue();
+            JsonTree value = entry.getValue();
             long limit = value.path("limit").asLong(-1);
             long remaining = value.path("remaining").asLong(-1);
             long used = value.path("used").asLong(limit >= 0 && remaining >= 0 ? Math.max(0, limit - remaining) : -1);
@@ -360,20 +379,20 @@ final class GitHubApiClient implements GitHubClient {
         return "OK";
     }
 
-    private Long coreRemaining(JsonNode rateLimit) {
+    private Long coreRemaining(JsonTree rateLimit) {
         long remaining =
                 rateLimit.path("resources").path("core").path("remaining").asLong(-1);
         return remaining >= 0 ? remaining : null;
     }
 
-    private List<GitHubPullRequestDto> pullRequests(JsonNode root) {
+    private List<GitHubPullRequestDto> pullRequests(JsonTree root) {
         if (!root.isArray()) {
             return List.of();
         }
         List<GitHubPullRequestDto> pullRequests = new ArrayList<>();
-        for (JsonNode item : root) {
+        for (JsonTree item : root) {
             pullRequests.add(new GitHubPullRequestDto(
-                    item.path("number").asInt(),
+                    item.path("number").asInt(0),
                     text(item, "title"),
                     text(item.path("user"), "login"),
                     item.path("draft").asBoolean(false),
@@ -386,18 +405,18 @@ final class GitHubApiClient implements GitHubClient {
         return pullRequests;
     }
 
-    private List<GitHubWorkflowRunDto> workflowRuns(JsonNode root) {
-        JsonNode runs = root.path("workflow_runs");
+    private List<GitHubWorkflowRunDto> workflowRuns(JsonTree root) {
+        JsonTree runs = root.path("workflow_runs");
         if (!runs.isArray()) {
             return List.of();
         }
         List<GitHubWorkflowRunDto> workflowRuns = new ArrayList<>();
-        for (JsonNode item : runs) {
+        for (JsonTree item : runs) {
             Long created = instantMillis(text(item, "created_at"));
             Long updated = instantMillis(text(item, "updated_at"));
             Long started = instantMillis(text(item, "run_started_at"));
             workflowRuns.add(new GitHubWorkflowRunDto(
-                    item.path("id").asLong(),
+                    item.path("id").asLong(0),
                     nullable(item.path("workflow_id").asLong(-1)),
                     text(item, "name"),
                     text(item, "display_title"),
@@ -416,15 +435,15 @@ final class GitHubApiClient implements GitHubClient {
     }
 
     private List<GitHubWorkflowDto> workflows(
-            JsonNode root, GitHubRepositoryDetector.Repository repository, List<GitHubWorkflowRunDto> workflowRuns) {
-        JsonNode items = root.path("workflows");
+            JsonTree root, GitHubRepositoryDetector.Repository repository, List<GitHubWorkflowRunDto> workflowRuns) {
+        JsonTree items = root.path("workflows");
         if (!items.isArray()) {
             return List.of();
         }
         Map<Long, GitHubWorkflowRunDto> latestRuns = latestWorkflowRuns(workflowRuns);
         List<GitHubWorkflowDto> workflows = new ArrayList<>();
-        for (JsonNode item : items) {
-            long id = item.path("id").asLong();
+        for (JsonTree item : items) {
+            long id = item.path("id").asLong(0);
             workflows.add(new GitHubWorkflowDto(
                     id,
                     text(item, "name"),
@@ -458,7 +477,7 @@ final class GitHubApiClient implements GitHubClient {
         return run.updatedAt() == null ? 0 : run.updatedAt();
     }
 
-    private String workflowHtmlUrl(GitHubRepositoryDetector.Repository repository, JsonNode workflow) {
+    private String workflowHtmlUrl(GitHubRepositoryDetector.Repository repository, JsonTree workflow) {
         String workflowPath = text(workflow, "path");
         if (workflowPath != null && workflowPath.startsWith(".github/workflows/")) {
             String fileName = workflowPath.substring(workflowPath.lastIndexOf('/') + 1);
@@ -475,7 +494,7 @@ final class GitHubApiClient implements GitHubClient {
         return trimTrailingSlash(repository.htmlUrl()) + "/actions";
     }
 
-    private List<GitHubIssueBucketDto> issueBuckets(JsonNode root) {
+    private List<GitHubIssueBucketDto> issueBuckets(JsonTree root) {
         if (!root.isArray()) {
             return List.of();
         }
@@ -484,12 +503,12 @@ final class GitHubApiClient implements GitHubClient {
         int stale = 0;
         int labeled = 0;
         long staleBefore = Instant.now().minus(Duration.ofDays(30)).toEpochMilli();
-        for (JsonNode item : root) {
-            if (!item.path("pull_request").isMissingNode()) {
+        for (JsonTree item : root) {
+            if (!item.path("pull_request").isMissing()) {
                 continue;
             }
             open++;
-            JsonNode labels = item.path("labels");
+            JsonTree labels = item.path("labels");
             if (labels.isArray() && labels.size() > 0) {
                 labeled++;
             } else {
@@ -507,17 +526,17 @@ final class GitHubApiClient implements GitHubClient {
                 new GitHubIssueBucketDto("Stale 30d+", stale, stale > 0 ? "warning" : "success"));
     }
 
-    private List<GitHubIssueDto> issues(JsonNode root) {
+    private List<GitHubIssueDto> issues(JsonTree root) {
         if (!root.isArray()) {
             return List.of();
         }
         List<GitHubIssueDto> issues = new ArrayList<>();
-        for (JsonNode item : root) {
-            if (!item.path("pull_request").isMissingNode()) {
+        for (JsonTree item : root) {
+            if (!item.path("pull_request").isMissing()) {
                 continue;
             }
             issues.add(new GitHubIssueDto(
-                    item.path("number").asInt(),
+                    item.path("number").asInt(0),
                     text(item, "title"),
                     text(item.path("user"), "login"),
                     text(item, "html_url"),
@@ -553,20 +572,20 @@ final class GitHubApiClient implements GitHubClient {
         }
     }
 
-    private List<GitHubDependabotAlertDto> dependabotAlerts(JsonNode root) {
-        int max = positive(properties.getMaxSecurityAlerts(), 50);
+    private List<GitHubDependabotAlertDto> dependabotAlerts(JsonTree root) {
+        int max = positive(settings.maxSecurityAlerts(), 50);
         List<GitHubDependabotAlertDto> alerts = new ArrayList<>();
-        for (JsonNode item : root) {
+        for (JsonTree item : root) {
             if (alerts.size() >= max) {
                 break;
             }
-            JsonNode dependency = item.path("dependency");
-            JsonNode pkg = dependency.path("package");
-            JsonNode advisory = item.path("security_advisory");
-            JsonNode vulnerability = item.path("security_vulnerability");
+            JsonTree dependency = item.path("dependency");
+            JsonTree pkg = dependency.path("package");
+            JsonTree advisory = item.path("security_advisory");
+            JsonTree vulnerability = item.path("security_vulnerability");
             String severity = textOrDefault(vulnerability, "severity", text(advisory, "severity"));
             alerts.add(new GitHubDependabotAlertDto(
-                    item.path("number").asInt(),
+                    item.path("number").asInt(0),
                     text(item, "state"),
                     text(pkg, "name"),
                     text(pkg, "ecosystem"),
@@ -686,7 +705,7 @@ final class GitHubApiClient implements GitHubClient {
     private void addBillingQuota(
             List<GitHubQuotaDto> quotas,
             GitHubRepositoryDetector.Repository repository,
-            JsonNode repoNode,
+            JsonTree repoNode,
             GitHubTokenProvider.Token token,
             RequestBudget budget)
             throws IOException, InterruptedException {
@@ -719,7 +738,7 @@ final class GitHubApiClient implements GitHubClient {
 
     private GitHubCopilotUsageDto copilotUsage(
             GitHubRepositoryDetector.Repository repository,
-            JsonNode repoNode,
+            JsonTree repoNode,
             GitHubTokenProvider.Token token,
             RequestBudget budget)
             throws IOException, InterruptedException {
@@ -748,7 +767,7 @@ final class GitHubApiClient implements GitHubClient {
         if (!response.success()) {
             return unavailableCopilotUsage(response.safeMessage());
         }
-        JsonNode links = response.json().path("download_links");
+        JsonTree links = response.json().path("download_links");
         int linkCount = links.isArray() ? links.size() : 0;
         return new GitHubCopilotUsageDto(
                 "AVAILABLE",
@@ -762,7 +781,7 @@ final class GitHubApiClient implements GitHubClient {
     }
 
     private List<GitHubMetricDto> metrics(
-            JsonNode repoNode,
+            JsonTree repoNode,
             List<GitHubPullRequestDto> pullRequests,
             List<GitHubWorkflowRunDto> workflowRuns,
             List<GitHubIssueBucketDto> issueBuckets,
@@ -864,7 +883,7 @@ final class GitHubApiClient implements GitHubClient {
             String status,
             String message,
             Long refreshedAt,
-            JsonNode repoNode,
+            JsonTree repoNode,
             GitHubCredentialDto credential,
             List<GitHubMetricDto> metrics,
             List<GitHubQuotaDto> quotas,
@@ -927,7 +946,7 @@ final class GitHubApiClient implements GitHubClient {
                 "UNAVAILABLE", null, "Copilot usage report unavailable", null, null, null, COPILOT_DOCS, reason);
     }
 
-    private GitHubRepositoryDto repository(GitHubRepositoryDetector.Repository repository, JsonNode repoNode) {
+    private GitHubRepositoryDto repository(GitHubRepositoryDetector.Repository repository, JsonTree repoNode) {
         return new GitHubRepositoryDto(
                 repository.owner(),
                 repository.name(),
@@ -965,7 +984,7 @@ final class GitHubApiClient implements GitHubClient {
             return false;
         }
         String normalized = host.toLowerCase(Locale.ROOT);
-        return Arrays.stream(properties.getAllowedApiHosts())
+        return settings.allowedApiHosts().stream()
                 .filter(Objects::nonNull)
                 .map(value -> value.toLowerCase(Locale.ROOT))
                 .anyMatch(normalized::equals);
@@ -980,7 +999,7 @@ final class GitHubApiClient implements GitHubClient {
     }
 
     private Duration timeout() {
-        Duration timeout = properties.getRequestTimeout();
+        Duration timeout = settings.requestTimeout();
         return timeout == null || timeout.isNegative() || timeout.isZero() ? Duration.ofSeconds(5) : timeout;
     }
 
@@ -999,12 +1018,12 @@ final class GitHubApiClient implements GitHubClient {
         return value > 0 ? value : fallback;
     }
 
-    private static List<String> labels(JsonNode node) {
+    private static List<String> labels(JsonTree node) {
         if (!node.isArray()) {
             return List.of();
         }
         List<String> labels = new ArrayList<>();
-        for (JsonNode label : node) {
+        for (JsonTree label : node) {
             String name = text(label, "name");
             if (name != null) {
                 labels.add(name);
@@ -1013,7 +1032,7 @@ final class GitHubApiClient implements GitHubClient {
         return labels;
     }
 
-    private static String actor(JsonNode workflowRun) {
+    private static String actor(JsonTree workflowRun) {
         String triggeringActor = text(workflowRun.path("triggering_actor"), "login");
         return triggeringActor == null ? text(workflowRun.path("actor"), "login") : triggeringActor;
     }
@@ -1029,11 +1048,11 @@ final class GitHubApiClient implements GitHubClient {
         return String.join(" ", words);
     }
 
-    private static String text(JsonNode node, String fieldName) {
-        if (node == null || node.isMissingNode() || node.isNull()) {
+    private static String text(JsonTree node, String fieldName) {
+        if (node == null || node.isMissing() || node.isNull()) {
             return null;
         }
-        JsonNode value = node.get(fieldName);
+        JsonTree value = node.get(fieldName);
         if (value == null || value.isNull()) {
             return null;
         }
@@ -1041,24 +1060,24 @@ final class GitHubApiClient implements GitHubClient {
         return text == null || text.isBlank() ? null : text;
     }
 
-    private static String textOrDefault(JsonNode node, String fieldName, String fallback) {
+    private static String textOrDefault(JsonTree node, String fieldName, String fallback) {
         String value = text(node, fieldName);
         return value == null ? fallback : value;
     }
 
-    private static Boolean bool(JsonNode node, String fieldName) {
-        if (node == null || node.isMissingNode() || node.isNull()) {
+    private static Boolean bool(JsonTree node, String fieldName) {
+        if (node == null || node.isMissing() || node.isNull()) {
             return null;
         }
-        JsonNode value = node.get(fieldName);
-        return value == null || value.isNull() ? null : value.asBoolean();
+        JsonTree value = node.get(fieldName);
+        return value == null || value.isNull() ? null : value.asBoolean(false);
     }
 
-    private static Long longValue(JsonNode node, String fieldName) {
-        if (node == null || node.isMissingNode() || node.isNull()) {
+    private static Long longValue(JsonTree node, String fieldName) {
+        if (node == null || node.isMissing() || node.isNull()) {
             return null;
         }
-        JsonNode value = node.get(fieldName);
+        JsonTree value = node.get(fieldName);
         if (value == null || value.isNull()) {
             return null;
         }
@@ -1081,7 +1100,7 @@ final class GitHubApiClient implements GitHubClient {
         }
     }
 
-    private record ApiResponse(int status, JsonNode json, HttpHeaders headers, String safeMessage) {
+    private record ApiResponse(int status, JsonTree json, HttpHeaders headers, String safeMessage) {
 
         private static ApiResponse skipped(String message) {
             return new ApiResponse(0, null, HttpHeaders.of(Map.of(), (name, value) -> true), message);

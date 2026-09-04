@@ -4,18 +4,27 @@ import io.github.jdubois.bootui.core.BootUiPathNormalizer;
 import io.micronaut.core.value.PropertyResolver;
 
 /**
- * Single source of truth for normalized Micronaut UI, API, and application-root path composition — the
- * analogue of the Quarkus adapter's {@code QuarkusBootUiPaths}.
+ * Single source of truth for normalized Micronaut UI, API, and application-root path composition.
+ *
+ * <p>Unlike the Quarkus adapter — whose JAX-RS resources are pinned to a fixed internal {@code /bootui}
+ * mount, with requests to a custom {@code bootui.path} rewritten onto it — every Micronaut controller,
+ * including the one serving the packaged SPA bundle, binds directly to the {@code bootui.path} /
+ * {@code bootui.api-path} placeholders (see {@link io.github.jdubois.bootui.micronaut.web.BootUiApiPaths}).
+ * There is consequently no second, reserved mount on Micronaut: with {@code bootui.path=/console} nothing
+ * of BootUI is served under {@code /bootui} at all.
+ *
+ * <p>That is why the matcher below claims exactly the configured mounts and nothing else. Claiming a
+ * fixed {@code /bootui} on top of them would hijack an application's own routes at that path — the guards
+ * would reject them as non-loopback and the security rule would open them to anonymous callers — for a
+ * surface BootUI does not even occupy.
  */
 public final class MicronautBootUiPaths {
 
     public static final String PATH_KEY = "bootui.path";
     public static final String API_PATH_KEY = "bootui.api-path";
 
-    /** Internal, fixed mount serving BootUI's controllers and static assets. */
-    static final String INTERNAL_UI_PATH = BootUiPathNormalizer.DEFAULT_PATH;
-
-    static final String INTERNAL_API_PATH = INTERNAL_UI_PATH + "/api";
+    /** The API mount BootUI falls back to: the default UI mount plus {@code /api}. */
+    public static final String DEFAULT_API_PATH = BootUiPathNormalizer.DEFAULT_PATH + "/api";
 
     private MicronautBootUiPaths() {}
 
@@ -24,6 +33,13 @@ public final class MicronautBootUiPaths {
         return BootUiPathNormalizer.normalize(configured == null ? BootUiPathNormalizer.DEFAULT_PATH : configured);
     }
 
+    /**
+     * The configured API mount, defaulting to {@code <bootui.path>/api}.
+     *
+     * <p>The same derivation {@link BootUiApiPathConfigurer} contributes to the environment as an actual
+     * {@code bootui.api-path} property, so this method and the mount the controllers bind to always agree,
+     * whether or not the operator set the key.
+     */
     public static String apiPath(PropertyResolver config) {
         String configured = string(config, API_PATH_KEY);
         return BootUiPathNormalizer.normalizeApiPath(configured == null ? uiPath(config) + "/api" : configured);
@@ -52,43 +68,43 @@ public final class MicronautBootUiPaths {
      * {@code micronaut.server.context-path} prefix — targets BootUI's own console surface.
      *
      * <p>This is the single matcher every self-traffic exclusion in the Micronaut adapter uses — HTTP
-     * exchange capture, exception capture, and log-based exception capture — so those capture points can
-     * never drift from each other, nor from the access filters that guard the very same surface. It
-     * recognizes a BootUI request in all three mount shapes: the internal {@code /bootui} and
-     * {@code /bootui/api} mounts (always registered), the operator-configured {@code bootui.path} /
-     * {@code bootui.api-path} mounts, and any of the above under a non-default context path, whose prefix
-     * is stripped first exactly as the access filters strip it.
+     * exchange capture, exception capture, log-based exception capture, and outbound REST-client capture —
+     * so those capture points can never drift from each other, nor from the access filters and the
+     * security rule that guard the very same surface.
+     *
+     * <p>The surface is exactly the configured UI mount and the configured API mount, under the configured
+     * context path, whose prefix is stripped first exactly as the access filters strip it. Nothing else is
+     * claimed: a console moved to {@code /console} leaves an application's own {@code /bootui} routes
+     * entirely alone.
      *
      * <p>Matching is a strict {@code /}-delimited prefix match on the request path only, so an unrelated
      * application path such as {@code /bootui-other} is never mistaken for BootUI traffic and stays
-     * captured. Invalid configuration degrades to the internal mounts rather than throwing: a capture
-     * filter must never disrupt a request, and defaulting narrowly keeps application traffic captured.
+     * captured. Invalid configuration degrades to the default mounts rather than throwing: a capture filter
+     * must never disrupt a request, and the default is also what the controllers fall back to.
      */
     public static boolean isBootUiRequest(PropertyResolver config, String path) {
         if (path == null || path.isBlank()) {
             return false;
         }
-        String relativePath = path;
-        String uiPath = INTERNAL_UI_PATH;
-        String apiPath = INTERNAL_API_PATH;
-        if (config != null) {
-            try {
-                relativePath = MicronautContextPath.stripPrefix(path, contextPrefix(config));
-            } catch (RuntimeException exception) {
-                relativePath = path;
-            }
-            try {
-                uiPath = safeUiPath(config);
-                apiPath = safeApiPath(config);
-            } catch (RuntimeException exception) {
-                uiPath = INTERNAL_UI_PATH;
-                apiPath = INTERNAL_API_PATH;
-            }
+        if (config == null) {
+            return isSameOrChild(path, BootUiPathNormalizer.DEFAULT_PATH) || isSameOrChild(path, DEFAULT_API_PATH);
         }
-        return isSameOrChild(relativePath, INTERNAL_UI_PATH)
-                || isSameOrChild(relativePath, INTERNAL_API_PATH)
-                || isSameOrChild(relativePath, uiPath)
-                || isSameOrChild(relativePath, apiPath);
+        String relativePath;
+        try {
+            relativePath = MicronautContextPath.stripPrefix(path, contextPrefix(config));
+        } catch (RuntimeException exception) {
+            relativePath = path;
+        }
+        String uiPath;
+        String apiPath;
+        try {
+            uiPath = safeUiPath(config);
+            apiPath = safeApiPath(config);
+        } catch (RuntimeException exception) {
+            uiPath = BootUiPathNormalizer.DEFAULT_PATH;
+            apiPath = DEFAULT_API_PATH;
+        }
+        return isSameOrChild(relativePath, uiPath) || isSameOrChild(relativePath, apiPath);
     }
 
     public static boolean isSameOrChild(String path, String basePath) {
@@ -111,7 +127,7 @@ public final class MicronautBootUiPaths {
         try {
             return apiPath(config);
         } catch (IllegalArgumentException exception) {
-            return BootUiPathNormalizer.DEFAULT_PATH + "/api";
+            return DEFAULT_API_PATH;
         }
     }
 

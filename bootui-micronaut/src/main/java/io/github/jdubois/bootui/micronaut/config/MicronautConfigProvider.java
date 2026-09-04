@@ -122,12 +122,63 @@ public final class MicronautConfigProvider implements ConfigProvider {
         return null;
     }
 
+    /** The value the panel reports: the resolved value, reduced to the JSON contract's own types. */
     private Object effectiveValue(String key) {
+        return wireSafe(resolvedValue(key));
+    }
+
+    /** The value the resolver actually produced, used unmodified for source attribution. */
+    private Object resolvedValue(String key) {
         try {
             return environment.getProperty(key, Object.class).orElse(null);
         } catch (RuntimeException ex) {
             return null;
         }
+    }
+
+    /**
+     * Reduces a resolved property value to the scalars, lists and maps the JSON contract is defined in.
+     *
+     * <p>{@code ConfigPropertyDto.value()} is typed {@code Object} because configuration genuinely holds
+     * strings, numbers, booleans and structures. Micronaut's {@link Environment}, though, is a general bean
+     * container: a programmatic property source can bind a value of any type at all — a {@link Class}, for
+     * one, which is what a stock Micronaut context puts in the environment — and that object would then be
+     * handed to whichever JSON stack the application chose. Jackson databind reflects over it and invents
+     * some shape; Micronaut Serde refuses it outright ("No serializable introspection present"), which used
+     * to fail the whole Configuration panel with a 500.
+     *
+     * <p>Normalizing here rather than at the DTO keeps {@code bootui-core} free of any JSON knowledge and
+     * makes the panel's payload identical on both Micronaut JSON stacks and consistent with the Spring and
+     * Quarkus adapters, which surface configuration as text. A {@link Class} renders as its binary name
+     * (what Jackson databind already emitted), anything else unrecognized as its {@code toString()} — an
+     * honest rendering rather than a hidden failure.
+     */
+    private static Object wireSafe(Object value) {
+        if (value == null || value instanceof String || value instanceof Number || value instanceof Boolean) {
+            return value;
+        }
+        if (value instanceof Class<?> type) {
+            return type.getName();
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            map.forEach((k, v) -> copy.put(String.valueOf(k), wireSafe(v)));
+            return copy;
+        }
+        if (value instanceof Iterable<?> items) {
+            List<Object> copy = new ArrayList<>();
+            items.forEach(item -> copy.add(wireSafe(item)));
+            return copy;
+        }
+        if (value.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(value);
+            List<Object> copy = new ArrayList<>(length);
+            for (int i = 0; i < length; i++) {
+                copy.add(wireSafe(java.lang.reflect.Array.get(value, i)));
+            }
+            return copy;
+        }
+        return String.valueOf(value);
     }
 
     /**
@@ -137,7 +188,7 @@ public final class MicronautConfigProvider implements ConfigProvider {
      * resolver rebuilt from several sources).
      */
     private String attribute(String key) {
-        Object effective = effectiveValue(key);
+        Object effective = resolvedValue(key);
         String declaring = null;
         for (PropertySource source : orderedSources()) {
             Object value = source.get(key);

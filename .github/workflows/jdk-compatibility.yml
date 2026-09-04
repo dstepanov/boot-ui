@@ -45,12 +45,21 @@ jobs:
         # conformance suites while avoiding browser and optional-extension suites.
         # Select the Quarkus base module directly because selecting its aggregator
         # does not include child modules in a Maven -pl build.
+        # The Micronaut adapter has no conformance runner yet, so its own module's
+        # tests stand in for one.
         run: >
           ./mvnw -T 1C -B -ntp
-          -pl bootui-spring-sample-app,bootui-spring-webflux-sample-app,bootui-quarkus-integration-tests/base
+          -pl bootui-spring-sample-app,bootui-spring-webflux-sample-app,bootui-quarkus-integration-tests/base,bootui-micronaut
           -am test
 
       - name: Exercise Quarkus sample app augmentation
         # Ensures Quarkus build-time augmentation runs on supported JDKs (17/21/25) and
         # catches ByteBuddy/build-plugin regressions without running browser tests.
         run: ./mvnw -T 1C -B -ntp -pl bootui-quarkus-sample-app -am -DskipTests install
+
+      - name: Exercise Micronaut sample app annotation processing
+        # Micronaut resolves dependency injection in its own annotation processor at compile
+        # time, so this is the Micronaut analogue of the Quarkus augmentation check above: it
+        # catches micronaut-inject-java regressions on newer JDKs without running browser tests.
+        # No JDK is excluded — the processor runs on the whole 17/21/25 matrix.
+        run: ./mvnw -T 1C -B -ntp -pl bootui-micronaut-sample-app -am -DskipTests install

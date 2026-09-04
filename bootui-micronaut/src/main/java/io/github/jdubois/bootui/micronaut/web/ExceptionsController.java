@@ -9,6 +9,7 @@ import io.github.jdubois.bootui.engine.exceptions.ExceptionsService;
 import io.github.jdubois.bootui.micronaut.RequiresBootUi;
 import io.micronaut.core.annotation.Nullable;
 import io.micronaut.http.HttpResponse;
+import io.micronaut.http.HttpStatus;
 import io.micronaut.http.MediaType;
 import io.micronaut.http.annotation.Body;
 import io.micronaut.http.annotation.Controller;
@@ -17,6 +18,7 @@ import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.PathVariable;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Produces;
+import io.micronaut.http.exceptions.HttpStatusException;
 import io.micronaut.http.sse.Event;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -52,11 +54,23 @@ public class ExceptionsController {
         return service.report(store);
     }
 
+    /**
+     * The detail of one exception group.
+     *
+     * <p>An unknown id is reported by <em>throwing</em> rather than by returning a bare
+     * {@code HttpResponse.notFound()}: the same method backs the {@code get_exception_detail} MCP/CLI tool,
+     * and {@code MicronautMcpToolFailures} can only tell an agent <em>which</em> id was not found when the
+     * refusal carries a message. A bodyless 404 degraded to the bare reason phrase "Not Found". The message
+     * matches the Quarkus adapter's {@code NotFoundException} text so both stacks answer an agent alike.
+     */
     @Get("/{id}")
     @Produces(MediaType.APPLICATION_JSON)
-    public HttpResponse<ExceptionDetailDto> detail(@PathVariable String id) {
+    public ExceptionDetailDto detail(@PathVariable String id) {
         ExceptionStore.GroupDetail detail = store.find(id);
-        return detail == null ? HttpResponse.notFound() : HttpResponse.ok(service.detail(detail));
+        if (detail == null) {
+            throw new HttpStatusException(HttpStatus.NOT_FOUND, "exception " + id + " not found");
+        }
+        return service.detail(detail);
     }
 
     @Delete

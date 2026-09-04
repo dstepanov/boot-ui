@@ -1,6 +1,5 @@
 package io.github.jdubois.bootui.quarkus;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
 import io.github.jdubois.bootui.engine.activity.ActivityInstanceIds;
 import io.github.jdubois.bootui.engine.activity.ActivityPersistenceSettings;
@@ -24,6 +23,8 @@ import io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceEventRecorde
 import io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceService;
 import io.github.jdubois.bootui.engine.flyway.FlywayService;
 import io.github.jdubois.bootui.engine.github.DefaultGitHubTokenProvider;
+import io.github.jdubois.bootui.engine.github.GitHubApiClient;
+import io.github.jdubois.bootui.engine.github.GitHubApiSettings;
 import io.github.jdubois.bootui.engine.github.GitHubDashboardConfig;
 import io.github.jdubois.bootui.engine.github.GitHubDashboardService;
 import io.github.jdubois.bootui.engine.health.HealthService;
@@ -57,6 +58,8 @@ import io.github.jdubois.bootui.engine.support.InternalPackageMatcher;
 import io.github.jdubois.bootui.engine.telemetry.SelfTelemetryClassifier;
 import io.github.jdubois.bootui.engine.telemetry.SpanEnricher;
 import io.github.jdubois.bootui.engine.threads.ThreadDumpService;
+import io.github.jdubois.bootui.engine.vulnerabilities.OsvScannerSettings;
+import io.github.jdubois.bootui.engine.vulnerabilities.OsvVulnerabilityScanner;
 import io.github.jdubois.bootui.engine.web.HttpExchangeBuffer;
 import io.github.jdubois.bootui.engine.web.HttpProbeService;
 import io.github.jdubois.bootui.engine.websocket.WebSocketActivityRecorder;
@@ -69,14 +72,13 @@ import io.github.jdubois.bootui.quarkus.errorcontract.QuarkusErrorContractProvid
 import io.github.jdubois.bootui.quarkus.faulttolerance.QuarkusFaultTolerancePolicyProvider;
 import io.github.jdubois.bootui.quarkus.health.QuarkusHealthGuidance;
 import io.github.jdubois.bootui.quarkus.hibernate.QuarkusHibernatePropertyLookup;
+import io.github.jdubois.bootui.quarkus.json.QuarkusJsonCodec;
 import io.github.jdubois.bootui.quarkus.logging.QuarkusLoggerProvider;
 import io.github.jdubois.bootui.quarkus.mappings.QuarkusMappingProvider;
 import io.github.jdubois.bootui.quarkus.pentesting.QuarkusPentestingObservationCollector;
 import io.github.jdubois.bootui.quarkus.quarkusapp.QuarkusAppSnapshotProviderImpl;
 import io.github.jdubois.bootui.quarkus.scheduled.QuarkusScheduledTaskProvider;
 import io.github.jdubois.bootui.quarkus.security.QuarkusSecuritySnapshotProviderImpl;
-import io.github.jdubois.bootui.quarkus.web.GitHubApiClient;
-import io.github.jdubois.bootui.quarkus.web.QuarkusGitHubSettings;
 import io.github.jdubois.bootui.quarkus.websocket.QuarkusWebSocketMetadataProvider;
 import io.github.jdubois.bootui.spi.CacheProvider;
 import io.github.jdubois.bootui.spi.ConnectionPoolProvider;
@@ -662,16 +664,18 @@ public class BootUiEngineProducer {
     }
 
     /**
-     * The GitHub dashboard service over a Jackson-2 {@link GitHubApiClient}. The shared engine
-     * {@link GitHubDashboardService} is framework- and JSON-library-free; this factory mirrors the Spring
-     * adapter's {@code GitHubController} composition root, reading the same {@code bootui.github.*} keys (with
-     * the same defaults) from MicroProfile {@link Config} and feeding the engine an already-wired client.
+     * The GitHub dashboard service. Both the engine {@link GitHubDashboardService} and the
+     * {@link GitHubApiClient} it drives are shared, framework-neutral engine code; this factory mirrors the
+     * Spring adapter's {@code GitHubController} composition root, reading the same {@code bootui.github.*} keys
+     * (with the same defaults) from MicroProfile {@link Config} into the neutral {@link GitHubApiSettings} and
+     * supplying the one genuinely Quarkus-specific piece — a Jackson 2 {@link QuarkusJsonCodec}, where Spring
+     * Boot supplies its Jackson 3 twin.
      *
      * <p>The host allow-list is read once and passed to <em>both</em> the engine
      * {@link GitHubDashboardConfig} (which the engine consults during repository detection) and the client's
-     * {@link QuarkusGitHubSettings} (which the client enforces before issuing any request), exactly as Spring
-     * shares one {@code BootUiProperties.GitHub}. {@code Arrays.asList(...)} is used (not {@code List.of(...)})
-     * to stay null-safe, matching the Spring factory. The credential lookup reuses the framework-free shared
+     * settings (which the client enforces before issuing any request), exactly as the Spring factory shares one
+     * {@code BootUiProperties.GitHub}. {@code Arrays.asList(...)} is used (not {@code List.of(...)}) to stay
+     * null-safe, matching the Spring factory. The credential lookup reuses the framework-free shared
      * {@link DefaultGitHubTokenProvider} (env tokens + {@code gh} CLI). No network call happens at construction
      * or on render: only the explicit {@code POST /bootui/api/github/refresh} action calls GitHub.</p>
      */
@@ -696,7 +700,7 @@ public class BootUiEngineProducer {
                 .orElse(50);
         List<String> allowedApiHosts = gitHubAllowedApiHosts(config);
 
-        QuarkusGitHubSettings settings = new QuarkusGitHubSettings(
+        GitHubApiSettings settings = new GitHubApiSettings(
                 requestTimeout,
                 maxPullRequests,
                 maxIssues,
@@ -708,7 +712,7 @@ public class BootUiEngineProducer {
         GitHubApiClient client = new GitHubApiClient(
                 settings,
                 HttpClient.newBuilder().connectTimeout(requestTimeout).build(),
-                new ObjectMapper(),
+                new QuarkusJsonCodec(),
                 DefaultGitHubTokenProvider.create());
         return GitHubDashboardService.using(
                 Path.of(System.getProperty("user.dir", ".")),
@@ -968,19 +972,37 @@ public class BootUiEngineProducer {
     }
 
     /**
-     * The OSV.dev vulnerability scanner over the JDK {@link java.net.http.HttpClient} and Jackson 2. It
-     * follows the engine's <em>static settings record</em> extraction template: vulnerabilities has no live
-     * UI override / re-bind path, so the immutable {@link QuarkusVulnerabilitySettings} is mapped once from
-     * {@code bootui.vulnerabilities.*} (matching the Spring factory's defaults). The companion
-     * {@link QuarkusDependencyProvider} (the build-time-captured local inventory) is a plain {@code @Singleton}
-     * bean rather than a producer-method bean. The scanner is produced (not annotated as a bean itself) so its
-     * concrete type can be injected into {@code VulnerabilitiesResource} without making CDI resolution
-     * ambiguous — and it is never invoked except by the user-initiated {@code POST /scan}.
+     * The shared engine {@link OsvVulnerabilityScanner} over the JDK {@link java.net.http.HttpClient}, reading
+     * OSV's JSON through the Quarkus Jackson 2 {@link QuarkusJsonCodec}. It follows the engine's <em>static
+     * settings record</em> extraction template: vulnerabilities has no live UI override / re-bind path, so the
+     * immutable {@link OsvScannerSettings} is mapped once from {@code bootui.vulnerabilities.*} (matching the
+     * Spring factory's defaults). The companion {@link QuarkusDependencyProvider} (the build-time-captured
+     * local inventory) is a plain {@code @Singleton} bean rather than a producer-method bean. The scanner is
+     * produced (not annotated as a bean itself) so its concrete type can be injected into
+     * {@code VulnerabilitiesResource} without making CDI resolution ambiguous — and it is never invoked except
+     * by the user-initiated {@code POST /scan}, which checks {@code bootui.vulnerabilities.osv-enabled} first.
      */
     @Produces
     @Singleton
     public OsvVulnerabilityScanner osvVulnerabilityScanner(Config config) {
-        return new OsvVulnerabilityScanner(QuarkusVulnerabilitySettings.from(config));
+        return new OsvVulnerabilityScanner(osvScannerSettings(config), new QuarkusJsonCodec());
+    }
+
+    /** Maps {@code bootui.vulnerabilities.*} onto the engine scanner's settings, defaults included. */
+    static OsvScannerSettings osvScannerSettings(Config config) {
+        return new OsvScannerSettings(
+                config.getOptionalValue("bootui.vulnerabilities.request-timeout", Duration.class)
+                        .orElse(Duration.ofSeconds(10)),
+                config.getOptionalValue("bootui.vulnerabilities.max-packages", Integer.class)
+                        .orElse(250),
+                config.getOptionalValue("bootui.vulnerabilities.max-advisories", Integer.class)
+                        .orElse(200),
+                config.getOptionalValue("bootui.vulnerabilities.osv-base-uri", String.class)
+                        .orElse(OsvScannerSettings.DEFAULT_BASE_URI),
+                config.getOptionalValue("bootui.vulnerabilities.epss-enabled", Boolean.class)
+                        .orElse(Boolean.TRUE),
+                config.getOptionalValue("bootui.vulnerabilities.epss-base-uri", String.class)
+                        .orElse(OsvScannerSettings.DEFAULT_EPSS_BASE_URI));
     }
 
     /**

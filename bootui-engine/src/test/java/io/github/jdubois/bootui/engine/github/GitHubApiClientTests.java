@@ -1,21 +1,28 @@
-package io.github.jdubois.bootui.autoconfigure.web;
+package io.github.jdubois.bootui.engine.github;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sun.net.httpserver.HttpServer;
-import io.github.jdubois.bootui.autoconfigure.BootUiProperties;
 import io.github.jdubois.bootui.core.dto.GitHubDashboardReport;
-import io.github.jdubois.bootui.engine.github.GitHubRepositoryDetector;
-import io.github.jdubois.bootui.engine.github.GitHubTokenProvider;
+import io.github.jdubois.bootui.spi.json.TestJsonCodec;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.ObjectMapper;
 
+/**
+ * Drives the shared {@link GitHubApiClient} against a loopback {@code com.sun.net.httpserver} stub serving
+ * canned GitHub REST payloads, so the parsing, bounding and shaping every adapter now relies on is pinned
+ * once, framework-free, and without ever reaching the real GitHub API.
+ *
+ * <p>This suite moved here from the Spring adapter when the client itself moved into the engine (the Quarkus
+ * adapter carried a near-identical copy); it reads JSON through the dependency-free {@link TestJsonCodec}, and
+ * each adapter's own codec test pins that its Jackson wrapper agrees with it.</p>
+ */
 class GitHubApiClientTests {
 
     private HttpServer server;
@@ -231,14 +238,30 @@ class GitHubApiClientTests {
                 .allSatisfy(signal -> assertThat(signal.alerts()).isEmpty());
     }
 
+    @Test
+    void rejectsRefreshWhenApiHostIsNotAllowed() throws Exception {
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.start();
+
+        GitHubApiClient client = client("local-token", List.of("api.github.com"));
+
+        GitHubDashboardReport report = client.refresh(repository());
+
+        assertThat(report.status()).isEqualTo("BLOCKED");
+        assertThat(report.message()).contains("is not allowed");
+    }
+
     private GitHubApiClient client(String token) {
-        BootUiProperties.GitHub properties = new BootUiProperties.GitHub();
-        properties.setRequestTimeout(Duration.ofSeconds(2));
-        properties.setAllowedApiHosts(new String[] {"localhost"});
+        return client(token, List.of("localhost"));
+    }
+
+    private GitHubApiClient client(String token, List<String> allowedApiHosts) {
+        GitHubApiSettings settings =
+                new GitHubApiSettings(Duration.ofSeconds(2), 10, 25, 20, 10, 17, 50, allowedApiHosts);
         return new GitHubApiClient(
-                properties,
+                settings,
                 HttpClient.newHttpClient(),
-                new ObjectMapper(),
+                new TestJsonCodec(),
                 timeout -> token == null ? null : new GitHubTokenProvider.Token(token, "test-token"));
     }
 

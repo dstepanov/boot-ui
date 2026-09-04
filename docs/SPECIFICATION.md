@@ -103,11 +103,14 @@ the classpath, it should not expose the UI.
 Failing closed covers the packaged console itself, not only its API. When BootUI is inactive no controller, resource
 handler, or safety filter is registered, but `bootui-ui` still ships the compiled shell on the classpath at
 `META-INF/resources/bootui/`, which every supported runtime serves from its own built-in static-resource handling. Each
-adapter therefore keeps a guard that answers `404` for the reserved internal `/bootui` namespace while the console is
-off: `BootUiShellGuardAutoConfiguration` on Spring MVC and Spring WebFlux (registered under the exact negation of the
-activation condition, and only when the packaged shell is actually on the classpath), `BootUiProdShellGuardFilter` on
-Quarkus (always registered, active in `LaunchMode.NORMAL`). A custom `bootui.path` moves the console's routes but never
-the classpath location of the bundle.
+adapter therefore keeps a guard that answers `404` for the console's dormant surface while the console is off:
+`BootUiShellGuardAutoConfiguration` on Spring MVC and Spring WebFlux (registered under the exact negation of the
+activation condition, and only when the packaged shell is actually on the classpath), and a
+`BootUiProdShellGuardFilter` on Quarkus (always registered, active in `LaunchMode.NORMAL`) and on Micronaut (always
+registered, deciding once at construction). What that surface is depends on the adapter: Spring and Quarkus reserve the
+internal `/bootui` namespace, while Micronaut binds every console route from `bootui.path` / `bootui.api-path` and
+reserves no fixed namespace at all, so its guard covers exactly the configured UI and API mounts and nothing beyond
+them. A custom `bootui.path` moves the console's routes but never the classpath location of the bundle.
 
 The URL that reaches that classpath location is not fixed, so the Spring guard resolves it rather than assuming it. It
 matches the decoded application path, the same form the framework's handler mapping resolves against, so encoded and

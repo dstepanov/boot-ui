@@ -32,15 +32,29 @@ Add BootUI to your build — nothing else is required. BootUI wires itself up on
 
 ```groovy
 // Groovy DSL (build.gradle)
-implementation 'com.julien-dubois.bootui:bootui-micronaut'
+implementation 'com.julien-dubois.bootui:bootui-micronaut:1.16.0'
 ```
 
 ```kotlin
 // Kotlin DSL (build.gradle.kts)
-implementation("com.julien-dubois.bootui:bootui-micronaut")
+implementation("com.julien-dubois.bootui:bootui-micronaut:1.16.0")
 ```
 
 :::
+
+### Your JSON stack stays yours
+
+BootUI works on **either** Micronaut JSON stack, and adds neither to your build:
+
+- **`micronaut-serde-jackson`** — the default for a new Micronaut 4 application, and fully supported. Serde is
+  reflection-free and serializes only types that carry a compile-time introspection, so the adapter declares a
+  `@SerdeImport` for every record it puts on the wire. Those introspections are generated into BootUI's own jar; your
+  DTOs and your Serde configuration are untouched.
+- **`micronaut-jackson-databind`** — equally supported, and unchanged from earlier BootUI releases.
+
+You do not have to add, remove, or align anything: keep whichever stack your application already uses. BootUI brings
+plain `com.fasterxml.jackson.core:jackson-databind` for its own internal JSON work (the MCP envelope, the GitHub and
+OSV clients), which registers no beans and does not make your application a databind application.
 
 ## Run your app in development
 
@@ -77,17 +91,17 @@ Visit: <http://localhost:8080/bootui>
 
 The same `bootui.path` / `bootui.api-path` settings shown in
 [Use a custom path](../SETUP.md#use-a-custom-path) work on Micronaut and compose with
-`micronaut.server.context-path`, with **one Micronaut-specific rule**: set both keys together.
+`micronaut.server.context-path`. Setting `bootui.path` moves the whole console, API included:
 
 ```properties
 bootui.path=/console
-bootui.api-path=/console/api
 ```
 
-On Spring and Quarkus the API mount derives from the UI mount automatically. Micronaut resolves a controller's path
-from a configuration placeholder whose default cannot reference another property, so moving only `bootui.path` would
-leave the API behind. BootUI fails fast at startup with an actionable message rather than serving a console that loads
-and then fails every call.
+The console is then served at `/console` and its API at `/console/api`, and nothing of BootUI is left at `/bootui` —
+that path goes back to your application. Set `bootui.api-path` as well only if you want the API somewhere other than
+`<bootui.path>/api`.
+
+With `micronaut.server.context-path=/app` the console lands at `/app/console`, exactly as on Spring and Quarkus.
 
 ## Activation and safety on Micronaut
 

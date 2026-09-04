@@ -1,6 +1,5 @@
 package io.github.jdubois.bootui.micronaut;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.jdubois.bootui.core.dto.SqlTraceEntryDto;
 import io.github.jdubois.bootui.engine.activity.ActivityInstanceIds;
 import io.github.jdubois.bootui.engine.activity.ActivityPersistenceSettings;
@@ -23,6 +22,8 @@ import io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceEventRecorde
 import io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceService;
 import io.github.jdubois.bootui.engine.flyway.FlywayService;
 import io.github.jdubois.bootui.engine.github.DefaultGitHubTokenProvider;
+import io.github.jdubois.bootui.engine.github.GitHubApiClient;
+import io.github.jdubois.bootui.engine.github.GitHubApiSettings;
 import io.github.jdubois.bootui.engine.github.GitHubDashboardConfig;
 import io.github.jdubois.bootui.engine.github.GitHubDashboardService;
 import io.github.jdubois.bootui.engine.health.HealthService;
@@ -56,6 +57,7 @@ import io.github.jdubois.bootui.engine.telemetry.SelfTelemetryClassifier;
 import io.github.jdubois.bootui.engine.telemetry.TelemetryStore;
 import io.github.jdubois.bootui.engine.telemetry.TracesService;
 import io.github.jdubois.bootui.engine.threads.ThreadDumpService;
+import io.github.jdubois.bootui.engine.vulnerabilities.OsvVulnerabilityScanner;
 import io.github.jdubois.bootui.engine.web.HttpExchangeBuffer;
 import io.github.jdubois.bootui.engine.web.HttpProbeService;
 import io.github.jdubois.bootui.engine.websocket.WebSocketActivityRecorder;
@@ -69,12 +71,13 @@ import io.github.jdubois.bootui.micronaut.datasource.MicronautHikariConnectionPo
 import io.github.jdubois.bootui.micronaut.errorcontract.MicronautErrorContractProvider;
 import io.github.jdubois.bootui.micronaut.faulttolerance.MicronautRetryPolicyProvider;
 import io.github.jdubois.bootui.micronaut.flyway.MicronautFlywayProvider;
-import io.github.jdubois.bootui.micronaut.github.GitHubApiClient;
 import io.github.jdubois.bootui.micronaut.github.MicronautGitHubSettings;
 import io.github.jdubois.bootui.micronaut.health.MicronautHealthGuidance;
+import io.github.jdubois.bootui.micronaut.health.MicronautHealthProvider;
 import io.github.jdubois.bootui.micronaut.hibernate.MicronautEntityDiscovery;
 import io.github.jdubois.bootui.micronaut.hibernate.MicronautHibernatePropertyLookup;
 import io.github.jdubois.bootui.micronaut.hibernate.MicronautHibernateStatisticsProvider;
+import io.github.jdubois.bootui.micronaut.json.MicronautJsonCodec;
 import io.github.jdubois.bootui.micronaut.liquibase.MicronautLiquibaseProvider;
 import io.github.jdubois.bootui.micronaut.logging.MicronautLoggerProvider;
 import io.github.jdubois.bootui.micronaut.mappings.MicronautMappingProvider;
@@ -83,7 +86,6 @@ import io.github.jdubois.bootui.micronaut.scheduled.MicronautScheduledTaskProvid
 import io.github.jdubois.bootui.micronaut.telemetry.MicronautTelemetrySettings;
 import io.github.jdubois.bootui.micronaut.vulnerabilities.MicronautDependencyProvider;
 import io.github.jdubois.bootui.micronaut.vulnerabilities.MicronautVulnerabilitySettings;
-import io.github.jdubois.bootui.micronaut.vulnerabilities.OsvVulnerabilityScanner;
 import io.github.jdubois.bootui.micronaut.websocket.MicronautWebSocketConnectionCapture;
 import io.github.jdubois.bootui.micronaut.websocket.MicronautWebSocketMetadataProvider;
 import io.github.jdubois.bootui.micronaut.websocket.MicronautWebSocketSessionProvider;
@@ -169,6 +171,10 @@ public class BootUiEngineFactory {
     /** micronaut-liquibase's per-datasource configuration; the Liquibase panel needs it. */
     private static final boolean LIQUIBASE_PRESENT =
             isPresent("io.micronaut.liquibase.LiquibaseConfigurationProperties");
+
+    /** micronaut-management's health aggregation; the Health panel needs it. */
+    private static final boolean MANAGEMENT_PRESENT =
+            isPresent("io.micronaut.management.health.aggregator.HealthAggregator");
 
     /**
      * Whether an optional integration is on the application's classpath. Every optional panel is gated on one
@@ -460,14 +466,18 @@ public class BootUiEngineFactory {
     }
 
     /**
-     * The Health panel service. The {@link HealthProvider} exists only when {@code micronaut-management} is
-     * on the application's classpath (its own bean condition), so it is resolved through the bean context:
-     * absent &rarr; {@code null} &rarr; the engine renders {@link MicronautHealthGuidance}'s honest setup
-     * steps instead of an empty tree.
+     * The Health panel service. The {@link HealthProvider} is built only when {@code micronaut-management}
+     * is on the application's classpath <em>and</em> it actually published a health aggregator (the
+     * endpoint can be switched off); absent &rarr; {@code null} &rarr; the engine renders
+     * {@link MicronautHealthGuidance}'s honest setup steps instead of an empty tree.
+     *
+     * <p>Every reference to the management API is confined to {@link MicronautHealthProvider}, gated behind
+     * {@link #MANAGEMENT_PRESENT}, so an application without micronaut-management never links those
+     * classes — the same shape as the Hikari, cache and WebSocket bindings above.
      */
     @Singleton
     HealthService healthService(BeanContext beanContext) {
-        HealthProvider provider = beanContext.findBean(HealthProvider.class).orElse(null);
+        HealthProvider provider = MANAGEMENT_PRESENT ? MicronautHealthProvider.create(beanContext) : null;
         return new HealthService(provider, MicronautHealthGuidance.INSTANCE);
     }
 
@@ -681,7 +691,7 @@ public class BootUiEngineFactory {
      */
     @Singleton
     OsvVulnerabilityScanner osvVulnerabilityScanner(Environment environment) {
-        return new OsvVulnerabilityScanner(MicronautVulnerabilitySettings.from(environment));
+        return new OsvVulnerabilityScanner(MicronautVulnerabilitySettings.from(environment), new MicronautJsonCodec());
     }
 
     /** The bounds the WebSockets panel's inventory and activity capture run under. */
@@ -843,13 +853,13 @@ public class BootUiEngineFactory {
         boolean apiEnabled = environment
                 .getProperty("bootui.github.api-enabled", Boolean.class)
                 .orElse(Boolean.TRUE);
-        MicronautGitHubSettings settings = MicronautGitHubSettings.from(environment);
+        GitHubApiSettings settings = MicronautGitHubSettings.from(environment);
         GitHubApiClient client = new GitHubApiClient(
                 settings,
                 HttpClient.newBuilder()
                         .connectTimeout(settings.requestTimeout())
                         .build(),
-                new ObjectMapper(),
+                new MicronautJsonCodec(),
                 DefaultGitHubTokenProvider.create());
         return GitHubDashboardService.using(
                 Path.of(System.getProperty("user.dir", ".")),

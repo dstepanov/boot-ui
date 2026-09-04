@@ -45,10 +45,40 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <configuration>
                         <annotationProcessorPaths>
+                            <!--
+                                micronaut-core-processor is pinned ahead of the processors that pull it in.
+                                <annotationProcessorPaths> is resolved outside dependencyManagement, so the
+                                platform BOM does not mediate it: micronaut-serde-processor declares its own,
+                                older micronaut-core-bom, and without this entry that older micronaut-core can
+                                win and the compiler dies with NoClassDefFoundError on a class the newer
+                                micronaut-inject-java was built against (io.micronaut.core.annotation.NullMarked).
+                                A direct entry sits nearest and settles the version for both processors.
+                            -->
+                            <path>
+                                <groupId>io.micronaut</groupId>
+                                <artifactId>micronaut-core-processor</artifactId>
+                                <version>${micronaut.core.version}</version>
+                            </path>
                             <path>
                                 <groupId>io.micronaut</groupId>
                                 <artifactId>micronaut-inject-java</artifactId>
                                 <version>${micronaut.core.version}</version>
+                            </path>
+                            <!--
+                                micronaut-serde-processor turns the adapter's @SerdeImport declarations
+                                (BootUiSerdeImports) into compile-time bean introspections for the shared,
+                                deliberately annotation-free core DTOs. Without it those @SerdeImport
+                                annotations are inert and every /bootui/api/** response fails under
+                                micronaut-serde-jackson with "No serializable introspection present".
+
+                                It is on the processor path of every Micronaut module rather than only the
+                                adapter so the adapter's tests and the sample app compile identically; a
+                                module that declares no @SerdeImport simply gets nothing from it.
+                            -->
+                            <path>
+                                <groupId>io.micronaut.serde</groupId>
+                                <artifactId>micronaut-serde-processor</artifactId>
+                                <version>${micronaut.serde.version}</version>
                             </path>
                         </annotationProcessorPaths>
                         <compilerArgs>

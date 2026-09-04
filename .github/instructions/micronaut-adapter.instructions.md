@@ -20,10 +20,22 @@ applyTo: "pom.xml,bootui-micronaut-parent/**,bootui-micronaut/**,bootui-micronau
   under the console surface is still rejected rather than answered with a bare 404.
 - Read live policy from the `Environment` and fail closed on missing or invalid values. Use `BootUiBooleans` for every
   safety-relevant boolean: Micronaut's own conversion turns an invalid string into `false`, which would widen access.
-- Controllers bind their mounts from `bootui.path` / `bootui.api-path` placeholders. Because a placeholder default
-  cannot derive from another property, `BootUiPathsValidator` must keep failing fast when only `bootui.path` is set.
+- Controllers bind their mounts from `bootui.path` / `bootui.api-path` placeholders, so the console surface is exactly
+  the configured mounts — there is no reserved internal `/bootui` on Micronaut, and no guard, capture point or security
+  rule may claim one. A placeholder default cannot derive from another property, so `BootUiApiPathConfigurer`
+  contributes `bootui.api-path` = `<bootui.path>/api` from an `ApplicationContextConfigurer`, before bean definitions
+  load; `BootUiPathsValidator` is normalization only.
 - Optional integrations must be safe when absent: compile them as `provided`, guard them with a class-presence check or
   a bean condition, and report the panel unavailable with an honest reason rather than failing.
+- The adapter must not dictate the host's JSON stack: it depends on neither `micronaut-serde-jackson` nor
+  `micronaut-jackson-databind`, and works under both. Serde needs a compile-time introspection for every type on the
+  wire, so `BootUiSerdeImports` declares a `@SerdeImport` for each one — add a line there for every new core DTO or
+  controller request record, copying an existing line so it carries `mixin = AlwaysInclude.class`, or
+  `BootUiSerdeImportsTest` fails the build. That mix-in is not decoration: both JSON stacks default to a `NON_EMPTY`
+  inclusion policy that drops empty collections, empty maps and nulls, and it is what pins BootUI's
+  write-every-field wire contract under Serde, as `BootUiJsonInclusionCustomizer` does under databind. Never hand a
+  type the host's mapper owns (a Jackson `JsonNode`, a raw `Environment` property value) straight to a response
+  body; serialize it here instead.
 - Update `MicronautPanelAvailability` and `docs/MICRONAUT-SUPPORT.md` whenever panel support changes. Distinguish
   unavailable, not-yet-supported, and not-applicable states honestly.
 - Focused adapter validation: `./mvnw -B -ntp -pl bootui-micronaut,bootui-micronaut-sample-app -am install`.

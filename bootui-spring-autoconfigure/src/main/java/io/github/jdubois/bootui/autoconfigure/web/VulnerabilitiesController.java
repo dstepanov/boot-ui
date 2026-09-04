@@ -8,6 +8,8 @@ import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
 import io.github.jdubois.bootui.engine.vulnerabilities.DependencyProvider;
 import io.github.jdubois.bootui.engine.vulnerabilities.DependencyReports;
+import io.github.jdubois.bootui.engine.vulnerabilities.OsvScannerSettings;
+import io.github.jdubois.bootui.engine.vulnerabilities.OsvVulnerabilityScanner;
 import io.github.jdubois.bootui.engine.vulnerabilities.VulnerabilityScanner;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,8 +47,24 @@ public class VulnerabilitiesController {
         this(
                 properties,
                 new DependencyCatalog(),
-                new OsvVulnerabilityScanner(properties.getVulnerabilities()),
+                new OsvVulnerabilityScanner(settings(properties.getVulnerabilities()), new SpringJsonCodec()),
                 dismissedRules);
+    }
+
+    /**
+     * Maps {@code bootui.vulnerabilities.*} onto the shared engine scanner's neutral settings record. Only the
+     * key mapping is adapter-specific; the scan itself is the engine {@link OsvVulnerabilityScanner}, reading
+     * OSV's JSON through the Jackson 3 {@link SpringJsonCodec}. {@code osv-enabled} is not carried here: this
+     * controller checks it directly before ever calling the scanner.
+     */
+    private static OsvScannerSettings settings(BootUiProperties.Vulnerabilities vulnerabilities) {
+        return new OsvScannerSettings(
+                vulnerabilities.getRequestTimeout(),
+                vulnerabilities.getMaxPackages(),
+                vulnerabilities.getMaxAdvisories(),
+                vulnerabilities.getOsvBaseUri(),
+                vulnerabilities.isEpssEnabled(),
+                vulnerabilities.getEpssBaseUri());
     }
 
     VulnerabilitiesController(

@@ -17,6 +17,7 @@ const sidebarLabels = {
   'setup/quarkus.md': 'Quarkus',
   'setup/micronaut.md': 'Micronaut',
   'QUARKUS-SUPPORT.md': 'Quarkus design notes',
+  'MICRONAUT-SUPPORT.md': 'Micronaut design notes',
   'WEBFLUX-SUPPORT.md': 'WebFlux design notes',
   'SPECIFICATION.md': 'Specification',
   'PLAN.md': 'Implementation plan',
@@ -83,7 +84,14 @@ const groups = [
   {
     text: 'Contributing',
     collapsed: true,
-    docs: ['REPOSITORY.md', 'SPECIFICATION.md', 'PLAN.md', 'QUARKUS-SUPPORT.md', 'WEBFLUX-SUPPORT.md']
+    docs: [
+      'REPOSITORY.md',
+      'SPECIFICATION.md',
+      'PLAN.md',
+      'QUARKUS-SUPPORT.md',
+      'MICRONAUT-SUPPORT.md',
+      'WEBFLUX-SUPPORT.md'
+    ]
   }
 ]
 

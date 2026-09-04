@@ -1,10 +1,11 @@
 # Setup
 
-BootUI runs on **Spring Boot 4** (servlet or WebFlux) and **Quarkus**, serving the same console and the same
-JSON contract (at `/bootui/api/**` by default) from a shared, framework-neutral engine.
+BootUI runs on **Spring Boot 4** (servlet or WebFlux), **Quarkus** and **Micronaut**, serving the same console and
+the same JSON contract (at `/bootui/api/**` by default) from a shared, framework-neutral engine.
 
 The four steps below are the whole servlet install. If you are on **WebFlux**, follow
-[BootUI on Spring WebFlux](setup/webflux.md) instead; on **Quarkus**, follow [BootUI on Quarkus](setup/quarkus.md).
+[BootUI on Spring WebFlux](setup/webflux.md) instead; on **Quarkus**, follow [BootUI on Quarkus](setup/quarkus.md); on
+**Micronaut**, follow [BootUI on Micronaut](setup/micronaut.md).
 
 ## 1) Prerequisites
 
@@ -106,9 +107,10 @@ bootui.path=/dev-console
 bootui.api-path=/internal/bootui-api
 ```
 
-These are application-relative paths. A servlet context path, WebFlux base path, or Quarkus HTTP root path is composed
-automatically; for example, `server.servlet.context-path=/host` plus `bootui.path=/dev-console` produces
-`/host/dev-console`. The shell publishes the browser-visible paths to the SPA, so no frontend rebuild is needed.
+These are application-relative paths. A servlet context path, WebFlux base path, Quarkus HTTP root path, or Micronaut
+server context path is composed automatically; for example, `server.servlet.context-path=/host` plus
+`bootui.path=/dev-console` produces `/host/dev-console`. The shell publishes the browser-visible paths to the SPA, so
+no frontend rebuild is needed.
 
 Paths may use only absolute RFC 3986 unreserved segments. Trailing slashes are removed. Root, empty, encoded,
 query/fragment, duplicate interior separator, routing-pattern, and `.` / `..` segment values fail startup. Custom UI
@@ -120,11 +122,11 @@ contract.
 
 You are done — everything below is optional, and only when you need it.
 
-| If you want to                                                     | Read                                                             |
-| ------------------------------------------------------------------ | ---------------------------------------------------------------- |
-| Understand when BootUI turns on, or keep it out of your prod build | [Activation and safety](setup/activation.md)                     |
-| Run BootUI on WebFlux or Quarkus                                   | [Spring WebFlux](setup/webflux.md) · [Quarkus](setup/quarkus.md) |
-| Run inside Docker, or in a command-line app                        | [Non-standard runtimes](setup/environments.md)                   |
-| Fix something that is not working                                  | [Troubleshooting](setup/troubleshooting.md)                      |
-| Look up a property                                                 | [Property reference](PROPERTIES.md)                              |
-| See what each panel does                                           | [Features](features/README.md)                                   |
+| If you want to                                                     | Read                                                                                               |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Understand when BootUI turns on, or keep it out of your prod build | [Activation and safety](setup/activation.md)                                                       |
+| Run BootUI on WebFlux, Quarkus or Micronaut                        | [Spring WebFlux](setup/webflux.md) · [Quarkus](setup/quarkus.md) · [Micronaut](setup/micronaut.md) |
+| Run inside Docker, or in a command-line app                        | [Non-standard runtimes](setup/environments.md)                                                     |
+| Fix something that is not working                                  | [Troubleshooting](setup/troubleshooting.md)                                                        |
+| Look up a property                                                 | [Property reference](PROPERTIES.md)                                                                |
+| See what each panel does                                           | [Features](features/README.md)                                                                     |

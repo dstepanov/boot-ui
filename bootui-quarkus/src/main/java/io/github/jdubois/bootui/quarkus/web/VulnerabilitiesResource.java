@@ -6,7 +6,7 @@ import io.github.jdubois.bootui.engine.action.ActionOperations;
 import io.github.jdubois.bootui.engine.action.SingleFlightAction;
 import io.github.jdubois.bootui.engine.advisor.DismissedRulesStore;
 import io.github.jdubois.bootui.engine.vulnerabilities.DependencyReports;
-import io.github.jdubois.bootui.quarkus.OsvVulnerabilityScanner;
+import io.github.jdubois.bootui.engine.vulnerabilities.OsvVulnerabilityScanner;
 import io.github.jdubois.bootui.quarkus.QuarkusDependencyProvider;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

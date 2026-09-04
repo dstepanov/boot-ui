@@ -123,9 +123,17 @@ public class McpBridgeController {
         return response;
     }
 
-    private static HttpResponse<JsonNode> json(int status, JsonNode body) {
+    /**
+     * Writes an already-rendered envelope as raw bytes with an explicit JSON content type.
+     *
+     * <p>Deliberately not {@code body(JsonNode)}: that would leave the encoding to the application's JSON
+     * stack, and a Jackson {@code JsonNode} is a Jackson-databind type that Micronaut Serde cannot write.
+     * The envelope serializes with BootUI's own mapper, so the JSON-RPC wire format is the same on every
+     * host regardless of which JSON stack it runs.
+     */
+    private HttpResponse<byte[]> json(int status, JsonNode body) {
         return HttpResponse.status(HttpStatus.valueOf(status))
                 .contentType(MediaType.APPLICATION_JSON_TYPE)
-                .body(body);
+                .body(envelope.toBytes(body));
     }
 }

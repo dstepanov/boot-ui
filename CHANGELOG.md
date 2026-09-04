@@ -7,6 +7,61 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A Micronaut adapter, published as `bootui-micronaut`.** BootUI now runs on a fourth request stack: add one
+  dependency to a Micronaut 4 application and the same Vue console and the same JSON contract are served at `/bootui`
+  and `/bootui/api/**`, backed by the same framework-neutral engine as Spring MVC, Spring WebFlux and Quarkus. There is
+  no deployment half to install — Micronaut resolves dependency injection in its own annotation processor at compile
+  time, so the bean container, route table, configuration and base packages the Quarkus extension has to capture into
+  Jandex at build time are simply read from the running context. Activation is environment-based and fails closed:
+  `bootui.enabled=AUTO` (the default) turns the console on in the `dev`, `local` and `test` environments and off in
+  `prod` / `production`, with `bootui.enabled-environments` and `bootui.disabled-environments` alongside it, and
+  Micronaut deduces nothing for an ordinary run, so an application that declares no environment stays dark. When it is
+  dark, **no** controller, filter, engine service or provider bean is created at all, and an always-registered guard
+  answers `404` for the whole console surface — the packaged SPA assets included — so a production build cannot serve
+  even an empty shell. The request-time safety model is the one every other stack has: the shared `LocalhostGuard` with
+  loopback-source trust, the `Host` allow-list as a DNS-rebinding defence, cross-site-write protection, secret masking,
+  and the per-panel `bootui.panels.*` enable / read-only policy with the `bootui.read-only` master switch. Two
+  Micronaut-specific rules are reported rather than papered over: a custom mount needs both `bootui.path` and
+  `bootui.api-path` set together, because a Micronaut `@Controller` path comes from a configuration placeholder whose
+  default cannot reference another property — BootUI fails fast at startup with an actionable message instead of
+  serving a console whose API is somewhere else; and switches whose safe value is `true` are parsed strictly, because
+  Micronaut's own conversion would turn a typo into `false` and silently widen access. The adapter is published
+  alongside `bootui-micronaut-parent`, a POM-only module that pins the Micronaut platform BOM and the annotation
+  processor; it goes to Maven Central too, because a consumer resolving `bootui-micronaut` reads its `<parent>` from
+  there.
+- **Most panels are live on Micronaut from the first release.** Without any extra dependency: Overview, Beans (the live
+  bean container, including injection edges), Mappings (the live router), Configuration (read-only), Loggers (read and
+  write Logback levels), Threads, Heap Dump, Live Memory, JVM Tuning, HTTP Probe, HTTP Exchanges, Log Tail, Exceptions,
+  Profile Diff, Security Logs, Live Activity with its service map, Traces, AI Framework, SQL Trace, REST Client,
+  Vulnerabilities, MCP Server, Command Line, and the Memory, Architecture, REST API, Pentesting and Database advisors.
+  Health and Metrics report real data once `micronaut-management` and `micronaut-micrometer` are present, and Database
+  Connection Pools, Cache, Flyway, Liquibase, Hibernate and Hibernate Statistics, WebSockets, Fault Tolerance and Email
+  light up with their Micronaut integration, each naming the dependency it is missing when it is dark. Nine panels
+  target Spring-specific runtime concepts and are permanently *not applicable*, each with its own reason: GraalVM and
+  CRaC, Conditions and Startup Timeline, Spring Security and Spring Data, Spring DevTools, HTTP Sessions, and
+  Transactions. Five are reported *not yet available*: Kafka, RabbitMQ, Dev Services, the Security advisor and the
+  platform application advisor. Three smaller limits are stated rather than invented: WebSocket frame capture is
+  unsupported (Micronaut binds messages to the handler at compile time and exposes no interception seam, so the panel
+  records connection open/close only), live circuit-breaker state is observed from the framework's own circuit events
+  rather than queried, and cache statistics and cache access edges are reported unavailable. As on every stack, the
+  running application is the authoritative answer: each unavailable panel says so in the sidebar and in a banner, and
+  `/bootui/api/panels` carries the same information — now with `platform: "micronaut"` — for agents and scripts.
+- **A `MICRONAUT` stack in the engine's MCP tool catalog.** `McpToolCatalog` gains a fourth stack, and the tools whose
+  backing panel has no Micronaut binding yet — `spring_scan`, `get_spring_report`, `security_scan`,
+  `get_security_report`, `get_kafka_activity`, `get_rabbitmq_activity`, `get_dev_services` — are excluded from it. An
+  agent or a `bootui` command run against a Micronaut application is therefore never offered a tool that cannot run,
+  which is the same guarantee the catalog already gave the other three stacks.
+- **`bootui-micronaut-sample-app`, a reference Micronaut application.** The analogue of the Spring and Quarkus sample
+  apps: it starts in the `dev` environment by default, so the console is at `http://localhost:8080/bootui` with no
+  configuration, and it carries `micronaut-management`, `micronaut-micrometer-core`, `micronaut-retry` and
+  `micronaut-websocket` so the Health, Metrics, Fault Tolerance and WebSockets panels light up with real data. It is
+  never published to Maven Central. New documentation covers the stack for both audiences:
+  [Micronaut setup](docs/setup/micronaut.md) for users, [Micronaut support](docs/MICRONAUT-SUPPORT.md) for the
+  engineering rationale and the remaining work, and [Framework support](docs/FRAMEWORK-SUPPORT.md) now compares all
+  four stacks.
+
 ## [1.16.0] - 2026-09-03
 
 Feature release that takes BootUI's diagnostics out of the browser and the agent: a `bootui` command-line interface with

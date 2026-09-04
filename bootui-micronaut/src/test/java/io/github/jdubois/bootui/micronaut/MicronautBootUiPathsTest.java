@@ -50,14 +50,14 @@ class MicronautBootUiPathsTest {
     }
 
     @Test
-    void recognisesConsoleTrafficUnderEveryMountShape() {
+    void recognisesConsoleTrafficUnderTheConfiguredMountsAndTheContextPath() {
         PropertyResolver config = config(Map.of(
                 "bootui.path", "/console", "bootui.api-path", "/console/api", "micronaut.server.context-path", "/app"));
 
         assertThat(MicronautBootUiPaths.isBootUiRequest(config, "/app/console")).isTrue();
-        assertThat(MicronautBootUiPaths.isBootUiRequest(config, "/app/console/api/beans"))
+        assertThat(MicronautBootUiPaths.isBootUiRequest(config, "/app/console/assets/app.js"))
                 .isTrue();
-        assertThat(MicronautBootUiPaths.isBootUiRequest(config, "/app/bootui/assets/app.js"))
+        assertThat(MicronautBootUiPaths.isBootUiRequest(config, "/app/console/api/beans"))
                 .isTrue();
     }
 
@@ -68,6 +68,22 @@ class MicronautBootUiPathsTest {
         assertThat(MicronautBootUiPaths.isBootUiRequest(config, "/bootui-other"))
                 .isFalse();
         assertThat(MicronautBootUiPaths.isBootUiRequest(config, "/api/bootui-proxy"))
+                .isFalse();
+    }
+
+    /**
+     * The console occupies only its configured mounts, so a relocated console must leave an application's
+     * own routes at the default mount alone: claiming them would hand them to the safety guard, the
+     * production shell guard and the anonymous-access security rule.
+     */
+    @Test
+    void leavesTheDefaultMountToTheApplicationWhenTheConsoleIsMountedElsewhere() {
+        PropertyResolver config = config(Map.of("bootui.path", "/console"));
+
+        assertThat(MicronautBootUiPaths.isBootUiRequest(config, "/bootui")).isFalse();
+        assertThat(MicronautBootUiPaths.isBootUiRequest(config, "/bootui/whatever"))
+                .isFalse();
+        assertThat(MicronautBootUiPaths.isBootUiRequest(config, "/bootui/api/beans"))
                 .isFalse();
     }
 

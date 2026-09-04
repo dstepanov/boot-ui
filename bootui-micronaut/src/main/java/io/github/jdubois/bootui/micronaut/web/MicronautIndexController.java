@@ -19,8 +19,8 @@ import java.util.regex.Pattern;
  * Serves the BootUI single-page application shell at the configured UI mount.
  *
  * <p>The compiled Vue assets ship inside {@code bootui-ui} at {@code META-INF/resources/bootui/} and are
- * served by the static-resource mapping {@code BootUiStaticResourceFactory} registers. This controller
- * answers the shell request itself so it can inject the runtime paths the SPA needs: the generated
+ * served from the same mount by {@link BootUiAssetsController}. This controller answers the shell request
+ * itself so it can inject the runtime paths the SPA needs: the generated
  * {@code index.html} references its assets relatively, so the browser base must be the console's own mount
  * and must end in a slash.
  *

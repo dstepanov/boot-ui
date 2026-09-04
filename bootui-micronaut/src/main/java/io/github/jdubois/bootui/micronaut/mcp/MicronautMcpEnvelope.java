@@ -32,6 +32,14 @@ import java.util.TreeSet;
  * Micronaut (Jackson 2) JSON-RPC envelope codec for the BootUI MCP server — the byte-for-byte twin of
  * the Spring adapter's {@code BootUiMcpService}, over the same framework- and JSON-free engine
  * {@link McpDispatcher}.
+ *
+ * <p>The codec owns its {@link ObjectMapper} instead of injecting the application's. Two reasons, and both
+ * matter: an application on {@code micronaut-serde-jackson} publishes no {@code ObjectMapper} bean at all,
+ * so injecting one would make the MCP transport fail to wire on the JSON stack a new Micronaut 4
+ * application gets by default; and MCP is a protocol with a fixed wire shape, which an application's own
+ * Jackson customisation (a naming strategy, an inclusion rule) has no business reshaping. A private,
+ * default-configured mapper keeps the bytes identical on every stack — the same guarantee the Spring and
+ * Quarkus adapters give.
  */
 @RequiresBootUi
 @Singleton
@@ -43,11 +51,8 @@ public class MicronautMcpEnvelope {
     private final int maxResponseBytes;
 
     public MicronautMcpEnvelope(
-            McpDispatcher dispatcher,
-            ObjectMapper objectMapper,
-            MicronautMcpFailureReporter failureReporter,
-            Environment environment) {
-        this(dispatcher, objectMapper, failureReporter, BootUiMcpFactory.maxResponseBytes(environment));
+            McpDispatcher dispatcher, MicronautMcpFailureReporter failureReporter, Environment environment) {
+        this(dispatcher, new ObjectMapper(), failureReporter, BootUiMcpFactory.maxResponseBytes(environment));
     }
 
     MicronautMcpEnvelope(
@@ -72,6 +77,23 @@ public class MicronautMcpEnvelope {
             return objectMapper.readTree(body);
         } catch (Exception ex) {
             throw new IllegalArgumentException("Invalid JSON-RPC request", ex);
+        }
+    }
+
+    /**
+     * Renders a JSON-RPC envelope to the bytes that go on the wire.
+     *
+     * <p>The transport writes those bytes itself rather than handing the node to the server's JSON stack:
+     * a Jackson {@code JsonNode} is a Jackson-databind type, and Micronaut Serde — which is reflection-free
+     * and writes only types with a compile-time introspection — cannot encode one. Serializing here makes
+     * the MCP response independent of whichever JSON stack the host application chose.
+     */
+    public byte[] toBytes(JsonNode node) {
+        try {
+            return objectMapper.writeValueAsBytes(node);
+        } catch (JsonProcessingException ex) {
+            failureReporter.report("serializing a response", ex);
+            throw new IllegalStateException("Unable to serialize the JSON-RPC response", ex);
         }
     }
 

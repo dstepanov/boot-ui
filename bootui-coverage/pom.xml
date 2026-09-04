@@ -13,7 +13,7 @@
     <artifactId>bootui-coverage</artifactId>
     <packaging>pom</packaging>
     <name>BootUI :: Coverage</name>
-    <description>Coverage-only reactor module that aggregates reports across the shared engine and both adapters.</description>
+    <description>Coverage-only reactor module that aggregates reports across the shared engine and every adapter.</description>
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
@@ -39,6 +39,10 @@
         <dependency>
             <groupId>com.julien-dubois.bootui</groupId>
             <artifactId>bootui-quarkus-deployment</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.julien-dubois.bootui</groupId>
+            <artifactId>bootui-micronaut</artifactId>
         </dependency>
 
         <!-- Test-scope dependencies contribute execution data without adding their application

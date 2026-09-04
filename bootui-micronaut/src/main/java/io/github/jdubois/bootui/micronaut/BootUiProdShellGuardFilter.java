@@ -13,16 +13,18 @@ import io.micronaut.http.annotation.ServerFilter;
 import jakarta.inject.Singleton;
 
 /**
- * Keeps the configured BootUI surface and its private {@code /bootui} mount dark whenever the console is
- * not active, including the part that is reachable for a reason the other filters cannot fix.
+ * Keeps the BootUI console surface dark whenever the console is not active, including the part that would
+ * otherwise stay reachable for a reason the other filters cannot fix.
  *
  * <p>When {@link BootUiEnabledCondition} does not match, none of BootUI's controllers, filters or services
- * is created, so every data-bearing {@code /bootui/api/**} endpoint is already unreachable. The shared Vue
- * bundle under {@code META-INF/resources/bootui/}, however, is a plain classpath resource: any application
- * that has configured a matching {@code micronaut.router.static-resources} mapping — including the one
- * this adapter registers itself — would still serve the empty SPA shell. This filter turns that into a
- * plain 404, at parity with the Spring adapter, where {@code BootUiShellGuardAutoConfiguration} answers the
- * same 404 for the same reserved mount, and with the Quarkus adapter's {@code BootUiProdShellGuardFilter}.
+ * is created, so every {@code bootui.api-path} endpoint and the SPA shell itself are already unreachable.
+ * The compiled Vue bundle inside {@code bootui-ui}, however, is a plain classpath resource under
+ * {@code META-INF/resources/bootui/}: any application that has configured a
+ * {@code micronaut.router.static-resources} mapping over {@code classpath:META-INF/resources} — a common
+ * Micronaut setup, and not something BootUI registers or controls — would still serve the empty SPA shell
+ * from the console's mount. This filter turns that into a plain 404, at parity with the Spring adapter,
+ * where {@code BootUiShellGuardAutoConfiguration} answers the same 404, and with the Quarkus adapter's
+ * {@code BootUiProdShellGuardFilter}.
  *
  * <p>This bean is deliberately <strong>always registered</strong> — it is the one BootUI bean that carries
  * no {@link RequiresBootUi} gate. The activation decision is made once, at construction, and stored in
@@ -33,9 +35,12 @@ import jakarta.inject.Singleton;
  * backwards, since there is no alternate polarity here at all — the bean is unconditionally present, and
  * only its runtime behavior changes.
  *
- * <p>It suppresses the normalized configured UI/API paths as well as the fixed classpath mount, while
- * invalid dormant configuration falls back to safe defaults rather than activating any console route. The
- * {@code micronaut.server.context-path} prefix is stripped before matching (shared
+ * <p>The suppressed surface is exactly the console's own dormant mounts — the normalized {@code bootui.path}
+ * and {@code bootui.api-path}, with invalid configuration falling back to the defaults rather than
+ * activating any console route. It is deliberately not any wider than that: on Micronaut the console
+ * occupies only its configured mounts, so claiming a fixed {@code /bootui} on top of them would blank out
+ * an application's own routes at that path in production the moment an operator had moved the console
+ * elsewhere. The {@code micronaut.server.context-path} prefix is stripped before matching (shared
  * {@link MicronautContextPath} helper), so a host application running under a non-default context path is
  * still fully covered.
  */
@@ -43,9 +48,6 @@ import jakarta.inject.Singleton;
 @ServerFilter(ServerFilter.MATCH_ALL_PATTERN)
 @Order(BootUiProdShellGuardFilter.ORDER)
 public class BootUiProdShellGuardFilter {
-
-    /** Internal classpath path — always {@code /bootui}; the compiled SPA assets live here. */
-    static final String INTERNAL_PATH = "/bootui";
 
     /** Runs before every other BootUI filter, so a dark console is never even evaluated further. */
     static final int ORDER = -2000;
@@ -81,18 +83,11 @@ public class BootUiProdShellGuardFilter {
             return null;
         }
 
-        // Determine the API path for cache-control header differentiation: use the configuredApiPath for
-        // requests at the configured path, the internal API path for direct internal-path access.
-        String internalApiPath = INTERNAL_PATH + "/api";
-        String apiPath = relativePath.equals(configuredApiPath) || relativePath.startsWith(configuredApiPath + "/")
-                ? configuredApiPath
-                : internalApiPath;
-
         MutableHttpResponse<?> response = HttpResponse.status(HttpStatus.NOT_FOUND);
-        if (BootUiSecurityHeaders.removesPragma(relativePath, apiPath, 404)) {
+        if (BootUiSecurityHeaders.removesPragma(relativePath, configuredApiPath, 404)) {
             response.getHeaders().remove(BootUiSecurityHeaders.PRAGMA);
         }
-        BootUiSecurityHeaders.headersFor(relativePath, apiPath, 404).forEach((name, value) -> {
+        BootUiSecurityHeaders.headersFor(relativePath, configuredApiPath, 404).forEach((name, value) -> {
             if (BootUiSecurityHeaders.overridesExisting(name)
                     || !response.getHeaders().contains(name)) {
                 response.getHeaders().set(name, value);
@@ -102,20 +97,13 @@ public class BootUiProdShellGuardFilter {
     }
 
     /**
-     * Returns {@code true} for the whole BootUI surface under both the configured base path and the
-     * internal classpath path ({@code /bootui}), so the static Vue assets at their classpath location are
-     * suppressed even when a custom {@code bootui.path} is configured.
+     * Returns {@code true} for the console's dormant UI and API mounts, and for nothing else — a strict
+     * {@code /}-delimited boundary check, so a neighbouring application route such as {@code /bootui-other}
+     * is never blanked out.
      */
     static boolean isBootUiPath(String path, String configuredPath, String configuredApiPath) {
-        if (path == null) {
-            return false;
-        }
-        return path.equals(configuredPath)
-                || path.startsWith(configuredPath + "/")
-                || path.equals(configuredApiPath)
-                || path.startsWith(configuredApiPath + "/")
-                || path.equals(INTERNAL_PATH)
-                || path.startsWith(INTERNAL_PATH + "/");
+        return MicronautBootUiPaths.isSameOrChild(path, configuredPath)
+                || MicronautBootUiPaths.isSameOrChild(path, configuredApiPath);
     }
 
     static boolean isBootUiPath(String path, String configuredPath) {

@@ -145,6 +145,8 @@ jobs:
           perl -0pi -e 's{(com\.julien-dubois\.bootui:bootui-spring-boot-starter-reactive:)[0-9][0-9A-Za-z.\-]*}{$1$ENV{VERSION}}g' docs/setup/webflux.md
           perl -0pi -e 's{(<artifactId>bootui-quarkus</artifactId>\s*<version>)[^<]*(</version>)}{$1$ENV{VERSION}$2}g' README.md docs/setup/quarkus.md
           perl -0pi -e 's{(com\.julien-dubois\.bootui:bootui-quarkus:)[0-9][0-9A-Za-z.\-]*}{$1$ENV{VERSION}}g' docs/setup/quarkus.md
+          perl -0pi -e 's{(<artifactId>bootui-micronaut</artifactId>\s*<version>)[^<]*(</version>)}{$1$ENV{VERSION}$2}g' README.md docs/setup/micronaut.md
+          perl -0pi -e 's{(com\.julien-dubois\.bootui:bootui-micronaut:)[0-9][0-9A-Za-z.\-]*}{$1$ENV{VERSION}}g' docs/setup/micronaut.md
           perl -0pi -e 's{(com\.julien-dubois\.bootui:bootui-cli:)[0-9][0-9A-Za-z.\-]*}{$1$ENV{VERSION}}g' jbang-catalog.json README.md docs/CLI.md
           # The download snippet pins the jar through a shell variable rather than a coordinate, so the
           # substitution above does not reach it.
@@ -167,6 +169,11 @@ jobs:
 
           if ! grep -q "com.julien-dubois.bootui:bootui-quarkus:$VERSION" docs/setup/quarkus.md; then
             echo "::error::Failed to update the Gradle bootui-quarkus version in docs/setup/quarkus.md to $VERSION"
+            exit 1
+          fi
+
+          if ! grep -q "com.julien-dubois.bootui:bootui-micronaut:$VERSION" docs/setup/micronaut.md; then
+            echo "::error::Failed to update the Gradle bootui-micronaut version in docs/setup/micronaut.md to $VERSION"
             exit 1
           fi
 
@@ -401,7 +408,7 @@ jobs:
           # publication. The complete reactor was already verified before the immutable release
           # commit and tag were created.
           ./mvnw -B -ntp -Prelease clean deploy \
-            -pl .,bootui-core,bootui-engine,bootui-spring-autoconfigure,bootui-spring-boot-starter,bootui-spring-boot-starter-reactive,bootui-ui,bootui-quarkus-parent,bootui-quarkus,bootui-quarkus-deployment,bootui-client,bootui-cli \
+            -pl .,bootui-core,bootui-engine,bootui-spring-autoconfigure,bootui-spring-boot-starter,bootui-spring-boot-starter-reactive,bootui-ui,bootui-quarkus-parent,bootui-quarkus,bootui-quarkus-deployment,bootui-micronaut-parent,bootui-micronaut,bootui-client,bootui-cli \
             -am \
             -Dcentral.autoPublish="${CENTRAL_AUTO_PUBLISH}"
 
@@ -413,12 +420,15 @@ jobs:
           VERSION="$(./mvnw -B -ntp -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
           BASE="https://repo1.maven.org/maven2/com/julien-dubois/bootui"
 
-          # Every published artifact: the parent POM and one JAR per published module.
+          # Every published artifact: the parent POMs and one JAR per published module.
+          # The adapter parents are POM-only but must be public: a consumer resolving
+          # bootui-quarkus or bootui-micronaut reads its <parent> from Central.
           # This list must stay in sync with the publication reactor and Central exclusions.
           # Missing any one artifact causes the release to fail with the coordinate in the error.
           ARTIFACTS=(
             "bootui-parent/${VERSION}/bootui-parent-${VERSION}.pom"
             "bootui-quarkus-parent/${VERSION}/bootui-quarkus-parent-${VERSION}.pom"
+            "bootui-micronaut-parent/${VERSION}/bootui-micronaut-parent-${VERSION}.pom"
             "bootui-core/${VERSION}/bootui-core-${VERSION}.jar"
             "bootui-engine/${VERSION}/bootui-engine-${VERSION}.jar"
             "bootui-spring-autoconfigure/${VERSION}/bootui-spring-autoconfigure-${VERSION}.jar"
@@ -427,6 +437,7 @@ jobs:
             "bootui-spring-boot-starter-reactive/${VERSION}/bootui-spring-boot-starter-reactive-${VERSION}.jar"
             "bootui-quarkus/${VERSION}/bootui-quarkus-${VERSION}.jar"
             "bootui-quarkus-deployment/${VERSION}/bootui-quarkus-deployment-${VERSION}.jar"
+            "bootui-micronaut/${VERSION}/bootui-micronaut-${VERSION}.jar"
             "bootui-client/${VERSION}/bootui-client-${VERSION}.jar"
             "bootui-cli/${VERSION}/bootui-cli-${VERSION}.jar"
             # The runnable CLI is the shaded artifact, not the thin jar, so it is checked on its own:
@@ -466,8 +477,12 @@ jobs:
           VERSION="$(./mvnw -B -ntp -q -N -DforceStdout help:evaluate -Dexpression=project.version | tail -n 1)"
           SPRING_BOOT_VERSION="$(./mvnw -B -ntp -q -N -DforceStdout help:evaluate -Dexpression=spring-boot.version | tail -n 1)"
           QUARKUS_VERSION="$(./mvnw -B -ntp -q -N -DforceStdout help:evaluate -Dexpression=quarkus.platform.version | tail -n 1)"
+          MICRONAUT_VERSION="$(./mvnw -B -ntp -q -N -DforceStdout help:evaluate -Dexpression=micronaut.platform.version | tail -n 1)"
+          # Micronaut's annotation processor is pinned separately from the platform BOM (see the
+          # micronaut.core.version comment in the root pom), so the smoke consumer pins it the same way.
+          MICRONAUT_CORE_VERSION="$(./mvnw -B -ntp -q -N -DforceStdout help:evaluate -Dexpression=micronaut.core.version | tail -n 1)"
           echo "Smoke-testing BootUI ${VERSION} against the published Maven Central artifacts."
-          echo "Distributions: Spring MVC (servlet starter), Spring WebFlux (reactive starter), Quarkus extension."
+          echo "Distributions: Spring MVC (servlet starter), Spring WebFlux (reactive starter), Quarkus extension, Micronaut adapter."
 
           # Drop all locally built/installed BootUI artifacts so every smoke test is forced to
           # resolve them from Maven Central — exercising exactly what a consumer downloads.
@@ -564,8 +579,8 @@ jobs:
           SPRING_PROPERTIES
           }
 
-          # ── 1/3: Spring MVC — bootui-spring-boot-starter ─────────────────────────────
-          echo "=== Smoke test 1/3: Spring MVC (bootui-spring-boot-starter) ==="
+          # ── 1/4: Spring MVC — bootui-spring-boot-starter ─────────────────────────────
+          echo "=== Smoke test 1/4: Spring MVC (bootui-spring-boot-starter) ==="
           MVC_SMOKE_DIR="$(mktemp -d)"
           create_spring_smoke_project "$MVC_SMOKE_DIR" "bootui-spring-boot-starter" "8080"
           LOG_MVC="$(mktemp)"
@@ -582,8 +597,8 @@ jobs:
           trap - EXIT
           echo "Spring MVC smoke test passed."
 
-          # ── 2/3: Spring WebFlux — bootui-spring-boot-starter-reactive ─────────────────
-          echo "=== Smoke test 2/3: Spring WebFlux (bootui-spring-boot-starter-reactive) ==="
+          # ── 2/4: Spring WebFlux — bootui-spring-boot-starter-reactive ─────────────────
+          echo "=== Smoke test 2/4: Spring WebFlux (bootui-spring-boot-starter-reactive) ==="
           WEBFLUX_SMOKE_DIR="$(mktemp -d)"
           create_spring_smoke_project "$WEBFLUX_SMOKE_DIR" "bootui-spring-boot-starter-reactive" "8081"
           LOG_WEBFLUX="$(mktemp)"
@@ -598,12 +613,12 @@ jobs:
           trap - EXIT
           echo "Spring WebFlux smoke test passed."
 
-          # ── 3/3: Quarkus — bootui-quarkus + bootui-quarkus-deployment ────────────────
+          # ── 3/4: Quarkus — bootui-quarkus + bootui-quarkus-deployment ────────────────
           # A minimal standalone Maven project outside the reactor exercises the full consumer
           # path: both runtime (bootui-quarkus) and deployment (bootui-quarkus-deployment)
           # artifacts are resolved from Maven Central and the extension augments successfully.
           # No HTTP server is started; a clean Quarkus build-time augmentation is the bar.
-          echo "=== Smoke test 3/3: Quarkus extension (bootui-quarkus + bootui-quarkus-deployment) ==="
+          echo "=== Smoke test 3/4: Quarkus extension (bootui-quarkus + bootui-quarkus-deployment) ==="
           QUARKUS_SMOKE_DIR="$(mktemp -d)"
           mkdir -p "$QUARKUS_SMOKE_DIR/src/main/java"
           cat > "$QUARKUS_SMOKE_DIR/pom.xml" << QUARKUS_POM
@@ -666,7 +681,100 @@ jobs:
           ./mvnw -B -ntp -f "$QUARKUS_SMOKE_DIR/pom.xml" package -Dmaven.test.skip=true
           echo "Quarkus extension smoke test passed."
 
-          echo "All BootUI ${VERSION} distribution smoke tests passed (Spring MVC, Spring WebFlux, Quarkus)."
+          # ── 4/4: Micronaut — bootui-micronaut (+ the bootui-micronaut-parent POM) ─────
+          # A minimal standalone Maven project outside the reactor exercises the full consumer
+          # path: bootui-micronaut is resolved from Maven Central, which forces Maven to read its
+          # <parent> — the POM-only bootui-micronaut-parent — from Central as well. That is the
+          # reason the parent is published at all, and a release that shipped the adapter without
+          # it would fail every consumer's dependency resolution while looking fine here.
+          # There is no augmentation half to exercise (Micronaut resolves injection in its own
+          # annotation processor at compile time), so a clean compile against the published
+          # artifact, with Micronaut's processor on the path, is the bar.
+          echo "=== Smoke test 4/4: Micronaut adapter (bootui-micronaut) ==="
+          MICRONAUT_SMOKE_DIR="$(mktemp -d)"
+          mkdir -p "$MICRONAUT_SMOKE_DIR/src/main/java/smoke"
+          cat > "$MICRONAUT_SMOKE_DIR/pom.xml" << MICRONAUT_POM
+          <?xml version="1.0" encoding="UTF-8"?>
+          <project xmlns="http://maven.apache.org/POM/4.0.0">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>smoke</groupId>
+            <artifactId>bootui-micronaut-consumer-smoke</artifactId>
+            <version>1</version>
+            <properties>
+              <maven.compiler.release>17</maven.compiler.release>
+              <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+            </properties>
+            <dependencyManagement>
+              <dependencies>
+                <dependency>
+                  <groupId>io.micronaut.platform</groupId>
+                  <artifactId>micronaut-platform</artifactId>
+                  <version>${MICRONAUT_VERSION}</version>
+                  <type>pom</type>
+                  <scope>import</scope>
+                </dependency>
+              </dependencies>
+            </dependencyManagement>
+            <dependencies>
+              <dependency>
+                <groupId>com.julien-dubois.bootui</groupId>
+                <artifactId>bootui-micronaut</artifactId>
+                <version>${VERSION}</version>
+              </dependency>
+              <dependency>
+                <groupId>io.micronaut</groupId>
+                <artifactId>micronaut-http-server-netty</artifactId>
+              </dependency>
+              <dependency>
+                <groupId>io.micronaut</groupId>
+                <artifactId>micronaut-jackson-databind</artifactId>
+              </dependency>
+            </dependencies>
+            <build>
+              <plugins>
+                <plugin>
+                  <artifactId>maven-compiler-plugin</artifactId>
+                  <configuration>
+                    <annotationProcessorPaths>
+                      <path>
+                        <groupId>io.micronaut</groupId>
+                        <artifactId>micronaut-inject-java</artifactId>
+                        <version>${MICRONAUT_CORE_VERSION}</version>
+                      </path>
+                    </annotationProcessorPaths>
+                    <compilerArgs>
+                      <arg>-parameters</arg>
+                      <arg>-Amicronaut.processing.group=smoke</arg>
+                    </compilerArgs>
+                  </configuration>
+                </plugin>
+              </plugins>
+            </build>
+          </project>
+          MICRONAUT_POM
+          cat > "$MICRONAUT_SMOKE_DIR/src/main/java/smoke/SmokeApplication.java" <<'MICRONAUT_APPLICATION'
+          package smoke;
+
+          import io.micronaut.context.env.Environment;
+          import io.micronaut.runtime.Micronaut;
+
+          public final class SmokeApplication {
+
+              private SmokeApplication() {}
+
+              public static void main(String[] args) {
+                  Micronaut.build(args)
+                          .mainClass(SmokeApplication.class)
+                          .defaultEnvironments(Environment.DEVELOPMENT)
+                          .start();
+              }
+          }
+          MICRONAUT_APPLICATION
+          # No -am (standalone project outside the reactor); no -o (must resolve from Central).
+          ./mvnw -B -ntp -f "$MICRONAUT_SMOKE_DIR/pom.xml" package -Dmaven.test.skip=true
+          echo "Micronaut adapter smoke test passed."
+
+          echo "All BootUI ${VERSION} distribution smoke tests passed (Spring MVC, Spring WebFlux, Quarkus, Micronaut)."
 
       - name: Redeploy documentation site
         if: env.CENTRAL_AUTO_PUBLISH == 'true'

@@ -26,9 +26,11 @@ import jakarta.inject.Singleton;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,18 +50,20 @@ import org.slf4j.LoggerFactory;
  * <p>The filter matches {@code /**} rather than only the console mount so it also covers requests that
  * resolve to no route at all — an unmatched {@code POST} under the BootUI surface is exactly the
  * cross-site-write case the safety contract must reject, and it must not be answered by a bare 404 that
- * skipped the guard. Scope is then narrowed in {@link #filterRequest} to the whole {@code /bootui}
- * surface (the UI and the API), mirroring the Spring adapter; cross-site-write protection additionally
- * applies to state-changing methods. The {@code micronaut.server.context-path} prefix is stripped before
- * the scope check (mirroring how the Spring filter strips the servlet context path), so the console is
- * still guarded when the host application runs under a non-default context path.</p>
+ * skipped the guard. Scope is then narrowed in {@link #filterRequest} to the console's own surface — the
+ * configured UI mount and API mount, and nothing else — mirroring the Spring adapter; cross-site-write
+ * protection additionally applies to state-changing methods. The {@code micronaut.server.context-path}
+ * prefix is stripped before the scope check (mirroring how the Spring filter strips the servlet context
+ * path), so the console is still guarded when the host application runs under a non-default context
+ * path.</p>
  *
  * <p>The three defenses are bypassed entirely only when {@code bootui.allow-non-localhost=true}. Config is
- * read live and <em>fails closed</em> (a missing/invalid value never widens access). The container-gateway
- * snapshot is resolved once, eagerly at startup on the bean's own initialization thread (the detector does
- * blocking {@code /proc}/DNS work that must never run on an event loop), and only when
- * {@code bootui.trust-container-gateway} is not {@code OFF} so a default deployment never touches
- * {@code /proc} or DNS.</p>
+ * read live and <em>fails closed</em> (a missing/invalid value never widens access); only the
+ * <em>parsing</em> of the list-valued keys is memoized, keyed on the raw property value, so a live change
+ * still takes effect on the next request. The container-gateway snapshot is resolved once, eagerly at
+ * startup on the bean's own initialization thread (the detector does blocking {@code /proc}/DNS work that
+ * must never run on an event loop), and only when {@code bootui.trust-container-gateway} is not
+ * {@code OFF} so a default deployment never touches {@code /proc} or DNS.</p>
  */
 @RequiresBootUi
 @Singleton
@@ -68,9 +72,6 @@ import org.slf4j.LoggerFactory;
 public class BootUiMicronautSafetyFilter {
 
     private static final Logger LOG = LoggerFactory.getLogger(BootUiMicronautSafetyFilter.class);
-
-    private static final String INTERNAL_BASE_PATH = MicronautBootUiPaths.INTERNAL_UI_PATH;
-    private static final String INTERNAL_API_PATH = MicronautBootUiPaths.INTERNAL_API_PATH;
 
     static final String ALLOW_NON_LOCALHOST_KEY = "bootui.allow-non-localhost";
     static final String ALLOWED_HOSTS_KEY = "bootui.allowed-hosts";
@@ -91,6 +92,11 @@ public class BootUiMicronautSafetyFilter {
     private volatile boolean inContainer = false;
     private volatile Set<InetAddress> containerGateways = Set.of();
     private volatile boolean loggedTrustedGateway = false;
+
+    /** Memoized parses of the two list-valued policy keys; see {@link #trustedRanges()}. */
+    private volatile Parsed<List<String>> allowedHosts;
+
+    private volatile Parsed<List<CidrRange>> trustedRanges;
 
     public BootUiMicronautSafetyFilter(Environment environment) {
         this(environment, new ContainerGatewayDetector());
@@ -150,7 +156,7 @@ public class BootUiMicronautSafetyFilter {
 
     private <T> MutableHttpResponse<T> applySecurityHeaders(MutableHttpResponse<T> response, String relativePath) {
         int statusCode = response.getStatus().getCode();
-        String apiPath = apiPathFor(relativePath);
+        String apiPath = MicronautBootUiPaths.safeApiPath(environment);
         if (BootUiSecurityHeaders.removesPragma(relativePath, apiPath, statusCode)) {
             response.getHeaders().remove(BootUiSecurityHeaders.PRAGMA);
         }
@@ -168,10 +174,12 @@ public class BootUiMicronautSafetyFilter {
      * Spring and Quarkus adapters (an exact match or a {@code /}-delimited sub-path) so an unrelated path
      * such as {@code /bootui-other} is not caught.
      *
-     * <p>Both the configured mounts ({@code bootui.path} / {@code bootui.api-path}, where the controllers
-     * actually live on Micronaut) and the reserved internal {@code /bootui} mount (where the packaged SPA
-     * assets live) are guarded, so moving the console with {@code bootui.path} can never leave either
-     * surface unguarded. The paths are read live and fail closed to the internal mounts.
+     * <p>The surface is exactly the configured mounts ({@code bootui.path} / {@code bootui.api-path}),
+     * because on Micronaut that is where every console controller — the SPA shell and its bundle
+     * included — actually binds. Guarding a fixed {@code /bootui} as well would reject an application's
+     * own routes at that path as non-loopback the moment an operator moved the console elsewhere. The
+     * mounts are read live and fail closed to the defaults, which is also what the controllers' own
+     * placeholders fall back to.
      *
      * @param relativePath the request path with the server context path already stripped
      */
@@ -179,21 +187,8 @@ public class BootUiMicronautSafetyFilter {
         if (relativePath == null) {
             return false;
         }
-        return MicronautBootUiPaths.isSameOrChild(relativePath, INTERNAL_BASE_PATH)
-                || MicronautBootUiPaths.isSameOrChild(relativePath, INTERNAL_API_PATH)
-                || MicronautBootUiPaths.isSameOrChild(relativePath, MicronautBootUiPaths.safeUiPath(environment))
+        return MicronautBootUiPaths.isSameOrChild(relativePath, MicronautBootUiPaths.safeUiPath(environment))
                 || MicronautBootUiPaths.isSameOrChild(relativePath, MicronautBootUiPaths.safeApiPath(environment));
-    }
-
-    /**
-     * The API mount to evaluate this path against for the cache-control policy: the configured one for a
-     * request under it, the reserved internal one otherwise (which is where the packaged SPA assets live).
-     */
-    private String apiPathFor(String relativePath) {
-        String configuredApiPath = MicronautBootUiPaths.safeApiPath(environment);
-        return MicronautBootUiPaths.isSameOrChild(relativePath, configuredApiPath)
-                ? configuredApiPath
-                : INTERNAL_API_PATH;
     }
 
     /**
@@ -290,45 +285,88 @@ public class BootUiMicronautSafetyFilter {
         return BootUiBooleans.value(environment, ALLOW_NON_LOCALHOST_KEY, false, LOG);
     }
 
+    /**
+     * The Host allow-list, split from the raw property.
+     *
+     * <p>The property is still <em>read</em> on every request, so a live configuration change is picked up
+     * exactly as before; only the split is memoized, keyed on the raw value. See {@link #trustedRanges()}
+     * for why the memo is safe.
+     */
     private List<String> allowedHosts() {
-        return stringList(ALLOWED_HOSTS_KEY);
-    }
-
-    private List<CidrRange> trustedRanges() {
-        List<CidrRange> parsed = new ArrayList<>();
-        for (String entry : stringList(TRUSTED_PROXIES_KEY)) {
-            CidrRange range = CidrRange.parse(entry);
-            if (range != null) {
-                parsed.add(range);
-            } else if (entry != null && !entry.isBlank()) {
-                LOG.warn("BootUI ignoring malformed {} entry '{}'", TRUSTED_PROXIES_KEY, entry);
-            }
+        Object raw = rawValue(ALLOWED_HOSTS_KEY);
+        Parsed<List<String>> cached = allowedHosts;
+        if (cached != null && Objects.equals(cached.raw(), raw)) {
+            return cached.value();
         }
-        return List.copyOf(parsed);
+        List<String> hosts = split(raw);
+        allowedHosts = new Parsed<>(raw, hosts);
+        return hosts;
     }
 
     /**
-     * Reads a list-valued property, accepting both the YAML list form and a single comma-separated string
-     * (which is how the same key is written on the command line or in a {@code .properties} file).
+     * The trusted source ranges, parsed from {@code bootui.trusted-proxies}.
+     *
+     * <p>Parsing every CIDR range on every console request is pure repeated work, so the result is
+     * memoized against the raw property value and recomputed only when that value changes — which keeps
+     * the "read live" contract intact. The memo is a single immutable snapshot published through a
+     * volatile field: two threads racing on a changed value both compute it and the last write wins, which
+     * is harmless because the result depends only on the raw input.
      */
-    private List<String> stringList(String key) {
+    private List<CidrRange> trustedRanges() {
+        Object raw = rawValue(TRUSTED_PROXIES_KEY);
+        Parsed<List<CidrRange>> cached = trustedRanges;
+        if (cached != null && Objects.equals(cached.raw(), raw)) {
+            return cached.value();
+        }
+        List<CidrRange> ranges = new ArrayList<>();
+        for (String entry : split(raw)) {
+            CidrRange range = CidrRange.parse(entry);
+            if (range != null) {
+                ranges.add(range);
+            } else {
+                LOG.warn("BootUI ignoring malformed {} entry '{}'", TRUSTED_PROXIES_KEY, entry);
+            }
+        }
+        List<CidrRange> parsed = List.copyOf(ranges);
+        trustedRanges = new Parsed<>(raw, parsed);
+        return parsed;
+    }
+
+    /**
+     * The raw configured value of a list-valued property: the YAML list form when present, otherwise the
+     * single comma-separated string form (which is how the same key is written on the command line or in a
+     * {@code .properties} file), or {@code null} when unset. Used both as the cache key and as the input
+     * the parsers work from.
+     */
+    @Nullable
+    private Object rawValue(String key) {
         List<String> values =
                 environment.getProperty(key, Argument.listOf(String.class)).orElse(null);
-        if (values != null) {
+        return values != null
+                ? values
+                : environment.getProperty(key, String.class).orElse(null);
+    }
+
+    /** Splits a {@link #rawValue raw} list-valued property into trimmed, non-blank entries. */
+    private static List<String> split(@Nullable Object raw) {
+        if (raw instanceof List<?> values) {
             return values.stream()
+                    .map(String::valueOf)
                     .map(String::trim)
                     .filter(value -> !value.isBlank())
                     .toList();
         }
-        String raw = environment.getProperty(key, String.class).orElse(null);
-        if (raw == null || raw.isBlank()) {
+        if (raw == null) {
             return List.of();
         }
-        return java.util.Arrays.stream(raw.split(","))
+        return Arrays.stream(String.valueOf(raw).split(","))
                 .map(String::trim)
                 .filter(value -> !value.isBlank())
                 .toList();
     }
+
+    /** A parsed configuration value together with the raw property value it was derived from. */
+    private record Parsed<T>(@Nullable Object raw, T value) {}
 
     /**
      * Reads {@code bootui.trust-container-gateway} and maps it onto the neutral {@link GatewayTrust}. A

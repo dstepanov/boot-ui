@@ -83,6 +83,13 @@
             dependencyManagement and therefore cannot inherit a managed version.
         -->
         <micronaut.core.version>4.10.26</micronaut.core.version>
+        <!--
+            micronaut-serde's own version, as published by the platform BOM above. Same literal-value reason
+            as micronaut.core.version: the Micronaut adapter runs micronaut-serde-processor on the compiler's
+            <annotationProcessorPaths> so its @SerdeImport declarations produce compile-time introspections
+            for the annotation-free core DTOs, and that path cannot inherit a managed version.
+        -->
+        <micronaut.serde.version>2.16.2</micronaut.serde.version>
         <!-- Neither Resilience4j nor Spring Retry is managed by the Spring Boot 4.1 BOM, so both are
              pinned here and shared by the optional autoconfigure dependencies and the sample apps. -->
         <resilience4j.version>2.4.0</resilience4j.version>
@@ -364,6 +371,7 @@
                             <excludeArtifact>bootui-spring-sample-app</excludeArtifact>
                             <excludeArtifact>bootui-spring-webflux-sample-app</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-sample-app</excludeArtifact>
+                            <excludeArtifact>bootui-micronaut-sample-app</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-integration-tests-aggregator</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-integration-tests</excludeArtifact>
                             <excludeArtifact>bootui-quarkus-cache-integration-tests</excludeArtifact>

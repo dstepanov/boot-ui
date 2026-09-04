@@ -2,6 +2,7 @@ package io.github.jdubois.bootui.micronaut.health;
 
 import io.github.jdubois.bootui.core.dto.HealthNodeDto;
 import io.github.jdubois.bootui.spi.HealthProvider;
+import io.micronaut.context.BeanContext;
 import io.micronaut.health.HealthStatus;
 import io.micronaut.management.endpoint.health.HealthLevelOfDetail;
 import io.micronaut.management.health.aggregator.HealthAggregator;
@@ -49,6 +50,26 @@ public final class MicronautHealthProvider implements HealthProvider {
     public MicronautHealthProvider(HealthAggregator<HealthResult> aggregator, List<HealthIndicator> indicators) {
         this.aggregator = aggregator;
         this.indicators = indicators == null ? new HealthIndicator[0] : indicators.toArray(new HealthIndicator[0]);
+    }
+
+    /**
+     * Builds a provider over the application's own health aggregation, or returns {@code null} when
+     * micronaut-management published no {@link HealthAggregator} — which happens when the health endpoint
+     * is switched off. Returning {@code null} lets the engine render the honest "not available" guidance
+     * rather than an empty tree.
+     *
+     * <p>This factory is the single place the management API is touched, so
+     * {@code BootUiEngineFactory} can gate the whole binding on one class-presence probe and an
+     * application without micronaut-management never links these types.
+     */
+    @SuppressWarnings("unchecked")
+    public static HealthProvider create(BeanContext beanContext) {
+        HealthAggregator<HealthResult> aggregator = (HealthAggregator<HealthResult>)
+                beanContext.findBean(HealthAggregator.class).orElse(null);
+        if (aggregator == null) {
+            return null;
+        }
+        return new MicronautHealthProvider(aggregator, List.copyOf(beanContext.getBeansOfType(HealthIndicator.class)));
     }
 
     @Override

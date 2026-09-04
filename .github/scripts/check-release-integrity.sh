@@ -59,7 +59,7 @@ require_literal 'git verify-tag "$EXPECTED_TAG"' 'existing tag signature verific
 require_literal 'ref: ${{ env.RELEASE_SHA }}' 'immutable release checkout'
 require_literal "if: env.RESUME_AFTER_PUBLISH != 'true'" 'deploy skip for publication continuation'
 require_literal 'gh workflow run pages.yml --ref "$RELEASE_TAG"' 'tag-pinned documentation deployment'
-require_literal '-pl .,bootui-core,bootui-engine,bootui-spring-autoconfigure,bootui-spring-boot-starter,bootui-spring-boot-starter-reactive,bootui-ui,bootui-quarkus-parent,bootui-quarkus,bootui-quarkus-deployment,bootui-client,bootui-cli' \
+require_literal '-pl .,bootui-core,bootui-engine,bootui-spring-autoconfigure,bootui-spring-boot-starter,bootui-spring-boot-starter-reactive,bootui-ui,bootui-quarkus-parent,bootui-quarkus,bootui-quarkus-deployment,bootui-micronaut-parent,bootui-micronaut,bootui-client,bootui-cli' \
   'publication-only Maven reactor'
 require_literal 'bootui-cli/${VERSION}/bootui-cli-${VERSION}-all.jar' \
   'runnable CLI uber-jar availability check'
@@ -90,6 +90,7 @@ readonly expected_exclusions=(
   bootui-spring-sample-app
   bootui-spring-webflux-sample-app
   bootui-quarkus-sample-app
+  bootui-micronaut-sample-app
   bootui-quarkus-integration-tests-aggregator
   bootui-quarkus-integration-tests
   bootui-quarkus-cache-integration-tests

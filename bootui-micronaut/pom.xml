@@ -37,10 +37,12 @@
             <artifactId>bootui-ui</artifactId>
         </dependency>
 
-        <!-- Micronaut DI + HTTP server + Jackson for the /bootui/api/** endpoints.
-             micronaut-jackson-databind (rather than micronaut-serde) is deliberate: the shared core DTOs are
-             annotation-free records with no @Serdeable, so they must be serialized reflectively, byte-identically
-             to the Spring (Jackson 3) and Quarkus (Jackson 2) adapters. -->
+        <!-- Micronaut DI + HTTP server for the /bootui/api/** endpoints. Deliberately absent from this list
+             is a Micronaut JSON stack: BootUI must not dictate the host's. The application chooses
+             micronaut-serde-jackson (the default for a new Micronaut 4 application) or
+             micronaut-jackson-databind, and the adapter serializes correctly under either — see
+             BootUiSerdeImports, which supplies the compile-time introspections Serde needs for the shared,
+             annotation-free core DTOs. -->
         <dependency>
             <groupId>io.micronaut</groupId>
             <artifactId>micronaut-inject</artifactId>
@@ -53,9 +55,29 @@
             <groupId>io.micronaut</groupId>
             <artifactId>micronaut-http-server-netty</artifactId>
         </dependency>
+
+        <!-- Plain Jackson 2 databind (the library, NOT micronaut-jackson-databind the JSON stack): BootUI's
+             own internal JSON work — the MCP JSON-RPC envelope, the GitHub and OSV clients, the AI agent
+             session parsers — reads and writes JSON with its own ObjectMapper instances. Keeping this a
+             library dependency instead of a Micronaut JSON-stack dependency is what lets the adapter run on
+             a Serde application: nothing here registers an ObjectMapper bean or a MessageBodyWriter, so the
+             host's choice of JSON stack is untouched. Under micronaut-jackson-databind the host supplies the
+             very same artifact, so nothing is duplicated. -->
         <dependency>
-            <groupId>io.micronaut</groupId>
-            <artifactId>micronaut-jackson-databind</artifactId>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- Micronaut Serde annotations, compile-only (provided): needed solely to compile BootUiSerdeImports,
+             the @SerdeImport holder that makes the annotation-free core DTOs serializable under
+             micronaut-serde without annotating them. provided scope is NOT transitive, so an application on
+             micronaut-jackson-databind is never dragged onto Serde; the @SerdeImport annotations are then
+             simply absent at runtime (annotations that cannot be loaded are ignored by the JVM) and the
+             generated introspections sit unused. -->
+        <dependency>
+            <groupId>io.micronaut.serde</groupId>
+            <artifactId>micronaut-serde-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <!-- Reactor, for the server-sent-event streams the live panels (Log Tail, Exceptions) subscribe to.
              Micronaut's Netty server already brings it at runtime; it is declared explicitly here because
@@ -195,6 +217,19 @@
         <!-- Test dependencies. The adapter's own tests boot a real Micronaut server (@MicronautTest) so the
              filters, the controllers and the DI wiring are exercised together, exactly as the Quarkus
              adapter's white-box tests do with @QuarkusTest. -->
+
+        <!-- The JSON stack these tests run under is micronaut-serde-jackson, on purpose: Serde is the default
+             for a new Micronaut 4 application and is the stricter of the two (it refuses any type without a
+             compile-time introspection), so booting the whole console on it proves BootUiSerdeImports is
+             complete for every endpoint the smoke test walks. The other stack is covered by
+             bootui-micronaut-sample-app, which declares micronaut-jackson-databind and runs the same smoke
+             assertions — the two stacks are mutually exclusive on one classpath, so they are covered by two
+             modules rather than two profiles. -->
+        <dependency>
+            <groupId>io.micronaut.serde</groupId>
+            <artifactId>micronaut-serde-jackson</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -218,6 +253,15 @@
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- The shared, framework-neutral HTTP conformance contract. bootui-micronaut-sample-app runs it on
+             micronaut-jackson-databind; MicronautSerdeApiConformanceTest here runs the very same suite on
+             micronaut-serde-jackson, so the promise that both JSON stacks answer one identical wire contract
+             is proven by the contract itself rather than by a smoke test. -->
+        <dependency>
+            <groupId>com.julien-dubois.bootui</groupId>
+            <artifactId>bootui-conformance</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

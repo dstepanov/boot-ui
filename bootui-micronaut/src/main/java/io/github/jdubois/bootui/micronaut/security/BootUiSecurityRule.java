@@ -34,7 +34,11 @@ import reactor.core.publisher.Mono;
  * silent.
  *
  * <p>The rule answers {@link SecurityRuleResult#UNKNOWN} for every path outside the console, which leaves
- * the application's own rules entirely in charge of its own endpoints.
+ * the application's own rules entirely in charge of its own endpoints. "The console" is the configured UI
+ * and API mounts and nothing else — the shared
+ * {@link MicronautBootUiPaths#isBootUiRequest(io.micronaut.core.value.PropertyResolver, String) matcher}
+ * every guard and capture point uses. That matters most here: permitting a mount BootUI does not actually
+ * occupy would hand anonymous access to whatever the application itself serves there.
  */
 @RequiresBootUi
 @Requires(classes = SecurityRule.class)

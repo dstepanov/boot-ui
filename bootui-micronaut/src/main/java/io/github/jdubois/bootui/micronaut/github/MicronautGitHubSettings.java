@@ -1,33 +1,29 @@
 package io.github.jdubois.bootui.micronaut.github;
 
+import io.github.jdubois.bootui.engine.github.GitHubApiSettings;
 import io.micronaut.context.env.Environment;
 import io.micronaut.core.type.Argument;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 
 /**
- * The immutable bounds the GitHub panel's API calls run under, mapped once from {@code bootui.github.*}.
+ * Maps {@code bootui.github.*} from the Micronaut {@link Environment} onto the engine's neutral
+ * {@link GitHubApiSettings}.
  *
- * <p>Every default matches the Spring and Quarkus adapters. The bounds exist because this is the one panel
- * that talks to a third party: the number of API calls per refresh is capped, each response is capped, the
- * request timeout is short, and calls stop entirely once the account's remaining rate-limit quota drops below
- * the safety threshold — so BootUI can never exhaust a developer's GitHub quota on their behalf. The host
- * allow-list means a redirected or misconfigured base URL cannot send a token anywhere else.
+ * <p>This is the only GitHub-panel code the Micronaut adapter owns: the client itself is the shared engine
+ * {@code GitHubApiClient}, so all that remains per adapter is reading configuration in the framework's own
+ * idiom. Every default matches the Spring and Quarkus adapters key for key, which is what makes the same
+ * configuration behave identically on every stack.</p>
  */
-public record MicronautGitHubSettings(
-        Duration requestTimeout,
-        int maxPullRequests,
-        int maxIssues,
-        int maxWorkflowRuns,
-        int quotaSafetyThreshold,
-        int maxApiCalls,
-        int maxSecurityAlerts,
-        List<String> allowedApiHosts) {
+public final class MicronautGitHubSettings {
 
     public static final String DEFAULT_API_HOST = "api.github.com";
 
-    public static MicronautGitHubSettings from(Environment environment) {
-        return new MicronautGitHubSettings(
+    private MicronautGitHubSettings() {}
+
+    public static GitHubApiSettings from(Environment environment) {
+        return new GitHubApiSettings(
                 environment
                         .getProperty("bootui.github.request-timeout", Duration.class)
                         .orElse(Duration.ofSeconds(5)),
@@ -65,7 +61,7 @@ public record MicronautGitHubSettings(
         }
         return environment
                 .getProperty("bootui.github.allowed-api-hosts", String.class)
-                .map(raw -> java.util.Arrays.stream(raw.split(","))
+                .map(raw -> Arrays.stream(raw.split(","))
                         .map(String::trim)
                         .filter(host -> !host.isBlank())
                         .toList())

@@ -16,7 +16,21 @@ import java.util.Set;
 public final class BootUiApiContractCatalog {
 
     private static final Set<Runtime> SPRING = Set.of(Runtime.SPRING_MVC, Runtime.SPRING_WEBFLUX);
-    private static final Set<Runtime> ALL = Set.of(Runtime.SPRING_MVC, Runtime.SPRING_WEBFLUX, Runtime.QUARKUS);
+
+    /** Every runtime that runs this suite. */
+    private static final Set<Runtime> ALL =
+            Set.of(Runtime.SPRING_MVC, Runtime.SPRING_WEBFLUX, Runtime.QUARKUS, Runtime.MICRONAUT);
+
+    /**
+     * The runtimes other than Micronaut. Used for the handful of actions whose panel has no Micronaut
+     * binding at all — the Kafka and RabbitMQ captures (MN-3, MN-6), the Security advisor (MN-8) and the
+     * platform application advisor (MN-4). Scoping them here rather than leaving them in {@link #ALL} keeps
+     * the catalog an honest statement of what each runtime promises: the panels are reported unavailable by
+     * {@code MicronautPanelAvailability}, so a contract claiming a write route for them would be a claim no
+     * adapter makes. This mirrors {@code McpToolCatalog.NON_MICRONAUT_STACKS} in the engine.
+     */
+    private static final Set<Runtime> NON_MICRONAUT =
+            Set.of(Runtime.SPRING_MVC, Runtime.SPRING_WEBFLUX, Runtime.QUARKUS);
 
     private static final List<ReadContract> READS = List.of(
             read(
@@ -338,7 +352,7 @@ public final class BootUiApiContractCatalog {
         spring(actions, "config.override.put", "config", "POST", "/config/overrides");
         spring(actions, "config.override.delete", "config", "DELETE", "/config/overrides/conformance.key");
         all(actions, "loggers.level", "loggers", "POST", "/loggers/io.github.jdubois.bootui.conformance");
-        all(actions, "security.scan", "security", "POST", "/security/scan");
+        nonMicronaut(actions, "security.scan", "security", "POST", "/security/scan");
         all(actions, "pentesting.scan", "pentesting", "POST", "/pentesting/scan");
         all(actions, "hibernate.scan", "hibernate", "POST", "/hibernate/scan");
         all(actions, "hibernate-statistics.enable", "hibernate-statistics", "POST", "/hibernate-statistics/enable");
@@ -359,7 +373,7 @@ public final class BootUiApiContractCatalog {
         all(actions, "liquibase.update", "liquibase", "POST", "/liquibase/update");
         all(actions, "github.refresh", "github", "POST", "/github/refresh");
         all(actions, "rest-api.scan", "rest-api", "POST", "/rest-api/scan");
-        all(actions, "spring.scan", "spring", "POST", "/spring/scan");
+        nonMicronaut(actions, "spring.scan", "spring", "POST", "/spring/scan");
         spring(actions, "crac.scan", "crac", "POST", "/crac/scan");
         spring(actions, "crac.dockerfile.install", "crac", "POST", "/crac/dockerfile/install");
         spring(actions, "crac.entrypoint.install", "crac", "POST", "/crac/entrypoint/install");
@@ -373,8 +387,8 @@ public final class BootUiApiContractCatalog {
         all(actions, "mcp-server.toggle", "mcp-server", "POST", "/mcp-server/toggle");
         all(actions, "activity.use-existing-datasource", "activity", "POST", "/activity/use-existing-datasource");
         all(actions, "email.clear", "email", "DELETE", "/email");
-        all(actions, "kafka.clear", "kafka", "DELETE", "/kafka");
-        all(actions, "rabbitmq.clear", "rabbitmq", "DELETE", "/rabbitmq");
+        nonMicronaut(actions, "kafka.clear", "kafka", "DELETE", "/kafka");
+        nonMicronaut(actions, "rabbitmq.clear", "rabbitmq", "DELETE", "/rabbitmq");
         spring(actions, "jms.clear", "jms", "DELETE", "/jms");
         all(actions, "websockets.clear", "websockets", "DELETE", "/websockets");
         all(actions, "websockets.capture", "websockets", "POST", "/websockets/capture");
@@ -529,6 +543,15 @@ public final class BootUiApiContractCatalog {
         actions.add(new ActionContract(id, panelId, method, path, Set.of(Runtime.QUARKUS), true));
     }
 
+    /**
+     * An action every runtime but Micronaut promises, because the panel behind it has no Micronaut binding
+     * (see {@link #NON_MICRONAUT}).
+     */
+    private static void nonMicronaut(
+            List<ActionContract> actions, String id, String panelId, String method, String path) {
+        actions.add(new ActionContract(id, panelId, method, path, NON_MICRONAUT, true));
+    }
+
     private static void infrastructure(
             List<ActionContract> actions,
             String id,
@@ -542,7 +565,8 @@ public final class BootUiApiContractCatalog {
     public enum Runtime {
         SPRING_MVC,
         SPRING_WEBFLUX,
-        QUARKUS
+        QUARKUS,
+        MICRONAUT
     }
 
     public enum JsonType {

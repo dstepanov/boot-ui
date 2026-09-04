@@ -18,20 +18,27 @@
 - `bootui-quarkus-deployment`: Quarkus build-time wiring module.
 - `bootui-quarkus-integration-tests`: Quarkus `@QuarkusTest` suites.
 - `bootui-quarkus-sample-app`: Quarkus sample app.
+- `bootui-micronaut-parent`: shared Micronaut platform BOM and annotation-processor plugin management.
+- `bootui-micronaut`: Micronaut runtime adapter.
+- `bootui-micronaut-sample-app`: Micronaut sample app.
 
 ## Compatibility version source of truth
 
-Spring Boot and Quarkus compatibility references for the published adapters should follow the root `pom.xml` properties:
+Spring Boot, Quarkus and Micronaut compatibility references for the published adapters should follow the root
+`pom.xml` properties:
 
 - `spring-boot.version`
 - `quarkus.platform.version`
+- `micronaut.platform.version` (with `micronaut.core.version` for the annotation processor)
 
 When these are updated, refresh matching documentation references in the same pull request (`README.md`,
 `docs/SETUP.md`, `docs/features/`, `.github/copilot-instructions.md`, and
-`.github/instructions/{spring-adapter,quarkus-adapter}.instructions.md`). All Quarkus modules inherit
-`bootui-quarkus-parent`, which imports the Quarkus BOM closer than the root parent imports Spring Boot's BOM. This keeps
-the two frameworks' shared transitive dependencies isolated while giving the extension, tests, and sample app one
-Quarkus LTS version.
+`.github/instructions/{spring-adapter,quarkus-adapter,micronaut-adapter}.instructions.md`). All Quarkus modules inherit
+`bootui-quarkus-parent`, and all Micronaut modules inherit `bootui-micronaut-parent`; each imports its framework's BOM
+closer than the root parent imports Spring Boot's BOM. This keeps the frameworks' shared transitive dependencies
+isolated while giving each adapter, its tests, and its sample app one pinned platform version. Both parents are POM-only
+but are published to Maven Central, because a consumer resolving `bootui-quarkus` or `bootui-micronaut` reads its
+`<parent>` from there.
 
 ## Documentation website
 
