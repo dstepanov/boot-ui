@@ -77,6 +77,7 @@ class SecurityRulesTests {
                 "default-src 'self'; frame-ancestors 'none'",
                 Boolean.TRUE,
                 null,
+                null,
                 null);
 
         SecurityRuleResultDto result = new FrameOptionsRule().evaluate(singleChain(chain));
@@ -756,6 +757,83 @@ class SecurityRulesTests {
         SecurityRuleResultDto result = new CsrfDisabledStatefulRule().evaluate(singleChain(tokenLogin));
 
         assertThat(result.status()).isEqualTo(SecurityRuleSupport.PASS);
+    }
+
+    // --- SEC-CSRF-001 / SEC-SESSION-006: sessionCreationPolicy(STATELESS) -------------------
+
+    @Test
+    void csrfDisabledIgnoresStatelessChainThatStillInstallsSessionManagementFilter() {
+        SecurityRuleResultDto result =
+                new CsrfDisabledStatefulRule().evaluate(singleChain(statelessBearerChain(Boolean.TRUE)));
+
+        assertThat(result.status()).isEqualTo(SecurityRuleSupport.PASS);
+    }
+
+    @Test
+    void csrfDisabledFiresForABearerChainWhoseSecurityContextIsSessionBacked() {
+        SecurityRuleResultDto result =
+                new CsrfDisabledStatefulRule().evaluate(singleChain(statelessBearerChain(Boolean.FALSE)));
+
+        assertThat(result.status()).isEqualTo(SecurityRuleSupport.VIOLATION);
+    }
+
+    @Test
+    void csrfDisabledFallsBackToTheFilterHeuristicWhenTheRepositoryCouldNotBeIntrospected() {
+        SecurityRuleResultDto result = new CsrfDisabledStatefulRule().evaluate(singleChain(statelessBearerChain(null)));
+
+        assertThat(result.status()).isEqualTo(SecurityRuleSupport.VIOLATION);
+    }
+
+    @Test
+    void csrfDisabledStillFiresForARememberMeChainWithAStatelessSecurityContext() {
+        FilterChainModel rememberMe = chain(
+                "any request",
+                List.of("SecurityContextHolderFilter", "RememberMeAuthenticationFilter", "AuthorizationFilter"),
+                Boolean.TRUE);
+
+        SecurityRuleResultDto result = new CsrfDisabledStatefulRule().evaluate(singleChain(rememberMe));
+
+        assertThat(result.status()).isEqualTo(SecurityRuleSupport.VIOLATION);
+    }
+
+    @Test
+    void bearerTokenStatefulIgnoresStatelessChainThatStillInstallsSessionManagementFilter() {
+        SecurityRuleResultDto result =
+                new BearerTokenStatefulRule().evaluate(singleChain(statelessBearerChain(Boolean.TRUE)));
+
+        assertThat(result.status()).isEqualTo(SecurityRuleSupport.PASS);
+    }
+
+    @Test
+    void bearerTokenStatefulFiresWhenTheSecurityContextIsSessionBacked() {
+        SecurityRuleResultDto result =
+                new BearerTokenStatefulRule().evaluate(singleChain(statelessBearerChain(Boolean.FALSE)));
+
+        assertThat(result.status()).isEqualTo(SecurityRuleSupport.VIOLATION);
+    }
+
+    @Test
+    void sessionTimeoutIsNotRequiredWhenEveryChainIsStateless() {
+        SecurityRuleResultDto result = new SessionTimeoutRule().evaluate(singleChain(statelessBearerChain(true)));
+
+        assertThat(result.status()).isEqualTo(SecurityRuleSupport.PASS);
+    }
+
+    /**
+     * The chain reported in issue #921: {@code sessionCreationPolicy(STATELESS)} with a bearer-token
+     * resource server and CSRF disabled. Spring Security installs a {@code SessionManagementFilter}
+     * for any {@code sessionManagement} block, stateless included, so only the security-context
+     * repository verdict distinguishes it from a session-backed chain.
+     */
+    private static FilterChainModel statelessBearerChain(Boolean statelessSecurityContext) {
+        return chain(
+                "any request",
+                List.of(
+                        "SecurityContextHolderFilter",
+                        "BearerTokenAuthenticationFilter",
+                        "SessionManagementFilter",
+                        "AuthorizationFilter"),
+                statelessSecurityContext);
     }
 
     // --- SEC-SESSION-008: weak remember-me signing key --------------------------------------
@@ -1573,6 +1651,23 @@ class SecurityRulesTests {
 
     private static FilterChainModel chain(String matcher, List<String> filters) {
         return new FilterChainModel(0, matcher, filters, null, null, List.of());
+    }
+
+    private static FilterChainModel chain(String matcher, List<String> filters, Boolean statelessSecurityContext) {
+        return new FilterChainModel(
+                0,
+                matcher,
+                filters,
+                null,
+                null,
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                statelessSecurityContext);
     }
 
     private static SecurityContext singleChain(FilterChainModel chain) {

@@ -42,6 +42,11 @@ final class SecurityModel {
      *     {@code RememberMeAuthenticationFilter} is present and its key could be read, {@code null}
      *     otherwise. Only the length is retained -- never the key itself -- so a short/predictable
      *     key can be flagged without the key value ever leaving this process.
+     * @param statelessSecurityContext {@code TRUE} when the chain's {@code SecurityContextRepository}
+     *     never persists the security context in an HTTP session (what
+     *     {@code sessionCreationPolicy(STATELESS)} configures), {@code FALSE} when an
+     *     {@code HttpSessionSecurityContextRepository} is part of it, {@code null} when the
+     *     repository was absent, custom, or could not be introspected
      */
     record FilterChainModel(
             int index,
@@ -55,7 +60,8 @@ final class SecurityModel {
             String cspPolicyDirectives,
             Boolean cspReportOnly,
             Boolean authorizationRuleShadowed,
-            Integer rememberMeKeyLength) {
+            Integer rememberMeKeyLength,
+            Boolean statelessSecurityContext) {
 
         private static final long HSTS_MIN_MAX_AGE_SECONDS = 31536000L; // HstsHeaderWriter's own 1-year default
 
@@ -96,6 +102,7 @@ final class SecurityModel {
                     null,
                     null,
                     null,
+                    null,
                     null);
         }
 
@@ -125,6 +132,7 @@ final class SecurityModel {
                     cspPolicyDirectives,
                     null,
                     null,
+                    null,
                     null);
         }
 
@@ -152,7 +160,8 @@ final class SecurityModel {
                     cspPolicyDirectives,
                     null,
                     authorizationRuleShadowed,
-                    rememberMeKeyLength);
+                    rememberMeKeyLength,
+                    null);
         }
 
         boolean hasFilter(String simpleClassName) {
@@ -266,20 +275,38 @@ final class SecurityModel {
         }
 
         /**
-         * A chain is considered session-creating (stateful) when it installs the session management
-         * or remember-me filters, maintains concurrent-session control, or runs an interactive
-         * form-login or OAuth2/OIDC login flow. Spring Security 6 no longer installs a {@code
-         * SessionManagementFilter} by default, so a normal form-login chain that still creates HTTP
-         * sessions would otherwise look stateless here; the interactive-login signal restores that.
-         * {@code OAuth2LoginAuthenticationFilter} is included because the authorization_code login
-         * flow stores request state (state/nonce/PKCE, the pre-auth redirect target) in the HTTP
-         * session just like form login does. A chain that also accepts bearer tokens is treated as a
-         * stateless token API and is excluded from the interactive-login heuristic.
+         * A chain is considered session-creating (stateful) when it keeps the security context in an
+         * HTTP session, installs the remember-me filter, maintains concurrent-session control, or runs
+         * an interactive form-login or OAuth2/OIDC login flow.
+         *
+         * <p>The authoritative signal is {@link #statelessSecurityContext()}, read from the chain's
+         * {@code SecurityContextRepository}: {@code sessionCreationPolicy(STATELESS)} swaps that
+         * repository for a request-scoped one, so the security context is never persisted in a
+         * session. Filter presence alone cannot answer the question -- {@code SessionManagementFilter}
+         * is installed for any {@code sessionManagement} block, including a stateless one -- so it is
+         * only used as a fallback when the repository could not be introspected.</p>
+         *
+         * <p>Remember-me and concurrent-session control are checked first because both keep state of
+         * their own (an auto-resent remember-me cookie, a session registry) regardless of how the
+         * security context is stored. A {@code FALSE} repository verdict is deliberately not treated
+         * as proof of statefulness on its own: every default chain carries an
+         * {@code HttpSessionSecurityContextRepository}, so the remaining heuristics still decide.
+         * Spring Security 6 no longer installs a {@code SessionManagementFilter} by default, so a
+         * normal form-login chain that still creates HTTP sessions would otherwise look stateless
+         * here; the interactive-login signal restores that. {@code OAuth2LoginAuthenticationFilter} is
+         * included because the authorization_code login flow stores request state (state/nonce/PKCE,
+         * the pre-auth redirect target) in the HTTP session just like form login does. A chain that
+         * also accepts bearer tokens is treated as a stateless token API and is excluded from the
+         * interactive-login heuristic.</p>
          */
         boolean isStateful() {
-            if (hasFilter("SessionManagementFilter")
-                    || hasFilter("RememberMeAuthenticationFilter")
-                    || hasFilterContaining("ConcurrentSession")) {
+            if (hasFilter("RememberMeAuthenticationFilter") || hasFilterContaining("ConcurrentSession")) {
+                return true;
+            }
+            if (Boolean.TRUE.equals(statelessSecurityContext)) {
+                return false;
+            }
+            if (hasFilter("SessionManagementFilter")) {
                 return true;
             }
             boolean interactiveLogin = hasFilter("UsernamePasswordAuthenticationFilter")

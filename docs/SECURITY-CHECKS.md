@@ -152,7 +152,7 @@ Dismissed rules remove all of their findings from the score.
 ### SEC-CSRF-001 - CSRF protection should stay on for session-based chains
 
 - **Severity**: HIGH
-- **Detects**: Detects a stateful (session/remember-me) chain with no CsrfFilter installed.
+- **Detects**: Detects a stateful (session/remember-me) chain with no CsrfFilter installed. Statelessness is read from the chain's SecurityContextRepository, so a sessionCreationPolicy(STATELESS) chain is not flagged even though it still installs a SessionManagementFilter.
 - **Recommendation**: Keep CSRF enabled for browser, cookie, or session authenticated chains; only disable it for stateless token APIs.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html>
 
@@ -203,7 +203,7 @@ Dismissed rules remove all of their findings from the score.
 ### SEC-SESSION-006 - Bearer-token authentication chains should be stateless
 
 - **Severity**: HIGH
-- **Detects**: Detects a chain with both a bearer-token filter (stateless) and session management filters (stateful).
+- **Detects**: Detects a chain that accepts bearer tokens but still persists its security context in an HTTP session. The verdict comes from the chain's SecurityContextRepository, not from the presence of a SessionManagementFilter, which sessionCreationPolicy(STATELESS) also installs.
 - **Recommendation**: Configure sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS) to avoid creating HTTP sessions for REST API calls.
 - **Learn more**: <https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html#oauth2resourceserver-jwt-stateless>
 

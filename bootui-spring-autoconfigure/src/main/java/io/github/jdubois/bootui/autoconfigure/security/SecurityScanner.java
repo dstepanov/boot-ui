@@ -43,8 +43,15 @@ import org.springframework.security.web.access.intercept.RequestMatcherDelegatin
 import org.springframework.security.web.authentication.RememberMeServices;
 import org.springframework.security.web.authentication.rememberme.AbstractRememberMeServices;
 import org.springframework.security.web.authentication.rememberme.RememberMeAuthenticationFilter;
+import org.springframework.security.web.context.DelegatingSecurityContextRepository;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.NullSecurityContextRepository;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.debug.DebugFilter;
 import org.springframework.security.web.firewall.StrictHttpFirewall;
+import org.springframework.security.web.session.SessionManagementFilter;
 import org.springframework.security.web.util.matcher.AnyRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcherEntry;
@@ -344,6 +351,7 @@ final class SecurityScanner {
         HeaderWriterInfo headerWriters = detectHeaderWriters(filters);
         Boolean authorizationRuleShadowed = detectAuthorizationRuleShadowed(authorizationManager);
         Integer rememberMeKeyLength = detectRememberMeKeyLength(filters);
+        Boolean statelessSecurityContext = detectStatelessSecurityContext(filters);
         return new FilterChainModel(
                 index,
                 matcher,
@@ -356,7 +364,8 @@ final class SecurityScanner {
                 headerWriters.cspPolicyDirectives(),
                 headerWriters.cspReportOnly(),
                 authorizationRuleShadowed,
-                rememberMeKeyLength);
+                rememberMeKeyLength,
+                statelessSecurityContext);
     }
 
     private static String matcherDescription(SecurityFilterChain chain) {
@@ -479,6 +488,76 @@ final class SecurityScanner {
             }
         }
         return null;
+    }
+
+    /**
+     * {@code TRUE} when the chain never persists its {@code SecurityContext} in an HTTP session --
+     * what {@code sessionManagement().sessionCreationPolicy(STATELESS)} configures -- {@code FALSE}
+     * when an {@code HttpSessionSecurityContextRepository} takes part in it, and {@code null} when the
+     * repository is custom, absent, or could not be introspected.
+     *
+     * <p>The repository is the only reliable statelessness signal on a built chain: {@code
+     * SessionManagementFilter} is installed for every {@code sessionManagement} block, stateless
+     * included, so its presence says nothing about the policy. Under {@code STATELESS} Spring
+     * Security swaps the shared repository for a {@code RequestAttributeSecurityContextRepository}
+     * (and gives {@code SessionManagementFilter} a {@code NullSecurityContextRepository}), whereas
+     * every session-backed chain keeps an {@code HttpSessionSecurityContextRepository}. Only
+     * repository types are inspected -- no session identifier or security context is ever read.</p>
+     */
+    private static Boolean detectStatelessSecurityContext(List<Filter> filters) {
+        return statelessVerdict(securityContextRepository(filters), 0);
+    }
+
+    /**
+     * The chain's {@code SecurityContextRepository}, preferring the one held by {@code
+     * SecurityContextHolderFilter} (the chain-wide repository) and falling back to {@code
+     * SessionManagementFilter}'s own, which mirrors the same policy.
+     */
+    private static SecurityContextRepository securityContextRepository(List<Filter> filters) {
+        SecurityContextRepository fallback = null;
+        for (Filter filter : filters) {
+            if (filter instanceof SecurityContextHolderFilter) {
+                if (readField(filter, "securityContextRepository") instanceof SecurityContextRepository repository) {
+                    return repository;
+                }
+            } else if (filter instanceof SessionManagementFilter && fallback == null) {
+                if (readField(filter, "securityContextRepository") instanceof SecurityContextRepository repository) {
+                    fallback = repository;
+                }
+            }
+        }
+        return fallback;
+    }
+
+    private static Boolean statelessVerdict(SecurityContextRepository repository, int depth) {
+        if (repository == null || depth > 4) {
+            return null;
+        }
+        if (repository instanceof HttpSessionSecurityContextRepository) {
+            return Boolean.FALSE;
+        }
+        if (repository instanceof RequestAttributeSecurityContextRepository
+                || repository instanceof NullSecurityContextRepository) {
+            return Boolean.TRUE;
+        }
+        if (!(repository instanceof DelegatingSecurityContextRepository)) {
+            return null;
+        }
+        if (!(readField(repository, "delegates") instanceof Iterable<?> delegates)) {
+            return null;
+        }
+        boolean anyDelegate = false;
+        boolean anyUnknown = false;
+        for (Object delegate : delegates) {
+            anyDelegate = true;
+            Boolean verdict =
+                    delegate instanceof SecurityContextRepository nested ? statelessVerdict(nested, depth + 1) : null;
+            if (Boolean.FALSE.equals(verdict)) {
+                return Boolean.FALSE;
+            }
+            anyUnknown |= verdict == null;
+        }
+        return anyDelegate && !anyUnknown ? Boolean.TRUE : null;
     }
 
     private static Boolean detectSessionFixationDisabled(List<Filter> filters) {
