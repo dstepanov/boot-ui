@@ -7,6 +7,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Database Advisor and SQL Trace no longer go blind when the pool is wrapped in a `DataSource` proxy.** Spring
+  Boot 4.1's `spring.datasource.connection-fetch: lazy` replaces the `dataSource` bean with a
+  `LazyConnectionDataSourceProxy`, so the Hikari pool inside it is not a bean at all. BootUI skipped every Spring
+  wrapper on the assumption that it forwards to another `DataSource` bean that is discovered on its own — true for a
+  hand-declared wrapper, false here. The Database Advisor answered `DISABLED, "No DataSource beans were found to
+  inspect."` while the Connection Pools panel, which unwraps, showed the very same pool; SQL Trace silently recorded
+  nothing for the same reason. Wrappers are now *resolved* instead of ignored. The advisor skips one only when the pool
+  behind it is a bean of its own, introspects the wrapper itself when it is not, expands a routing datasource into its
+  resolved targets as `beanName[lookupKey]`, and reports a wrapper that will not describe its target as an unreadable
+  datasource rather than dropping it — so `"No DataSource beans were found"` now means exactly that. SQL Trace traces
+  the pool *inside* such a wrapper in place, leaving the bean and its concrete type untouched so by-type injection and
+  Spring Boot's own pool lookups keep resolving, and still skips a target that was already traced so nothing is
+  double-counted. ([#924](https://github.com/jdubois/boot-ui/issues/924))
+
 ## [1.16.0] - 2026-09-03
 
 Feature release that takes BootUI's diagnostics out of the browser and the agent: a `bootui` command-line interface with
