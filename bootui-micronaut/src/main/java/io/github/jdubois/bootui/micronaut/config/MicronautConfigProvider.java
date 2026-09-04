@@ -23,7 +23,7 @@ import java.util.Objects;
  * <p>Each key is reported once, with the value the application actually sees
  * ({@link Environment#getProperty}) and the name of the property source that supplied it. Attribution
  * prefers the source whose own value matches the effective one and, when several match, the
- * highest-precedence (lowest {@link PropertySource#getOrder() order}) of them — so a key set in both
+ * highest-precedence (highest {@link PropertySource#getOrder() order}) of them — so a key set in both
  * {@code application.yml} and a system property is attributed to the system property that actually won.
  * Reading through the resolver rather than the raw source map also means a value that cannot be resolved
  * degrades to {@code null} instead of failing the enumeration, and no placeholder expansion is performed
@@ -206,14 +206,19 @@ public final class MicronautConfigProvider implements ConfigProvider {
     }
 
     /**
-     * The environment's property sources in precedence order, highest first. Micronaut orders property
-     * sources ascending by {@link PropertySource#getOrder()} with the lowest value winning (system
-     * properties are {@code -100}, environment variables {@code -200}, ordinary configuration files
-     * {@code 0}), so ascending order is precedence order.
+     * The environment's property sources in precedence order, highest first.
+     *
+     * <p>Micronaut processes property sources in <em>ascending</em> {@link PropertySource#getOrder()} and
+     * lets each later source overwrite the earlier ones, so the <strong>highest</strong> order value wins:
+     * system properties ({@code -100}) beat environment variables ({@code -200}), which beat
+     * {@code application.yml} ({@code -300}), which beats a floor such as the adapter's own derived
+     * {@code bootui.api-path} source ({@code -400}). Descending order is therefore precedence order — the
+     * opposite of what the numbers suggest at a glance, which is why this is pinned by
+     * {@code MicronautConfigProviderTest} rather than left to the reader.
      */
     private List<PropertySource> orderedSources() {
         List<PropertySource> sources = new ArrayList<>(environment.getPropertySources());
-        sources.sort(Comparator.comparingInt(PropertySource::getOrder));
+        sources.sort(Comparator.comparingInt(PropertySource::getOrder).reversed());
         return sources;
     }
 }

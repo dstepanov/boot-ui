@@ -22,12 +22,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   answers `404` for the whole console surface — the packaged SPA assets included — so a production build cannot serve
   even an empty shell. The request-time safety model is the one every other stack has: the shared `LocalhostGuard` with
   loopback-source trust, the `Host` allow-list as a DNS-rebinding defence, cross-site-write protection, secret masking,
-  and the per-panel `bootui.panels.*` enable / read-only policy with the `bootui.read-only` master switch. Two
-  Micronaut-specific rules are reported rather than papered over: a custom mount needs both `bootui.path` and
-  `bootui.api-path` set together, because a Micronaut `@Controller` path comes from a configuration placeholder whose
-  default cannot reference another property — BootUI fails fast at startup with an actionable message instead of
-  serving a console whose API is somewhere else; and switches whose safe value is `true` are parsed strictly, because
-  Micronaut's own conversion would turn a typo into `false` and silently widen access. The adapter is published
+  and the per-panel `bootui.panels.*` enable / read-only policy with the `bootui.read-only` master switch. Moving
+  the console is the same one-key change as everywhere else: `bootui.path` moves the UI and the API together, because
+  the adapter derives `bootui.api-path` from it at context start (a Micronaut `@Controller` placeholder default cannot
+  reference another property on its own), and `micronaut.server.context-path` composes with both. Switches whose safe
+  value is `true` are parsed strictly, because Micronaut's own conversion would turn a typo into `false` and silently
+  widen access. The adapter serializes byte-identically under `micronaut-serde-jackson` and
+  `micronaut-jackson-databind` and forces neither on the application. The adapter is published
   alongside `bootui-micronaut-parent`, a POM-only module that pins the Micronaut platform BOM and the annotation
   processor; it goes to Maven Central too, because a consumer resolving `bootui-micronaut` reads its `<parent>` from
   there.
