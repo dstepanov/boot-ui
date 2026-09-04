@@ -37,7 +37,6 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.DefaultSecurityFilterChain;
 import org.springframework.security.web.FilterChainProxy;
@@ -443,11 +442,12 @@ class SecurityScannerTests {
      * A {@code sessionCreationPolicy(STATELESS)} chain built by the real {@code HttpSecurity} DSL.
      * Spring Security still installs a {@code SessionManagementFilter} for it, so this pins that the
      * advisor reads statelessness from the chain's {@code SecurityContextRepository} instead
-     * (issue #921). SEC-CSRF-002 must still fire: HTTP Basic credentials are resent by browsers even
-     * on a stateless chain, which also proves the chain really was analyzed.
+     * (issue #921). SEC-SESSION-005 stands in for the whole family of session-based rules: it fires
+     * only when some chain is considered stateful, and CSRF stays enabled so the fixture does not
+     * have to configure a knowingly insecure chain.
      */
     @Test
-    void statelessSessionPolicyChainIsNotReportedAsSessionBased() throws Exception {
+    void statelessSessionPolicyChainIsNotTreatedAsSessionBased() throws Exception {
         SecurityFilterChain chain = securityFilterChain(http ->
                 http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)));
 
@@ -459,25 +459,25 @@ class SecurityScannerTests {
                 .as("the filter the previous heuristic keyed on is still installed")
                 .contains("SessionManagementFilter");
         assertThat(report.filterChainsAnalyzed()).isEqualTo(1);
-        assertThat(report.results()).extracting(SecurityRuleResultDto::id).doesNotContain("SEC-CSRF-001");
-        assertThat(report.results()).extracting(SecurityRuleResultDto::id).contains("SEC-CSRF-002");
+        assertThat(report.results()).extracting(SecurityRuleResultDto::id).doesNotContain("SEC-SESSION-005");
     }
 
-    /** The same chain with a session-backed policy stays a SEC-CSRF-001 violation. */
+    /** The same chain with a session-backed policy is still treated as stateful. */
     @Test
-    void sessionBackedChainWithCsrfDisabledIsStillReported() throws Exception {
+    void sessionBackedPolicyChainIsTreatedAsSessionBased() throws Exception {
         SecurityFilterChain chain = securityFilterChain(http ->
                 http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)));
 
         SecurityReport report = scannerFor(new FilterChainProxy(chain), new DefaultListableBeanFactory())
                 .scan();
 
-        assertThat(report.results()).extracting(SecurityRuleResultDto::id).contains("SEC-CSRF-001");
+        assertThat(report.results()).extracting(SecurityRuleResultDto::id).contains("SEC-SESSION-005");
     }
 
     /**
-     * Builds a real filter chain through the {@code HttpSecurity} DSL -- CSRF disabled, HTTP Basic,
-     * every request authenticated -- with {@code customizer} applying the session policy under test.
+     * Builds a real filter chain through the {@code HttpSecurity} DSL -- HTTP Basic, every request
+     * authenticated, defaults otherwise -- with {@code customizer} applying the session policy under
+     * test.
      */
     private static SecurityFilterChain securityFilterChain(Customizer<HttpSecurity> customizer) throws Exception {
         GenericApplicationContext applicationContext = new GenericApplicationContext();
@@ -493,8 +493,7 @@ class SecurityScannerTests {
                 new AuthenticationManagerBuilder(objectPostProcessor),
                 Map.of(ApplicationContext.class, applicationContext));
         customizer.customize(http);
-        return http.csrf(AbstractHttpConfigurer::disable)
-                .httpBasic(Customizer.withDefaults())
+        return http.httpBasic(Customizer.withDefaults())
                 .authenticationManager(authentication -> authentication)
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
                 .build();
