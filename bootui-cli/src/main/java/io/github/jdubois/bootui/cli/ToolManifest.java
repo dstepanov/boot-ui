@@ -6,8 +6,10 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The command tree the CLI was built with, read from the generated {@code bootui-tools.json}.
@@ -28,6 +30,20 @@ public final class ToolManifest {
 
     ToolManifest(List<Tool> tools) {
         this.tools = List.copyOf(tools);
+    }
+
+    /**
+     * Every stack named anywhere in the bundled manifest. This is what {@link Tool#onEveryStack()} compares
+     * against, so the set grows with the catalog instead of being restated here.
+     */
+    private static final Set<String> KNOWN_STACKS = knownStacks();
+
+    private static Set<String> knownStacks() {
+        Set<String> stacks = new LinkedHashSet<>();
+        for (Tool tool : bundled().tools()) {
+            stacks.addAll(tool.stacks());
+        }
+        return Set.copyOf(stacks);
     }
 
     /** Reads the manifest bundled with this CLI. */
@@ -119,9 +135,15 @@ public final class ToolManifest {
             return "ID".equals(schema);
         }
 
-        /** Whether every stack advertises this tool. */
+        /**
+         * Whether every stack advertises this tool.
+         *
+         * <p>Derived from the manifest itself — the union of the stacks named across all of its tools —
+         * rather than from a hard-coded count, so adding a stack to the shared catalog cannot leave the
+         * CLI's help text quietly wrong about which commands are stack-specific.
+         */
         public boolean onEveryStack() {
-            return stacks.size() == 3;
+            return stacks.size() == KNOWN_STACKS.size();
         }
     }
 }

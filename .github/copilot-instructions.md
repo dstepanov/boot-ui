@@ -1,23 +1,27 @@
 # BootUI repository instructions
 
-BootUI is a local-only developer console delivered from one codebase through three request stacks: Spring Boot 4 MVC,
-Spring Boot 4 WebFlux, and Quarkus. All three serve the same Vue UI and stable JSON contract through a
+BootUI is a local-only developer console delivered from one codebase through four request stacks: Spring Boot 4 MVC,
+Spring Boot 4 WebFlux, Quarkus, and Micronaut. All four serve the same Vue UI and stable JSON contract through a
 framework-neutral engine.
 
 ## Authoritative context
 
-- Read `docs/SPECIFICATION.md`, `docs/PLAN.md`, `docs/features/`, `docs/WEBFLUX-SUPPORT.md`, and
-  `docs/QUARKUS-SUPPORT.md` before changing public behavior, panel availability, or visible UI.
+- Read `docs/SPECIFICATION.md`, `docs/PLAN.md`, `docs/features/`, `docs/WEBFLUX-SUPPORT.md`,
+  `docs/QUARKUS-SUPPORT.md`, and `docs/MICRONAUT-SUPPORT.md` before changing public behavior, panel availability, or
+  visible UI.
 - Read `PRODUCT.md` and `DESIGN.md` before changing user-facing design or interaction.
-- Spring MVC is the complete reference stack. WebFlux and Quarkus support are capability-specific; verify current
-  availability rather than assuming parity or absence.
+- Spring MVC is the complete reference stack. WebFlux, Quarkus and Micronaut support are capability-specific; verify
+  current availability rather than assuming parity or absence. The Micronaut adapter is the newest and covers a core
+  set of panels.
 
 ## Architecture invariants
 
-- Preserve `bootui-core <- bootui-engine <- adapters`. Shared modules never depend on Spring, Quarkus, or a JSON library.
-- Put reusable behavior and policy in the engine. Keep Spring and Quarkus adapters thin and native to their frameworks.
+- Preserve `bootui-core <- bootui-engine <- adapters`. Shared modules never depend on Spring, Quarkus, Micronaut, or a
+  JSON library.
+- Put reusable behavior and policy in the engine. Keep the Spring, Quarkus and Micronaut adapters thin and native to
+  their frameworks.
 - Keep core DTO records immutable, annotation-free, and byte-compatible across Jackson 3 and Jackson 2 serialization.
-- Treat Spring MVC, Spring WebFlux, and Quarkus as the default scope for shared behavior. When a capability is
+- Treat Spring MVC, Spring WebFlux, Quarkus, and Micronaut as the default scope for shared behavior. When a capability is
   stack-specific, expose that honestly through availability rather than forking the shared UI contract.
 - Keep optional integrations classloading-safe when their dependency is absent.
 

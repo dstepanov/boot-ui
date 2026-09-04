@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.julien-dubois.bootui</groupId>
+        <artifactId>bootui-micronaut-parent</artifactId>
+        <version>1.16.0</version>
+        <relativePath>../bootui-micronaut-parent/pom.xml</relativePath>
+    </parent>
+
+    <artifactId>bootui-micronaut</artifactId>
+    <name>BootUI :: Micronaut Adapter</name>
+    <description>Micronaut adapter that serves the BootUI developer console — the Micronaut binding over the
+        framework-neutral bootui-engine, the analogue of bootui-spring-autoconfigure on Spring Boot and of
+        bootui-quarkus on Quarkus.</description>
+
+    <dependencies>
+        <!-- Framework-neutral DTO/wire contract: the immutable records the engine returns and this adapter
+             serializes (imported directly by the controllers), declared explicitly rather than leaned on
+             transitively through bootui-engine. -->
+        <dependency>
+            <groupId>com.julien-dubois.bootui</groupId>
+            <artifactId>bootui-core</artifactId>
+        </dependency>
+        <!-- Framework-neutral engine (logic shared with the Spring and Quarkus adapters). -->
+        <dependency>
+            <groupId>com.julien-dubois.bootui</groupId>
+            <artifactId>bootui-engine</artifactId>
+        </dependency>
+        <!-- bootui-ui ships the pre-built SPA under META-INF/resources/bootui/, served by the static-resource
+             route this adapter registers programmatically — no Node required by consumers. -->
+        <dependency>
+            <groupId>com.julien-dubois.bootui</groupId>
+            <artifactId>bootui-ui</artifactId>
+        </dependency>
+
+        <!-- Micronaut DI + HTTP server + Jackson for the /bootui/api/** endpoints.
+             micronaut-jackson-databind (rather than micronaut-serde) is deliberate: the shared core DTOs are
+             annotation-free records with no @Serdeable, so they must be serialized reflectively, byte-identically
+             to the Spring (Jackson 3) and Quarkus (Jackson 2) adapters. -->
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-inject</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-runtime</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-http-server-netty</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-jackson-databind</artifactId>
+        </dependency>
+        <!-- Reactor, for the server-sent-event streams the live panels (Log Tail, Exceptions) subscribe to.
+             Micronaut's Netty server already brings it at runtime; it is declared explicitly here because
+             this module compiles against it, and because a library should not lean on a transitive runtime
+             dependency of its host. -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
+        </dependency>
+
+        <!-- Logback, compile-only (provided): needed solely to compile the Loggers panel binding
+             (MicronautLoggerProvider), which reads and writes live logger levels through the Logback
+             LoggerContext. provided scope is NOT transitive, so an application that depends on this adapter
+             but uses another SLF4J backend never gets Logback pulled in; the provider then reports the panel
+             unavailable instead of failing. Micronaut applications use Logback by default, so in practice it
+             is supplied by the application itself. -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Micronaut Security, compile-only (provided): needed solely to compile the Security Logs capture
+             listener (MicronautSecurityEventCapture), which observes micronaut-security's login/logout
+             application events into the shared SecurityEventBuffer. provided scope is NOT transitive, so an
+             application that does not add micronaut-security never gets it on its classpath, and the listener
+             bean is conditioned on the API actually being present. -->
+        <dependency>
+            <groupId>io.micronaut.security</groupId>
+            <artifactId>micronaut-security</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- HikariCP, compile-only (provided): needed solely to compile the Database Connection Pools panel
+             binding (MicronautHikariConnectionPoolProvider), which reads the live pool configuration and
+             counters. provided scope is NOT transitive, so an application with no JDBC datasource never gets
+             it, and the provider is only wired when the API is actually present. When an app DOES add
+             micronaut-jdbc-hikari, Hikari is supplied by that module. -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Micronaut Cache, compile-only (provided): needed solely to compile the Cache panel binding
+             (MicronautCacheProvider), which reads the live cache topology from the application's
+             SyncCache beans. provided scope is NOT transitive, so an application that does not add
+             micronaut-cache-core never gets it, and the provider is only wired when the API is present. -->
+        <dependency>
+            <groupId>io.micronaut.cache</groupId>
+            <artifactId>micronaut-cache-core</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Micronaut Flyway, compile-only (provided): needed solely to compile the Flyway panel binding
+             (MicronautFlywayProvider), which reads the migration history and runs migrate/clean through the
+             same per-datasource configuration micronaut-flyway itself uses. provided scope is NOT transitive,
+             so an application without Flyway never gets it, and the provider is only wired when present. -->
+        <dependency>
+            <groupId>io.micronaut.flyway</groupId>
+            <artifactId>micronaut-flyway</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Micronaut Liquibase, compile-only (provided): the Liquibase panel binding
+             (MicronautLiquibaseProvider) reads the change-log history and runs the update action through the
+             same per-datasource configuration micronaut-liquibase itself uses. Same non-transitive rationale
+             as Flyway above. -->
+        <dependency>
+            <groupId>io.micronaut.liquibase</groupId>
+            <artifactId>micronaut-liquibase</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Jakarta Persistence and Hibernate ORM, compile-only (provided): needed solely to compile the
+             Hibernate advisor's entity discovery and the Hibernate Statistics panel, which read the JPA
+             metamodel and the SessionFactory's statistics. provided scope is NOT transitive, so an
+             application with no JPA never gets them, and both bindings are wired only when the API is
+             actually present. When an app DOES add micronaut-data-hibernate-jpa, both are supplied by it. -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.hibernate.orm</groupId>
+            <artifactId>hibernate-core</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- OpenTelemetry SDK, compile-only (provided): needed solely to compile the in-process span capture
+             behind the Traces and AI Framework panels. provided scope is NOT transitive, so an application
+             that does not add micronaut-tracing-opentelemetry never gets the SDK, and the capture beans are
+             conditioned on it actually being present. -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-trace</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Micronaut WebSocket, compile-only (provided): needed solely to compile the WebSockets panel
+             bindings, which inventory @ServerWebSocket endpoints and observe session open/close events.
+             provided scope is NOT transitive, so an application without WebSockets never gets it, and the
+             beans are conditioned on the API actually being present. -->
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-websocket</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Micronaut Email, compile-only (provided): needed solely to compile the Email Viewer capture,
+             which wraps the application's email sender to record what it sends. provided scope is NOT
+             transitive, so an application that sends no mail never gets it, and the capture is conditioned
+             on the API actually being present. -->
+        <dependency>
+            <groupId>io.micronaut.email</groupId>
+            <artifactId>micronaut-email</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Micronaut Management, compile-only (provided): needed solely to compile the Health panel binding
+             (MicronautHealthProvider), which reads the aggregated health result through Micronaut's
+             HealthMonitorTask/HealthAggregator. provided scope is NOT transitive, so an application that does
+             not add micronaut-management never gets it on its classpath, and the provider is only wired when
+             the API is actually present. -->
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-management</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Test dependencies. The adapter's own tests boot a real Micronaut server (@MicronautTest) so the
+             filters, the controllers and the DI wiring are exercised together, exactly as the Quarkus
+             adapter's white-box tests do with @QuarkusTest. -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.micronaut.test</groupId>
+            <artifactId>micronaut-test-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-http-client</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

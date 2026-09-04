@@ -5,13 +5,14 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.x-6db33f?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Quarkus](https://img.shields.io/badge/Quarkus-3.33_LTS-4695EB?logo=quarkus&logoColor=white)](https://quarkus.io/)
+[![Micronaut](https://img.shields.io/badge/Micronaut-4.10-1E7B7B?logo=micronaut&logoColor=white)](https://micronaut.io/)
 [![Java](https://img.shields.io/badge/Java-17-orange?logo=openjdk&logoColor=white)](https://openjdk.org/projects/jdk/17/)
 
 BootUI adds an embedded, local-only developer console to your application. It runs on **Spring Boot 4** (servlet or
-WebFlux) and **Quarkus**, serving the same Vue UI and REST contract (`/bootui` and `/bootui/api/**` by default,
-configurable with `bootui.path` / `bootui.api-path`) from a shared,
-framework-neutral engine — add the matching Spring Boot starter or the Quarkus extension and BootUI activates only in
-local development.
+WebFlux), **Quarkus** and **Micronaut**, serving the same Vue UI and REST contract (`/bootui` and `/bootui/api/**` by
+default, configurable with `bootui.path` / `bootui.api-path`) from a shared,
+framework-neutral engine — add the matching Spring Boot starter, the Quarkus extension or the Micronaut adapter and
+BootUI activates only in local development.
 
 Read the documentation at <https://www.julien-dubois.com/boot-ui/>.
 

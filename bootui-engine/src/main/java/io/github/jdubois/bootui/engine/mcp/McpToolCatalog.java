@@ -38,10 +38,20 @@ public final class McpToolCatalog {
         /** Spring Boot reactive (Spring WebFlux). */
         SPRING_WEBFLUX,
         /** The Quarkus extension. */
-        QUARKUS
+        QUARKUS,
+        /** The Micronaut adapter. */
+        MICRONAUT
     }
 
     private static final Set<Stack> ALL_STACKS = EnumSet.allOf(Stack.class);
+
+    /**
+     * Every stack except Micronaut, for tools whose backing panel has no Micronaut binding yet. Listing them
+     * here rather than letting the tool be advertised and then fail is what keeps the MCP catalog honest: an
+     * agent is only ever offered a tool the stack can actually run.
+     */
+    private static final Set<Stack> NON_MICRONAUT_STACKS =
+            EnumSet.of(Stack.SPRING_MVC, Stack.SPRING_WEBFLUX, Stack.QUARKUS);
 
     /**
      * One catalog entry.
@@ -80,14 +90,14 @@ public final class McpToolCatalog {
     private static final List<Entry> ENTRIES = List.of(
             entry("architecture_scan", McpToolSchema.NONE, BootUiPanels.ARCHITECTURE, true, ALL_STACKS),
             entry("get_architecture_report", McpToolSchema.NONE, BootUiPanels.ARCHITECTURE, false, ALL_STACKS),
-            entry("spring_scan", McpToolSchema.NONE, BootUiPanels.SPRING, true, ALL_STACKS),
-            entry("get_spring_report", McpToolSchema.NONE, BootUiPanels.SPRING, false, ALL_STACKS),
+            entry("spring_scan", McpToolSchema.NONE, BootUiPanels.SPRING, true, NON_MICRONAUT_STACKS),
+            entry("get_spring_report", McpToolSchema.NONE, BootUiPanels.SPRING, false, NON_MICRONAUT_STACKS),
             entry("hibernate_scan", McpToolSchema.NONE, BootUiPanels.HIBERNATE, true, ALL_STACKS),
             entry("get_hibernate_report", McpToolSchema.NONE, BootUiPanels.HIBERNATE, false, ALL_STACKS),
             entry("memory_scan", McpToolSchema.NONE, BootUiPanels.MEMORY, true, ALL_STACKS),
             entry("get_memory_report", McpToolSchema.NONE, BootUiPanels.MEMORY, false, ALL_STACKS),
-            entry("security_scan", McpToolSchema.NONE, BootUiPanels.SECURITY, true, ALL_STACKS),
-            entry("get_security_report", McpToolSchema.NONE, BootUiPanels.SECURITY, false, ALL_STACKS),
+            entry("security_scan", McpToolSchema.NONE, BootUiPanels.SECURITY, true, NON_MICRONAUT_STACKS),
+            entry("get_security_report", McpToolSchema.NONE, BootUiPanels.SECURITY, false, NON_MICRONAUT_STACKS),
             entry("pentest_scan", McpToolSchema.NONE, BootUiPanels.PENTESTING, true, ALL_STACKS),
             entry("get_pentest_report", McpToolSchema.NONE, BootUiPanels.PENTESTING, false, ALL_STACKS),
             entry("rest_api_scan", McpToolSchema.NONE, BootUiPanels.REST_API, true, ALL_STACKS),
@@ -212,8 +222,8 @@ public final class McpToolCatalog {
             entry("resume_rest_client_recording", McpToolSchema.NONE, BootUiPanels.REST_CLIENT_TRACE, true, ALL_STACKS),
             entry("get_ai_overview", McpToolSchema.NONE, BootUiPanels.AI, false, ALL_STACKS),
             entry("get_emails", McpToolSchema.NONE, BootUiPanels.EMAIL, false, ALL_STACKS),
-            entry("get_kafka_activity", McpToolSchema.NONE, BootUiPanels.KAFKA, false, ALL_STACKS),
-            entry("get_rabbitmq_activity", McpToolSchema.NONE, BootUiPanels.RABBITMQ, false, ALL_STACKS),
+            entry("get_kafka_activity", McpToolSchema.NONE, BootUiPanels.KAFKA, false, NON_MICRONAUT_STACKS),
+            entry("get_rabbitmq_activity", McpToolSchema.NONE, BootUiPanels.RABBITMQ, false, NON_MICRONAUT_STACKS),
             entry(
                     "get_jms_activity",
                     McpToolSchema.NONE,
@@ -232,7 +242,7 @@ public final class McpToolCatalog {
                     BootUiPanels.DEVTOOLS,
                     true,
                     Set.of(Stack.SPRING_MVC, Stack.SPRING_WEBFLUX)),
-            entry("get_dev_services", McpToolSchema.NONE, BootUiPanels.DEV_SERVICES, false, ALL_STACKS),
+            entry("get_dev_services", McpToolSchema.NONE, BootUiPanels.DEV_SERVICES, false, NON_MICRONAUT_STACKS),
             entry("get_github_dashboard", McpToolSchema.NONE, BootUiPanels.GITHUB, false, ALL_STACKS),
             entry("get_copilot_sessions", McpToolSchema.NONE, BootUiPanels.COPILOT, false, ALL_STACKS),
             entry("get_claude_code_sessions", McpToolSchema.NONE, BootUiPanels.CLAUDE_CODE, false, ALL_STACKS));

@@ -341,6 +341,30 @@ public final class McpToolDescriptions {
         };
     }
 
+    /**
+     * Micronaut-flavored descriptions. Only the tools whose wording would otherwise name the wrong framework
+     * are overridden — an agent reading "Arc/CDI beans" on a Micronaut application would be misled about what
+     * it is inspecting — and everything else falls through to the shared text.
+     */
+    public static String micronaut(String name) {
+        return switch (name) {
+            case "rest_api_scan" ->
+                "Actively inspect Micronaut controllers and API design for correctness and maintainability risks. "
+                        + "Verify recommendations against the public API contract.";
+            case "get_health" ->
+                "Return the current aggregated Micronaut Management health tree. Distinguish unavailable health "
+                        + "infrastructure from an unhealthy application.";
+            case "get_beans" ->
+                "Search Micronaut container beans by name or type and return a bounded result. Use this to verify "
+                        + "runtime wiring, not as proof that a bean is exercised.";
+            case "get_fault_tolerance" ->
+                "Return the @Retryable and @CircuitBreaker policy inventory declared by application annotations, "
+                        + "plus a bounded metadata-only event history observed from Micronaut's retry and circuit "
+                        + "events. This read never mutates a policy.";
+            default -> common(name);
+        };
+    }
+
     private static String common(String name) {
         String description = COMMON.get(name);
         if (description == null) {

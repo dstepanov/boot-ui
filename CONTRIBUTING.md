@@ -18,7 +18,8 @@ participating you are expected to uphold this code.
   Node manually.
 - **Framework targets**. The Spring MVC and WebFlux adapters target Spring Boot
   4.0+; the Quarkus adapter targets the LTS version declared by
-  `quarkus.platform.version` in the root `pom.xml`. BootUI does not support
+  `quarkus.platform.version` in the root `pom.xml`; the Micronaut adapter targets
+  the version declared by `micronaut.platform.version`. BootUI does not support
   Spring Boot 3.x.
 
 ## Project layout
@@ -47,6 +48,7 @@ Use the root Maven properties as the source of truth for the published adapters 
 ```bash
 ./mvnw -q -DforceStdout help:evaluate -Dexpression=spring-boot.version
 ./mvnw -q -DforceStdout help:evaluate -Dexpression=quarkus.platform.version
+./mvnw -q -DforceStdout help:evaluate -Dexpression=micronaut.platform.version
 ```
 
 When updating compatibility text in docs (README, `docs/SETUP.md`, `docs/features/`,
@@ -93,6 +95,9 @@ integration-test module and let Maven build its dependencies:
 
 # Quarkus extension plus Docker-free integration suites
 ./mvnw -B -ntp -pl bootui-quarkus-integration-tests -am install
+
+# Micronaut adapter plus its sample app
+./mvnw -B -ntp -pl bootui-micronaut,bootui-micronaut-sample-app -am install
 ```
 
 ### Software Bill of Materials (SBOM)

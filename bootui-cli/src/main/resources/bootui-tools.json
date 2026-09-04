@@ -7,6 +7,7 @@
       "panel": "activity",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -20,6 +21,7 @@
       "panel": "ai",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -33,6 +35,7 @@
       "panel": "architecture",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -46,6 +49,7 @@
       "panel": "architecture",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -59,6 +63,7 @@
       "panel": "beans",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -72,6 +77,7 @@
       "panel": "cache",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -97,6 +103,7 @@
       "panel": "config",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -134,6 +141,7 @@
       "panel": "flyway",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -147,6 +155,7 @@
       "panel": "liquibase",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -160,6 +169,7 @@
       "panel": "database-connection-pools",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -173,6 +183,7 @@
       "panel": "database-advisor",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -186,6 +197,7 @@
       "panel": "database-advisor",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -236,6 +248,7 @@
       "panel": "exceptions",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -249,6 +262,7 @@
       "panel": "exceptions",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -262,6 +276,7 @@
       "panel": "exceptions",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -275,6 +290,7 @@
       "panel": "fault-tolerance",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -288,6 +304,7 @@
       "panel": "github",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -325,6 +342,7 @@
       "panel": "health",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -338,6 +356,7 @@
       "panel": "hibernate",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -351,6 +370,7 @@
       "panel": "hibernate",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -364,6 +384,7 @@
       "panel": "http-exchanges",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -400,6 +421,7 @@
       "panel": "jvm-tuning",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -426,6 +448,7 @@
       "panel": "loggers",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -439,6 +462,7 @@
       "panel": "log-tail",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -452,6 +476,7 @@
       "panel": "email",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -465,6 +490,7 @@
       "panel": "mappings",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -478,6 +504,7 @@
       "panel": "heap-dump",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -491,6 +518,7 @@
       "panel": "heap-dump",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -504,6 +532,7 @@
       "panel": "live-memory",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -517,6 +546,7 @@
       "panel": "memory",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -530,6 +560,7 @@
       "panel": "memory",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -543,6 +574,7 @@
       "panel": "metrics",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -556,6 +588,7 @@
       "panel": "overview",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -569,6 +602,7 @@
       "panel": "pentesting",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -582,6 +616,7 @@
       "panel": "pentesting",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -595,6 +630,7 @@
       "panel": "profile-diff",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -633,6 +669,7 @@
       "panel": "rest-api",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -646,6 +683,7 @@
       "panel": "rest-api",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -659,6 +697,7 @@
       "panel": "rest-client-trace",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -672,6 +711,7 @@
       "panel": "rest-client-trace",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -685,6 +725,7 @@
       "panel": "rest-client-trace",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -698,6 +739,7 @@
       "panel": "rest-client-trace",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -711,6 +753,7 @@
       "panel": "scheduled",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -736,6 +779,7 @@
       "panel": "security-logs",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -775,6 +819,7 @@
       "panel": "claude-code",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -788,6 +833,7 @@
       "panel": "copilot",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -827,6 +873,7 @@
       "panel": "sql-trace",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -840,6 +887,7 @@
       "panel": "sql-trace",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -853,6 +901,7 @@
       "panel": "sql-trace",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -866,6 +915,7 @@
       "panel": "sql-trace",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -891,6 +941,7 @@
       "panel": "threads",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -904,6 +955,7 @@
       "panel": "traces",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -917,6 +969,7 @@
       "panel": "traces",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -978,6 +1031,7 @@
       "panel": "vulnerabilities",
       "action": false,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"
@@ -991,6 +1045,7 @@
       "panel": "vulnerabilities",
       "action": true,
       "stacks": [
+        "MICRONAUT",
         "QUARKUS",
         "SPRING_MVC",
         "SPRING_WEBFLUX"

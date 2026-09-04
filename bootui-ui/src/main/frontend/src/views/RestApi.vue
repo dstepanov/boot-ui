@@ -61,7 +61,9 @@ const SOURCE_LABELS = {
   SPRING_CONTROLLER_ADVICE: '@ControllerAdvice',
   SPRING_CONTROLLER: '@Controller',
   JAKARTA_REST_EXCEPTION_MAPPER: 'ExceptionMapper',
-  QUARKUS_SERVER_EXCEPTION_MAPPER: '@ServerExceptionMapper'
+  QUARKUS_SERVER_EXCEPTION_MAPPER: '@ServerExceptionMapper',
+  MICRONAUT_ERROR_HANDLER: '@Error',
+  MICRONAUT_EXCEPTION_HANDLER: 'ExceptionHandler'
 }
 
 const SCOPE_LABELS = {

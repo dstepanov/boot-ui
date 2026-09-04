@@ -1,13 +1,15 @@
 # Framework support
 
-BootUI runs on three stacks from one codebase: **Spring MVC**, **Spring WebFlux**, and **Quarkus**. They share the same
-engine, the same console, and the same JSON contract, so what you learn on one carries over to the others.
+BootUI runs on four stacks from one codebase: **Spring MVC**, **Spring WebFlux**, **Quarkus**, and **Micronaut**. They
+share the same engine, the same console, and the same JSON contract, so what you learn on one carries over to the
+others.
 
 | Stack             | Panel availability                               | Setup                              |
 | ----------------- | ------------------------------------------------ | ---------------------------------- |
 | Spring MVC        | Every panel. This is the reference stack.        | [Setup](./SETUP.md)                |
 | Spring WebFlux    | Every panel except **HTTP Sessions**.            | [WebFlux setup](./setup/webflux.md) |
 | Quarkus           | Most panels — see [below](#what-is-not-on-quarkus). | [Quarkus setup](./setup/quarkus.md) |
+| Micronaut         | Most panels — see [below](#what-is-on-micronaut). | [Micronaut setup](./setup/micronaut.md) |
 
 ## Your app is the real answer
 
@@ -53,11 +55,29 @@ identity — add `quarkus-opentelemetry` to get it.
 Everything else ships, including the whole advisor and scoring surface and the MCP server, which is where BootUI adds
 the most on a stack that already has a dev UI.
 
+## What is on Micronaut
+
+Most panels are live, including the whole advisor surface, the Live Activity timeline, the MCP server and the CLI.
+The optional-integration panels (Flyway, Liquibase, Cache, Connection Pools, Hibernate, WebSockets, Fault Tolerance,
+Email) light up when their Micronaut integration is on the classpath and name the missing dependency when it is not.
+
+Nine panels are permanently not applicable, for the same reasons they are not applicable on Quarkus: **GraalVM** and
+**CRaC** (Micronaut generates its own native-image metadata and starts fast by design), **Conditions** and **Startup
+Timeline** (wiring is resolved at compile time), **Spring Security** and **Spring Data** (Micronaut uses
+`micronaut-security` and Micronaut Data), **Spring DevTools**, **HTTP Sessions**, and **Transactions**.
+
+Five are not ported yet: **Kafka**, **RabbitMQ**, **Dev Services**, the **Security** advisor and the platform
+application advisor. Three smaller gaps are worth knowing: WebSocket frame capture is unsupported (Micronaut exposes
+no message-interception seam), live circuit-breaker state is observed from events rather than queried, and cache
+statistics are reported unavailable rather than invented.
+
+The engineering rationale and the remaining work are in [Micronaut support](./MICRONAUT-SUPPORT.md).
+
 ## Going deeper
 
 Per-panel behavior lives with the panel, in [Features](./features/README.md).
 
 If you want the engineering rationale — how the adapters share code, why each panel was ported, adapted, rebuilt, or
 dropped, and what remains open — that is in the design notes for
-[Quarkus](./QUARKUS-SUPPORT.md) and [Spring WebFlux](./WEBFLUX-SUPPORT.md). They are written for people working on
-BootUI itself.
+[Quarkus](./QUARKUS-SUPPORT.md), [Spring WebFlux](./WEBFLUX-SUPPORT.md) and [Micronaut](./MICRONAUT-SUPPORT.md). They
+are written for people working on BootUI itself.

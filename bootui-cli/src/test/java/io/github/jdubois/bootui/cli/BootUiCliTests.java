@@ -198,8 +198,8 @@ class BootUiCliTests {
 
     @Test
     void aToolMissingBecauseItsPanelIsUnavailableSaysWhyRatherThanGuessing() {
-        // get_kafka_activity is advertised on every stack, so the version guess would fire — and be wrong.
-        // The application already knows the real reason, so it is asked instead of guessed at.
+        // The application already knows the real reason a panel is unavailable, so it is asked rather than
+        // guessed at — otherwise the reader is told to upgrade when nothing is wrong with their version.
         status = 404;
         responseBody = "{\"error\":\"Unknown tool\"}";
         catalogOverride = "{\"enabled\":true,\"tools\":[]}";
@@ -223,10 +223,11 @@ class BootUiCliTests {
         responseBody = "{\"error\":\"Unknown tool\"}";
         catalogOverride = "{\"enabled\":true,\"tools\":[]}";
 
-        Result result = run("kafka");
+        // get_overview is advertised by every stack, so the version hint is the right fallback for it.
+        Result result = run("overview");
 
         assertThat(result.exitCode).isEqualTo(ExitCodes.ERROR);
-        assertThat(result.err).contains("get_kafka_activity").contains("older BootUI version");
+        assertThat(result.err).contains("get_overview").contains("older BootUI version");
     }
 
     @Test

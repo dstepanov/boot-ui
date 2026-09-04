@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.julien-dubois.bootui</groupId>
+        <artifactId>bootui-micronaut-parent</artifactId>
+        <version>1.16.0</version>
+        <relativePath>../bootui-micronaut-parent/pom.xml</relativePath>
+    </parent>
+
+    <artifactId>bootui-micronaut-sample-app</artifactId>
+    <name>BootUI :: Micronaut Sample App</name>
+    <description>Reference Micronaut application that runs the BootUI console, mirroring the Spring and
+        Quarkus sample apps. Never published to Maven Central.</description>
+
+    <properties>
+        <!-- Reference application, not a published artifact. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.julien-dubois.bootui</groupId>
+            <artifactId>bootui-micronaut</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-http-server-netty</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-jackson-databind</artifactId>
+        </dependency>
+        <!-- Lights up the Health panel with real indicators. -->
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-management</artifactId>
+        </dependency>
+        <!-- Lights up the Metrics panel with a real Micrometer registry. -->
+        <dependency>
+            <groupId>io.micronaut.micrometer</groupId>
+            <artifactId>micronaut-micrometer-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- Lights up the Fault Tolerance panel with real @Retryable/@CircuitBreaker policies. -->
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-retry</artifactId>
+        </dependency>
+        <!-- Lights up the WebSockets panel with a real @ServerWebSocket endpoint. -->
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-websocket</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.micronaut.test</groupId>
+            <artifactId>micronaut-test-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-http-client</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Runnable with `./mvnw -pl bootui-micronaut-sample-app exec:java`. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>io.github.jdubois.bootui.micronautsample.BootUiMicronautSampleApplication</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

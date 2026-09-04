@@ -63,6 +63,12 @@ public record ErrorHandlerDescriptor(
     /** A Quarkus REST {@code @ServerExceptionMapper} method. */
     public static final String QUARKUS_SERVER_EXCEPTION_MAPPER = "QUARKUS_SERVER_EXCEPTION_MAPPER";
 
+    /** A Micronaut {@code @Error} method, declared on a controller or globally. */
+    public static final String MICRONAUT_ERROR_HANDLER = "MICRONAUT_ERROR_HANDLER";
+
+    /** A Micronaut {@code ExceptionHandler} bean, which is always application-wide. */
+    public static final String MICRONAUT_EXCEPTION_HANDLER = "MICRONAUT_EXCEPTION_HANDLER";
+
     /** Applies application-wide. */
     public static final String SCOPE_GLOBAL = "GLOBAL";
 

@@ -60,6 +60,9 @@
             tests, so nothing fails on an unsupported JDK.
         -->
         <module>bootui-quarkus-sample-app</module>
+        <module>bootui-micronaut-parent</module>
+        <module>bootui-micronaut</module>
+        <module>bootui-micronaut-sample-app</module>
     </modules>
 
     <properties>
@@ -72,6 +75,14 @@
         <spring-boot.version>4.1.1</spring-boot.version>
         <!-- Latest Quarkus LTS, shared by the extension, integration tests, and sample app. -->
         <quarkus.platform.version>3.33.3.1</quarkus.platform.version>
+        <!-- Micronaut platform (BOM) shared by the Micronaut adapter and its sample app. -->
+        <micronaut.platform.version>4.10.17</micronaut.platform.version>
+        <!--
+            micronaut-core's own version, as published by the platform BOM above. Needed as an explicit
+            literal because maven-compiler-plugin's <annotationProcessorPaths> are resolved outside
+            dependencyManagement and therefore cannot inherit a managed version.
+        -->
+        <micronaut.core.version>4.10.26</micronaut.core.version>
         <!-- Neither Resilience4j nor Spring Retry is managed by the Spring Boot 4.1 BOM, so both are
              pinned here and shared by the optional autoconfigure dependencies and the sample apps. -->
         <resilience4j.version>2.4.0</resilience4j.version>
@@ -168,6 +179,11 @@
             <dependency>
                 <groupId>com.julien-dubois.bootui</groupId>
                 <artifactId>bootui-quarkus</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.julien-dubois.bootui</groupId>
+                <artifactId>bootui-micronaut</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

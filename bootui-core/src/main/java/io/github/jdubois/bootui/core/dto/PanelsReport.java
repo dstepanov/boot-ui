@@ -7,7 +7,7 @@ import java.util.List;
  *
  * <p>The {@code platform} discriminator lets the shared Vue UI tailor framework-specific copy (setup guidance, capture
  * model) without a per-panel probe. Allowed values are {@link #PLATFORM_SPRING_BOOT}, {@link #PLATFORM_SPRING_BOOT_REACTIVE},
- * and {@link #PLATFORM_QUARKUS}; the field is always populated by the BootUI backend. UI consumers should default to
+ * {@link #PLATFORM_QUARKUS}, and {@link #PLATFORM_MICRONAUT}; the field is always populated by the BootUI backend. UI consumers should default to
  * {@link #PLATFORM_SPRING_BOOT} when the field is absent (an older bundle or a unit test without a manifest).
  */
 public record PanelsReport(String platform, List<PanelDto> panels) {
@@ -24,4 +24,7 @@ public record PanelsReport(String platform, List<PanelDto> panels) {
 
     /** Platform value reported by the Quarkus extension adapter. */
     public static final String PLATFORM_QUARKUS = "quarkus";
+
+    /** Platform value reported by the Micronaut adapter. */
+    public static final String PLATFORM_MICRONAUT = "micronaut";
 }
