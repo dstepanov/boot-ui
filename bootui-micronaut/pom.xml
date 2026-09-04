@@ -255,6 +255,14 @@
             <artifactId>mockito-core</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- H2, test-only: the in-memory datasource TestDataSourceFactory publishes so the tests that configure
+             Flyway and Liquibase against a real DataSource bean can prove the two panels light up on a configured
+             migration (and, on the very same classpath without that configuration, stay dark). -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- The shared, framework-neutral HTTP conformance contract. bootui-micronaut-sample-app runs it on
              micronaut-jackson-databind; MicronautSerdeApiConformanceTest here runs the very same suite on
              micronaut-serde-jackson, so the promise that both JSON stacks answer one identical wire contract

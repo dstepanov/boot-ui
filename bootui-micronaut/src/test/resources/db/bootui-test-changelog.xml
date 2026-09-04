@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    An empty Liquibase change log for the adapter's own tests. It exists so a test can configure
+    liquibase.datasources.default.change-log against the H2 datasource TestDataSourceFactory publishes and
+    prove the Liquibase panel lights up on a configured migration; it deliberately changes nothing.
+-->
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd"/>

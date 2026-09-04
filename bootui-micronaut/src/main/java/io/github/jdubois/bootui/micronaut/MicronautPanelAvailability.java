@@ -6,7 +6,12 @@ import io.github.jdubois.bootui.engine.github.GitHubRepositoryDetector;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.github.jdubois.bootui.micronaut.agent.MicronautClaudeCodeSessionStore;
 import io.github.jdubois.bootui.micronaut.agent.MicronautCopilotSessionStore;
+import io.github.jdubois.bootui.micronaut.flyway.MicronautFlywayProvider;
 import io.github.jdubois.bootui.micronaut.github.MicronautGitHubSettings;
+import io.github.jdubois.bootui.micronaut.liquibase.MicronautLiquibaseProvider;
+import io.github.jdubois.bootui.spi.FlywayProvider;
+import io.github.jdubois.bootui.spi.LiquibaseProvider;
+import io.micronaut.context.BeanContext;
 import io.micronaut.context.env.Environment;
 import jakarta.inject.Singleton;
 import java.nio.file.Path;
@@ -39,6 +44,16 @@ import java.util.Set;
  * the shared UI renders differently: {@link #NOT_APPLICABLE} for a capability that has no Micronaut
  * analogue at all, and {@link #NOT_YET_AVAILABLE} for one whose Micronaut binding simply has not been
  * written yet.
+ *
+ * <p>Two panels are gated on a <em>configured</em> integration rather than a present one. Flyway and
+ * Liquibase light up only when their library is on the classpath <em>and</em> at least one enabled
+ * {@code flyway.datasources.<name>} / {@code liquibase.datasources.<name>} configuration is backed by a
+ * {@code DataSource} bean of the same name — the Micronaut analogue of the Spring adapter's "a Flyway /
+ * SpringLiquibase bean exists" rule (Quarkus decides from its build-time capability instead, and its sample
+ * always configures a datasource). The decision is read from the very {@link MicronautFlywayProvider} /
+ * {@link MicronautLiquibaseProvider} logic the engine services run on, so the manifest can never advertise a
+ * panel whose reads report {@code flywayPresent:false} and whose actions answer 404. A library that is
+ * present but unconfigured names the missing configuration rather than the missing dependency.
  *
  * <p>Action-capable panels here are Loggers (a logger level can be set), Heap Dump (it captures and
  * deletes dumps), HTTP Probe (it issues a request), Architecture (it runs a scan and dismisses rules),
@@ -192,6 +207,30 @@ public class MicronautPanelAvailability {
                     "Not available: micronaut-email is not on the classpath. Add it (with a sender such as"
                             + " micronaut-email-javamail) to see the messages this application sends."));
 
+    /** The Flyway panel's reason when {@code micronaut-flyway} is present but nothing is configured for it. */
+    private static final String FLYWAY_UNCONFIGURED =
+            "Not available: micronaut-flyway is on the classpath, but no enabled Flyway configuration is backed"
+                    + " by a datasource. Configure flyway.datasources.<name> for a datasource of the same name to"
+                    + " inspect and run this application's Flyway migrations.";
+
+    /** The Liquibase panel's reason when {@code micronaut-liquibase} is present but nothing is configured. */
+    private static final String LIQUIBASE_UNCONFIGURED =
+            "Not available: micronaut-liquibase is on the classpath, but no enabled Liquibase configuration with"
+                    + " a change log is backed by a datasource. Configure liquibase.datasources.<name>.change-log"
+                    + " for a datasource of the same name to inspect and run this application's Liquibase change"
+                    + " sets.";
+
+    /**
+     * The agent panels' reason when they are switched off outright — as opposed to the
+     * {@link #CAPABILITY_ABSENT} reason, which applies when they are on (or in AUTO mode) but their session
+     * directory does not exist.
+     */
+    private static final String COPILOT_OFF =
+            "Not available: the Copilot panel is switched off via bootui.copilot.enabled=OFF.";
+
+    private static final String CLAUDE_CODE_OFF =
+            "Not available: the Claude Code panel is switched off via bootui.claude-code.enabled=OFF.";
+
     /** Whether HikariCP — the pool {@code micronaut-jdbc-hikari} configures — is on the classpath. */
     private static final boolean HIKARI_PRESENT = isPresent("com.zaxxer.hikari.HikariDataSource");
 
@@ -219,13 +258,12 @@ public class MicronautPanelAvailability {
 
     /**
      * Panels whose availability depends on what the application actually has on its classpath. Resolved once
-     * because a classpath does not change while the JVM runs.
+     * because a classpath does not change while the JVM runs. Flyway and Liquibase are deliberately absent:
+     * for them a present library is necessary but not sufficient, see {@link #isPanelAvailable(String)}.
      */
     private static final Map<String, Boolean> CLASSPATH_AVAILABILITY = Map.of(
             BootUiPanels.DATABASE_CONNECTION_POOLS, HIKARI_PRESENT,
             BootUiPanels.CACHE, CACHE_PRESENT,
-            BootUiPanels.FLYWAY, FLYWAY_PRESENT,
-            BootUiPanels.LIQUIBASE, LIQUIBASE_PRESENT,
             BootUiPanels.HIBERNATE, HIBERNATE_PRESENT,
             BootUiPanels.HIBERNATE_STATISTICS, HIBERNATE_PRESENT,
             BootUiPanels.WEBSOCKETS, WEBSOCKET_PRESENT,
@@ -250,14 +288,27 @@ public class MicronautPanelAvailability {
     private final MicronautClaudeCodeSessionStore claudeCodeStore;
     private final List<String> githubAllowedApiHosts;
 
+    /**
+     * The Flyway / Liquibase seams, or {@code null} when the library is absent. Built exactly as
+     * {@link BootUiEngineFactory} builds the ones behind the engine services — under the same classpath guard,
+     * so the optional types are never linked in an application without them — and consulted for their
+     * {@code available()} answer only, which reads the live configuration and instantiates nothing.
+     */
+    private final FlywayProvider flywayProvider;
+
+    private final LiquibaseProvider liquibaseProvider;
+
     public MicronautPanelAvailability(
             Environment environment,
+            BeanContext beanContext,
             MicronautCopilotSessionStore copilotStore,
             MicronautClaudeCodeSessionStore claudeCodeStore) {
         this.accessConfig = new MicronautPanelAccessConfig(environment);
         this.copilotStore = copilotStore;
         this.claudeCodeStore = claudeCodeStore;
         this.githubAllowedApiHosts = MicronautGitHubSettings.allowedApiHosts(environment);
+        this.flywayProvider = FLYWAY_PRESENT ? new MicronautFlywayProvider(beanContext) : null;
+        this.liquibaseProvider = LIQUIBASE_PRESENT ? new MicronautLiquibaseProvider(beanContext, environment) : null;
     }
 
     private static Path workingDirectory() {
@@ -278,6 +329,15 @@ public class MicronautPanelAvailability {
     public boolean isPanelAvailable(String panelId) {
         if (AVAILABLE_PANELS.contains(panelId) || CLASSPATH_AVAILABILITY.getOrDefault(panelId, Boolean.FALSE)) {
             return true;
+        }
+        // Flyway and Liquibase are gated on configuration, not on the classpath: the library being present is
+        // necessary but not sufficient. Both are re-read on every call, through the same provider logic the
+        // engine services run on, so the manifest and the panel's own reads and actions can never disagree.
+        if (BootUiPanels.FLYWAY.equals(panelId)) {
+            return flywayProvider != null && flywayProvider.available();
+        }
+        if (BootUiPanels.LIQUIBASE.equals(panelId)) {
+            return liquibaseProvider != null && liquibaseProvider.available();
         }
         // The two agent panels are available only when their session directory actually exists, which is a
         // filesystem fact rather than a classpath one: it can appear while the application is running, so it
@@ -321,7 +381,28 @@ public class MicronautPanelAvailability {
         return new PanelDto(panel.id(), panel.title(), available, unavailableReason, enabled, readOnly, readOnlyReason);
     }
 
+    /**
+     * The honest reason for a dark panel, most specific first: a library that is present but unconfigured
+     * (Flyway, Liquibase), an agent panel switched off outright, a missing optional integration
+     * ({@link #CAPABILITY_ABSENT}), a permanent {@link #NOT_APPLICABLE}, and finally the not-yet-ported reasons.
+     */
     private String unavailableReason(String panelId) {
+        if (BootUiPanels.FLYWAY.equals(panelId) && FLYWAY_PRESENT) {
+            return FLYWAY_UNCONFIGURED;
+        }
+        if (BootUiPanels.LIQUIBASE.equals(panelId) && LIQUIBASE_PRESENT) {
+            return LIQUIBASE_UNCONFIGURED;
+        }
+        if (BootUiPanels.COPILOT.equals(panelId) && !copilotStore.isStartEnabled()) {
+            return COPILOT_OFF;
+        }
+        if (BootUiPanels.CLAUDE_CODE.equals(panelId) && !claudeCodeStore.isStartEnabled()) {
+            return CLAUDE_CODE_OFF;
+        }
+        String absent = CAPABILITY_ABSENT.get(panelId);
+        if (absent != null) {
+            return absent;
+        }
         return NOT_APPLICABLE.getOrDefault(panelId, NOT_YET_AVAILABLE_REASONS.getOrDefault(panelId, NOT_YET_AVAILABLE));
     }
 }

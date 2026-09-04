@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.jdubois.bootui.core.dto.PanelDto;
 import io.github.jdubois.bootui.core.dto.PanelsReport;
+import io.github.jdubois.bootui.engine.flyway.FlywayService;
+import io.github.jdubois.bootui.engine.liquibase.LiquibaseService;
 import io.github.jdubois.bootui.engine.panel.BootUiPanels;
 import io.micronaut.context.ApplicationContext;
 import java.util.Map;
@@ -61,6 +63,68 @@ class MicronautPanelAvailabilityTest {
         PanelDto loggers = panel(manifest, BootUiPanels.LOGGERS);
         assertThat(loggers.readOnly()).isTrue();
         assertThat(loggers.readOnlyReason()).isEqualTo("BootUI is read-only via bootui.read-only=true");
+    }
+
+    /**
+     * {@code micronaut-flyway} and {@code micronaut-liquibase} are {@code provided} dependencies of this module,
+     * so both are on this test classpath — and nothing configures them. A present library is not a configured
+     * one: the panels stay dark, and each reason names the configuration that would light it up rather than
+     * the dependency that is already there.
+     */
+    @Test
+    void keepsFlywayAndLiquibaseDarkWhileTheirLibrariesAreUnconfigured() {
+        PanelsReport manifest = manifest(Map.of());
+
+        PanelDto flyway = panel(manifest, BootUiPanels.FLYWAY);
+        assertThat(flyway.available()).isFalse();
+        assertThat(flyway.unavailableReason())
+                .startsWith("Not available: micronaut-flyway is on the classpath")
+                .contains("flyway.datasources.<name>");
+        PanelDto liquibase = panel(manifest, BootUiPanels.LIQUIBASE);
+        assertThat(liquibase.available()).isFalse();
+        assertThat(liquibase.unavailableReason())
+                .startsWith("Not available: micronaut-liquibase is on the classpath")
+                .contains("liquibase.datasources.<name>.change-log");
+    }
+
+    /** A migration configuration that names no datasource bean is not a configured migration either. */
+    @Test
+    void keepsFlywayAndLiquibaseDarkWhenTheirConfigurationHasNoDatasourceBehindIt() {
+        PanelsReport manifest = manifest(Map.of(
+                "flyway.datasources.default.enabled", "true",
+                "liquibase.datasources.default.change-log", "classpath:db/bootui-test-changelog.xml"));
+
+        assertThat(available(manifest, BootUiPanels.FLYWAY)).isFalse();
+        assertThat(available(manifest, BootUiPanels.LIQUIBASE)).isFalse();
+    }
+
+    /**
+     * The positive half: an enabled migration configured against a datasource bean lights both panels up, and
+     * the engine services — the ones the panel's reads and actions actually run on — agree with the manifest.
+     */
+    @Test
+    void lightsFlywayAndLiquibaseOnceAMigrationIsConfiguredAgainstADatasource() {
+        Map<String, Object> configured = Map.of(
+                TestDataSourceFactory.PROPERTY,
+                "true",
+                "flyway.datasources.default.enabled",
+                "true",
+                "liquibase.datasources.default.change-log",
+                "classpath:db/bootui-test-changelog.xml");
+        try (ApplicationContext context = ApplicationContext.run(configured, "test")) {
+            MicronautPanelAvailability availability = context.getBean(MicronautPanelAvailability.class);
+
+            assertThat(availability.isPanelAvailable(BootUiPanels.FLYWAY)).isTrue();
+            assertThat(availability.panelUnavailableReason(BootUiPanels.FLYWAY)).isNull();
+            assertThat(availability.isPanelAvailable(BootUiPanels.LIQUIBASE)).isTrue();
+            assertThat(availability.panelUnavailableReason(BootUiPanels.LIQUIBASE))
+                    .isNull();
+
+            assertThat(context.getBean(FlywayService.class).report().flywayPresent())
+                    .isTrue();
+            assertThat(context.getBean(LiquibaseService.class).report().liquibasePresent())
+                    .isTrue();
+        }
     }
 
     private static PanelsReport manifest(Map<String, Object> properties) {

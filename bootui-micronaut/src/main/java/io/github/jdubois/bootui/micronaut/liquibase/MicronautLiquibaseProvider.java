@@ -38,6 +38,12 @@ import liquibase.resource.ResourceAccessor;
  * {@link LiquibaseResourceAccessor}, so a change log on the classpath or in the environment's config
  * locations resolves exactly as it does at startup.
  *
+ * <p>Only enabled configurations that name a change log <em>and</em> are backed by a {@code DataSource} bean
+ * of the same name count — for the report, for the update targets and for {@link #available()} alike. That
+ * makes {@link #available()} a statement about a <em>configured</em> Liquibase, not a present library:
+ * {@code MicronautPanelAvailability} reads it to decide whether the panel is advertised at all, so the
+ * manifest can never light up a panel whose report would say {@code liquibasePresent=false}.
+ *
  * <p>Every read opens and closes its own connection, and each is independently fail-soft: an inaccessible
  * history table yields an empty list for that datasource rather than failing the panel.
  */
@@ -108,10 +114,16 @@ public final class MicronautLiquibaseProvider implements LiquibaseProvider {
             return beanContext.getBeansOfType(LiquibaseConfigurationProperties.class).stream()
                     .filter(LiquibaseConfigurationProperties::isEnabled)
                     .filter(configuration -> configuration.getChangeLog() != null)
+                    .filter(configuration -> hasDataSource(configuration.getNameQualifier()))
                     .toList();
         } catch (RuntimeException ex) {
             return List.of();
         }
+    }
+
+    /** Whether a {@code DataSource} bean of the given name exists, decided without instantiating it. */
+    private boolean hasDataSource(String name) {
+        return beanContext.containsBean(DataSource.class, Qualifiers.byName(name));
     }
 
     /**

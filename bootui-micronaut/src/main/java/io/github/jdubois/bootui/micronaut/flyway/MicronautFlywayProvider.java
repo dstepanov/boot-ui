@@ -33,8 +33,12 @@ import org.flywaydb.core.api.output.MigrateResult;
  * fluent configuration} plus the matching {@code DataSource} bean. That means the migration history the panel
  * shows, and any migration it runs, use the same configuration the application's own startup migration does.
  *
- * <p>Only enabled configurations are reported. A configuration whose datasource cannot be resolved is
- * skipped rather than reported as broken: the application's own startup already surfaced that.
+ * <p>Only enabled configurations backed by a {@code DataSource} bean of the same name count — for the report,
+ * for the action targets and for {@link #available()} alike. A configuration whose datasource does not exist
+ * is skipped rather than reported as broken: the application's own startup already surfaced that. This is
+ * what makes {@link #available()} a statement about a <em>configured</em> Flyway, not a present library:
+ * {@code MicronautPanelAvailability} reads it to decide whether the panel is advertised at all, so the
+ * manifest can never light up a panel whose report would say {@code flywayPresent=false}.
  */
 public final class MicronautFlywayProvider implements FlywayProvider {
 
@@ -124,10 +128,16 @@ public final class MicronautFlywayProvider implements FlywayProvider {
         try {
             return beanContext.getBeansOfType(FlywayConfigurationProperties.class).stream()
                     .filter(FlywayConfigurationProperties::isEnabled)
+                    .filter(configuration -> hasDataSource(configuration.getNameQualifier()))
                     .toList();
         } catch (RuntimeException ex) {
             return List.of();
         }
+    }
+
+    /** Whether a {@code DataSource} bean of the given name exists, decided without instantiating it. */
+    private boolean hasDataSource(String name) {
+        return beanContext.containsBean(DataSource.class, Qualifiers.byName(name));
     }
 
     private Optional<Flyway> findFlyway(String name) {

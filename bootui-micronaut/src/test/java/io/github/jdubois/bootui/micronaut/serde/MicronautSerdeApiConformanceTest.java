@@ -34,21 +34,10 @@ import java.util.Set;
  * {@code bootui.panels.copilot.enabled=false} arms the disabled-panel rejection,
  * {@code bootui.panels.heap-dump.read-only=true} arms the read-only rejection, and
  * {@code bootui.conformance.api-token} is the fixture the secret-masking assertion looks for.
- *
- * <p>Flyway and Liquibase are disabled here, and only here. Both are {@code provided} dependencies of this
- * module — compiled against, so present on its <em>test</em> classpath — while no datasource, no migration
- * configuration and no database exist to go with them. {@code MicronautPanelAvailability} reads class
- * presence, so it reports both panels available, but the shared engine services answer 404 for a Flyway or
- * Liquibase instance that was never configured, and the suite's confirmation-gate assertion rightly expects
- * a 400. That mismatch is a property of this artificial classpath, not of the adapter, and the sample runner
- * never sees it because the sample application does not depend on either library. Disabling the two panels
- * keeps this runner honest about what it can actually exercise.
  */
 @MicronautTest
 @Property(name = "micronaut.server.port", value = "-1")
 @Property(name = "bootui.panels.copilot.enabled", value = "false")
-@Property(name = "bootui.panels.flyway.enabled", value = "false")
-@Property(name = "bootui.panels.liquibase.enabled", value = "false")
 @Property(name = "bootui.panels.heap-dump.read-only", value = "true")
 @Property(name = "bootui.heap-dump.capture-enabled", value = "false")
 @Property(name = "bootui.claude-code.enabled", value = "OFF")

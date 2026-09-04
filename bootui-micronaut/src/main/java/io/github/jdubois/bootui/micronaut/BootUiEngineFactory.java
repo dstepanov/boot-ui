@@ -578,7 +578,10 @@ public class BootUiEngineFactory {
 
     /**
      * The Flyway panel. Wired only when Flyway's own API is on the classpath; without it the service is
-     * built with a {@code null} provider and the engine renders the panel's honest unavailable state.
+     * built with a {@code null} provider and the engine renders the panel's honest unavailable state. With
+     * it, the provider still reports {@code flywayPresent=false} until a migration is configured against a
+     * datasource — the same fact {@link MicronautPanelAvailability} reads to decide whether the panel is
+     * advertised, so the manifest and the panel's own reads and actions can never disagree.
      */
     @Singleton
     FlywayService flywayService(BeanContext beanContext) {

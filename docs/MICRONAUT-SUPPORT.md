@@ -140,9 +140,18 @@ Vulnerabilities, MCP Server, Command Line, and the Memory, Architecture, REST AP
 advisors.
 
 **Live when the integration is present** — Database Connection Pools (HikariCP), Cache
-(`micronaut-cache-*`), Flyway (`micronaut-flyway`), Liquibase (`micronaut-liquibase`), Hibernate and
-Hibernate Statistics (Hibernate ORM), WebSockets (`micronaut-websocket`), Fault Tolerance
-(`micronaut-retry`), Email (`micronaut-email`). Each names its missing dependency when it is dark.
+(`micronaut-cache-*`), Hibernate and Hibernate Statistics (Hibernate ORM), WebSockets
+(`micronaut-websocket`), Fault Tolerance (`micronaut-retry`), Email (`micronaut-email`). Each names its
+missing dependency when it is dark.
+
+**Live when the integration is configured** — Flyway and Liquibase need more than `micronaut-flyway` /
+`micronaut-liquibase` on the classpath. Each lights up only when at least one enabled
+`flyway.datasources.<name>` / `liquibase.datasources.<name>` (with a `change-log`) configuration is backed by
+a `DataSource` bean of the same name — the Micronaut analogue of the Spring adapter's "a `Flyway` /
+`SpringLiquibase` bean exists" rule. The manifest reads that decision from the very provider the engine
+services run on, so it never advertises a panel whose report would say `flywayPresent: false` and whose
+actions would answer 404. A library that is present but unconfigured names the missing configuration rather
+than the missing dependency.
 
 **Live when the environment allows** — GitHub (a git checkout with a GitHub origin), Copilot and Claude Code
 (their session directories exist).
