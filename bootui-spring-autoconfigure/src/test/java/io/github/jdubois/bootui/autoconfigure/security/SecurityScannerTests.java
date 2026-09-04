@@ -25,14 +25,22 @@ import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.http.HttpMethod;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.authorization.ObservationAuthorizationManager;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.ObjectPostProcessor;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.DefaultSecurityFilterChain;
 import org.springframework.security.web.FilterChainProxy;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.access.intercept.RequestMatcherDelegatingAuthorizationManager;
@@ -428,6 +436,67 @@ class SecurityScannerTests {
                 scannerFor(filterChainProxy(denyAll), beanFactory).scan();
 
         assertThat(report.results()).extracting(SecurityRuleResultDto::id).doesNotContain("SEC-CORS-003");
+    }
+
+    /**
+     * A {@code sessionCreationPolicy(STATELESS)} chain built by the real {@code HttpSecurity} DSL.
+     * Spring Security still installs a {@code SessionManagementFilter} for it, so this pins that the
+     * advisor reads statelessness from the chain's {@code SecurityContextRepository} instead
+     * (issue #921). SEC-SESSION-005 stands in for the whole family of session-based rules: it fires
+     * only when some chain is considered stateful, and CSRF stays enabled so the fixture does not
+     * have to configure a knowingly insecure chain.
+     */
+    @Test
+    void statelessSessionPolicyChainIsNotTreatedAsSessionBased() throws Exception {
+        SecurityFilterChain chain = securityFilterChain(http ->
+                http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)));
+
+        SecurityReport report = scannerFor(new FilterChainProxy(chain), new DefaultListableBeanFactory())
+                .scan();
+
+        assertThat(chain.getFilters())
+                .extracting(filter -> filter.getClass().getSimpleName())
+                .as("the filter the previous heuristic keyed on is still installed")
+                .contains("SessionManagementFilter");
+        assertThat(report.filterChainsAnalyzed()).isEqualTo(1);
+        assertThat(report.results()).extracting(SecurityRuleResultDto::id).doesNotContain("SEC-SESSION-005");
+    }
+
+    /** The same chain with a session-backed policy is still treated as stateful. */
+    @Test
+    void sessionBackedPolicyChainIsTreatedAsSessionBased() throws Exception {
+        SecurityFilterChain chain = securityFilterChain(http ->
+                http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)));
+
+        SecurityReport report = scannerFor(new FilterChainProxy(chain), new DefaultListableBeanFactory())
+                .scan();
+
+        assertThat(report.results()).extracting(SecurityRuleResultDto::id).contains("SEC-SESSION-005");
+    }
+
+    /**
+     * Builds a real filter chain through the {@code HttpSecurity} DSL -- HTTP Basic, every request
+     * authenticated, defaults otherwise -- with {@code customizer} applying the session policy under
+     * test.
+     */
+    private static SecurityFilterChain securityFilterChain(Customizer<HttpSecurity> customizer) throws Exception {
+        GenericApplicationContext applicationContext = new GenericApplicationContext();
+        applicationContext.refresh();
+        ObjectPostProcessor<Object> objectPostProcessor = new ObjectPostProcessor<>() {
+            @Override
+            public <O> O postProcess(O object) {
+                return object;
+            }
+        };
+        HttpSecurity http = new HttpSecurity(
+                objectPostProcessor,
+                new AuthenticationManagerBuilder(objectPostProcessor),
+                Map.of(ApplicationContext.class, applicationContext));
+        customizer.customize(http);
+        return http.httpBasic(Customizer.withDefaults())
+                .authenticationManager(authentication -> authentication)
+                .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
+                .build();
     }
 
     @Test
