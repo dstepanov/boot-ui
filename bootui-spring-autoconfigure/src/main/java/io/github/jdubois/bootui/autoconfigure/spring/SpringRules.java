@@ -1335,13 +1335,15 @@ final class ActuatorShowValuesAlwaysRule extends AbstractSpringRule {
     SpringRuleResultDto evaluateRule(SpringContext context) {
         List<String> findings = new ArrayList<>();
         for (String id : VALUE_ENDPOINTS) {
-            String showValues = context.firstProperty("management.endpoint." + id + ".show-values");
+            // Host-configured values only: BootUI contributes its own actuator defaults (including
+            // show-details=always) so its local panels work, and must not report them against the host.
+            String showValues = context.firstHostProperty("management.endpoint." + id + ".show-values");
             if ("always".equalsIgnoreCase(showValues) && ActuatorExposure.isReadable(context, id)) {
                 findings.add("management.endpoint." + id + ".show-values=ALWAYS reveals full '" + id
                         + "' values to every caller; use WHEN_AUTHORIZED.");
             }
         }
-        String showDetails = context.firstProperty("management.endpoint.health.show-details");
+        String showDetails = context.firstHostProperty("management.endpoint.health.show-details");
         if ("always".equalsIgnoreCase(showDetails) && ActuatorExposure.isReadable(context, "health")) {
             findings.add("management.endpoint.health.show-details=always exposes internal health probe details to"
                     + " every caller; use when-authorized.");

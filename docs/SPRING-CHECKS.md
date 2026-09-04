@@ -304,6 +304,7 @@ The access-aware rules resolve Spring Boot 4 endpoint-specific and global `acces
 
 - **Severity**: MEDIUM
 - **Detects**: management.endpoint.env.show-values=ALWAYS or management.endpoint.configprops.show-values=ALWAYS on readable endpoints, or management.endpoint.health.show-details=always while health is readable. Property values, including credentials, and internal health probe details are then returned to every caller.
+- **Only host configuration**: BootUI contributes `management.endpoint.health.show-details=always` itself, as a lowest-priority default, so its own Health panel works. That contribution is ignored here, so the rule reports only what the application configured.
 - **Recommendation**: Use show-values=WHEN_AUTHORIZED and show-details=when-authorized so sensitive values and health details are only revealed to authenticated, authorized users.
 - **Learn more**: <https://docs.spring.io/spring-boot/reference/actuator/endpoints.html#actuator.endpoints.sanitization>
 

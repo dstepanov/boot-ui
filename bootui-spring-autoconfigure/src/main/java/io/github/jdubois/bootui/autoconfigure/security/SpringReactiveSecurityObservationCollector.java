@@ -1,6 +1,6 @@
 package io.github.jdubois.bootui.autoconfigure.security;
 
-import io.github.jdubois.bootui.autoconfigure.config.BootUiActuatorDefaultsEnvironmentPostProcessor;
+import io.github.jdubois.bootui.autoconfigure.config.BootUiContributedProperties;
 import io.github.jdubois.bootui.engine.reactivesecurity.CorsConfigObservation;
 import io.github.jdubois.bootui.engine.reactivesecurity.ReactiveSecurityEnvironmentSnapshot;
 import io.github.jdubois.bootui.engine.reactivesecurity.ReactiveSecurityObservation;
@@ -589,42 +589,7 @@ public final class SpringReactiveSecurityObservationCollector {
     }
 
     private String firstHostProperty(String... keys) {
-        if (!(environment instanceof ConfigurableEnvironment configurableEnvironment)) {
-            return firstProperty(keys);
-        }
-        for (String key : keys) {
-            String value = hostProperty(configurableEnvironment, key);
-            if (value != null) {
-                return value;
-            }
-        }
-        return null;
-    }
-
-    private String hostProperty(ConfigurableEnvironment configurableEnvironment, String key) {
-        for (PropertySource<?> propertySource : configurableEnvironment.getPropertySources()) {
-            if (ConfigurationPropertySources.isAttachedConfigurationPropertySource(propertySource)) {
-                continue;
-            }
-            Object value = propertySource.getProperty(key);
-            if (value == null) {
-                continue;
-            }
-            String text = value.toString().trim();
-            if (text.isBlank()) {
-                continue;
-            }
-            if (isBootUiActuatorDefault(propertySource, key, text)) {
-                continue;
-            }
-            return text;
-        }
-        return null;
-    }
-
-    private boolean isBootUiActuatorDefault(PropertySource<?> propertySource, String key, String value) {
-        return DefaultPropertiesPropertySource.NAME.equals(propertySource.getName())
-                && BootUiActuatorDefaultsEnvironmentPostProcessor.isBootUiActuatorDefault(key, value);
+        return BootUiContributedProperties.firstHostProperty(environment, keys);
     }
 
     /**

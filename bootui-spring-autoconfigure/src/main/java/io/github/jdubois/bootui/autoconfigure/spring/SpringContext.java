@@ -1,5 +1,6 @@
 package io.github.jdubois.bootui.autoconfigure.spring;
 
+import io.github.jdubois.bootui.autoconfigure.config.BootUiContributedProperties;
 import io.github.jdubois.bootui.autoconfigure.spring.SpringModel.BeanRef;
 import io.github.jdubois.bootui.autoconfigure.spring.SpringModel.CacheManagerRef;
 import java.time.Duration;
@@ -67,6 +68,14 @@ record SpringContext(
             }
         }
         return null;
+    }
+
+    /**
+     * Like {@link #firstProperty}, but ignores the actuator defaults BootUI contributes itself, so a rule
+     * reports only what the host application configured.
+     */
+    String firstHostProperty(String... keys) {
+        return BootUiContributedProperties.firstHostProperty(environment, keys);
     }
 
     Integer firstIntegerProperty(String... keys) {
