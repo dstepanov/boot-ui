@@ -2,11 +2,15 @@ package io.github.jdubois.bootui.autoconfigure.spring;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.jdubois.bootui.autoconfigure.config.BootUiActuatorDefaultsEnvironmentPostProcessor;
 import io.github.jdubois.bootui.autoconfigure.spring.SpringModel.BeanRef;
 import io.github.jdubois.bootui.autoconfigure.spring.SpringModel.CacheManagerRef;
 import io.github.jdubois.bootui.core.dto.SpringRuleResultDto;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
+import org.springframework.core.env.MapPropertySource;
 import org.springframework.mock.env.MockEnvironment;
 
 /** Focused coverage for the rules added or corrected during the Spring Advisor audit. */
@@ -901,6 +905,35 @@ class SpringRulesTests {
                                 .build())
                         .status())
                 .isEqualTo("PASS");
+    }
+
+    @Test
+    void actuatorShowDetailsAlwaysIgnoresBootUiOwnDefault() {
+        // Regression for #923: BootUiActuatorDefaultsEnvironmentPostProcessor contributes
+        // show-details=always into the lowest-priority defaultProperties source whenever BootUI is active,
+        // and a real application also has Spring Boot's attached "configurationProperties" source in front
+        // of it. Neither must be reported as host misconfiguration.
+        ActuatorShowValuesAlwaysRule rule = new ActuatorShowValuesAlwaysRule();
+
+        MockEnvironment bootUiContributed = env();
+        bootUiContributed
+                .getPropertySources()
+                .addLast(new MapPropertySource(
+                        "defaultProperties",
+                        Map.of(
+                                "management.endpoint.health.show-details",
+                                "always",
+                                "management.endpoints.web.exposure.include",
+                                BootUiActuatorDefaultsEnvironmentPostProcessor.REQUIRED_ENDPOINTS)));
+        ConfigurationPropertySources.attach(bootUiContributed);
+
+        assertThat(rule.evaluate(context(bootUiContributed).build()).status()).isEqualTo("PASS");
+
+        // A host that configures the same value itself is still reported.
+        MockEnvironment hostConfigured = env().withProperty("management.endpoint.health.show-details", "always");
+        ConfigurationPropertySources.attach(hostConfigured);
+
+        assertThat(rule.evaluate(context(hostConfigured).build()).status()).isEqualTo("VIOLATION");
     }
 
     // ── SPRING-MGMT-004: shutdown / heapdump reachable ───────────────────────────
