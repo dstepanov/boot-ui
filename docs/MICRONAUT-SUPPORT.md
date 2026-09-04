@@ -26,6 +26,7 @@ table, the application's base packages — is all readable from the running cont
 | Route inventory | Actuator `MappingsEndpoint` | build-time Jandex capture | live `Router` |
 | Configuration | `Environment` property sources | SmallRye `Config` | `Environment` property sources |
 | Loggers | Actuator `LoggersEndpoint` | JBoss LogManager | Logback `LoggerContext` |
+| Dependency inventory | `DependencyCatalog` classpath scan | build-time application model | `java.class.path` + classloader scan |
 | JSON for the shared GitHub/OSV clients | Jackson 3 `SpringJsonCodec` | Jackson 2 `QuarkusJsonCodec` | Jackson 2 `MicronautJsonCodec` |
 
 The last row is the whole of what this adapter owns for the GitHub and Vulnerabilities panels. The GitHub REST
@@ -71,10 +72,50 @@ switches whose safe value is `true` — `bootui.mask-secrets`, `bootui.panels.*.
 that would silently widen access on a typo, so `BootUiBooleans` parses these values itself and falls back to
 each key's documented default, warning about the invalid value.
 
+**The inventory panels describe the application, and Micronaut makes that three separate decisions.** Every
+panel's subject is the host application, never the console or the framework, and on Micronaut each of the
+three inventories reaches that answer differently.
+
+- *Beans.* The self-filter is scoped to `io.github.jdubois.bootui.micronaut` and `…core` rather than the whole
+  `io.github.jdubois.bootui` tree, so an application that happens to live under that root package is not
+  swallowed by the console it embeds. But BootUI's console is assembled by `@Factory` classes whose
+  `@Singleton` methods return framework-neutral `bootui-engine` and `spi` types, which that scope does not
+  cover — some fifty of them, `beansService` and `apiTokenAuthenticator` among them. Micronaut records the
+  producing factory on a factory-built definition, so `MicronautBeanTypes.isBootUiOwned` hides a bean when
+  either its type *or* its `BeanDefinition.getDeclaringType()` is in the adapter's packages. That is the
+  Micronaut form of the Spring adapter's `isBootUiBean(beanName, type, resource)`, and it is shared by all
+  four inventories that walk the container (Beans, Scheduled Tasks, Fault Tolerance, error contract) so they
+  cannot drift.
+- *Mappings.* Micronaut registers a generated `HEAD` route beside every route that answers `GET` — `@Get`
+  does it unless the method sets `headRoute = false`, and the management endpoints' `@Read` does it
+  unconditionally — so a naive listing reports each endpoint twice. The panel inventories declarations, and
+  Micronaut publishes no flag for the generated route, so `MicronautMappingProvider` identifies it
+  structurally, exactly as the two route builders create it: a `HEAD` route that does not itself declare
+  `@Head` and whose path, declaring class and target method are shared with a `GET` route. An explicit
+  `@Head` route survives.
+- *Error contract.* Unlike Spring's `@ControllerAdvice` (of which the framework declares none) and Quarkus'
+  application-archive index, Micronaut ships its own error contract as ordinary `ExceptionHandler` beans, so
+  a plain application hands the container a dozen framework handlers — `JsonExceptionHandler`,
+  `ConversionErrorHandler` and the rest. `ErrorHandlerDescriptor` is the frozen neutral SPI record and has no
+  field for marking an entry framework-provided, so the engine could not group them either; handlers whose
+  declaring type is under `io.micronaut.` are therefore excluded, as BootUI's own already are, and the
+  catalogue is the application's alone.
+
 **Architecture rules treat Micronaut like Spring, not like Quarkus.** Micronaut generates interception
 subclasses at compile time, so a `private`, `static` or `final` method cannot be advised — the same
 proxyability bar as Spring, rather than Arc's bytecode-transformation semantics. `ArchitecturePlatform.MICRONAUT`
 therefore deliberately does not share Quarkus' relaxed visibility branch.
+
+**The dependency inventory reads the classpath twice, and reads both Maven metadata files.** Micronaut resolves
+nothing about dependencies at build time, so `MicronautDependencyProvider` derives the Vulnerabilities panel's
+inventory from what the JVM actually loaded. It reads `java.class.path` *and* the application classloader: under
+an in-process launcher such as `mvn exec:java`, `java.class.path` describes the launcher and not the
+application, which used to make the panel report a single, confidently wrong entry
+(`org.apache.maven.wrapper:maven-wrapper`). Each jar's coordinate comes from
+`META-INF/maven/<group>/<artifact>/pom.properties` where there is one and from the `pom.xml` beside it where
+there is not — Maven writes the properties file, Gradle writes only the POM, and Micronaut itself is published
+from Gradle, so a properties-only reader omitted the framework the application runs on. A jar with neither
+contributes nothing rather than a guessed coordinate.
 
 **Both Micronaut JSON stacks are supported, and the adapter brings neither.** `micronaut-serde-jackson` (the
 default for a new Micronaut 4 application) and `micronaut-jackson-databind` both work, unchanged; BootUI must not

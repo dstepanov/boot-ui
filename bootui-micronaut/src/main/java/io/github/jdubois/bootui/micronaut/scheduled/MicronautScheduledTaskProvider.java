@@ -1,7 +1,6 @@
 package io.github.jdubois.bootui.micronaut.scheduled;
 
 import io.github.jdubois.bootui.core.dto.ScheduledTaskDto;
-import io.github.jdubois.bootui.engine.support.InternalPackageMatcher;
 import io.github.jdubois.bootui.micronaut.MicronautBeanTypes;
 import io.github.jdubois.bootui.spi.ScheduledTaskProvider;
 import io.micronaut.context.BeanContext;
@@ -25,7 +24,9 @@ import java.util.List;
  *
  * <p>Each task is reported under the trigger Micronaut actually used: a {@code cron} expression, a
  * {@code fixedRate}, or a {@code fixedDelay}, with the initial delay alongside. BootUI's own scheduled work
- * is filtered out so the panel describes the application.
+ * is filtered out by {@link MicronautBeanTypes#isBootUiOwned(BeanDefinition)} — the same self-filter the
+ * Beans, error-contract and fault-tolerance inventories use, so all four agree on where the console ends
+ * and the application begins, including for the beans this adapter's {@code @Factory} classes produce.
  */
 public final class MicronautScheduledTaskProvider implements ScheduledTaskProvider {
 
@@ -33,9 +34,6 @@ public final class MicronautScheduledTaskProvider implements ScheduledTaskProvid
     static final String TRIGGER_FIXED_RATE = "FIXED_RATE";
     static final String TRIGGER_FIXED_DELAY = "FIXED_DELAY";
     static final String TRIGGER_UNKNOWN = "UNKNOWN";
-
-    private static final InternalPackageMatcher INTERNAL_PACKAGES =
-            new InternalPackageMatcher(List.of("io.github.jdubois.bootui.micronaut", "io.github.jdubois.bootui.core"));
 
     private final BeanContext beanContext;
 
@@ -57,8 +55,11 @@ public final class MicronautScheduledTaskProvider implements ScheduledTaskProvid
         }
         List<ScheduledTaskDto> tasks = new ArrayList<>();
         for (BeanDefinition<?> definition : beanContext.getAllBeanDefinitions()) {
+            if (MicronautBeanTypes.isBootUiOwned(definition)) {
+                continue;
+            }
             Class<?> beanType = MicronautBeanTypes.resolve(definition);
-            if (beanType == null || INTERNAL_PACKAGES.matchesName(beanType.getName())) {
+            if (beanType == null) {
                 continue;
             }
             for (ExecutableMethod<?, ?> method : definition.getExecutableMethods()) {

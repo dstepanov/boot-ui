@@ -71,7 +71,7 @@ Micronaut.build(args)
 or, without touching code:
 
 ```bash
-./mvnw exec:java -Dmicronaut.environments=dev
+./mvnw mn:run -Dmicronaut.environments=dev
 ```
 
 ```bash
@@ -80,6 +80,57 @@ MICRONAUT_ENVIRONMENTS=dev ./gradlew run
 
 `micronaut.environments` cannot be set in `application.yml` — Micronaut resolves the active environments *before* it
 reads configuration files, so it must come from the builder, a system property, or the environment variable.
+
+### Start your application in its own JVM
+
+Whichever command you use, prefer one that **forks a JVM** for your application — `mn:run`, `gradle run`, or
+`exec:exec` with an explicit `java` executable — over `mvn exec:java`, which runs your application inside Maven's
+own JVM. Under `exec:java` the `java.class.path` system property describes the Maven launcher rather than your
+application, which misleads any tool that reads it. BootUI's Vulnerabilities panel also reads the application
+classloader precisely so that its dependency inventory survives an in-process launcher, but other JVM-level
+readings (and other tools) are still more faithful in a forked JVM.
+
+With `exec-maven-plugin` that is:
+
+```xml
+<plugin>
+  <groupId>org.codehaus.mojo</groupId>
+  <artifactId>exec-maven-plugin</artifactId>
+  <configuration>
+    <executable>java</executable>
+    <arguments>
+      <argument>-classpath</argument>
+      <classpath/>
+      <argument>-Dmicronaut.environments=${micronaut.environments}</argument>
+      <argument>com.example.Application</argument>
+    </arguments>
+  </configuration>
+</plugin>
+```
+
+run with `./mvnw exec:exec`. This is what the [Micronaut sample app](https://github.com/jdubois/boot-ui/tree/main/bootui-micronaut-sample-app)
+does.
+
+### Configure logging
+
+Micronaut Launch generates a `logback.xml` for a new application; if yours has none, add one. Logback's own
+fallback when there is no configuration is `DEBUG` on the **root** logger, and the console reports honestly what
+your application logs: the Log Tail panel then streams Micronaut's bean-resolution chatter, and the Exceptions
+panel records the `UnsupportedOperationException`s Netty throws and logs at `DEBUG` while probing the JVM at
+startup as your application's exceptions. A root logger at `INFO` is all it takes:
+
+```xml
+<configuration>
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+  <root level="INFO">
+    <appender-ref ref="STDOUT"/>
+  </root>
+</configuration>
+```
 
 ## Open BootUI
 

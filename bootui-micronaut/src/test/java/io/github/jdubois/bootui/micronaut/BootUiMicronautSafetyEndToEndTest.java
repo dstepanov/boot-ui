@@ -2,6 +2,8 @@ package io.github.jdubois.bootui.micronaut;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import io.github.jdubois.bootui.engine.safety.BootUiSecurityHeaders;
 import io.github.jdubois.bootui.engine.safety.LocalhostGuard;
 import io.micronaut.context.ApplicationContext;
@@ -14,6 +16,7 @@ import io.micronaut.runtime.server.EmbeddedServer;
 import java.util.Map;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 /**
  * Exercises the console's two access filters against a <em>real</em> server, so what is pinned is the
@@ -237,15 +240,33 @@ class BootUiMicronautSafetyEndToEndTest {
         });
     }
 
-    /** Without the read-only switch the very same action succeeds, so the test above pins gating, not breakage. */
+    /**
+     * Without the read-only switch the very same action succeeds, so the test above pins gating, not
+     * breakage.
+     *
+     * <p>The level is restored afterwards, because this write is not scoped to the test: it reconfigures the
+     * root logger of the whole surefire fork. Left at {@code DEBUG} it made every test that ran after this
+     * one emit Micronaut's bean-resolution chatter — tens of thousands of lines that buried the actual
+     * results and defeated {@code logback-test.xml}.
+     */
     @Test
     void allowsTheSameActionWhenNotReadOnly() {
-        withServer(
-                Map.of(),
-                (client) -> assertThat((Object)
-                                exchange(client, HttpRequest.POST("/bootui/api/loggers/ROOT", Map.of("level", "DEBUG")))
-                                        .getStatus())
-                        .isEqualTo(HttpStatus.OK));
+        Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
+        Level original = root.getLevel();
+        try {
+            withServer(
+                    Map.of(),
+                    (client) -> assertThat((Object) exchange(
+                                            client,
+                                            HttpRequest.POST("/bootui/api/loggers/ROOT", Map.of("level", "DEBUG")))
+                                    .getStatus())
+                            .isEqualTo(HttpStatus.OK));
+            assertThat(root.getLevel())
+                    .as("the write must really have reached Logback")
+                    .isEqualTo(Level.DEBUG);
+        } finally {
+            root.setLevel(original);
+        }
     }
 
     // -----------------------------------------------------------------------

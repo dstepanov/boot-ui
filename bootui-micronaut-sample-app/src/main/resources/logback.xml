@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    The logging configuration Micronaut Launch generates for a new application: one console appender, root
+    at INFO. It is here for the same reason it is in a generated project, and for one more.
+
+    Without a logback.xml, Logback falls back to its own default of DEBUG on the root logger. That is not a
+    cosmetic difference for a BootUI sample: the console's Log Tail panel then streams Micronaut's own
+    DefaultBeanContext bean-resolution DEBUG chatter, and — worse — the Exceptions panel records the
+    UnsupportedOperationExceptions Netty throws and logs at DEBUG while probing the JVM at startup ("Native
+    access (restricted methods) is not enabled...", "sun.misc.Unsafe unavailable" on a recent JDK). Netty
+    handles those itself and falls back; recording them as application exceptions attributed to this sample
+    is simply wrong, and it is the first thing a visitor sees in the panel. At INFO they are never logged, so
+    they are never captured.
+-->
+<configuration>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%cyan(%d{HH:mm:ss.SSS}) %gray([%thread]) %highlight(%-5level) %magenta(%logger{36}) - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+
+    <!-- The sample's own package, stated explicitly so the console's Loggers panel shows a configured
+         level to read and write rather than only an inherited one. -->
+    <logger name="io.github.jdubois.bootui.micronautsample" level="INFO"/>
+
+</configuration>

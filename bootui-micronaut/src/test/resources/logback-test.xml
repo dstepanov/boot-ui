@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Test logging for the Micronaut adapter: one console appender, root at INFO.
+
+    These tests boot real embedded servers, and Logback's own fallback when no configuration is present is
+    DEBUG on the root logger. Micronaut resolves its beans at runtime through DefaultBeanContext, which logs
+    every candidate and every resolution at DEBUG, so an unconfigured run buried the actual test results
+    under tens of thousands of lines of bean-resolution chatter — enough to make a failing assertion hard to
+    find in CI output. INFO keeps the startup banner, the safety filter's rejection warnings and anything a
+    test deliberately logs, which is what a failure diagnosis actually needs.
+
+    This is a test-scoped file on purpose: bootui-micronaut is a library and must never ship a logging
+    configuration that would silently take over a host application's.
+-->
+<configuration>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+
+</configuration>

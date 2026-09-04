@@ -3,7 +3,6 @@ package io.github.jdubois.bootui.micronaut.faulttolerance;
 import io.github.jdubois.bootui.core.dto.FaultTolerancePolicyDto;
 import io.github.jdubois.bootui.core.dto.FaultTolerancePolicySettingDto;
 import io.github.jdubois.bootui.engine.faulttolerance.FaultToleranceVocabulary;
-import io.github.jdubois.bootui.engine.support.InternalPackageMatcher;
 import io.github.jdubois.bootui.micronaut.MicronautBeanTypes;
 import io.github.jdubois.bootui.spi.FaultTolerancePolicyProvider;
 import io.micronaut.context.BeanContext;
@@ -27,6 +26,11 @@ import java.util.List;
  * inside the generated interceptor and exposes no maintenance API to query it, so the panel reports the
  * configured policy and leaves state unknown rather than guessing. State transitions are still visible —
  * {@code MicronautRetryEventCapture} records them from the framework's own circuit events as they happen.
+ *
+ * <p>BootUI's own beans are skipped through {@link MicronautBeanTypes#isBootUiOwned(BeanDefinition)}, the
+ * self-filter shared with the Beans, scheduled-task and error-contract inventories, so a policy declared by
+ * the console — or by an engine service one of this adapter's {@code @Factory} classes produces — is never
+ * reported as the application's.
  */
 public final class MicronautRetryPolicyProvider implements FaultTolerancePolicyProvider {
 
@@ -37,9 +41,6 @@ public final class MicronautRetryPolicyProvider implements FaultTolerancePolicyP
     static final String TYPE_CIRCUIT_BREAKER = FaultToleranceVocabulary.TYPE_CIRCUIT_BREAKER;
 
     private static final String SOURCE_ANNOTATION = FaultToleranceVocabulary.SOURCE_ANNOTATION;
-
-    private static final InternalPackageMatcher INTERNAL_PACKAGES =
-            new InternalPackageMatcher(List.of("io.github.jdubois.bootui.micronaut", "io.github.jdubois.bootui.core"));
 
     private final BeanContext beanContext;
 
@@ -64,8 +65,11 @@ public final class MicronautRetryPolicyProvider implements FaultTolerancePolicyP
         }
         List<FaultTolerancePolicyDto> policies = new ArrayList<>();
         for (BeanDefinition<?> definition : beanContext.getAllBeanDefinitions()) {
+            if (MicronautBeanTypes.isBootUiOwned(definition)) {
+                continue;
+            }
             Class<?> beanType = MicronautBeanTypes.resolve(definition);
-            if (beanType == null || INTERNAL_PACKAGES.matchesName(beanType.getName())) {
+            if (beanType == null) {
                 continue;
             }
             collect(definition, beanType, policies);

@@ -1,7 +1,6 @@
 package io.github.jdubois.bootui.micronaut.beans;
 
 import io.github.jdubois.bootui.core.dto.BeanSummary;
-import io.github.jdubois.bootui.engine.support.InternalPackageMatcher;
 import io.github.jdubois.bootui.micronaut.MicronautBeanTypes;
 import io.github.jdubois.bootui.spi.BeanProvider;
 import io.micronaut.context.BeanContext;
@@ -35,15 +34,14 @@ import java.util.stream.Collectors;
  * name, matching how the other adapters name unnamed container beans. Qualifiers have no
  * {@link BeanSummary} field — the DTO is the frozen UI contract — so {@code aliases} is always empty.
  *
- * <p>The self-filter reuses the shared engine {@link InternalPackageMatcher} scoped to
- * {@code io.github.jdubois.bootui.micronaut}/{@code .core} rather than the whole
- * {@code io.github.jdubois.bootui} tree, so it does not also swallow application code that happens to live
- * under that root package, nor the framework-neutral {@code engine}/{@code spi} packages.
+ * <p>The self-filter is {@link MicronautBeanTypes#isBootUiOwned(BeanDefinition)}, shared with the other
+ * three inventories that walk the container. It drops a definition whose reported type <em>or</em> whose
+ * declaring {@code @Factory} is in the adapter's packages, which is what keeps the ~50 framework-neutral
+ * engine services this adapter's factories produce ({@code beansService}, {@code configService},
+ * {@code apiTokenAuthenticator}, …) out of a panel whose subject is the application — they would otherwise
+ * be listed as {@code APPLICATION} beans, wired into an injection graph the application never wrote.
  */
 public final class MicronautBeanProvider implements BeanProvider {
-
-    private static final InternalPackageMatcher INTERNAL_PACKAGES =
-            new InternalPackageMatcher(List.of("io.github.jdubois.bootui.micronaut", "io.github.jdubois.bootui.core"));
 
     private static final List<String> FRAMEWORK_PREFIXES = List.of("io.micronaut.", "io.netty.", "reactor.core.");
 
@@ -67,11 +65,11 @@ public final class MicronautBeanProvider implements BeanProvider {
         List<BeanSummary> summaries = new ArrayList<>();
         Map<String, List<String>> dependenciesByName = new java.util.LinkedHashMap<>();
         for (BeanDefinition<?> definition : beanContext.getAllBeanDefinitions()) {
-            Class<?> beanType = MicronautBeanTypes.resolve(definition);
-            String type = beanType == null ? null : beanType.getName();
-            if (type != null && INTERNAL_PACKAGES.matchesName(type)) {
+            if (MicronautBeanTypes.isBootUiOwned(definition)) {
                 continue;
             }
+            Class<?> beanType = MicronautBeanTypes.resolve(definition);
+            String type = beanType == null ? null : beanType.getName();
             String name = name(definition, beanType);
             summaries.add(new BeanSummary(name, type, scope(definition), null, List.of(), List.of(), classify(type)));
             dependenciesByName
@@ -141,7 +139,7 @@ public final class MicronautBeanProvider implements BeanProvider {
         if (type == null) {
             return "OTHER";
         }
-        if (INTERNAL_PACKAGES.matchesName(type)) {
+        if (MicronautBeanTypes.isBootUiTypeName(type)) {
             return "BOOTUI";
         }
         for (String prefix : FRAMEWORK_PREFIXES) {

@@ -19,6 +19,15 @@
     <properties>
         <!-- Reference application, not a published artifact. -->
         <maven.deploy.skip>true</maven.deploy.skip>
+        <!--
+            Overridable on the command line, so `-Dmicronaut.environments=prod` still reaches the forked JVM
+            below: exec:exec passes fixed <arguments>, not the ambient system properties exec:java inherits.
+        -->
+        <micronaut.environments>dev</micronaut.environments>
+        <micronaut.server.port>8080</micronaut.server.port>
+        <!-- Pinned rather than left to Maven's "latest release" resolution, so an offline build of this
+             module resolves the plugin it already has. -->
+        <exec-maven-plugin.version>3.6.3</exec-maven-plugin.version>
     </properties>
 
     <dependencies>
@@ -97,12 +106,30 @@
 
     <build>
         <plugins>
-            <!-- Runnable with `./mvnw -pl bootui-micronaut-sample-app exec:java`. -->
+            <!--
+                Runnable with `./mvnw -pl bootui-micronaut-sample-app exec:exec`.
+
+                exec:exec, not exec:java: exec:java runs the application inside Maven's own JVM, where
+                `java.class.path` describes the Maven launcher rather than the application. BootUI's
+                Vulnerabilities panel builds its inventory from the runtime classpath, and started that way
+                it used to report exactly one dependency — `org.apache.maven.wrapper:maven-wrapper`. The
+                adapter now also reads the application classloader so it survives an in-process launcher,
+                but a sample that demonstrates the console should run the way a real application does: its
+                own JVM, its own classpath, its own logging configuration.
+            -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
+                <version>${exec-maven-plugin.version}</version>
                 <configuration>
-                    <mainClass>io.github.jdubois.bootui.micronautsample.BootUiMicronautSampleApplication</mainClass>
+                    <executable>java</executable>
+                    <arguments>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>-Dmicronaut.environments=${micronaut.environments}</argument>
+                        <argument>-Dmicronaut.server.port=${micronaut.server.port}</argument>
+                        <argument>io.github.jdubois.bootui.micronautsample.BootUiMicronautSampleApplication</argument>
+                    </arguments>
                 </configuration>
             </plugin>
         </plugins>

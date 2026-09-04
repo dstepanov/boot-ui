@@ -11,8 +11,8 @@ import io.github.jdubois.bootui.micronaut.github.MicronautGitHubSettings;
 import io.github.jdubois.bootui.micronaut.liquibase.MicronautLiquibaseProvider;
 import io.github.jdubois.bootui.spi.FlywayProvider;
 import io.github.jdubois.bootui.spi.LiquibaseProvider;
-import io.micronaut.context.BeanContext;
 import io.micronaut.context.env.Environment;
+import io.micronaut.core.annotation.Nullable;
 import jakarta.inject.Singleton;
 import java.nio.file.Path;
 import java.util.List;
@@ -51,9 +51,10 @@ import java.util.Set;
  * {@code DataSource} bean of the same name — the Micronaut analogue of the Spring adapter's "a Flyway /
  * SpringLiquibase bean exists" rule (Quarkus decides from its build-time capability instead, and its sample
  * always configures a datasource). The decision is read from the very {@link MicronautFlywayProvider} /
- * {@link MicronautLiquibaseProvider} logic the engine services run on, so the manifest can never advertise a
- * panel whose reads report {@code flywayPresent:false} and whose actions answer 404. A library that is
- * present but unconfigured names the missing configuration rather than the missing dependency.
+ * {@link MicronautLiquibaseProvider} <em>instances</em> the engine services run on — one object per job,
+ * injected as {@link MicronautMigrationProviders} — so the manifest can never advertise a panel whose reads
+ * report {@code flywayPresent:false} and whose actions answer 404. A library that is present but
+ * unconfigured names the missing configuration rather than the missing dependency.
  *
  * <p>Action-capable panels here are Loggers (a logger level can be set), Heap Dump (it captures and
  * deletes dumps), HTTP Probe (it issues a request), Architecture (it runs a scan and dismisses rules),
@@ -289,26 +290,33 @@ public class MicronautPanelAvailability {
     private final List<String> githubAllowedApiHosts;
 
     /**
-     * The Flyway / Liquibase seams, or {@code null} when the library is absent. Built exactly as
-     * {@link BootUiEngineFactory} builds the ones behind the engine services — under the same classpath guard,
-     * so the optional types are never linked in an application without them — and consulted for their
-     * {@code available()} answer only, which reads the live configuration and instantiates nothing.
+     * The Flyway / Liquibase seams, or {@code null} when the library is absent — the very objects
+     * {@link BootUiEngineFactory} puts behind {@code FlywayService} and {@code LiquibaseService}, injected
+     * through {@link MicronautMigrationProviders} rather than rebuilt here. One object per job: the
+     * manifest's "is a migration configured?" answer and the panel's own reads and actions then come from
+     * the same instance and cannot drift apart. The factory builds them under a classpath guard, so the
+     * optional types are never linked in an application without them.
+     *
+     * <p>They are consulted for their {@code available()} answer only, which reads the live configuration and
+     * instantiates nothing.
      */
+    @Nullable
     private final FlywayProvider flywayProvider;
 
+    @Nullable
     private final LiquibaseProvider liquibaseProvider;
 
     public MicronautPanelAvailability(
             Environment environment,
-            BeanContext beanContext,
             MicronautCopilotSessionStore copilotStore,
-            MicronautClaudeCodeSessionStore claudeCodeStore) {
+            MicronautClaudeCodeSessionStore claudeCodeStore,
+            MicronautMigrationProviders migrationProviders) {
         this.accessConfig = new MicronautPanelAccessConfig(environment);
         this.copilotStore = copilotStore;
         this.claudeCodeStore = claudeCodeStore;
         this.githubAllowedApiHosts = MicronautGitHubSettings.allowedApiHosts(environment);
-        this.flywayProvider = FLYWAY_PRESENT ? new MicronautFlywayProvider(beanContext) : null;
-        this.liquibaseProvider = LIQUIBASE_PRESENT ? new MicronautLiquibaseProvider(beanContext, environment) : null;
+        this.flywayProvider = migrationProviders.flyway();
+        this.liquibaseProvider = migrationProviders.liquibase();
     }
 
     private static Path workingDirectory() {

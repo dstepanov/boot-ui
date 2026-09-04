@@ -1,6 +1,5 @@
 package io.github.jdubois.bootui.micronaut.errorcontract;
 
-import io.github.jdubois.bootui.engine.support.InternalPackageMatcher;
 import io.github.jdubois.bootui.micronaut.MicronautBeanTypes;
 import io.github.jdubois.bootui.spi.ErrorContractProvider;
 import io.github.jdubois.bootui.spi.ErrorHandlerDescriptor;
@@ -32,13 +31,34 @@ import java.util.Optional;
  *       from the bean's own generic type argument.</li>
  * </ul>
  *
- * <p>BootUI's own handlers are filtered out, so the panel describes the application's contract rather than
- * the console's.
+ * <h2>Whose contract this describes</h2>
+ *
+ * <p>The panel answers "what does <em>this application</em> promise its callers when something fails", so
+ * the catalogue is scoped to declarations the application owns — the same scope the Spring adapter gets for
+ * free (it discovers {@code @ControllerAdvice} beans, of which the framework declares none) and the Quarkus
+ * adapter gets from indexing only the application archive.
+ *
+ * <p>Micronaut is the odd one out: it ships its own error contract as ordinary
+ * {@link ExceptionHandler} beans, so a plain application hands the container a dozen framework handlers
+ * ({@code JsonExceptionHandler}, {@code ConversionErrorHandler}, {@code UnsatisfiedRouteHandler}, …) that
+ * live alongside the application's own. Cataloguing them would bury a single application handler under
+ * twelve rows describing Micronaut, and {@link ErrorHandlerDescriptor} — the frozen neutral SPI record —
+ * has no field with which to mark an entry framework-provided, so the engine could not group them either.
+ * Handlers whose declaring type is under {@code io.micronaut.} are therefore excluded, as BootUI's own
+ * already are.
+ *
+ * <p>BootUI's own declarations are skipped through
+ * {@link MicronautBeanTypes#isBootUiOwned(BeanDefinition)} — the self-filter shared with the Beans,
+ * scheduled-task and fault-tolerance inventories, which also catches the engine services this adapter's
+ * {@code @Factory} classes produce.
  */
 public final class MicronautErrorContractProvider implements ErrorContractProvider {
 
-    private static final InternalPackageMatcher INTERNAL_PACKAGES =
-            new InternalPackageMatcher(List.of("io.github.jdubois.bootui.micronaut", "io.github.jdubois.bootui.core"));
+    /**
+     * Micronaut's own packages. A handler declared here belongs to the framework's error contract, not the
+     * application's.
+     */
+    private static final String FRAMEWORK_PACKAGE_PREFIX = "io.micronaut.";
 
     private final BeanContext beanContext;
 
@@ -73,20 +93,36 @@ public final class MicronautErrorContractProvider implements ErrorContractProvid
     private List<ErrorHandlerDescriptor> discover() {
         List<ErrorHandlerDescriptor> handlers = new ArrayList<>();
         for (BeanDefinition<?> definition : beanContext.getAllBeanDefinitions()) {
-            Class<?> beanType = MicronautBeanTypes.resolve(definition);
-            if (beanType == null || INTERNAL_PACKAGES.matchesName(beanType.getName())) {
+            Class<?> beanType = applicationDeclaredType(definition);
+            if (beanType == null) {
                 continue;
             }
             errorMethods(definition, beanType, handlers);
         }
         for (BeanDefinition<ExceptionHandler> definition : beanContext.getBeanDefinitions(ExceptionHandler.class)) {
-            Class<?> beanType = MicronautBeanTypes.resolve(definition);
-            if (beanType == null || INTERNAL_PACKAGES.matchesName(beanType.getName())) {
+            Class<?> beanType = applicationDeclaredType(definition);
+            if (beanType == null) {
                 continue;
             }
             exceptionHandler(definition, beanType).ifPresent(handlers::add);
         }
         return List.copyOf(handlers);
+    }
+
+    /**
+     * The declaring type of a definition when the application owns it, {@code null} when BootUI or Micronaut
+     * itself does. Both exclusions are about the same thing: a catalogue of the console's or the framework's
+     * handlers would describe neither the contract the application declares nor one it can change.
+     */
+    private static Class<?> applicationDeclaredType(BeanDefinition<?> definition) {
+        if (MicronautBeanTypes.isBootUiOwned(definition)) {
+            return null;
+        }
+        Class<?> beanType = MicronautBeanTypes.resolve(definition);
+        if (beanType == null || beanType.getName().startsWith(FRAMEWORK_PACKAGE_PREFIX)) {
+            return null;
+        }
+        return beanType;
     }
 
     private static void errorMethods(

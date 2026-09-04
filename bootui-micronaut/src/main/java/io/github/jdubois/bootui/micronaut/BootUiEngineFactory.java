@@ -577,22 +577,40 @@ public class BootUiEngineFactory {
     }
 
     /**
-     * The Flyway panel. Wired only when Flyway's own API is on the classpath; without it the service is
-     * built with a {@code null} provider and the engine renders the panel's honest unavailable state. With
-     * it, the provider still reports {@code flywayPresent=false} until a migration is configured against a
-     * datasource — the same fact {@link MicronautPanelAvailability} reads to decide whether the panel is
-     * advertised, so the manifest and the panel's own reads and actions can never disagree.
+     * The Flyway and Liquibase seams, built once here under the same classpath probe that gates every other
+     * optional integration: {@link MicronautFlywayProvider} is referenced only on the branch whose probe
+     * passed, so its Flyway types are never linked in an application without the library.
+     *
+     * <p>They are produced as one bean because two consumers need the <em>same</em> seam — the engine
+     * services below, and {@link MicronautPanelAvailability}, which asks whether a migration is actually
+     * configured before advertising the panel. Both once built their own; sharing one instance is what makes
+     * the manifest and the panel agree by identity rather than by two construction sites happening to match.
+     * See {@link MicronautMigrationProviders} for why the pair travels in a holder instead of as two nullable
+     * beans.
      */
     @Singleton
-    FlywayService flywayService(BeanContext beanContext) {
-        return new FlywayService(FLYWAY_PRESENT ? new MicronautFlywayProvider(beanContext) : null);
+    MicronautMigrationProviders migrationProviders(BeanContext beanContext, Environment environment) {
+        return new MicronautMigrationProviders(
+                FLYWAY_PRESENT ? new MicronautFlywayProvider(beanContext) : null,
+                LIQUIBASE_PRESENT ? new MicronautLiquibaseProvider(beanContext, environment) : null);
+    }
+
+    /**
+     * The Flyway panel. Without the library the service is built with a {@code null} provider and the engine
+     * renders the panel's honest unavailable state. With it, the provider still reports
+     * {@code flywayPresent=false} until a migration is configured against a datasource — the same fact
+     * {@link MicronautPanelAvailability} reads from this same provider instance to decide whether the panel
+     * is advertised, so the manifest and the panel's own reads and actions can never disagree.
+     */
+    @Singleton
+    FlywayService flywayService(MicronautMigrationProviders migrationProviders) {
+        return new FlywayService(migrationProviders.flyway());
     }
 
     /** The Liquibase panel, gated on Liquibase's own API exactly like the Flyway panel above. */
     @Singleton
-    LiquibaseService liquibaseService(BeanContext beanContext, Environment environment) {
-        return new LiquibaseService(
-                LIQUIBASE_PRESENT ? new MicronautLiquibaseProvider(beanContext, environment) : null);
+    LiquibaseService liquibaseService(MicronautMigrationProviders migrationProviders) {
+        return new LiquibaseService(migrationProviders.liquibase());
     }
 
     /**
