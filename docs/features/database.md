@@ -46,7 +46,10 @@ BootUI transparently wraps each `DataSource` bean and intercepts statement execu
 `Connection`/`Statement`/`PreparedStatement`/`CallableStatement` objects, recording the SQL text, statement type, SQL
 category (`SELECT`/`INSERT`/`UPDATE`/`DELETE`/`DDL`/`OTHER`), wall-clock duration, affected-row counts, batch size,
 originating connection, executing thread, the call site that triggered it (when call-site capture is enabled), and any
-failure. Spring's delegating/routing `DataSource` wrappers are skipped so executions are not double-counted, and wrapping
+failure. A Spring `DataSource` wrapper is never replaced, because its concrete type is part of your application's
+contract: instead, when it owns the only reference to a pool — as `spring.datasource.connection-fetch=lazy` does with
+`LazyConnectionDataSourceProxy` — the pool inside it is traced in place, and when its target is a bean that was traced
+on its own it is left alone so executions are not double-counted. Wrapping
 **fails open**: if a `DataSource` cannot be proxied it is left untouched so application database access is never
 compromised.
 

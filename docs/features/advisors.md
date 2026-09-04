@@ -174,9 +174,12 @@ The Database panel introspects the physical schema of every discovered applicati
 of deterministic, low-false-positive structural checks. It never executes DDL and never queries application data. See
 [DATABASE-ADVISOR-CHECKS.md](../DATABASE-ADVISOR-CHECKS.md) for the full catalogue and remediation links.
 
-It reuses the same proxy-aware datasource discovery as Database Connection Pools and SQL Trace, skipping Spring's
-delegating/routing `DataSource` wrappers and de-duplicating by the physical pool behind BootUI's own SQL Trace proxy, so
-a wrapped datasource is never introspected twice.
+It reuses the same proxy-aware datasource discovery as Database Connection Pools and SQL Trace, de-duplicating by the
+physical pool behind BootUI's own SQL Trace proxy so a wrapped datasource is never introspected twice. Spring's
+delegating and routing `DataSource` wrappers are resolved rather than ignored: one is skipped only when the pool it
+forwards to is a bean of its own, so the pool inside a `LazyConnectionDataSourceProxy` (what
+`spring.datasource.connection-fetch=lazy` installs) is still inspected, and a routing datasource is expanded into its
+resolved targets, named `beanName[lookupKey]`.
 
 ::: details The generic structural checks
 - A missing primary key.

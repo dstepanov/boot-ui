@@ -1746,8 +1746,13 @@ Features:
   foreign key matching tolerates the physical constraint's own column order but requires the same child-to-parent
   pairing, and an association explicitly declaring `@ForeignKey(ConstraintMode.NO_CONSTRAINT)` is excluded from the
   missing-constraint check.
-- Discover datasources through the same proxy-aware mechanism as Database Connection Pools and SQL Trace so delegating
-  or routing wrappers do not cause the same physical datasource to be scanned twice.
+- Discover datasources through the same proxy-aware mechanism as Database Connection Pools and SQL Trace, resolving
+  Spring's delegating and routing `DataSource` wrappers down to the physical pool behind them so the same datasource is
+  never scanned twice. A wrapper is skipped only when the pool it forwards to is a bean of its own; when the wrapper
+  owns the only reference to that pool — as `spring.datasource.connection-fetch=lazy` does with
+  `LazyConnectionDataSourceProxy` — the wrapper itself is introspected, and a routing wrapper is expanded into its
+  resolved targets named `beanName[lookupKey]`. A wrapper that cannot describe its target is reported as an unreadable
+  datasource rather than dropped.
 - Report findings by severity and rule, with bounded sample evidence and remediation guidance, and cache the latest
   report until the next explicit scan.
 

@@ -8,17 +8,22 @@ import io.github.jdubois.bootui.spi.NamedDataSource;
 import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.jdbc.datasource.DelegatingDataSource;
+import org.springframework.jdbc.datasource.LazyConnectionDataSourceProxy;
+import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
 
 /**
  * Discovery rules for the Spring binding: a wrapped datasource must be introspected exactly once, under one
- * name, because every duplicate would double every finding the Database Advisor reports.
+ * name, because every duplicate would double every finding the Database Advisor reports — and a wrapper that
+ * owns the only reference to a pool must still be introspected rather than skipped (issue #924).
  */
 class SpringDatabaseAdvisorDataSourceProviderTests {
 
@@ -51,11 +56,40 @@ class SpringDatabaseAdvisorDataSourceProviderTests {
                 .containsExactly("dataSource");
     }
 
+    /**
+     * Spring Boot's {@code spring.datasource.connection-fetch=lazy} replaces the {@code dataSource} bean with a
+     * {@link LazyConnectionDataSourceProxy}, so the pool is not a bean at all and skipping the wrapper left the
+     * advisor with nothing to inspect.
+     */
+    @Test
+    void introspectsALazyConnectionProxyWhoseTargetIsNotABeanOfItsOwn() {
+        DataSource pool = new StubDataSource();
+        LazyConnectionDataSourceProxy lazy = new LazyConnectionDataSourceProxy(pool);
+        DefaultListableBeanFactory factory = new DefaultListableBeanFactory();
+        factory.registerSingleton("dataSource", lazy);
+
+        List<NamedDataSource> dataSources = providerFor(factory).dataSources();
+
+        assertThat(dataSources).hasSize(1);
+        assertThat(dataSources.get(0).name()).isEqualTo("dataSource");
+        assertThat(dataSources.get(0).dataSource()).isSameAs(lazy);
+    }
+
+    @Test
+    void collapsesNestedWrappersOverTheSamePoolToOneDatasource() {
+        DataSource pool = new StubDataSource();
+        DefaultListableBeanFactory factory = new DefaultListableBeanFactory();
+        factory.registerSingleton("dataSource", new DelegatingDataSource(new LazyConnectionDataSourceProxy(pool)));
+
+        assertThat(providerFor(factory).dataSources())
+                .extracting(NamedDataSource::name)
+                .containsExactly("dataSource");
+    }
+
     @Test
     void introspectsATracedDataSourceAndItsUnderlyingPoolOnlyOnce() {
         DataSource real = new StubDataSource();
-        DataSource traced =
-                SqlTracingProxies.wrap(real, new SqlTraceRecorder(false, false, false, false, 100, 100, 256, 128, 5));
+        DataSource traced = SqlTracingProxies.wrap(real, recorder());
         DefaultListableBeanFactory factory = new DefaultListableBeanFactory();
         factory.registerSingleton("dataSource", traced);
         factory.registerSingleton("rawDataSource", real);
@@ -64,6 +98,78 @@ class SpringDatabaseAdvisorDataSourceProviderTests {
 
         assertThat(dataSources).hasSize(1);
         assertThat(dataSources.get(0).name()).isEqualTo("dataSource");
+    }
+
+    /** SQL Trace inserts its proxy underneath a lazy wrapper, which must not make the pool look like a second one. */
+    @Test
+    void introspectsATracedPoolBehindALazyProxyOnlyOnce() {
+        DataSource pool = new StubDataSource();
+        DefaultListableBeanFactory factory = new DefaultListableBeanFactory();
+        factory.registerSingleton("rawDataSource", pool);
+        factory.registerSingleton(
+                "dataSource", new LazyConnectionDataSourceProxy(SqlTracingProxies.wrap(pool, recorder())));
+
+        assertThat(providerFor(factory).dataSources())
+                .extracting(NamedDataSource::name)
+                .containsExactly("rawDataSource");
+    }
+
+    @Test
+    void expandsARoutingDataSourceIntoItsResolvedTargets() {
+        DefaultListableBeanFactory factory = new DefaultListableBeanFactory();
+        factory.registerSingleton("routingDataSource", routing(new StubDataSource(), new StubDataSource()));
+
+        assertThat(providerFor(factory).dataSources())
+                .extracting(NamedDataSource::name)
+                .containsExactly("routingDataSource[primary]", "routingDataSource[replica]");
+    }
+
+    @Test
+    void doesNotDuplicateRoutingTargetsThatAreBeansOfTheirOwn() {
+        DataSource primary = new StubDataSource();
+        DataSource replica = new StubDataSource();
+        DefaultListableBeanFactory factory = new DefaultListableBeanFactory();
+        factory.registerSingleton("primaryDataSource", primary);
+        factory.registerSingleton("replicaDataSource", replica);
+        factory.registerSingleton("routingDataSource", routing(primary, replica));
+
+        assertThat(providerFor(factory).dataSources())
+                .extracting(NamedDataSource::name)
+                .containsExactly("primaryDataSource", "replicaDataSource");
+    }
+
+    /**
+     * A wrapper that will not name its target is reported, so the scan explains a read failure instead of claiming
+     * the application has no {@code DataSource} bean.
+     */
+    @Test
+    void reportsAWrapperWhoseTargetCannotBeResolved() {
+        DefaultListableBeanFactory factory = new DefaultListableBeanFactory();
+        factory.registerSingleton("dataSource", new DelegatingDataSource());
+
+        assertThat(providerFor(factory).dataSources())
+                .extracting(NamedDataSource::name)
+                .containsExactly("dataSource");
+    }
+
+    private static SqlTraceRecorder recorder() {
+        return new SqlTraceRecorder(false, false, false, false, 100, 100, 256, 128, 5);
+    }
+
+    private static AbstractRoutingDataSource routing(DataSource primary, DataSource replica) {
+        Map<Object, Object> targets = new LinkedHashMap<>();
+        targets.put("primary", primary);
+        targets.put("replica", replica);
+        AbstractRoutingDataSource routing = new AbstractRoutingDataSource() {
+            @Override
+            protected Object determineCurrentLookupKey() {
+                return "primary";
+            }
+        };
+        routing.setTargetDataSources(targets);
+        routing.setDefaultTargetDataSource(primary);
+        routing.afterPropertiesSet();
+        return routing;
     }
 
     /** Minimal {@link ObjectProvider} over a fixed bean factory. */
