@@ -22,6 +22,7 @@ import io.micronaut.rabbitmq.exception.RabbitListenerException;
 import io.micronaut.rabbitmq.exception.RabbitListenerExceptionHandler;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.Test;
  * the consumer that channel subscribed, and a rejected message as a separate failure entry. Each listener is
  * driven directly over a stub bean, which is exactly what Micronaut hands it at bean-creation time.
  */
+@Tag("rabbitmq")
 class MicronautRabbitCaptureTest {
 
     private static final AMQP.BasicProperties PROPERTIES =

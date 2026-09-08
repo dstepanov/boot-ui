@@ -326,18 +326,15 @@ describe('routes', () => {
     expect(routeMetadata).toEqual(backendMetadata)
   })
 
-  it('keeps conformance manifests aligned with the backend panel catalog and order', () => {
+  it('keeps the conformance manifest aligned with the backend panel catalog and order', () => {
     const backendPanels = parseBackendPanels()
     const expected = backendPanels.map(({id, title, actionCapable}) => ({id, title, actionCapable}))
 
-    for (const manifestFile of [
-      'expected-panels-spring.json',
-      'expected-panels-quarkus.json',
-      'expected-panels-webflux.json'
-    ]) {
-      const manifest = loadManifest(manifestFile)
-      expect(manifest.panels).toEqual(expected)
-    }
+    // One golden manifest covers every stack: the panel list is the shared BootUiPanels registry, and the
+    // per-stack $.platform discriminator lives on BootUiApiContractCatalog.Runtime instead of in this file.
+    const manifest = loadManifest('expected-panels.json')
+    expect(manifest.panels).toEqual(expected)
+    expect(manifest.platform).toBeUndefined()
   })
 
   it('documents every panel from the backend panel catalog in docs/features/', () => {

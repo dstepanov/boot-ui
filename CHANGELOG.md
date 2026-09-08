@@ -63,6 +63,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   integration exposes a per-record completion callback on Micronaut 4. Note that `micronaut-kafka` and
   `micronaut-rabbitmq` each declare an `ExecutorConfiguration` bean named `consumer`, so an application carrying both
   does not start, with or without BootUI.
+- **The MCP transport's payload bound is the one it documents.** `POST /bootui/api/mcp` bound its body as a
+  `byte[]`, so `McpPayloadReader`'s limit was checked against a request the server had already buffered in full: the
+  effective ceiling was `micronaut.server.max-request-size` (10 MiB by default, more in an application that accepts
+  uploads) rather than `bootui.mcp.max-payload-bytes` (1 MiB). The body is now bound as an `InputStream`, as on
+  Quarkus. Also on the Micronaut adapter: `bootui-micronaut` depends on `micronaut-http-server` rather than
+  `micronaut-http-server-netty`, since it references no Netty type and should not put a second server implementation on
+  the classpath of an application running `micronaut-servlet`; and an SSE stream whose change source throws while
+  subscribing no longer leaks one of that panel's concurrent-stream slots for the lifetime of the application.
 - **Every optional integration the Micronaut adapter binds to is guarded at the bean level.** The adapter
   declares each one (`micronaut-security`, `micronaut-kafka`, `micronaut-rabbitmq`, `micronaut-email`,
   `micronaut-websocket`, the OpenTelemetry SDK, Logback) as a `provided` dependency, so it compiles against the
@@ -75,6 +83,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   documentation promised. A new `MicronautOptionalDependencyGuardTest` fails the build if any bean references a
   `provided` API without a guard, or if a `provided` dependency is added without declaring the packages it
   makes optional.
+- **One golden panel manifest for all four stacks.** `bootui-conformance` carried four near-identical
+  `expected-panels-*.json` files whose panel lists could not legitimately differ — they are the shared `BootUiPanels`
+  registry, and `BackendPanelCatalogConsistencyTest` already proved it — with only `$.platform` varying. Rather than
+  add a fifth copy for Micronaut, the discriminator moved onto `BootUiApiContractCatalog.Runtime.platform()` and the
+  list is stated once in `expected-panels.json`. The fixture stays checked in rather than derived from the registry,
+  because a golden file that is generated from the thing it checks proves nothing.
 - **A `MICRONAUT` stack in the engine's MCP tool catalog.** `McpToolCatalog` gains a fourth stack, and the tools whose
   backing panel has no Micronaut binding yet — `spring_scan`, `get_spring_report`, `security_scan`,
   `get_security_report`, `get_dev_services` — are excluded from it. An

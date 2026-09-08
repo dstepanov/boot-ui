@@ -11,10 +11,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Micronaut agent JSON parser over Jackson 2 ({@code com.fasterxml.jackson}, from {@code
- * quarkus-rest-jackson}). The twin of the Spring {@code SpringAgentJsonParser}: it keeps the shared
- * engine session store free of any Jackson dependency by handing it neutral {@link AgentJson} trees, so
- * both adapters render byte-identical payloads.
+ * Micronaut agent JSON parser over Jackson 2 ({@code com.fasterxml.jackson}, the {@code jackson-databind}
+ * this adapter depends on directly rather than through a Micronaut JSON stack, so the host's choice of
+ * {@code micronaut-serde} or {@code micronaut-jackson-databind} is untouched). The twin of the Spring
+ * {@code SpringAgentJsonParser}: it keeps the shared engine session store free of any Jackson dependency by
+ * handing it neutral {@link AgentJson} trees, so both adapters render byte-identical payloads.
  */
 public class MicronautAgentJsonParser implements AgentJsonParser {
 

@@ -48,8 +48,13 @@ public abstract class AbstractBootUiApiConformanceTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private static final String DEFAULT_EXPECTED_PANELS =
-            "/io/github/jdubois/bootui/conformance/expected-panels-spring.json";
+    /**
+     * One golden manifest for all four stacks. The panel list is the shared {@code BootUiPanels} registry, so
+     * it cannot legitimately differ between them; what does differ — the {@code $.platform} discriminator and
+     * per-panel availability — comes from {@link Runtime#platform()} and from the live manifest respectively,
+     * not from a per-stack copy of this file.
+     */
+    private static final String DEFAULT_EXPECTED_PANELS = "/io/github/jdubois/bootui/conformance/expected-panels.json";
 
     private static final String CONTENT_SECURITY_POLICY = "Content-Security-Policy";
 
@@ -92,7 +97,7 @@ public abstract class AbstractBootUiApiConformanceTest {
     /** Base URL of the booted app under test, e.g. {@code http://localhost:54321} (no trailing slash). */
     protected abstract String baseUrl();
 
-    /** Classpath resource of the expected panel manifest for this platform. */
+    /** Classpath resource of the expected panel manifest; the shared golden file unless a stack needs its own. */
     protected String expectedPanelsResource() {
         return DEFAULT_EXPECTED_PANELS;
     }
@@ -159,13 +164,13 @@ public abstract class AbstractBootUiApiConformanceTest {
 
         JsonNode root = response.json();
 
-        String expectedPlatform = loadExpectedPlatform();
+        String expectedPlatform = runtime().platform();
         JsonNode livePlatform = root.path("platform");
         assertThat(livePlatform.isTextual())
                 .as("$.platform must be a non-null string (got %s)", livePlatform)
                 .isTrue();
         assertThat(livePlatform.asText())
-                .as("manifest platform must match the expected fixture")
+                .as("manifest platform must match the discriminator this runtime promises")
                 .isEqualTo(expectedPlatform);
 
         JsonNode panels = root.get("panels");
@@ -1723,22 +1728,6 @@ public abstract class AbstractBootUiApiConformanceTest {
                         panel.get("actionCapable").asBoolean()));
             }
             return panels;
-        } catch (IOException ex) {
-            throw new UncheckedIOException("Failed to read expected-panels resource: " + resource, ex);
-        }
-    }
-
-    private String loadExpectedPlatform() {
-        String resource = expectedPanelsResource();
-        try (InputStream in = getClass().getResourceAsStream(resource)) {
-            if (in == null) {
-                throw new IllegalStateException("Expected-panels resource not found on the classpath: " + resource);
-            }
-            JsonNode platform = MAPPER.readTree(in).path("platform");
-            assertThat(platform.isTextual())
-                    .as("expected-panels fixture %s must declare a string 'platform'", resource)
-                    .isTrue();
-            return platform.asText();
         } catch (IOException ex) {
             throw new UncheckedIOException("Failed to read expected-panels resource: " + resource, ex);
         }

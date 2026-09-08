@@ -53,11 +53,6 @@ class MicronautSerdeApiConformanceTest extends AbstractBootUiApiConformanceTest 
     }
 
     @Override
-    protected String expectedPanelsResource() {
-        return "/io/github/jdubois/bootui/conformance/expected-panels-micronaut.json";
-    }
-
-    @Override
     protected Runtime runtime() {
         return Runtime.MICRONAUT;
     }

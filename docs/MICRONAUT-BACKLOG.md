@@ -22,6 +22,8 @@ filed, so a closed item is struck from the table rather than renumbering the res
 | MN-12 | Sample-app Playwright coverage | Test | sample | M |
 | MN-13 | WebSocket frame capture | Blocked | upstream | — |
 | MN-14 | Live circuit-breaker state | Blocked | upstream | — |
+| MN-15 | Agent-session SSE stream | Enhancement | adapter | S |
+| MN-16 | Transactions panel binding | Panel | adapter | — |
 
 ---
 
@@ -65,15 +67,18 @@ modules and asserts on the raw response bytes, since deserializing would silentl
 
 **Kind:** test · **Priority:** was high — this was the gate for everything after it
 
-`bootui-conformance` now has `Runtime.MICRONAUT`, an `expected-panels-micronaut.json` manifest, and three runners in
+`bootui-conformance` now has `Runtime.MICRONAUT` (carrying its own `$.platform` discriminator, which is what let the four
+near-identical `expected-panels-*.json` copies collapse into one shared golden manifest) and three runners in
 `bootui-micronaut-sample-app` (`MicronautApiConformanceTest`, `MicronautCliConformanceTest`,
 `MicronautMcpConformanceTest`), each `@MicronautTest` on a random port. The API suite also runs a fourth time, in
 `bootui-micronaut` itself (`MicronautSerdeApiConformanceTest`), so the whole contract is exercised on
 `micronaut-serde-jackson` as well as on `micronaut-jackson-databind`; the two stacks share no serialization code, so
 every wire-shape guarantee has to be earned twice.
 
-`ALL` gained `MICRONAUT`; the four action contracts Micronaut cannot satisfy (`security.scan`, `spring.scan`,
-`kafka.clear`, `rabbitmq.clear`) moved to a new `NON_MICRONAUT` set, mirroring `McpToolCatalog.NON_MICRONAUT_STACKS`.
+`ALL` gained `MICRONAUT`; the action contracts Micronaut cannot satisfy moved to a new `NON_MICRONAUT` set, mirroring
+`McpToolCatalog.NON_MICRONAUT_STACKS`. That was four at the time (`security.scan`, `spring.scan`, `kafka.clear`,
+`rabbitmq.clear`); `kafka.clear` and `rabbitmq.clear` returned to `all(...)` when MN-3 and MN-6 landed, leaving the two
+that need an engine-side ruleset rather than an adapter binding.
 The read contracts needed no triage: the suite only exercises a panel the live manifest reports available, and the
 unported panels report themselves unavailable. `config` is declared `actionlessPanels()` for the same reason Quarkus
 does (no runtime override write path — MN-9).
@@ -277,3 +282,32 @@ state by observing `CircuitOpenEvent`/`CircuitClosedEvent`, which is accurate bu
 onward.
 
 Closing it needs a Micronaut-side accessor; same recommendation as MN-13.
+
+---
+
+## MN-15 — Agent-session SSE stream
+
+**Kind:** enhancement · **Size:** small · Affects: the Copilot and Claude Code panels
+
+Spring's `AgentSessionController` exposes a `/stream` endpoint, so both agent panels update as the session file
+changes. `AbstractAgentSessionController` on Micronaut has no stream route, and the panels poll instead.
+
+This is parity with Quarkus — both stacks expose the same seven stream endpoints, and the agent stream is a
+Spring-only feature rather than a Micronaut regression — so nothing is dishonest today. It is listed because it is a
+real behavioural difference between the stacks that was not written down anywhere, and because the seam already exists
+here: `SseStreams.replaying` is what the Log Tail route uses, and the session stores already know when they change.
+
+---
+
+## MN-16 — Transactions panel binding
+
+**Kind:** panel · **Size:** blocked by design, listed for completeness
+
+The Transactions panel is Spring-only and is reported *not applicable* on Micronaut (transaction-boundary capture
+relies on Spring Framework's `TransactionExecutionListener` hook against `ConfigurableTransactionManager` beans;
+Micronaut's transaction management is compile-time AOP over its own `SynchronousTransactionManager`, which exposes no
+comparable per-boundary listener). Quarkus reports the same.
+
+Listed so the gap is tracked rather than only stated in `MicronautPanelAvailability`. Closing it would need either a
+Micronaut-side listener SPI or instrumentation invasive enough that the panel would no longer be honest about what it
+observed.

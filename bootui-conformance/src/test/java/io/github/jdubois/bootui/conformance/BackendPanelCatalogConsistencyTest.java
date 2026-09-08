@@ -32,11 +32,13 @@ class BackendPanelCatalogConsistencyTest {
     private static final Pattern SCREENSHOT_ENTRY =
             Pattern.compile("\\[\\s*'[^']+'\\s*,\\s*'[^']+'\\s*,\\s*'(bootui-[^']+\\.webp)'\\s*,", Pattern.DOTALL);
 
-    private static final List<ManifestResource> MANIFEST_RESOURCES = List.of(
-            new ManifestResource("/io/github/jdubois/bootui/conformance/expected-panels-spring.json", "spring-boot"),
-            new ManifestResource("/io/github/jdubois/bootui/conformance/expected-panels-quarkus.json", "quarkus"),
-            new ManifestResource(
-                    "/io/github/jdubois/bootui/conformance/expected-panels-webflux.json", "spring-boot-reactive"));
+    /**
+     * The one golden manifest every stack is held to. It used to be four near-identical files — the panel
+     * list is the shared {@link BootUiPanels} registry, so this very test proved they could not differ — with
+     * only {@code $.platform} varying; that discriminator now lives on
+     * {@link BootUiApiContractCatalog.Runtime#platform()}, and the list is stated once.
+     */
+    private static final String MANIFEST_RESOURCE = "/io/github/jdubois/bootui/conformance/expected-panels.json";
 
     @Test
     void backendCatalogMatchesConformanceManifestsExactly() {
@@ -44,36 +46,48 @@ class BackendPanelCatalogConsistencyTest {
                 .map(panel -> new PanelMetadata(panel.id(), panel.title(), panel.actionCapable()))
                 .toList();
 
-        for (ManifestResource resource : MANIFEST_RESOURCES) {
-            JsonNode manifest = loadJsonResource(resource.path());
-            assertThat(manifest.path("platform").asText())
-                    .as("%s platform", resource.path())
-                    .isEqualTo(resource.platform());
-            assertThat(manifest.path("panels")).as("%s panels", resource.path()).isNotNull();
-            assertThat(manifest.path("panels").isArray())
-                    .as("%s panels array", resource.path())
-                    .isTrue();
+        JsonNode manifest = loadJsonResource(MANIFEST_RESOURCE);
+        assertThat(manifest.path("platform").isMissingNode())
+                .as(
+                        "%s must not carry a platform: it is shared by every stack, and the discriminator "
+                                + "comes from Runtime.platform()",
+                        MANIFEST_RESOURCE)
+                .isTrue();
+        assertThat(manifest.path("panels")).as("%s panels", MANIFEST_RESOURCE).isNotNull();
+        assertThat(manifest.path("panels").isArray())
+                .as("%s panels array", MANIFEST_RESOURCE)
+                .isTrue();
 
-            List<PanelMetadata> actual = new java.util.ArrayList<>();
-            for (JsonNode node : manifest.path("panels")) {
-                assertThat(node.path("id").isTextual())
-                        .as("%s panel id", resource.path())
-                        .isTrue();
-                assertThat(node.path("title").isTextual())
-                        .as("%s panel title", resource.path())
-                        .isTrue();
-                assertThat(node.path("actionCapable").isBoolean())
-                        .as("%s panel actionCapable", resource.path())
-                        .isTrue();
-                actual.add(new PanelMetadata(
-                        node.path("id").asText(),
-                        node.path("title").asText(),
-                        node.path("actionCapable").asBoolean()));
-            }
-            assertThat(actual)
-                    .as("%s panel metadata and contractual order", resource.path())
-                    .containsExactlyElementsOf(expected);
+        List<PanelMetadata> actual = new java.util.ArrayList<>();
+        for (JsonNode node : manifest.path("panels")) {
+            assertThat(node.path("id").isTextual())
+                    .as("%s panel id", MANIFEST_RESOURCE)
+                    .isTrue();
+            assertThat(node.path("title").isTextual())
+                    .as("%s panel title", MANIFEST_RESOURCE)
+                    .isTrue();
+            assertThat(node.path("actionCapable").isBoolean())
+                    .as("%s panel actionCapable", MANIFEST_RESOURCE)
+                    .isTrue();
+            actual.add(new PanelMetadata(
+                    node.path("id").asText(),
+                    node.path("title").asText(),
+                    node.path("actionCapable").asBoolean()));
         }
+        assertThat(actual)
+                .as("%s panel metadata and contractual order", MANIFEST_RESOURCE)
+                .containsExactlyElementsOf(expected);
+    }
+
+    /** Every stack must promise a distinct, non-blank {@code $.platform}, since the fixture no longer does. */
+    @Test
+    void everyRuntimePromisesItsOwnPlatformDiscriminator() {
+        List<String> platforms = java.util.Arrays.stream(BootUiApiContractCatalog.Runtime.values())
+                .map(BootUiApiContractCatalog.Runtime::platform)
+                .toList();
+
+        assertThat(platforms).doesNotContainNull().doesNotHaveDuplicates();
+        assertThat(platforms).allSatisfy(platform -> assertThat(platform).isNotBlank());
     }
 
     @Test
@@ -321,8 +335,6 @@ class BackendPanelCatalogConsistencyTest {
     private static Path repositoryRoot() {
         return findRepositoryRoot(Path.of(".").toAbsolutePath());
     }
-
-    private record ManifestResource(String path, String platform) {}
 
     private record PanelMetadata(String id, String title, boolean actionCapable) {}
 

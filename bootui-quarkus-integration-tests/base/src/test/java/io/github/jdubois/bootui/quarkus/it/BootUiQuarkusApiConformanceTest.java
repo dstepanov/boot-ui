@@ -64,11 +64,6 @@ class BootUiQuarkusApiConformanceTest extends AbstractBootUiApiConformanceTest {
     }
 
     @Override
-    protected String expectedPanelsResource() {
-        return "/io/github/jdubois/bootui/conformance/expected-panels-quarkus.json";
-    }
-
-    @Override
     protected Runtime runtime() {
         return Runtime.QUARKUS;
     }

@@ -531,10 +531,12 @@ for populated, correctly-nested (`parentId`) trace ids — none of which a unit 
   `spring-boot-starter-web`) with `notes`/`scheduling`/`greeting` packages, seeded with a scheduled task and an H2
   datasource (Flyway + Liquibase migrations on separate baselined schemas) so the data-source-backed panels (Flyway,
   Liquibase, Database Connection Pools, SQL Trace) have something real to show.
-- **`bootui-conformance`** gained `expected-panels-webflux.json` — identical to `expected-panels-spring.json` except
-  `platform: "spring-boot-reactive"`, itself evidence the shared-contract thesis holds even in the golden fixture — and
-  the sample app's `WebFluxApiConformanceTest extends AbstractBootUiApiConformanceTest` reuses the entire shared HTTP
-  contract suite for free, exactly as the Quarkus adapter does.
+- **`bootui-conformance`** gained a `SPRING_WEBFLUX` runtime carrying `platform: "spring-boot-reactive"`. It once had
+  its own `expected-panels-webflux.json`, identical to the Spring one but for that discriminator — itself evidence the
+  shared-contract thesis holds even in the golden fixture, which is why all four collapsed into one shared
+  `expected-panels.json` when the Micronaut adapter would have added a fourth copy. The sample app's
+  `WebFluxApiConformanceTest extends AbstractBootUiApiConformanceTest` reuses the entire shared HTTP contract suite for
+  free, exactly as the Quarkus adapter does.
 - **`bootui-spring-sample-app/e2e/playwright.webflux.config.js`** and `tests-webflux/webflux-smoke.spec.js` are a second,
   separate Playwright config and test directory (not a new npm project), so the default `npm test` run against the
   servlet sample app is untouched. The WebFlux suite checks the platform manifest, navbar branding, a representative

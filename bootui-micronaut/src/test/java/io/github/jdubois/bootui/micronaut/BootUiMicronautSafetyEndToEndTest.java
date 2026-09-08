@@ -99,6 +99,41 @@ class BootUiMicronautSafetyEndToEndTest {
         });
     }
 
+    /**
+     * The filter matches {@code /**} rather than the console mount, and this is the case that makes that
+     * choice load-bearing: an unmatched {@code POST} under the BootUI surface resolves to no route at all, so
+     * a filter scoped to the controllers would never see it and Micronaut would answer a bare {@code 404}
+     * that had skipped the cross-site-write guard. A probe would then learn which console paths exist from
+     * across origins. It must be refused by the guard, with the guard's own body — not 404'"'"'d.
+     */
+    @Test
+    void rejectsACrossSiteWriteToAPathThatMatchesNoRoute() {
+        withServer(Map.of(), (client) -> {
+            HttpResponse<?> response = exchange(
+                    client,
+                    HttpRequest.POST("/bootui/api/does-not-exist", "{}").header("Origin", "http://evil.example"));
+
+            assertThat((Object) response.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(bodyOf(response)).isEqualTo("{\"error\":\"" + LocalhostGuard.MESSAGE_CROSS_SITE_WRITE + "\"}");
+        });
+    }
+
+    /**
+     * The same unroutable path, same-origin: the guard passes it on and routing answers. Which routing answer
+     * it is ({@code 404}, or {@code 405} where the path matches a route bound to another method) is
+     * Micronaut's business; what matters here is that it is not the guard's {@code 403}, so the assertion
+     * above is pinning the guard rather than an incidental rejection every request to this path would get.
+     */
+    @Test
+    void leavesASameOriginRequestToAPathThatMatchesNoRouteToTheRouter() {
+        withServer(Map.of(), (client) -> {
+            HttpResponse<?> response = exchange(client, HttpRequest.POST("/bootui/api/does-not-exist", "{}"));
+
+            assertThat((Object) response.getStatus()).isNotEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(bodyOf(response)).doesNotContain(LocalhostGuard.MESSAGE_CROSS_SITE_WRITE);
+        });
+    }
+
     // -----------------------------------------------------------------------
     // Security headers
     // -----------------------------------------------------------------------

@@ -51,9 +51,15 @@
             <groupId>io.micronaut</groupId>
             <artifactId>micronaut-runtime</artifactId>
         </dependency>
+        <!-- micronaut-http-server, NOT micronaut-http-server-netty: the adapter compiles against the
+             server abstraction (@ServerFilter, StreamedFile/SystemFile, EmbeddedServer, the Router) and
+             references no Netty type at all. Depending on the Netty runtime here would put a second server
+             implementation on the classpath of every consumer that runs micronaut-servlet on Jetty, Tomcat
+             or Undertow. The application brings its own server; this module only needs to be routable by
+             whichever one that is. -->
         <dependency>
             <groupId>io.micronaut</groupId>
-            <artifactId>micronaut-http-server-netty</artifactId>
+            <artifactId>micronaut-http-server</artifactId>
         </dependency>
 
         <!-- Plain Jackson 2 databind (the library, NOT micronaut-jackson-databind the JSON stack): BootUI's
@@ -80,9 +86,8 @@
             <scope>provided</scope>
         </dependency>
         <!-- Reactor, for the server-sent-event streams the live panels (Log Tail, Exceptions) subscribe to.
-             Micronaut's Netty server already brings it at runtime; it is declared explicitly here because
-             this module compiles against it, and because a library should not lean on a transitive runtime
-             dependency of its host. -->
+             Declared explicitly because this module compiles against it, and because a library must not lean
+             on a transitive dependency of whichever server runtime the application happens to run. -->
         <dependency>
             <groupId>io.projectreactor</groupId>
             <artifactId>reactor-core</artifactId>
@@ -260,6 +265,13 @@
             <artifactId>micronaut-test-junit5</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- A server runtime for the tests only: they boot the console on a real port under @MicronautTest.
+             A consumer picks its own, which is exactly why this is not a compile dependency above. -->
+        <dependency>
+            <groupId>io.micronaut</groupId>
+            <artifactId>micronaut-http-server-netty</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.micronaut</groupId>
             <artifactId>micronaut-http-client</artifactId>
@@ -310,12 +322,21 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <!--
+                        Each run is split two ways, and both are needed. The file pattern keeps the other
+                        run's tests out of JUnit discovery, which would otherwise fail to load a class whose
+                        integration is off this classpath. The JUnit tag then covers the case the pattern
+                        cannot: -Dtest=SomeTest overrides <includes>/<excludes> but is combined with
+                        <groups>, so running a single test from the command line would otherwise run it in
+                        both executions and fail in whichever one lacks the integration it needs.
+                    -->
                     <classpathDependencyExcludes>
                         <classpathDependencyExclude>io.micronaut.rabbitmq:micronaut-rabbitmq</classpathDependencyExclude>
                     </classpathDependencyExcludes>
                     <excludes>
                         <exclude>**/rabbit/*Test.java</exclude>
                     </excludes>
+                    <excludedGroups>rabbitmq</excludedGroups>
                 </configuration>
                 <executions>
                     <execution>
@@ -331,6 +352,9 @@
                             <includes>
                                 <include>**/rabbit/*Test.java</include>
                             </includes>
+                            <excludedGroups combine.self="override" />
+                            <groups>rabbitmq</groups>
+                            <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
                         </configuration>
                     </execution>
                 </executions>

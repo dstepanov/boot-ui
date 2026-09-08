@@ -26,8 +26,16 @@ import java.util.Objects;
  * highest-precedence (highest {@link PropertySource#getOrder() order}) of them — so a key set in both
  * {@code application.yml} and a system property is attributed to the system property that actually won.
  * Reading through the resolver rather than the raw source map also means a value that cannot be resolved
- * degrades to {@code null} instead of failing the enumeration, and no placeholder expansion is performed
- * here that could leak a secret past {@code SecretMasker}.
+ * degrades to {@code null} instead of failing the enumeration.
+ *
+ * <p>It does mean values are reported <em>expanded</em>: {@link Environment#getProperty} resolves
+ * {@code ${...}} placeholders, so a key whose raw text merely references a secret is reported holding that
+ * secret's value. Name-based masking cannot catch that — the referencing key is rarely named like a secret —
+ * so what carries this case is {@code SecretValueDetector}, which inspects the resolved text for
+ * high-confidence secret shapes (JWTs, PEM blocks, AWS keys, {@code ://user:pass@host} userinfo). Spring
+ * reports expanded values for the same reason, so both stacks mask exactly the same set; stating it here
+ * because the alternative reading — that expansion is avoided — would credit a defense that does not exist
+ * and hide the one that does, along with its limits.
  *
  * <p>Micronaut's environment-specific configuration files ({@code application-dev.yml} and friends) are
  * separate, named property sources, so they map directly onto {@link #profileSources()} — giving the

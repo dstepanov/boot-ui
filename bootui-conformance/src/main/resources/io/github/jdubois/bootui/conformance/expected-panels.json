@@ -1,6 +1,5 @@
 {
-  "_comment": "Golden manifest for the Spring WebFlux (reactive) adapter: the exact panels GET /bootui/api/panels must report, in registry order. Panel ids/titles/order are shared with the servlet Spring adapter (same BootUiPanels registry), so this list mirrors expected-panels-spring.json; only the platform discriminator differs (runtime availability for divergent panels such as http-sessions, spring-security, security, and rest-client-trace is computed by PanelsController, not encoded here). Keep in sync with BootUiPanels and bootui-ui/src/main/frontend/src/routes.js.",
-  "platform": "spring-boot-reactive",
+  "_comment": "Golden manifest for every BootUI adapter: the exact panels GET /bootui/api/panels must report, in registry order. Panel ids, titles and actionCapable come from the shared BootUiPanels registry, so they are identical on Spring MVC, Spring WebFlux, Quarkus and Micronaut — this file is the independent statement of what that registry is contracted to be, which is why it is checked in rather than derived from it (BackendPanelCatalogConsistencyTest compares the two). The per-stack $.platform discriminator is not here: it is the one thing that genuinely differs, and it comes from BootUiApiContractCatalog.Runtime.platform(). Runtime availability is computed by each adapter and deliberately not encoded here. Keep in sync with BootUiPanels and bootui-ui/src/main/frontend/src/routes.js.",
   "panels": [
     { "id": "overview", "title": "Overview", "actionCapable": false },
     { "id": "health", "title": "Health", "actionCapable": false },

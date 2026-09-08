@@ -57,11 +57,6 @@ class WebFluxApiConformanceTest extends AbstractBootUiApiConformanceTest {
     }
 
     @Override
-    protected String expectedPanelsResource() {
-        return "/io/github/jdubois/bootui/conformance/expected-panels-webflux.json";
-    }
-
-    @Override
     protected Runtime runtime() {
         return Runtime.SPRING_WEBFLUX;
     }

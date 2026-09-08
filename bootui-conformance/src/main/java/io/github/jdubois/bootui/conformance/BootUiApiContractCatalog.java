@@ -22,9 +22,10 @@ public final class BootUiApiContractCatalog {
             Set.of(Runtime.SPRING_MVC, Runtime.SPRING_WEBFLUX, Runtime.QUARKUS, Runtime.MICRONAUT);
 
     /**
-     * The runtimes other than Micronaut. Used for the handful of actions whose panel has no Micronaut
-     * binding at all — the Kafka and RabbitMQ captures (MN-3, MN-6), the Security advisor (MN-8) and the
-     * platform application advisor (MN-4). Scoping them here rather than leaving them in {@link #ALL} keeps
+     * The runtimes other than Micronaut. Used for the two actions whose panel has no Micronaut binding at
+     * all — the Security advisor (MN-8) and the platform application advisor (MN-4), both of which need a
+     * ruleset written in the engine rather than an adapter binding. Scoping them here rather than leaving
+     * them in {@link #ALL} keeps
      * the catalog an honest statement of what each runtime promises: the panels are reported unavailable by
      * {@code MicronautPanelAvailability}, so a contract claiming a write route for them would be a claim no
      * adapter makes. This mirrors {@code McpToolCatalog.NON_MICRONAUT_STACKS} in the engine.
@@ -562,11 +563,29 @@ public final class BootUiApiContractCatalog {
         actions.add(new ActionContract(id, null, method, path, runtimes, blockedByGlobalReadOnly));
     }
 
+    /**
+     * The request stacks the contract is promised on, each carrying the {@code $.platform} discriminator its
+     * adapter reports in {@code GET /bootui/api/panels}. Keeping the string here rather than in a per-stack
+     * fixture is what lets all four stacks share one golden panel manifest: the panel list is identical by
+     * construction (the shared {@code BootUiPanels} registry), and the platform was the only thing that ever
+     * differed between the copies.
+     */
     public enum Runtime {
-        SPRING_MVC,
-        SPRING_WEBFLUX,
-        QUARKUS,
-        MICRONAUT
+        SPRING_MVC("spring-boot"),
+        SPRING_WEBFLUX("spring-boot-reactive"),
+        QUARKUS("quarkus"),
+        MICRONAUT("micronaut");
+
+        private final String platform;
+
+        Runtime(String platform) {
+            this.platform = platform;
+        }
+
+        /** The value {@code $.platform} must carry on this stack. */
+        public String platform() {
+            return platform;
+        }
     }
 
     public enum JsonType {

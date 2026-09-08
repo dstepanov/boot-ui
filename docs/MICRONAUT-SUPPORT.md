@@ -290,7 +290,7 @@ ambiguity. That is why `bootui-micronaut` excludes `micronaut-rabbitmq` from its
 surefire `classpathDependencyExcludes` in its POM) rather than carrying both.
 
 The shared `bootui-conformance` suite now has a Micronaut runner: `bootui-micronaut-sample-app` runs the API,
-CLI and MCP contracts against `Runtime.MICRONAUT` with an `expected-panels-micronaut.json` manifest, alongside
+CLI and MCP contracts against `Runtime.MICRONAUT` with the shared `expected-panels.json` golden manifest, alongside
 the Spring and Quarkus runners. The three panels above are scoped out of the contracts they cannot satisfy
 (`BootUiApiContractCatalog.NON_MICRONAUT`), mirroring `McpToolCatalog.NON_MICRONAUT_STACKS`, rather than left
 failing.

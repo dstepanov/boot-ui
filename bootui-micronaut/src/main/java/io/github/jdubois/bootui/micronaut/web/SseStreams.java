@@ -16,6 +16,11 @@ import reactor.core.publisher.FluxSink;
  * the stream carries a content-free "something changed" signal with a {@link FluxSink.OverflowStrategy#LATEST}
  * policy, so a burst of a thousand captured events becomes one notification the client answers with one
  * re-fetch, rather than a thousand payloads pushed at a browser that only re-renders once.
+ *
+ * <p>A slot is taken before the subscription is attempted, and there is exactly one window in which nothing
+ * would give it back: a change source that throws from {@code subscribe}, before the dispose hook that
+ * releases the slot has been registered. Both builders close that window explicitly, because the cost of
+ * missing it is not a failed request but a slot lost for the lifetime of the application.
  */
 public final class SseStreams {
 
@@ -42,11 +47,22 @@ public final class SseStreams {
                         sink.complete();
                         return;
                     }
-                    Runnable unsubscribe = source.subscribe(() -> {
-                        if (!sink.isCancelled()) {
-                            sink.next(tick());
-                        }
-                    });
+                    Runnable unsubscribe;
+                    try {
+                        unsubscribe = source.subscribe(() -> {
+                            if (!sink.isCancelled()) {
+                                sink.next(tick());
+                            }
+                        });
+                    } catch (RuntimeException ex) {
+                        // The slot was taken before the subscription was attempted, so it has to be handed
+                        // back here: nothing else will, since there is no subscription to dispose of yet and
+                        // the dispose hook that would release it is registered below. Leaking it would cost
+                        // the panel one of its concurrent-stream slots permanently.
+                        openStreams.decrementAndGet();
+                        sink.error(ex);
+                        return;
+                    }
                     sink.onDispose(() -> {
                         unsubscribe.run();
                         openStreams.decrementAndGet();
@@ -68,11 +84,20 @@ public final class SseStreams {
                         sink.complete();
                         return;
                     }
-                    Subscription<T> subscription = source.subscribe(item -> {
-                        if (!sink.isCancelled()) {
-                            sink.next(Event.of(item).name(eventName));
-                        }
-                    });
+                    Subscription<T> subscription;
+                    try {
+                        subscription = source.subscribe(item -> {
+                            if (!sink.isCancelled()) {
+                                sink.next(Event.of(item).name(eventName));
+                            }
+                        });
+                    } catch (RuntimeException ex) {
+                        // See updates(): the slot is taken before the subscription exists, so a failure here
+                        // is the one path that would lose it for good.
+                        openStreams.decrementAndGet();
+                        sink.error(ex);
+                        return;
+                    }
                     sink.onDispose(() -> {
                         subscription.unsubscribe().run();
                         openStreams.decrementAndGet();

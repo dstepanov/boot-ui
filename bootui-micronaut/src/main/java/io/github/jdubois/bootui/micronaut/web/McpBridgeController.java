@@ -24,12 +24,19 @@ import io.micronaut.http.annotation.Produces;
 import io.micronaut.scheduling.TaskExecutors;
 import io.micronaut.scheduling.annotation.ExecuteOn;
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 
 /**
  * The MCP JSON-RPC transport ({@code POST /bootui/api/mcp}) an AI agent connects to.
  *
  * <p>A thin transport shell over the shared engine dispatcher: this class owns only the protocol-version
- * check, the payload bound, and the JSON-RPC envelope shapes. Every decision that matters — which tools
+ * check, the payload bound, and the JSON-RPC envelope shapes.
+ *
+ * <p>The body is bound as an {@link InputStream}, not a {@code byte[]}, so that {@link McpPayloadReader}
+ * really is the payload bound it claims to be: it stops at {@code bootui.mcp.max-payload-bytes} while
+ * reading, whereas a materialised array would already have been buffered in full and the effective ceiling
+ * would silently become the host's {@code micronaut.server.max-request-size}. That is the same binding the
+ * Quarkus adapter's {@code McpBridgeResource} uses, and it is why this route runs on the blocking executor. Every decision that matters — which tools
  * exist, whether a panel allows the call, the result and concurrency bounds — belongs to the engine, so an
  * agent sees identical behavior on every stack.
  *
@@ -59,7 +66,7 @@ public class McpBridgeController {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public HttpResponse<?> rpc(
-            @Body @Nullable byte[] requestBody,
+            @Body @Nullable InputStream requestBody,
             @Header(value = McpProtocol.PROTOCOL_VERSION_HEADER, defaultValue = "") @Nullable String protocolVersion) {
         if (protocolVersion != null
                 && !protocolVersion.isBlank()
@@ -70,7 +77,7 @@ public class McpBridgeController {
         byte[] payload;
         try {
             payload = McpPayloadReader.read(
-                    new ByteArrayInputStream(requestBody == null ? new byte[0] : requestBody), maxPayloadBytes);
+                    requestBody == null ? new ByteArrayInputStream(new byte[0]) : requestBody, maxPayloadBytes);
         } catch (McpPayloadReader.PayloadTooLargeException ex) {
             return json(413, error(null, McpProtocol.PARSE_ERROR, PAYLOAD_LIMIT_MESSAGE));
         } catch (IllegalArgumentException ex) {
