@@ -2,8 +2,6 @@ package io.github.jdubois.bootui.micronaut.kafka;
 
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.micronaut.RequiresBootUi;
-import io.micronaut.configuration.kafka.KafkaProducerFactory;
-import io.micronaut.context.annotation.Requires;
 import io.micronaut.context.event.BeanCreatedEvent;
 import io.micronaut.context.event.BeanCreatedEventListener;
 import io.micronaut.core.annotation.Order;
@@ -43,7 +41,6 @@ import org.slf4j.LoggerFactory;
  * never cost the application a message.
  */
 @RequiresBootUi
-@Requires(classes = KafkaProducerFactory.class)
 @Singleton
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class MicronautKafkaProducerCapture implements BeanCreatedEventListener<Producer<?, ?>> {

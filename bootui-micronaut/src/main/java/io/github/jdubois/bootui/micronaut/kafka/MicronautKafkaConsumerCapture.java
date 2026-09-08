@@ -3,7 +3,6 @@ package io.github.jdubois.bootui.micronaut.kafka;
 import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.micronaut.RequiresBootUi;
 import io.micronaut.configuration.kafka.KafkaConsumerFactory;
-import io.micronaut.context.annotation.Requires;
 import io.micronaut.context.event.BeanCreatedEvent;
 import io.micronaut.context.event.BeanCreatedEventListener;
 import io.micronaut.core.annotation.Order;
@@ -40,7 +39,6 @@ import org.slf4j.LoggerFactory;
  * records are returned to the consumer untouched.
  */
 @RequiresBootUi
-@Requires(classes = KafkaConsumerFactory.class)
 @Singleton
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class MicronautKafkaConsumerCapture implements BeanCreatedEventListener<Consumer<?, ?>> {

@@ -2,12 +2,15 @@ package io.github.jdubois.bootui.micronaut.serde;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micronaut.core.annotation.AnnotationMetadata;
+import io.micronaut.core.beans.BeanIntrospection;
+import io.micronaut.core.beans.BeanIntrospector;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Delete;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.Post;
 import io.micronaut.http.annotation.Put;
-import io.micronaut.serde.annotation.SerdeImport;
+import io.micronaut.serde.config.annotation.SerdeConfig;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.GenericArrayType;
@@ -56,6 +59,13 @@ import org.junit.jupiter.api.Test;
  *       a nested DTO living outside the core package, such as a request record a controller declares for its
  *       own body.
  * </ul>
+ *
+ * <p>"Imported" is read from the {@link BeanIntrospector} rather than from the {@code @SerdeImport}
+ * annotations, because since those collapsed into a single {@code packageName} import the annotations no
+ * longer enumerate anything. Asking for the generated introspection is also the stronger question: it is the
+ * artifact Serde actually consults at request time, so this checks the outcome rather than the declaration
+ * that is supposed to produce it — a {@code packageName} that stops resolving would fail here, where reading
+ * the annotation back would not.
  */
 class BootUiSerdeImportsTest {
 
@@ -65,6 +75,9 @@ class BootUiSerdeImportsTest {
 
     /** Only BootUI's own types need an import; the JDK's and Micronaut's are Serde's own business. */
     private static final String BOOTUI_PACKAGE_PREFIX = "io.github.jdubois.bootui.";
+
+    /** How {@code micronaut-serde-processor} spells {@code JsonInclude.Include.ALWAYS} in the metadata. */
+    private static final String ALWAYS = "ALWAYS";
 
     private static final List<Class<? extends Annotation>> ROUTE_ANNOTATIONS =
             List.of(Get.class, Post.class, Put.class, Delete.class);
@@ -105,27 +118,43 @@ class BootUiSerdeImportsTest {
     }
 
     /**
-     * Every import must also carry the always-include mix-in.
+     * Every imported type must also carry the always-include mix-in.
      *
      * <p>An introspection makes a DTO writable; the mix-in decides which of its fields actually get written.
      * Without it Serde falls back to the global {@code serde.serialization.inclusion}, which defaults to
      * {@code NON_EMPTY} and silently drops empty lists, empty maps and nulls — a wire-contract break that no
-     * 500 announces and that only shows up as a panel failing to render its empty state. Copying an existing
-     * line is how a new import gets written, so the mix-in normally comes along for free; this assertion is
-     * what catches the one that does not.
+     * 500 announces and that only shows up as a panel failing to render its empty state.
+     *
+     * <p>Reading it off the generated introspection rather than the {@code @SerdeImport} declaration is what
+     * makes this meaningful for the package import: the mix-in is written once there, so the question worth
+     * asking is no longer "did someone forget a line?" but "did the processor merge it into every type the
+     * package import reached?".
      */
     @Test
     void appliesTheAlwaysIncludeMixinToEveryImport() {
-        List<String> withoutMixin = Stream.of(BootUiSerdeImports.class.getAnnotationsByType(SerdeImport.class))
-                .filter(declared -> !AlwaysInclude.class.equals(declared.mixin()))
-                .map(declared -> declared.value().getName())
+        List<String> withoutMixin = importedTypes().stream()
+                .filter(Class::isRecord)
+                .filter(type -> !alwaysIncludes(type))
+                .map(Class::getName)
                 .sorted()
                 .toList();
 
         assertThat(withoutMixin)
-                .as("@SerdeImport declarations missing mixin = AlwaysInclude.class — their empty collections, "
-                        + "empty maps and null fields are dropped under micronaut-serde-jackson")
+                .as("imported types whose introspection does not carry SerdeConfig(include = ALWAYS, "
+                        + "includeContent = ALWAYS) — their empty collections, empty maps and null fields are "
+                        + "dropped under micronaut-serde-jackson")
                 .isEmpty();
+    }
+
+    private static boolean alwaysIncludes(Class<?> type) {
+        AnnotationMetadata metadata = BeanIntrospector.SHARED
+                .findIntrospection(type)
+                .map(BeanIntrospection::getAnnotationMetadata)
+                .orElse(AnnotationMetadata.EMPTY_METADATA);
+        return ALWAYS.equals(metadata.stringValue(SerdeConfig.class, SerdeConfig.INCLUDE)
+                        .orElse(null))
+                && ALWAYS.equals(metadata.stringValue(SerdeConfig.class, SerdeConfig.INCLUDE_CONTENT)
+                        .orElse(null));
     }
 
     /** A sanity check on the guard itself: an empty or accidentally-cleared holder must not pass silently. */
@@ -135,10 +164,14 @@ class BootUiSerdeImportsTest {
                 .hasSizeGreaterThanOrEqualTo(classesIn(DTO_PACKAGE).size());
     }
 
+    /** The BootUI types the compiler actually generated a Serde introspection for. */
     private static Set<Class<?>> importedTypes() {
         Set<Class<?>> types = new TreeSet<>(Comparator.comparing(Class::getName));
-        for (SerdeImport declared : BootUiSerdeImports.class.getAnnotationsByType(SerdeImport.class)) {
-            types.add(declared.value());
+        for (BeanIntrospection<Object> introspection : BeanIntrospector.SHARED.findIntrospections(reference -> true)) {
+            Class<?> type = introspection.getBeanType();
+            if (type.getName().startsWith(BOOTUI_PACKAGE_PREFIX)) {
+                types.add(type);
+            }
         }
         return types;
     }

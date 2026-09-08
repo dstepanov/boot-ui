@@ -4,7 +4,6 @@ import io.github.jdubois.bootui.engine.email.CapturedAttachment;
 import io.github.jdubois.bootui.engine.email.CapturedEmail;
 import io.github.jdubois.bootui.engine.email.EmailCaptureService;
 import io.github.jdubois.bootui.micronaut.RequiresBootUi;
-import io.micronaut.context.annotation.Requires;
 import io.micronaut.context.event.BeanCreatedEvent;
 import io.micronaut.context.event.BeanCreatedEventListener;
 import io.micronaut.core.annotation.Order;
@@ -37,7 +36,6 @@ import java.util.List;
  * reports these as sent.
  */
 @RequiresBootUi
-@Requires(classes = TransactionalEmailSender.class)
 @Singleton
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class BootUiEmailCaptureListener implements BeanCreatedEventListener<TransactionalEmailSender<?, ?>> {

@@ -9,7 +9,6 @@ import io.github.jdubois.bootui.engine.telemetry.TelemetryStore;
 import io.github.jdubois.bootui.micronaut.RequiresBootUi;
 import io.github.jdubois.bootui.spi.TraceIdProvider;
 import io.micronaut.context.annotation.Factory;
-import io.micronaut.context.annotation.Requires;
 import io.micronaut.context.env.Environment;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
@@ -31,7 +30,6 @@ import jakarta.inject.Singleton;
  * exchange, exception or SQL statement with its owning trace.
  */
 @RequiresBootUi
-@Requires(classes = SpanProcessor.class)
 @Factory
 public class BootUiOtelFactory {
 

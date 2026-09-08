@@ -207,6 +207,23 @@ Exceptions, security and retry and WebSocket application events, a `@ClientFilte
 `BeanCreatedEventListener` wrappers for datasources (SQL Trace), the email sender, the Kafka producers and
 consumers, and the RabbitMQ channel pool.
 
+Every optional integration is a `provided` dependency of `bootui-micronaut`: on the compiler's classpath so
+the binding can be written against the real API, absent from an application that did not add it. What keeps
+that safe is that no bean may reference such an API unless its existence is guarded — otherwise Micronaut
+creates it on an application without the library and it fails with `NoClassDefFoundError`, at startup for a
+`@Context` bean and on the first request for a controller. The guard is declared once per feature slice, in a
+`package-info.java` carrying `@Configuration` and `@Requires`, which is also where a module's own off switch
+is honoured (`micronaut.security.enabled`, `kafka.enabled`, `rabbitmq.enabled`) — the idiom
+`micronaut-tracing`'s own JDBC instrumentation uses. `MicronautOptionalDependencyGuardTest` fails the build if
+a bean touches a `provided` API without one, and if a new `provided` dependency is added without saying which
+packages it makes optional.
+
+The controllers deliberately sit outside that rule, and it is checked that they do: none references an
+optional API. A panel whose integration is missing is answered by the always-present engine service reporting
+`available: false` with the dependency it needs, which is the same honest-unavailable contract the Spring and
+Quarkus adapters answer — and what lets `/bootui/api/panels` describe the whole registry on every stack
+rather than 404-ing the parts this application did not install.
+
 Three limits are reported honestly rather than papered over:
 
 - **WebSocket frame capture** is unsupported. Micronaut binds messages directly to the annotated handler at

@@ -4,7 +4,6 @@ import io.github.jdubois.bootui.engine.kafka.KafkaActivityRecorder;
 import io.github.jdubois.bootui.micronaut.RequiresBootUi;
 import io.micronaut.configuration.kafka.exceptions.KafkaListenerException;
 import io.micronaut.configuration.kafka.exceptions.KafkaListenerExceptionHandler;
-import io.micronaut.context.annotation.Requires;
 import io.micronaut.context.event.BeanCreatedEvent;
 import io.micronaut.context.event.BeanCreatedEventListener;
 import io.micronaut.core.annotation.Order;
@@ -33,7 +32,6 @@ import org.slf4j.LoggerFactory;
  * swallowed so it can never suppress the application's own error handling.
  */
 @RequiresBootUi
-@Requires(classes = KafkaListenerExceptionHandler.class)
 @Singleton
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class MicronautKafkaListenerFailureCapture implements BeanCreatedEventListener<KafkaListenerExceptionHandler> {

@@ -2,7 +2,6 @@ package io.github.jdubois.bootui.micronaut.websocket;
 
 import io.github.jdubois.bootui.micronaut.RequiresBootUi;
 import io.github.jdubois.bootui.spi.WebSocketSessionSnapshot;
-import io.micronaut.context.annotation.Requires;
 import io.micronaut.context.event.ApplicationEventListener;
 import io.micronaut.websocket.WebSocketSession;
 import io.micronaut.websocket.event.WebSocketSessionClosedEvent;
@@ -29,7 +28,6 @@ import java.util.Map;
  * ring, so a reconnect loop cannot grow memory without limit.
  */
 @RequiresBootUi
-@Requires(classes = WebSocketSessionOpenEvent.class)
 @Singleton
 public class MicronautWebSocketConnectionCapture implements ApplicationEventListener<Object> {
 

@@ -3,7 +3,6 @@ package io.github.jdubois.bootui.micronaut.rabbit;
 import com.rabbitmq.client.Envelope;
 import io.github.jdubois.bootui.engine.rabbit.RabbitActivityRecorder;
 import io.github.jdubois.bootui.micronaut.RequiresBootUi;
-import io.micronaut.context.annotation.Requires;
 import io.micronaut.context.event.BeanCreatedEvent;
 import io.micronaut.context.event.BeanCreatedEventListener;
 import io.micronaut.core.annotation.Order;
@@ -34,7 +33,6 @@ import org.slf4j.LoggerFactory;
  * swallowed so it can never suppress it.
  */
 @RequiresBootUi
-@Requires(classes = RabbitListenerExceptionHandler.class)
 @Singleton
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class MicronautRabbitListenerFailureCapture implements BeanCreatedEventListener<RabbitListenerExceptionHandler> {

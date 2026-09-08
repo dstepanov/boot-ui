@@ -63,6 +63,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   integration exposes a per-record completion callback on Micronaut 4. Note that `micronaut-kafka` and
   `micronaut-rabbitmq` each declare an `ExecutorConfiguration` bean named `consumer`, so an application carrying both
   does not start, with or without BootUI.
+- **Every optional integration the Micronaut adapter binds to is guarded at the bean level.** The adapter
+  declares each one (`micronaut-security`, `micronaut-kafka`, `micronaut-rabbitmq`, `micronaut-email`,
+  `micronaut-websocket`, the OpenTelemetry SDK, Logback) as a `provided` dependency, so it compiles against the
+  real API and an application that did not add it never gets it. Each feature slice now states that dependency
+  once in a `package-info.java` carrying `@Configuration` and `@Requires`, instead of repeating it on every
+  class, and honours the module's own off switch where it has one — `micronaut.security.enabled`,
+  `kafka.enabled`, `rabbitmq.enabled`. This fixes the Logback capture, which was `@Context`-scoped and so was
+  instantiated during startup: on an application using another SLF4J backend its `@PostConstruct` failed with
+  `NoClassDefFoundError` rather than degrading to the empty Log Tail and Exceptions panels its own
+  documentation promised. A new `MicronautOptionalDependencyGuardTest` fails the build if any bean references a
+  `provided` API without a guard, or if a `provided` dependency is added without declaring the packages it
+  makes optional.
 - **A `MICRONAUT` stack in the engine's MCP tool catalog.** `McpToolCatalog` gains a fourth stack, and the tools whose
   backing panel has no Micronaut binding yet — `spring_scan`, `get_spring_report`, `security_scan`,
   `get_security_report`, `get_dev_services` — are excluded from it. An

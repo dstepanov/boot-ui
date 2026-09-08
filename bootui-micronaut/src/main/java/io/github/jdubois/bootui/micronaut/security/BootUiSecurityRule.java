@@ -2,7 +2,6 @@ package io.github.jdubois.bootui.micronaut.security;
 
 import io.github.jdubois.bootui.micronaut.MicronautBootUiPaths;
 import io.github.jdubois.bootui.micronaut.RequiresBootUi;
-import io.micronaut.context.annotation.Requires;
 import io.micronaut.context.env.Environment;
 import io.micronaut.core.annotation.Order;
 import io.micronaut.core.order.Ordered;
@@ -41,7 +40,6 @@ import reactor.core.publisher.Mono;
  * occupy would hand anonymous access to whatever the application itself serves there.
  */
 @RequiresBootUi
-@Requires(classes = SecurityRule.class)
 @Singleton
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class BootUiSecurityRule implements SecurityRule<HttpRequest<?>> {

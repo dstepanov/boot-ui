@@ -5,7 +5,6 @@ import io.github.jdubois.bootui.engine.security.SecurityEventBuffer;
 import io.github.jdubois.bootui.micronaut.RequiresBootUi;
 import io.github.jdubois.bootui.spi.TraceIdProvider;
 import io.micronaut.context.BeanContext;
-import io.micronaut.context.annotation.Requires;
 import io.micronaut.context.event.ApplicationEventListener;
 import io.micronaut.security.authentication.Authentication;
 import io.micronaut.security.event.LoginFailedEvent;
@@ -29,7 +28,6 @@ import java.util.Map;
  * might be mistaken for "no failed logins".
  */
 @RequiresBootUi
-@Requires(classes = LoginSuccessfulEvent.class)
 @Singleton
 public class MicronautSecurityEventCapture implements ApplicationEventListener<Object> {
 
