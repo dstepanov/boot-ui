@@ -40,6 +40,11 @@ import java.util.Set;
  * Health reports the real aggregated indicators when {@code micronaut-management} is present and otherwise
  * renders setup guidance.
  *
+ * <p>The two messaging panels — <strong>Kafka</strong> and <strong>RabbitMQ</strong> — light up whenever
+ * {@code micronaut-kafka} / {@code micronaut-rabbitmq} is on the classpath, which is what makes BootUI's
+ * capture bindings (the producer/consumer wrappers and the channel-pool wrapper) able to record anything at
+ * all; without the library there is no messaging for them to describe.
+ *
  * <p>Every other panel is reported unavailable with a clear, honest reason, distinguishing the two cases
  * the shared UI renders differently: {@link #NOT_APPLICABLE} for a capability that has no Micronaut
  * analogue at all, and {@link #NOT_YET_AVAILABLE} for one whose Micronaut binding simply has not been
@@ -206,7 +211,16 @@ public class MicronautPanelAvailability {
             Map.entry(
                     BootUiPanels.EMAIL,
                     "Not available: micronaut-email is not on the classpath. Add it (with a sender such as"
-                            + " micronaut-email-javamail) to see the messages this application sends."));
+                            + " micronaut-email-javamail) to see the messages this application sends."),
+            Map.entry(
+                    BootUiPanels.KAFKA,
+                    "Not available: micronaut-kafka is not on the classpath. Add it (with a @KafkaClient or a"
+                            + " @KafkaListener) to see the messages this application publishes and receives."),
+            Map.entry(
+                    BootUiPanels.RABBITMQ,
+                    "Not available: micronaut-rabbitmq is not on the classpath. Add it (with a @RabbitClient or"
+                            + " a @RabbitListener) to see the messages this application publishes and"
+                            + " receives."));
 
     /** The Flyway panel's reason when {@code micronaut-flyway} is present but nothing is configured for it. */
     private static final String FLYWAY_UNCONFIGURED =
@@ -244,6 +258,12 @@ public class MicronautPanelAvailability {
     /** Whether micronaut-email is on the classpath. */
     private static final boolean EMAIL_PRESENT = isPresent("io.micronaut.email.TransactionalEmailSender");
 
+    /** Whether micronaut-kafka is on the classpath — the producers and consumers BootUI captures. */
+    private static final boolean KAFKA_PRESENT = isPresent("io.micronaut.configuration.kafka.KafkaProducerFactory");
+
+    /** Whether micronaut-rabbitmq is on the classpath — the channel pool BootUI captures. */
+    private static final boolean RABBIT_PRESENT = isPresent("io.micronaut.rabbitmq.connect.ChannelPool");
+
     /** Whether micronaut-retry is on the classpath. */
     private static final boolean RETRY_PRESENT = isPresent("io.micronaut.retry.annotation.Retryable");
 
@@ -269,7 +289,9 @@ public class MicronautPanelAvailability {
             BootUiPanels.HIBERNATE_STATISTICS, HIBERNATE_PRESENT,
             BootUiPanels.WEBSOCKETS, WEBSOCKET_PRESENT,
             BootUiPanels.FAULT_TOLERANCE, RETRY_PRESENT,
-            BootUiPanels.EMAIL, EMAIL_PRESENT);
+            BootUiPanels.EMAIL, EMAIL_PRESENT,
+            BootUiPanels.KAFKA, KAFKA_PRESENT,
+            BootUiPanels.RABBITMQ, RABBIT_PRESENT);
 
     private static boolean isPresent(String className) {
         try {

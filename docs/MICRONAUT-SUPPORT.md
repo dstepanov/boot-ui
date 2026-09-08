@@ -182,8 +182,8 @@ advisors.
 
 **Live when the integration is present** — Database Connection Pools (HikariCP), Cache
 (`micronaut-cache-*`), Hibernate and Hibernate Statistics (Hibernate ORM), WebSockets
-(`micronaut-websocket`), Fault Tolerance (`micronaut-retry`), Email (`micronaut-email`). Each names its
-missing dependency when it is dark.
+(`micronaut-websocket`), Fault Tolerance (`micronaut-retry`), Email (`micronaut-email`), Kafka
+(`micronaut-kafka`), RabbitMQ (`micronaut-rabbitmq`). Each names its missing dependency when it is dark.
 
 **Live when the integration is configured** — Flyway and Liquibase need more than `micronaut-flyway` /
 `micronaut-liquibase` on the classpath. Each lights up only when at least one enabled
@@ -204,7 +204,8 @@ are read live; `@Scheduled`, `@Error`, `ExceptionHandler`, `@Retryable`/`@Circui
 `@ServerWebSocket` inventories come from compile-time bean metadata; and the capture points hang off seams
 Micronaut already publishes — a server filter for HTTP exchanges, Logback appenders for the Log Tail and
 Exceptions, security and retry and WebSocket application events, a `@ClientFilter` for outbound calls, and
-`BeanCreatedEventListener` wrappers for datasources (SQL Trace) and the email sender.
+`BeanCreatedEventListener` wrappers for datasources (SQL Trace), the email sender, the Kafka producers and
+consumers, and the RabbitMQ channel pool.
 
 Three limits are reported honestly rather than papered over:
 
@@ -228,13 +229,8 @@ is no runtime condition graph or step timeline), **Spring Security** and **Sprin
 
 ## What is not ported yet
 
-Five panels remain, each reported honestly as *not yet available*:
+Three panels remain, each reported honestly as *not yet available*:
 
-- **Kafka** and **RabbitMQ**. The engine's activity recorders are already wired (which is why the Live
-  Activity timeline handles their absence rather than failing), but neither has a Micronaut capture point
-  yet. Micronaut Kafka publishes no send/receive event, so capture would mean contributing Kafka's own
-  `interceptor.classes` as a default property source and reaching the recorder from an interceptor Kafka
-  instantiates reflectively — workable, but it deserves its own change.
 - **Dev Services**. The Micronaut analogue is Micronaut Test Resources; reading which containers it started
   needs its client, and the panel should report resolved resources rather than guess.
 - **Security advisor** and the platform **application advisor** (`spring` panel id). Both need a Micronaut
@@ -242,8 +238,42 @@ Five panels remain, each reported honestly as *not yet available*:
   the latter — rather than an adapter binding. The MCP catalog already excludes both from the Micronaut
   stack, so no agent is offered a tool that cannot run.
 
+### Messaging capture
+
+**Kafka** and **RabbitMQ** are live, gated on `micronaut-kafka` / `micronaut-rabbitmq` being on the
+classpath. Micronaut publishes no send or receive event, so capture is installed at the beans the
+integrations themselves hand out, through the `BeanCreatedEventListener` seam the adapter already uses for
+datasources and the email sender — the same seam `micronaut-kafka` uses for Brave tracing and
+`micronaut-rabbitmq` for Micrometer metrics:
+
+- **Kafka.** Every `Producer` bean is wrapped so both `send` overloads run through
+  `send(record, callback)` with a capturing callback, which is what gives Micronaut producer sends a real
+  duration (the Spring adapter's `ProducerListener` has no send-start timestamp to measure from). Every
+  `Consumer` bean is wrapped so each record `poll` returns is recorded.
+- **RabbitMQ.** The `ChannelPool` bean is wrapped so the channels it hands out record `basicPublish` and
+  wrap the consumer passed to `basicConsume`. Everything `micronaut-rabbitmq` does — a `@RabbitClient`
+  publish through `ReactorReactivePublisher`, a `@RabbitListener` subscription, hand-written channel work —
+  draws its channel from that pool, so one seam covers both directions.
+
+Two honest differences from the Spring adapter follow from what the runtimes expose:
+
+- **A rejected message is two entries, not one.** Spring Kafka's `RecordInterceptor` brackets the listener
+  method, so one entry carries the listener's own outcome. Micronaut has no per-record completion callback
+  on either integration (`ConsumerRecordInterceptor` arrived in micronaut-kafka 6, which targets Micronaut 5;
+  the platform BOM here pins 5.9.0), and `micronaut-rabbitmq` catches a listener's exception inside its own
+  consumer. Failures are therefore captured from `KafkaListenerExceptionHandler` /
+  `RabbitListenerExceptionHandler`, so a message the listener rejects shows as the delivery followed by its
+  failure rather than as one combined entry.
+- **Consumed Kafka records carry no processing duration**, for the same reason: the transport seam knows when
+  a record arrived, not how long the listener took. Published messages and RabbitMQ deliveries are timed.
+
+An application that adds **both** `micronaut-kafka` and `micronaut-rabbitmq` will not start, on BootUI or
+without it: each declares an `ExecutorConfiguration` bean named `consumer`, and Micronaut refuses the
+ambiguity. That is why `bootui-micronaut` excludes `micronaut-rabbitmq` from its own test classpath (see the
+surefire `classpathDependencyExcludes` in its POM) rather than carrying both.
+
 The shared `bootui-conformance` suite now has a Micronaut runner: `bootui-micronaut-sample-app` runs the API,
 CLI and MCP contracts against `Runtime.MICRONAUT` with an `expected-panels-micronaut.json` manifest, alongside
-the Spring and Quarkus runners. The five panels above are scoped out of the contracts they cannot satisfy
+the Spring and Quarkus runners. The three panels above are scoped out of the contracts they cannot satisfy
 (`BootUiApiContractCatalog.NON_MICRONAUT`), mirroring `McpToolCatalog.NON_MICRONAUT_STACKS`, rather than left
 failing.

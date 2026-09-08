@@ -197,12 +197,16 @@ Client**, **Vulnerabilities**, **MCP Server**, **Command Line**, and the **Memor
 `micronaut-micrometer` are present.
 
 Panels that light up with their integration: **Database Connection Pools** (HikariCP), **Cache**, **Hibernate** and
-**Hibernate Statistics**, **WebSockets**, **Fault Tolerance**, **Email**. **Flyway** and **Liquibase** light up once a
+**Hibernate Statistics**, **WebSockets**, **Fault Tolerance**, **Email**, **Kafka** (`micronaut-kafka`) and
+**RabbitMQ** (`micronaut-rabbitmq`). **Flyway** and **Liquibase** light up once a
 migration is configured, not merely once the library is added: an enabled `flyway.datasources.<name>` /
 `liquibase.datasources.<name>` entry backed by a datasource of the same name. **GitHub**, **Copilot** and **Claude
 Code** light up when the working directory or the agent's session directory says so.
 
 Panels that target Spring-specific runtime concepts — GraalVM and CRaC readiness, Conditions, Startup Timeline, HTTP
 Sessions, Spring Data, Spring Security, DevTools and Transactions — are marked *not applicable* on Micronaut, each with
-its own reason. Kafka, RabbitMQ, Dev Services, the Security advisor and the platform application advisor are marked
-*not yet available*: see [Micronaut support](../MICRONAUT-SUPPORT.md) for why and what each would take.
+its own reason. Dev Services, the Security advisor and the platform application advisor are marked *not yet
+available*: see [Micronaut support](../MICRONAUT-SUPPORT.md) for why and what each would take.
+
+Note that `micronaut-kafka` and `micronaut-rabbitmq` cannot be used together in one application: each declares an
+`ExecutorConfiguration` bean named `consumer`, so the context fails to start with or without BootUI.

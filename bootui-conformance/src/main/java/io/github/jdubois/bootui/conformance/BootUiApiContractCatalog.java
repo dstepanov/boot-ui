@@ -387,8 +387,8 @@ public final class BootUiApiContractCatalog {
         all(actions, "mcp-server.toggle", "mcp-server", "POST", "/mcp-server/toggle");
         all(actions, "activity.use-existing-datasource", "activity", "POST", "/activity/use-existing-datasource");
         all(actions, "email.clear", "email", "DELETE", "/email");
-        nonMicronaut(actions, "kafka.clear", "kafka", "DELETE", "/kafka");
-        nonMicronaut(actions, "rabbitmq.clear", "rabbitmq", "DELETE", "/rabbitmq");
+        all(actions, "kafka.clear", "kafka", "DELETE", "/kafka");
+        all(actions, "rabbitmq.clear", "rabbitmq", "DELETE", "/rabbitmq");
         spring(actions, "jms.clear", "jms", "DELETE", "/jms");
         all(actions, "websockets.clear", "websockets", "DELETE", "/websockets");
         all(actions, "websockets.capture", "websockets", "POST", "/websockets/capture");

@@ -10,10 +10,10 @@ filed, so a closed item is struck from the table rather than renumbering the res
 | --- | --- | --- | --- | --- |
 | ~~MN-1~~ | ~~Serialization fails under `micronaut-serde`~~ | Bug | adapter | **done** |
 | ~~MN-2~~ | ~~Conformance runner for the Micronaut stack~~ | Test | conformance + sample | **done** |
-| MN-3 | Kafka capture | Panel | adapter | M |
+| ~~MN-3~~ | ~~Kafka capture~~ | Panel | adapter | **done** |
 | MN-4 | Micronaut application advisor ruleset | Panel | engine | L |
 | MN-5 | Caffeine cache statistics | Enhancement | adapter | S |
-| MN-6 | RabbitMQ capture | Panel | adapter | L |
+| ~~MN-6~~ | ~~RabbitMQ capture~~ | Panel | adapter | **done** |
 | MN-7 | Dev Services over Micronaut Test Resources | Panel | adapter | M |
 | MN-8 | Micronaut security advisor ruleset | Panel | engine | XL |
 | MN-9 | Runtime configuration overrides | Enhancement | adapter | M |
@@ -98,25 +98,30 @@ does (no runtime override write path — MN-9).
 
 ---
 
-## MN-3 — Kafka capture
+## MN-3 — Kafka capture — **done**
 
 **Kind:** panel · Lights up: Kafka, plus `MESSAGING` entries in Live Activity and the service map
 
-The recorders are already wired (`KafkaActivityRecorder` is produced unconditionally), so only the capture points are
-missing. micronaut-kafka has clean seams — an earlier assessment that it had none was wrong:
+The recorders were already wired (`KafkaActivityRecorder` is produced unconditionally), so only the capture points were
+missing. Both hang off `BeanCreatedEventListener`, the seam `micronaut-kafka` itself uses to install Brave tracing:
 
-- **Consumer:** implement `io.micronaut.configuration.kafka.ConsumerRecordInterceptor`. `KafkaConsumerProcessor` takes
-  `List<ConsumerRecordInterceptor<?,?>>` in its constructor and filters per listener through
-  `matches(BeanDefinition, ExecutableMethod)`, so a `@Singleton` is enough.
-- **Producer:** wrap `ProducerFactory` with a `BeanCreatedEventListener`, returning a recording `Producer` proxy — the
-  same pattern the datasource and email captures already use.
+- **Producer:** `MicronautKafkaProducerCapture` wraps every `Producer` bean — which is where the declarative
+  `@KafkaClient` advice gets its producer too, so the open question about `KafkaClientIntroductionAdvice` bypassing
+  `ProducerFactory` is moot: wrapping the product rather than the factory catches both paths. Both `send` overloads are
+  routed through `send(record, callback)` with a capturing callback, so producer sends carry a real duration.
+- **Consumer:** `MicronautKafkaConsumerCapture` wraps every `Consumer` bean and records what `poll` returns.
+  `ConsumerRecordInterceptor` — the seam an earlier note suggested — does not exist in micronaut-kafka 5.9.0, the
+  version the Micronaut 4.10 platform BOM pins; it arrived in micronaut-kafka 6, which targets Micronaut 5. Because the
+  transport seam sees a delivery rather than a listener outcome, a consumed record carries no processing duration, and
+  a listener that rejects the record is recorded separately by `MicronautKafkaListenerFailureCapture` through
+  `KafkaListenerExceptionHandler`.
 
-**Open question to answer first:** does `KafkaClientIntroductionAdvice` (declarative `@KafkaClient`) obtain producers
-through `ProducerFactory`, or build them itself? It keeps its own `producerMap`. If it bypasses the factory, the seam
-has to move to `ProducerRegistry` or declarative sends go uncaptured.
+Keys render through `String.valueOf`, then the recorder's own bounded hash, so a non-String key is handled exactly as
+on the other stacks. The `bootui.kafka.*` keys and defaults are unchanged from the Quarkus adapter.
 
-**Also:** keys are typed (`Serializer<K>`); decide how a non-String key renders into the recorder's bounded key field.
-Reuse the `bootui.kafka.*` keys and defaults from the Quarkus adapter unchanged.
+**Note for anyone adding both messaging integrations:** `micronaut-kafka` and `micronaut-rabbitmq` each declare an
+`ExecutorConfiguration` bean named `consumer`, so an application with both fails to start regardless of BootUI. That is
+why `bootui-micronaut` excludes `micronaut-rabbitmq` from its own test classpath.
 
 ---
 
@@ -147,18 +152,20 @@ Read them reflectively when the native cache is a Caffeine cache and recording i
 
 ---
 
-## MN-6 — RabbitMQ capture
+## MN-6 — RabbitMQ capture — **done**
 
-**Kind:** panel · **Size:** large — one side has no public seam
+**Kind:** panel · Lights up: RabbitMQ, plus `MESSAGING` entries in Live Activity and the service map
 
-- **Publishing:** `ReactivePublisher` is a public interface; wrap it with a `BeanCreatedEventListener`.
-- **Consuming:** no public seam. `RabbitMQConsumerAdvice`/`DefaultConsumer` are internal, and the only events
-  (`RabbitConsumerStarting`/`Started`) are lifecycle, not per-message.
+The "no public seam for consuming" conclusion was right about `RabbitMQConsumerAdvice`/`DefaultConsumer` and wrong
+about there being nowhere else to look. Both directions are captured from one bean instead:
+`MicronautRabbitChannelPoolCapture` wraps the public `ChannelPool` bean, and the channels it hands out record
+`basicPublish` and wrap the `Consumer` passed to `basicConsume`. Everything `micronaut-rabbitmq` does — a
+`@RabbitClient` publish through `ReactorReactivePublisher`, a `@RabbitListener` subscription, hand-written channel
+work — draws its channel from that pool, so wrapping `ReactivePublisher` separately is unnecessary.
 
-The precedent for going lower is micronaut-rabbitmq's own metrics: `RabbitMetricsInterceptor` is a
-`BeanCreatedEventListener<ConnectionFactory>`. BootUI can do the same, but that means proxying
-ConnectionFactory → Connection → Channel to observe `basicPublish`/`basicConsume`, and ordering carefully against the
-application's own connection-factory listeners. Consider shipping publish-side capture first.
+`micronaut-rabbitmq` catches a listener's exception inside its own consumer, so it never reaches the channel seam;
+failures are recorded by `MicronautRabbitListenerFailureCapture` through `RabbitListenerExceptionHandler`, and a
+rejected message shows as the delivery followed by its failure.
 
 ---
 

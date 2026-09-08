@@ -43,8 +43,26 @@ class MicronautPanelAvailabilityTest {
         assertThat(panel(manifest, BootUiPanels.SPRING_SECURITY).unavailableReason())
                 .startsWith("Not applicable on Micronaut:")
                 .contains("micronaut-security");
-        assertThat(panel(manifest, BootUiPanels.KAFKA).unavailableReason())
+        assertThat(panel(manifest, BootUiPanels.DEV_SERVICES).unavailableReason())
                 .isEqualTo("Not yet available on Micronaut.");
+    }
+
+    /**
+     * The two messaging panels are gated on their Micronaut integration being on the classpath, not on the
+     * adapter having a binding for them. This module's test classpath carries micronaut-kafka but not
+     * micronaut-rabbitmq (the two clash over an executor bean named "consumer" — see the surefire
+     * classpathDependencyExcludes in this module's pom), so it exercises both sides of that gate at once.
+     */
+    @Test
+    void gatesTheMessagingPanelsOnTheirMicronautIntegration() {
+        PanelsReport manifest = manifest(Map.of());
+
+        assertThat(available(manifest, BootUiPanels.KAFKA)).isTrue();
+        assertThat(panel(manifest, BootUiPanels.KAFKA).unavailableReason()).isNull();
+        assertThat(available(manifest, BootUiPanels.RABBITMQ)).isFalse();
+        assertThat(panel(manifest, BootUiPanels.RABBITMQ).unavailableReason())
+                .startsWith("Not available:")
+                .contains("micronaut-rabbitmq");
     }
 
     @Test

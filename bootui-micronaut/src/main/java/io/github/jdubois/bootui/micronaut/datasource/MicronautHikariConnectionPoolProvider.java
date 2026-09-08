@@ -7,10 +7,9 @@ import io.github.jdubois.bootui.spi.ConnectionPoolInfo;
 import io.github.jdubois.bootui.spi.ConnectionPoolProvider;
 import io.github.jdubois.bootui.spi.ConnectionPoolSnapshot;
 import io.micronaut.context.BeanContext;
-import io.micronaut.inject.BeanDefinition;
-import io.micronaut.inject.qualifiers.Qualifiers;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import javax.sql.DataSource;
 
 /**
@@ -26,6 +25,9 @@ import javax.sql.DataSource;
  * <p>Micronaut wraps datasources for transaction awareness, so each bean is unwrapped through the JDBC
  * {@code Wrapper} API before it is inspected; that is what makes this work for a transactional datasource
  * as well as a bare one.
+ *
+ * <p>The datasources themselves come from {@link MicronautDataSources}, shared with the Database advisor so
+ * a pool listed here carries the same name a finding is attributed to.
  */
 public final class MicronautHikariConnectionPoolProvider implements ConnectionPoolProvider {
 
@@ -45,43 +47,15 @@ public final class MicronautHikariConnectionPoolProvider implements ConnectionPo
 
     @Override
     public List<ConnectionPoolInfo> pools() {
-        if (beanContext == null) {
-            return List.of();
-        }
         List<ConnectionPoolInfo> pools = new ArrayList<>();
-        for (BeanDefinition<DataSource> definition : beanContext.getBeanDefinitions(DataSource.class)) {
-            String beanName = beanName(definition);
-            DataSource dataSource = resolve(definition, beanName);
-            if (dataSource == null) {
-                continue;
-            }
+        for (Map.Entry<String, DataSource> entry :
+                MicronautDataSources.byName(beanContext).entrySet()) {
+            String beanName = entry.getKey();
+            DataSource dataSource = entry.getValue();
             HikariDataSource hikari = unwrapHikari(dataSource);
             pools.add(hikari == null ? opaquePool(beanName, dataSource) : hikariPool(beanName, hikari));
         }
         return List.copyOf(pools);
-    }
-
-    private DataSource resolve(BeanDefinition<DataSource> definition, String beanName) {
-        try {
-            return beanContext.getBean(DataSource.class, Qualifiers.byName(beanName));
-        } catch (RuntimeException ex) {
-            try {
-                return beanContext.getBean(definition);
-            } catch (RuntimeException ignored) {
-                // A datasource that cannot be resolved (misconfigured credentials, for instance) must not
-                // fail the whole panel; it is simply omitted, and the application's own startup already
-                // reported the problem.
-                return null;
-            }
-        }
-    }
-
-    private static String beanName(BeanDefinition<DataSource> definition) {
-        return definition
-                .getAnnotationMetadata()
-                .stringValue(io.micronaut.context.annotation.EachProperty.class, "value")
-                .orElseGet(
-                        () -> definition.stringValue(jakarta.inject.Named.class).orElse("default"));
     }
 
     /**

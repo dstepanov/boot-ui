@@ -222,8 +222,8 @@ public final class McpToolCatalog {
             entry("resume_rest_client_recording", McpToolSchema.NONE, BootUiPanels.REST_CLIENT_TRACE, true, ALL_STACKS),
             entry("get_ai_overview", McpToolSchema.NONE, BootUiPanels.AI, false, ALL_STACKS),
             entry("get_emails", McpToolSchema.NONE, BootUiPanels.EMAIL, false, ALL_STACKS),
-            entry("get_kafka_activity", McpToolSchema.NONE, BootUiPanels.KAFKA, false, NON_MICRONAUT_STACKS),
-            entry("get_rabbitmq_activity", McpToolSchema.NONE, BootUiPanels.RABBITMQ, false, NON_MICRONAUT_STACKS),
+            entry("get_kafka_activity", McpToolSchema.NONE, BootUiPanels.KAFKA, false, ALL_STACKS),
+            entry("get_rabbitmq_activity", McpToolSchema.NONE, BootUiPanels.RABBITMQ, false, ALL_STACKS),
             entry(
                     "get_jms_activity",
                     McpToolSchema.NONE,

@@ -38,20 +38,34 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Profile Diff, Security Logs, Live Activity with its service map, Traces, AI Framework, SQL Trace, REST Client,
   Vulnerabilities, MCP Server, Command Line, and the Memory, Architecture, REST API, Pentesting and Database advisors.
   Health and Metrics report real data once `micronaut-management` and `micronaut-micrometer` are present, and Database
-  Connection Pools, Cache, Flyway, Liquibase, Hibernate and Hibernate Statistics, WebSockets, Fault Tolerance and Email
-  light up with their Micronaut integration, each naming the dependency it is missing when it is dark. Nine panels
-  target Spring-specific runtime concepts and are permanently *not applicable*, each with its own reason: GraalVM and
-  CRaC, Conditions and Startup Timeline, Spring Security and Spring Data, Spring DevTools, HTTP Sessions, and
-  Transactions. Five are reported *not yet available*: Kafka, RabbitMQ, Dev Services, the Security advisor and the
+  Connection Pools, Cache, Flyway, Liquibase, Hibernate and Hibernate Statistics, WebSockets, Fault Tolerance, Email,
+  Kafka and RabbitMQ light up with their Micronaut integration, each naming the dependency it is missing when it is
+  dark. Nine panels target Spring-specific runtime concepts and are permanently *not applicable*, each with its own
+  reason: GraalVM and CRaC, Conditions and Startup Timeline, Spring Security and Spring Data, Spring DevTools, HTTP
+  Sessions, and Transactions. Three are reported *not yet available*: Dev Services, the Security advisor and the
   platform application advisor. Three smaller limits are stated rather than invented: WebSocket frame capture is
   unsupported (Micronaut binds messages to the handler at compile time and exposes no interception seam, so the panel
   records connection open/close only), live circuit-breaker state is observed from the framework's own circuit events
   rather than queried, and cache statistics and cache access edges are reported unavailable. As on every stack, the
   running application is the authoritative answer: each unavailable panel says so in the sidebar and in a banner, and
   `/bootui/api/panels` carries the same information — now with `platform: "micronaut"` — for agents and scripts.
+- **Kafka and RabbitMQ capture on Micronaut.** Both dedicated panels are live, gated on `micronaut-kafka` /
+  `micronaut-rabbitmq` being on the classpath, and both feed the very buffer that already backed Live Activity's
+  `MESSAGING` entries. Micronaut publishes no send or receive event, so capture is installed at the beans the
+  integrations hand out, through the same `BeanCreatedEventListener` seam the adapter uses for datasources and the
+  email sender: every Kafka `Producer` and `Consumer` bean is wrapped, and for RabbitMQ the `ChannelPool` is — which
+  covers a `@RabbitClient` publish, a `@RabbitListener` subscription and hand-written channel work alike, because all
+  three draw their channel from it. Routing both `send` overloads through `send(record, callback)` gives Micronaut
+  producer sends a real duration, which the Spring adapter's `ProducerListener` cannot measure. Two differences are
+  reported rather than papered over: a consumed Kafka record carries no processing duration (the transport seam sees
+  the delivery, not the listener), and a message a listener rejects appears as the delivery followed by a separate
+  failure entry, captured from `KafkaListenerExceptionHandler` / `RabbitListenerExceptionHandler`, because neither
+  integration exposes a per-record completion callback on Micronaut 4. Note that `micronaut-kafka` and
+  `micronaut-rabbitmq` each declare an `ExecutorConfiguration` bean named `consumer`, so an application carrying both
+  does not start, with or without BootUI.
 - **A `MICRONAUT` stack in the engine's MCP tool catalog.** `McpToolCatalog` gains a fourth stack, and the tools whose
   backing panel has no Micronaut binding yet — `spring_scan`, `get_spring_report`, `security_scan`,
-  `get_security_report`, `get_kafka_activity`, `get_rabbitmq_activity`, `get_dev_services` — are excluded from it. An
+  `get_security_report`, `get_dev_services` — are excluded from it. An
   agent or a `bootui` command run against a Micronaut application is therefore never offered a tool that cannot run,
   which is the same guarantee the catalog already gave the other three stacks.
 - **`bootui-micronaut-sample-app`, a reference Micronaut application.** The analogue of the Spring and Quarkus sample

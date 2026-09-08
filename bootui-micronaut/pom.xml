@@ -203,6 +203,26 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- Micronaut Kafka, compile-only (provided): needed solely to compile the Kafka panel's capture
+             bindings, which wrap the Producer/Consumer beans micronaut-kafka creates so every send and every
+             delivery is recorded. provided scope is NOT transitive, so an application that does not add
+             micronaut-kafka never gets it on its classpath, and the capture beans are conditioned on the API
+             actually being present. -->
+        <dependency>
+            <groupId>io.micronaut.kafka</groupId>
+            <artifactId>micronaut-kafka</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Micronaut RabbitMQ, compile-only (provided): needed solely to compile the RabbitMQ panel's
+             capture bindings, which wrap the channel pool micronaut-rabbitmq publishes and consumes through.
+             Same non-transitive rationale as Kafka above. -->
+        <dependency>
+            <groupId>io.micronaut.rabbitmq</groupId>
+            <artifactId>micronaut-rabbitmq</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- Micronaut Management, compile-only (provided): needed solely to compile the Health panel binding
              (MicronautHealthProvider), which reads the aggregated health result through Micronaut's
              HealthMonitorTask/HealthAggregator. provided scope is NOT transitive, so an application that does
@@ -273,4 +293,48 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                micronaut-kafka and micronaut-rabbitmq each declare an ExecutorConfiguration bean named "consumer",
+                so any context that sees both fails to start with "Multiple possible bean candidates found:
+                [ExecutorConfiguration, ExecutorConfiguration]" — with or without BootUI. Both are provided-scope here
+                purely to compile the two capture bindings, and provided scope also puts them on the test classpath,
+                where, unlike in any real application, they would meet. The tests therefore run twice: the main run
+                carries Kafka (so the context-booting tests boot with a messaging integration present, and
+                RabbitController's absent path is exercised for real), and a second run carries RabbitMQ for the
+                RabbitMQ capture tests alone. Neither run ever sees both.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <classpathDependencyExcludes>
+                        <classpathDependencyExclude>io.micronaut.rabbitmq:micronaut-rabbitmq</classpathDependencyExclude>
+                    </classpathDependencyExcludes>
+                    <excludes>
+                        <exclude>**/rabbit/*Test.java</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>rabbitmq-capture</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <classpathDependencyExcludes>
+                                <classpathDependencyExclude>io.micronaut.kafka:micronaut-kafka</classpathDependencyExclude>
+                            </classpathDependencyExcludes>
+                            <excludes combine.self="override" />
+                            <includes>
+                                <include>**/rabbit/*Test.java</include>
+                            </includes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

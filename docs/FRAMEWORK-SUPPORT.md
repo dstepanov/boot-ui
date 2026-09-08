@@ -59,17 +59,20 @@ the most on a stack that already has a dev UI.
 
 Most panels are live, including the whole advisor surface, the Live Activity timeline, the MCP server and the CLI.
 The optional-integration panels (Flyway, Liquibase, Cache, Connection Pools, Hibernate, WebSockets, Fault Tolerance,
-Email) light up when their Micronaut integration is on the classpath and name the missing dependency when it is not.
+Email, Kafka, RabbitMQ) light up when their Micronaut integration is on the classpath and name the missing dependency
+when it is not.
 
 Nine panels are permanently not applicable, for the same reasons they are not applicable on Quarkus: **GraalVM** and
 **CRaC** (Micronaut generates its own native-image metadata and starts fast by design), **Conditions** and **Startup
 Timeline** (wiring is resolved at compile time), **Spring Security** and **Spring Data** (Micronaut uses
 `micronaut-security` and Micronaut Data), **Spring DevTools**, **HTTP Sessions**, and **Transactions**.
 
-Five are not ported yet: **Kafka**, **RabbitMQ**, **Dev Services**, the **Security** advisor and the platform
-application advisor. Three smaller gaps are worth knowing: WebSocket frame capture is unsupported (Micronaut exposes
-no message-interception seam), live circuit-breaker state is observed from events rather than queried, and cache
-statistics are reported unavailable rather than invented.
+Three are not ported yet: **Dev Services**, the **Security** advisor and the platform application advisor. Three
+smaller gaps are worth knowing: WebSocket frame capture is unsupported (Micronaut exposes no message-interception
+seam), live circuit-breaker state is observed from events rather than queried, and cache statistics are reported
+unavailable rather than invented. Messaging capture also differs in two documented ways from the Spring adapter: a
+consumed Kafka record carries no processing duration, and a message a listener rejects is recorded as the delivery plus
+a separate failure entry.
 
 The engineering rationale and the remaining work are in [Micronaut support](./MICRONAUT-SUPPORT.md).
 

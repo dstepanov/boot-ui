@@ -26,6 +26,7 @@ import io.github.jdubois.bootui.micronaut.web.HeapDumpController;
 import io.github.jdubois.bootui.micronaut.web.HibernateController;
 import io.github.jdubois.bootui.micronaut.web.HttpExchangesController;
 import io.github.jdubois.bootui.micronaut.web.JvmTuningController;
+import io.github.jdubois.bootui.micronaut.web.KafkaController;
 import io.github.jdubois.bootui.micronaut.web.LiquibaseController;
 import io.github.jdubois.bootui.micronaut.web.LiveActivityController;
 import io.github.jdubois.bootui.micronaut.web.LiveMemoryController;
@@ -37,6 +38,7 @@ import io.github.jdubois.bootui.micronaut.web.MetricsController;
 import io.github.jdubois.bootui.micronaut.web.OverviewController;
 import io.github.jdubois.bootui.micronaut.web.PentestingController;
 import io.github.jdubois.bootui.micronaut.web.ProfileDiffController;
+import io.github.jdubois.bootui.micronaut.web.RabbitController;
 import io.github.jdubois.bootui.micronaut.web.RestApiController;
 import io.github.jdubois.bootui.micronaut.web.RestClientTraceController;
 import io.github.jdubois.bootui.micronaut.web.ScheduledController;
@@ -119,6 +121,8 @@ public class MicronautMcpTools {
             RestClientTraceController restClientTrace,
             AiController ai,
             EmailController email,
+            KafkaController kafka,
+            RabbitController rabbit,
             GitHubController github,
             CopilotController copilot,
             ClaudeCodeController claudeCode) {
@@ -452,6 +456,17 @@ public class MicronautMcpTools {
                 registry,
                 availability,
                 tool("get_emails", McpToolDescriptions.micronaut("get_emails"), args -> email.list()));
+        addIfAvailable(
+                registry,
+                availability,
+                tool("get_kafka_activity", McpToolDescriptions.micronaut("get_kafka_activity"), args -> kafka.list()));
+        addIfAvailable(
+                registry,
+                availability,
+                tool(
+                        "get_rabbitmq_activity",
+                        McpToolDescriptions.micronaut("get_rabbitmq_activity"),
+                        args -> rabbit.list()));
         addIfAvailable(
                 registry,
                 availability,

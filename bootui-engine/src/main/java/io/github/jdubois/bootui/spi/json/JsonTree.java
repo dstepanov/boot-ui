@@ -1,5 +1,6 @@
 package io.github.jdubois.bootui.spi.json;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -50,10 +51,16 @@ public interface JsonTree extends Iterable<JsonTree> {
     /** Whether this node is a present JSON {@code null}. */
     boolean isNull();
 
+    /** Whether this node is a JSON object. {@code false} for a missing node and for a JSON {@code null}. */
     boolean isObject();
 
+    /** Whether this node is a JSON array. {@code false} for a missing node and for a JSON {@code null}. */
     boolean isArray();
 
+    /**
+     * Whether this node is a JSON string. Purely a type test — it does not coerce, so a number or a boolean
+     * answers {@code false} even though {@link #asString()} would render it.
+     */
     boolean isString();
 
     /** Number of elements for an array (fields for an object), otherwise 0. */
@@ -70,12 +77,35 @@ public interface JsonTree extends Iterable<JsonTree> {
      */
     String asString();
 
+    /**
+     * The scalar coerced to a boolean, or {@code defaultValue} when this node is a container, a missing node,
+     * a JSON {@code null}, or a scalar that does not convert — matching Jackson's defaulting overload, where a
+     * string converts only for the literals {@code true}/{@code false} and a number converts as non-zero.
+     */
     boolean asBoolean(boolean defaultValue);
 
+    /**
+     * The scalar coerced to an {@code int}, or {@code defaultValue} when this node is a container, a missing
+     * node, a JSON {@code null}, or a scalar that does not parse. A value outside {@code int} range is
+     * narrowed rather than rejected, exactly like Jackson's defaulting overload, so read anything that may
+     * exceed it with {@link #asLong(long)}.
+     */
     int asInt(int defaultValue);
 
+    /**
+     * The scalar coerced to a {@code long}, or {@code defaultValue} when this node is a container, a missing
+     * node, a JSON {@code null}, or a scalar that does not parse, exactly like Jackson's defaulting overload.
+     */
     long asLong(long defaultValue);
 
     /** Object field entries in document order; empty for non-objects. */
     List<Map.Entry<String, JsonTree>> properties();
+
+    /**
+     * Iterates an array's elements (an object's values) in document order, and is empty for scalars, missing
+     * nodes and JSON {@code null}. The iteration is a snapshot taken over the already-parsed tree, so it never
+     * fails and never yields {@code null} elements.
+     */
+    @Override
+    Iterator<JsonTree> iterator();
 }
